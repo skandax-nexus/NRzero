@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Afterzero</title>
+<meta name="description" content="AFTERZERO: The Last Version of Earth — a cinematic temporal-reality thriller.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="viewport"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="era">
+      <div id="era-ring"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" class="ring-bg"/><circle cx="32" cy="32" r="27" id="stab-arc" class="ring-fg"/></svg><span id="era-glyph">◎</span></div>
+      <div>
+        <div id="era-name">PRESENT</div>
+        <div id="era-year">2049</div>
+        <div id="era-keys"></div>
+      </div>
+    </div>
+    <div id="objective"><span class="obj-label">OBJECTIVE</span><span id="objective-text"></span></div>
+    <div id="prompt" class="hidden"><kbd>E</kbd><span id="prompt-text"></span><div id="hold-bar"><i></i></div></div>
+    <div id="detect" class="hidden"><div id="detect-fill"></div><span>DETECTION</span></div>
+    <div id="toast"></div>
+    <div id="residue-hint" class="hidden">RESIDUE VISION</div>
+    <div id="mission-tag"></div>
+  </div>
+
+  <!-- Dialogue -->
+  <div id="dialogue" class="hidden">
+    <div id="portrait-wrap"><img id="portrait" alt=""><div id="portrait-scan"></div></div>
+    <div id="dlg-body">
+      <div id="dlg-name"></div>
+      <div id="dlg-role"></div>
+      <div id="dlg-text"></div>
+      <div id="dlg-choices"></div>
+      <div id="dlg-next">▸ SPACE</div>
+    </div>
+  </div>
+  <div id="subtitle" class="hidden"></div>
+
+  <div id="letterbox"><div class="lb top"></div><div class="lb bottom"></div></div>
+  <div id="fade"></div>
+  <div id="flash"></div>
+
+  <div id="chapter-card" class="hidden">
+    <div class="cc-act" id="cc-act"></div>
+    <div class="cc-title" id="cc-title"></div>
+    <div class="cc-sub" id="cc-sub"></div>
+  </div>
+
+  <!-- Puzzle overlay (mural ordering etc.) -->
+  <div id="puzzle" class="hidden"></div>
+
+  <!-- Journal / case board -->
+  <div id="journal" class="hidden">
+    <div class="j-head"><h2>CASE BOARD</h2><span>J / ESC to close</span></div>
+    <div id="journal-grid"></div>
+  </div>
+
+  <!-- Title screen -->
+  <div id="title" >
+    <canvas id="title-bg"></canvas>
+    <div id="title-inner">
+      <div id="logo">AFTERZER<span class="o">O</span></div>
+      <div id="logo-sub">— THE LAST VERSION OF EARTH —</div>
+      <div id="logo-eras">PAST <i>|</i> PRESENT <i>|</i> FUTURE <i>|</i> BEYOND</div>
+      <div id="menu">
+        <button data-act="new">Begin</button>
+        <button data-act="continue" id="btn-continue" class="hidden">Continue</button>
+        <button data-act="chapters">Chapters</button>
+        <button data-act="dossier">Dossier</button>
+        <button data-act="controls">Controls</button>
+      </div>
+      <div id="title-foot">Prologue &amp; Act I vertical slice · Click to capture mouse · Headphones recommended</div>
+    </div>
+    <div id="panel" class="hidden"><button id="panel-close">✕</button><div id="panel-body"></div></div>
+  </div>
+
+  <div id="pause" class="hidden">
+    <div class="pause-inner">
+      <h2>PAUSED</h2>
+      <button data-p="resume">Resume</button>
+      <button data-p="journal">Case Board</button>
+      <button data-p="restart">Restart Checkpoint</button>
+      <button data-p="controls">Controls</button>
+      <label class="slider">Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+      <label class="slider">Graphics
+        <select id="gfx"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+      </label>
+      <button data-p="quit">Quit to Title</button>
+    </div>
+  </div>
+
+  <div id="loading"><div class="ld-ring"></div><div id="loading-text">CALIBRATING CHRONOLITH…</div></div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
