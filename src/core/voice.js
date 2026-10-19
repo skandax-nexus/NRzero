@@ -41,6 +41,11 @@ export class Voice {
     this.enabled = this.load('voices', true);
     this.volume = this.load('voiceVolume', 1);
     this.voices = []; this.assigned = {}; this.speaking = 0;
+    // recorded performances (tools/voice/build_voices.py): neural voices per character, keyed by speaker + line
+    this.recorded = null; this.clip = null;
+    if (typeof window !== 'undefined' && window.fetch) window.fetch(new globalThis.URL('../../assets/voice/manifest.json', import.meta.url).href).then(r => (r.ok ? r.json() : null)).then(m => {
+      if (m && m.lines) { this.recorded = m; this.base = new globalThis.URL('../../assets/voice/', import.meta.url).href; this.supported = true; }
+    }).catch(() => { /* no recorded voices in this build */ });
     if (!this.supported) return;
     const refresh = () => { this.voices = this.synth.getVoices().filter(v => /^en/i.test(v.lang)); this.assigned = {}; };
     refresh();
@@ -85,9 +90,37 @@ export class Voice {
     return best;
   }
 
+  // Key of a recorded line: FNV-1a of "speaker|text" (same as tools/voice/build_voices.py).
+  lineKey(id, text) {
+    const k = (id || 'crowd') + '|' + text.trim();
+    let h = 2166136261; for (let i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36);
+  }
+
+  // Play a recorded performance if this build has one for the line; resolves when it ends.
+  playRecorded(id, text, onWord) {
+    const file = this.recorded?.lines?.[this.lineKey(id, text)];
+    if (!file) return null;
+    this.stop();
+    const a = new window.Audio(this.base + file);
+    a.volume = Math.min(1, this.volume * (this.game.audio?.volume ?? 1));
+    this.clip = a; this.speaking++; this.duck(true);
+    return new Promise(res => {
+      let done = false, tick = null;
+      const fin = () => { if (done) return; done = true; clearInterval(tick); if (this.clip === a) this.clip = null; this.speaking = Math.max(0, this.speaking - 1); if (!this.speaking) this.duck(false); res(); };
+      a.onended = fin; a.onerror = fin; a.onpause = () => { if (a.ended) fin(); };
+      if (onWord) tick = setInterval(() => { if (!a.paused) onWord(); }, 260);
+      setTimeout(fin, 2500 + text.length * 120); // safety net
+      a.play().catch(fin);
+    });
+  }
+
   // Speak a line. Resolves when finished (or immediately when voices are off/unsupported).
   speak(id, text, { onWord } = {}) {
     if (!this.supported || !this.enabled || this.game.autoplay || !text) return Promise.resolve();
+    const rec = this.playRecorded(id, text, onWord);
+    if (rec) return rec;
+    if (!this.synth) return Promise.resolve();
     const clean = text.replace(/[“”"]/g, '').replace(/\s+[—–-]\s+/g, ', ').replace(/\.\.\.|…/g, '. ');
     this.synth.cancel();
     const p = this.profile(id);
@@ -105,9 +138,13 @@ export class Voice {
     });
   }
 
-  stop() { if (this.supported) { try { this.synth.cancel(); } catch { /* ignore */ } } this.speaking = 0; this.duck(false); }
-  pause() { if (this.supported) try { this.synth.pause(); } catch { /* ignore */ } }
-  resume() { if (this.supported) try { this.synth.resume(); } catch { /* ignore */ } }
+  stop() {
+    if (this.clip) { const c = this.clip; this.clip = null; try { c.pause(); c.onended?.(); } catch { /* ignore */ } }
+    if (this.synth) { try { this.synth.cancel(); } catch { /* ignore */ } }
+    this.speaking = 0; this.duck(false);
+  }
+  pause() { if (this.clip) this.clip.pause(); if (this.synth) try { this.synth.pause(); } catch { /* ignore */ } }
+  resume() { if (this.clip) this.clip.play().catch(() => {}); if (this.synth) try { this.synth.resume(); } catch { /* ignore */ } }
 
   duck(on) {
     const a = this.game.audio; if (!a?.ctx || !a.music) return;
