@@ -1,0 +1,2164 @@
+"""AFTERZERO realistic cast builder: MakeHuman sculpting (mh.py) + our own skin/clothes/hair texturing, game rig and
+animations, in Blender (bpy). Every character is designed in cast_humans.py.
+
+    export MH_DATA=/path/to/makehuman/makehuman/data
+    venv/bin/python build_humans.py OUT_DIR            # ONLY=arin,pell to build a subset
+
+Outputs OUT_DIR/cast.glb (all characters) and OUT_DIR/anims.glb (reference rig + clips).
+
+How a character is made:
+- layout(): the MakeHuman UV islands are split (face / scalp / torso / limbs ...) and re-packed so the face gets ~2.2x
+  the texels of the stock layout (hidden feet shrink); a reserved square holds small "cells" (eye disc, hair, leather,
+  sole, fabrics, metal ...) that every non-body piece maps into, so the whole character is ONE texture + ONE material.
+- fields(): smooth per-vertex coverage fields (metres; >0 = covered) for each layer: top, trousers, boot shaft, hair,
+  headscarf, hood. Layers are copies of the body faces with any vertex covered whose open border is snapped onto the
+  field's zero line (no stair-step teeth). Skin keeps a 2 cm band under every border and garments overlap each other
+  (top over trousers at the waist, trousers inside the boots), so nothing is ever see-through.
+- paint(): every texel is coloured from its 3D position and the same fields (outermost layer wins), with painted
+  features placed from real landmarks (lid margins from the lash helpers, lip line from the mouth topology).
+- Feet wear a fitted shoe: the convex hull of the real foot, voxel-remeshed, with a stretched sole edge, weighted
+  like the skin it covers. Eyes are the MakeHuman cornea shell textured with a painted iris (glossy via the mask).
+- Hands rest relaxed (relax_hands: a finger curl baked into the rest mesh with MakeHuman's finger joints and weights);
+  the deltoid cap is weighted half to the upper arm, so shoulders stay round when the arms hang down.
+- Skirts, coat tails and aprons are cloth tubes: both thighs blend across the front and back panels (the cloth
+  stretches between the legs instead of splitting), the hem rim has its own normals, and they skip decimation.
+- A per-vertex "_mask" attribute (skin, gloss, hair) drives the runtime skin shading in assets/js/humans.js.
+- Decimation protects the face (full density), then the rest of the head, then the body takes the reduction.
+"""
+import json, math, os, sys
+from functools import lru_cache
+import numpy as np
+import bpy, bmesh
+from mathutils import Vector, Matrix, kdtree
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mh  # noqa: E402
+import build_characters as BC  # noqa: E402  (tube/shell helpers, clips, export)
+from cast_humans import CAST  # noqa: E402
+
+V = Vector
+OURS = {  # MakeHuman bone -> our game bone
+    "root": "hips", "spine05": "hips", "pelvis.L": "hips", "pelvis.R": "hips",
+    "spine04": "spine", "spine03": "spine", "spine02": "chest", "spine01": "chest", "breast.L": "chest", "breast.R": "chest",
+    "neck01": "neck", "neck02": "neck", "neck03": "neck",
+}
+for s in "LR":
+    OURS.update({f"clavicle.{s}": f"clavicle_{s}", f"shoulder01.{s}": f"clavicle_{s}", f"upperarm01.{s}": f"upperarm_{s}", f"upperarm02.{s}": f"upperarm_{s}",
+                 f"lowerarm01.{s}": f"forearm_{s}", f"lowerarm02.{s}": f"forearm_{s}", f"wrist.{s}": f"hand_{s}",
+                 f"upperleg01.{s}": f"thigh_{s}", f"upperleg02.{s}": f"thigh_{s}", f"lowerleg01.{s}": f"shin_{s}", f"lowerleg02.{s}": f"shin_{s}",
+                 f"foot.{s}": f"foot_{s}"})
+BONE_NAMES = [b[0] for b in BC.BONES]
+WSTORE = {}   # object name -> (verts, bones) weight matrix until the rig exists
+BI = {b: i for i, b in enumerate(BONE_NAMES)}
+
+
+def our_bone(mhb):
+    if mhb in OURS:
+        return OURS[mhb]
+    side = "L" if mhb.endswith(".L") else "R" if mhb.endswith(".R") else None
+    if side and (mhb.startswith("finger") or mhb.startswith("metacarpal")):
+        return "hand_" + side
+    if side and mhb.startswith("toe"):
+        return "toe_" + side
+    return "head"   # face muscles, jaw, eyes, tongue, special*
+
+
+def to_bl(p):
+    """MakeHuman (x left, y up, z forward) metres -> Blender (x left, -y forward, z up)."""
+    return V((p[0], -p[2], p[1]))
+
+
+def to_bl_np(P):
+    P = np.asarray(P, float)
+    return np.stack([P[:, 0], -P[:, 2], P[:, 1]], 1)
+
+
+def from_bl_np(Q):
+    Q = np.asarray(Q, float)
+    return np.stack([Q[:, 0], Q[:, 2], -Q[:, 1]], 1)
+
+
+def ss(e0, e1, x):
+    t = np.clip((np.asarray(x, float) - e0) / (e1 - e0), 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# skeleton (from MakeHuman joints) and weights
+# ----------------------------------------------------------------------------------------------------------------
+SKEL = None
+
+
+def skel():
+    global SKEL
+    if SKEL is None:
+        SKEL = json.load(open(mh.path("rigs", "default.mhskel")))
+        SKEL["w"] = json.load(open(mh.path("rigs", "default_weights.mhw")))["weights"]
+    return SKEL
+
+
+def jpos(P, name):
+    return P[skel()["joints"][name]].mean(axis=0)
+
+
+def rig_points(P):
+    """Our rig joints in Blender space from MakeHuman bone heads/tails."""
+    h = lambda b: to_bl(jpos(P, b + "____head"))
+    t = lambda b: to_bl(jpos(P, b + "____tail"))
+    J = {"pelvis": h("spine05"), "spine": h("spine04"), "chest": h("spine02"), "neck": h("neck01"), "head": h("head"), "headTop": t("head")}
+    for s in "LR":
+        J["clav_" + s] = h(f"clavicle.{s}")
+        J["shoulder_" + s] = h(f"upperarm01.{s}")
+        J["elbow_" + s] = h(f"lowerarm01.{s}")
+        J["wrist_" + s] = h(f"wrist.{s}")
+        J["handEnd_" + s] = h(f"finger3-2.{s}")
+        J["hip_" + s] = h(f"upperleg01.{s}")
+        J["knee_" + s] = h(f"lowerleg01.{s}")
+        J["ankle_" + s] = h(f"foot.{s}")
+        J["ball_" + s] = h(f"toe3-1.{s}")
+        J["toe_" + s] = t(f"toe3-3.{s}")
+    return J
+
+
+@lru_cache(None)
+def dense_weights(n):
+    """(n, bones) MakeHuman weights folded onto our 21 game bones, rows normalised."""
+    W = np.zeros((n, len(BONE_NAMES)))
+    for mhb, lst in skel()["w"].items():
+        j = BI[our_bone(mhb)]
+        # the deltoid cap (shoulder01) turns half with the arm: on the clavicle alone it squares off as the arm drops
+        j2 = BI["upperarm_" + mhb[-1]] if mhb.startswith("shoulder01.") else j
+        for vi, w in lst:
+            if vi < n:
+                W[vi, j] += w * (0.5 if j2 != j else 1.0)
+                if j2 != j:
+                    W[vi, j2] += w * 0.5
+    s = W.sum(1)
+    W[s < 1e-9, BI["hips"]] = 1.0
+    return W / W.sum(1, keepdims=True)
+
+
+# relaxed hands: degrees of flexion per phalanx (proximal, middle, distal), thumb first; the metacarpals of the ring
+# and little fingers cup the palm a little. MakeHuman's rest hand is flat with the fingers splayed.
+CURL = {1: (4, 12, 10), 2: (14, 20, 10), 3: (18, 26, 12), 4: (22, 30, 14), 5: (26, 32, 16)}
+CUP = {3: 3.0, 4: 6.0}
+
+
+def relax_hands(P):
+    """Bake a relaxed finger pose into the rest mesh (MakeHuman finger joints / weights, linear blend skinning). Each
+    phalanx flexes about its bone X axis, built like MakeHuman's own bone frames from the bone's rotation plane."""
+    S = skel()
+    bones, planes = S["bones"], S["planes"]
+
+    def axis_x(name):
+        b = bones[name]
+        h, t = jpos(P, b["head"]), jpos(P, b["tail"])
+        p1, p2, p3 = (jpos(P, j) for j in planes[b["rotation_plane"]])
+        n = np.cross(nrm3(p3 - p2), nrm3(p2 - p1))
+        y = nrm3(t - h)
+        z = nrm3(np.cross(n, y))
+        return h, np.cross(y, z)
+
+    def rot(h, ax, deg):
+        a = math.radians(deg)
+        x, y, z = ax
+        c, s, C = math.cos(a), math.sin(a), 1 - math.cos(a)
+        R = np.array([[c + x * x * C, x * y * C - z * s, x * z * C + y * s], [y * x * C + z * s, c + y * y * C, y * z * C - x * s],
+                      [z * x * C - y * s, z * y * C + x * s, c + z * z * C]])
+        M = np.eye(4)
+        M[:3, :3] = R
+        M[:3, 3] = h - R @ h
+        return M
+
+    G = {}
+    for s in "LR":
+        for f in range(1, 6):
+            parent = np.eye(4)
+            if f > 1:
+                mc = f"metacarpal{f - 1}.{s}"
+                parent = rot(*axis_x(mc), CUP.get(f - 1, 0.0)) if CUP.get(f - 1) else np.eye(4)
+                G[mc] = parent
+            for k in range(3):
+                bn = f"finger{f}-{k + 1}.{s}"
+                parent = parent @ rot(*axis_x(bn), CURL[f][k])
+                G[bn] = parent
+    Ph = np.c_[P, np.ones(len(P))]
+    out = P.copy()
+    for bn, M in G.items():
+        for vi, w in S["w"].get(bn, []):
+            if vi < len(P):
+                out[vi] += w * ((M @ Ph[vi])[:3] - P[vi])
+    return out
+
+
+def nrm3(v):
+    return v / max(np.linalg.norm(v), 1e-12)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# proxies (.mhclo) e.g. eyes
+# ----------------------------------------------------------------------------------------------------------------
+def fit_proxy(rel, Pdm):
+    """Fit a MakeHuman proxy (eyes) to sculpted base vertices (decimetres). Returns verts (metres), faces."""
+    d = os.path.dirname(mh.path(rel))
+    scale = {}
+    rows, obj = [], None
+    in_verts = False
+    for line in open(mh.path(rel)):
+        a = line.split()
+        if not a or a[0].startswith("#"):
+            continue
+        if a[0] == "obj_file":
+            obj = os.path.join(d, a[1])
+        elif a[0] in ("x_scale", "y_scale", "z_scale"):
+            ax = "xyz".index(a[0][0])
+            scale[ax] = abs(Pdm[int(a[1])][ax] - Pdm[int(a[2])][ax]) / float(a[3])
+        elif a[0] == "verts":
+            in_verts = True
+        elif in_verts and len(a) in (1, 9):
+            rows.append(a)
+        elif in_verts:
+            in_verts = False
+    out = []
+    for a in rows:
+        if len(a) == 1:
+            out.append(Pdm[int(a[0])])
+            continue
+        i = [int(x) for x in a[:3]]
+        w = [float(x) for x in a[3:6]]
+        off = np.array([float(x) for x in a[6:9]]) * np.array([scale.get(0, 1), scale.get(1, 1), scale.get(2, 1)])
+        out.append(w[0] * Pdm[i[0]] + w[1] * Pdm[i[1]] + w[2] * Pdm[i[2]] + off)
+    faces = []
+    for line in open(obj):
+        if line.startswith("f "):
+            faces.append([int(t.split("/")[0]) - 1 for t in line.split()[1:]])
+    return np.array(out) * 0.1, faces
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# colour helpers (sRGB, 0..1)
+# ----------------------------------------------------------------------------------------------------------------
+def hexc(h):
+    h = h.lstrip("#")
+    return np.array([int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)])
+
+
+def lin(c):
+    c = np.asarray(c, dtype=float)
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+
+def vnoise(p, f, seed=0.0):
+    """Smooth pseudo-noise of 3D points p (N,3) at frequency f (per metre); 0..1."""
+    x, y, z = p[:, 0] * f + seed, p[:, 1] * f + seed * 0.7, p[:, 2] * f - seed * 0.3
+    n = (np.sin(x * 1.7 + np.sin(y * 2.3)) + np.sin(y * 1.9 + np.sin(z * 2.9)) + np.sin(z * 2.1 + np.sin(x * 3.1))
+         + 0.5 * np.sin(x * 4.3 + y * 3.7) + 0.5 * np.sin(z * 4.1 - y * 3.3))
+    return n / 8 + 0.5
+
+
+def hash01(p, f, seed=0.0):
+    """Per-cell white noise (0..1) of 3D points on a grid of 1/f metres (stubble dots, pores)."""
+    q = np.floor(p * f)
+    h = np.sin(q[:, 0] * 12.9898 + q[:, 1] * 78.233 + q[:, 2] * 37.719 + seed * 4.1) * 43758.5453
+    return h - np.floor(h)
+
+
+def g2(d2, s):
+    return np.exp(-d2 / (2 * s * s))
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# texture layout: re-packed MakeHuman islands + a square of material cells
+# ----------------------------------------------------------------------------------------------------------------
+PART_SCALE = dict(face=2.5, scalp=0.9, lidL=1.0, lidR=1.0, mouth=0.5, torso=0.85, legL=0.8, legR=0.8, armL=0.9, armR=0.9,
+                  handL=1.0, handR=1.0, footL=0.3, footR=0.3)
+PATCH = 0.22            # side of the cell square (fraction of the atlas)
+CELL_NAMES = ["hair", "shoe", "sole", "colA", "colB", "acc", "trim", "metal", "lash", "skin", "glow", "shirt"]
+PART_CODE = {k: i for i, k in enumerate(list(PART_SCALE) + ["patch"])}
+
+
+def _skyline(rects, margin=0.006):
+    """Bottom-left skyline packing of (key, w, h) rectangles (largest first, 90-degree rotation allowed)."""
+    sky, out = [(0.0, 1.0, 0.0)], {}
+    for k, w, h in sorted(rects, key=lambda r: -max(r[1], r[2]) * min(r[1], r[2]) ** 0.3):
+        best = None
+        for rot in (0, 1):
+            ww, hh = ((h, w) if rot else (w, h))
+            ww, hh = ww + margin, hh + margin
+            for x in sorted({s[0] for s in sky}):
+                if x + ww > 1.0 + 1e-9:
+                    continue
+                y = max(s[2] for s in sky if s[1] > x + 1e-9 and s[0] < x + ww - 1e-9)
+                if best is None or (y + hh, x) < (best[0] + best[3], best[1]):
+                    best = (y, x, rot, hh, ww)
+        y, x, rot, hh, ww = best
+        out[k] = (x, y, rot)
+        new = []
+        for s in sky:
+            if s[1] <= x or s[0] >= x + ww:
+                new.append(s)
+            else:
+                if s[0] < x:
+                    new.append((s[0], x, s[2]))
+                if s[1] > x + ww:
+                    new.append((x + ww, s[1], s[2]))
+        new.append((x, x + ww, y + hh))
+        sky = sorted(new)
+    return out, max(s[2] for s in sky)
+
+
+@lru_cache(None)
+def layout():
+    """part per body face, per-corner atlas UVs (FUV[face] -> (k,2)), and the cell square origin."""
+    Vb, UV, F = mh.base()
+    body = [i for i, f in enumerate(F) if f[2] == "body"]
+    W = dense_weights(len(Vb))
+    vb = [BONE_NAMES[i] for i in W.argmax(1)]
+    P = Vb * 0.1
+    P = P - np.array([0, P[:, 1].min(), 0])
+    eye = (P[mh.group_vertices("helper-l-eye")].mean(0) + P[mh.group_vertices("helper-r-eye")].mean(0)) / 2
+    fam = lambda b: ("torso" if b in ("hips", "spine", "chest", "neck", "clavicle_L", "clavicle_R", "head") else
+                     "arm" + b[-1] if b.startswith(("upperarm", "forearm", "hand")) else "leg" + b[-1])
+    par = {}
+
+    def find(a):
+        while par.setdefault(a, a) != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+    for fi in body:
+        ts = F[fi][1]
+        for t in ts[1:]:
+            ra, rb = find(ts[0]), find(t)
+            if ra != rb:
+                par[ra] = rb
+    isl = {}
+    for fi in body:
+        isl.setdefault(find(F[fi][1][0]), []).append(fi)
+    part = {}
+    for fs in isl.values():
+        bs = [vb[v] for fi in fs for v in F[fi][0]]
+        dom = max(set(bs), key=bs.count)
+        for fi in fs:
+            vs = list(F[fi][0])
+            fb = [vb[v] for v in vs]
+            b = max(set(fb), key=fb.count)
+            if dom == "head":
+                if len(fs) > 1000:
+                    rel = P[vs].mean(0) - eye
+                    part[fi] = "face" if (rel[2] > -0.03 and -0.16 < rel[1] < 0.07) else "scalp"
+                elif len(fs) > 350:
+                    part[fi] = "mouth"
+                else:   # the two small head islands are the eye sockets (inner lids)
+                    part[fi] = "lid" + ("L" if P[vs].mean(0)[0] > 0 else "R")
+            elif dom.startswith("hand"):
+                part[fi] = "hand" + dom[-1]
+            elif dom.startswith(("foot", "toe")):
+                part[fi] = "foot" + dom[-1]
+            else:
+                part[fi] = fam(b)
+    parts = {}
+    for fi, k in part.items():
+        parts.setdefault(k, []).append(fi)
+    box = {}
+    for k, fs in parts.items():
+        uv = UV[[t for fi in fs for t in F[fi][1]]]
+        box[k] = (uv.min(0), uv.max(0))
+
+    def attempt(g):
+        rects = [(k, (box[k][1] - box[k][0])[0] * PART_SCALE[k] * g, (box[k][1] - box[k][0])[1] * PART_SCALE[k] * g) for k in parts]
+        return _skyline(rects + [("patch", PATCH, PATCH)])
+    lo, hi = 0.3, 2.0
+    for _ in range(28):
+        g = (lo + hi) / 2
+        if attempt(g)[1] <= 1.0:
+            lo = g
+        else:
+            hi = g
+    place, _ = attempt(lo)
+    FUV = {}
+    for k, fs in parts.items():
+        x, y, rot = place[k]
+        s = PART_SCALE[k] * lo
+        b0, b1 = box[k]
+        for fi in fs:
+            uv = (UV[list(F[fi][1])] - b0) * s
+            if rot:
+                uv = np.stack([(b1[1] - b0[1]) * s - uv[:, 1], uv[:, 0]], 1)
+            FUV[fi] = uv + np.array([x, y])
+    # ears (inside the scalp island): lateral bumps behind the eyes
+    hv = np.array(sorted({v for fi, k in part.items() if k == "scalp" for v in F[fi][0]}))
+    q = P[hv] - eye
+    ears = hv[(np.abs(q[:, 0]) > 0.071) & (q[:, 1] > -0.05) & (q[:, 1] < 0.034) & (q[:, 2] < -0.055) & (q[:, 2] > -0.115)]
+    return dict(part=part, FUV=FUV, patch=place["patch"][:2], g=lo, ears=ears)
+
+
+def cell_rect(name):
+    """(u0, v0, size) of a material cell inside the cell square (4x4 grid; the eye disc takes the top-left 2x2)."""
+    px, py = layout()["patch"]
+    cs = PATCH / 4
+    if name == "eye":
+        return px, py + 2 * cs, 2 * cs
+    slots = [(c, r) for r in range(4) for c in range(4) if not (c < 2 and r >= 2)]
+    c, r = slots[CELL_NAMES.index(name)]
+    return px + c * cs, py + r * cs, cs
+
+
+def cell_uv(name, a, b, inset=0.14):
+    u0, v0, s = cell_rect(name)
+    a, b = np.clip(a, 0, 1), np.clip(b, 0, 1)
+    return np.stack([u0 + s * (inset + (1 - 2 * inset) * a), v0 + s * (inset + (1 - 2 * inset) * b)], -1)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# landmarks
+# ----------------------------------------------------------------------------------------------------------------
+def _profile(x, y, fn, n=9):
+    edges = np.linspace(x.min(), x.max(), n + 1)
+    xs, ys = [], []
+    for a, b in zip(edges[:-1], edges[1:]):
+        m = (x >= a) & (x <= b)
+        if m.any():
+            xs.append((a + b) / 2)
+            ys.append(fn(y[m]))
+    return np.array(xs), np.array(ys)
+
+
+class Landmarks:
+    def __init__(self, P):
+        self.eyeL = P[mh.group_vertices("helper-l-eye")].mean(axis=0)
+        self.eyeR = P[mh.group_vertices("helper-r-eye")].mean(axis=0)
+        self.eye = (self.eyeL + self.eyeR) / 2
+        self.H = P[:, 1].max() - P[:, 1].min()
+        self.ground = P[:, 1].min()
+        upper = P[mh.group_vertices("helper-upper-teeth")].mean(axis=0)
+        m = mh.joint(P, "mouth")
+        self.mouth = np.array([m[0], upper[1] - 0.004, max(m[2], upper[2]) + 0.01])
+        # lid margins (dx outward from each eye centre) from the roots of the lash helpers
+        self.lid = {}
+        for s, e, sg in (("L", self.eyeL, 1), ("R", self.eyeR, -1)):
+            up = P[mh.group_vertices(f"helper-{s.lower()}-eyelashes-2")] - e
+            lo = P[mh.group_vertices(f"helper-{s.lower()}-eyelashes-1")] - e
+            self.lid[s] = (_profile(up[:, 0] * sg, up[:, 1], np.min), _profile(lo[:, 0] * sg, lo[:, 1], np.max))
+        # lip contact line: vertices shared by the face part and the inner-mouth part of the layout
+        lay = layout()
+        _, _, F = mh.base()
+        fv, mv = set(), set()
+        for fi, k in lay["part"].items():
+            (fv if k == "face" else mv if k == "mouth" else set()).update(F[fi][0])
+        lv = sorted(fv & mv)
+        q = P[lv]
+        self.lip_cx = 0.0
+        self.lip_w = (q[:, 0].max() - q[:, 0].min()) / 2
+        self.lip_line = _profile(q[:, 0], q[:, 1], np.mean, 11)
+        self.lip_z = q[:, 2].max()
+        ears = lay["ears"]
+        self.earL = P[ears[P[ears, 0] > 0]].mean(0)
+        self.earR = P[ears[P[ears, 0] < 0]].mean(0)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# the sculpted body and its coverage fields
+# ----------------------------------------------------------------------------------------------------------------
+def vertex_normals(P, faces):
+    N = np.zeros_like(P)
+    q = [f for f in faces if len(f) == 4]
+    t = [f for f in faces if len(f) == 3]
+    if q:
+        q = np.array(q)
+        n = np.cross(P[q[:, 2]] - P[q[:, 0]], P[q[:, 3]] - P[q[:, 1]])
+        for k in range(4):
+            np.add.at(N, q[:, k], n)
+    if t:
+        t = np.array(t)
+        n = np.cross(P[t[:, 1]] - P[t[:, 0]], P[t[:, 2]] - P[t[:, 0]])
+        for k in range(3):
+            np.add.at(N, t[:, k], n)
+    return N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+
+
+def chain_param(P, pts):
+    """Arc length (m) of each point's projection onto a joint polyline, plus the cumulative joint lengths."""
+    best = np.full(len(P), np.inf)
+    s = np.zeros(len(P))
+    acc, cum = 0.0, [0.0]
+    for a, b in zip(pts[:-1], pts[1:]):
+        ab = b - a
+        L2 = max(ab @ ab, 1e-12)
+        t = np.clip((P - a) @ ab / L2, 0, 1)
+        d = np.linalg.norm(P - (a + t[:, None] * ab), axis=1)
+        m = d < best
+        best[m] = d[m]
+        s[m] = acc + t[m] * math.sqrt(L2)
+        acc += math.sqrt(L2)
+        cum.append(acc)
+    return s, cum
+
+
+class Body:
+    def __init__(self, c):
+        P = mh.sculpt(c["macro"], c.get("details"))
+        self.P = relax_hands(P - np.array([0, P[:, 1].min(), 0]))
+        _, _, self.F = mh.base()
+        self.faces = [i for i, f in enumerate(self.F) if f[2] == "body"]
+        self.W = dense_weights(len(self.P))
+        self.vb = [BONE_NAMES[i] for i in self.W.argmax(1)]
+        self.L = Landmarks(self.P)
+        self.J = rig_points(self.P)
+        self.Jm = {k: np.array([v.x, v.z, -v.y]) for k, v in self.J.items()}
+        self.H = self.L.H
+        self.N = vertex_normals(self.P, [self.F[i][0] for i in self.faces])
+        self.part = layout()["part"]
+        fam = lambda names: self.W[:, [BI[n] for n in names]].sum(1)
+        self.tw = fam(["hips", "spine", "chest", "neck", "head", "clavicle_L", "clavicle_R"])
+        self.hw = self.W[:, BI["head"]]
+        self.aw = {s: fam([f"upperarm_{s}", f"forearm_{s}", f"hand_{s}"]) for s in "LR"}
+        self.lw = {s: fam([f"thigh_{s}", f"shin_{s}", f"foot_{s}", f"toe_{s}"]) for s in "LR"}
+        self.arm = {s: chain_param(self.P, [self.Jm[k + s] for k in ("shoulder_", "elbow_", "wrist_", "handEnd_")]) for s in "LR"}
+        self.legs = self.lw["L"] + self.lw["R"]
+        self.arms = self.aw["L"] + self.aw["R"]
+        bodyv = mh.group_vertices("body")
+        self.bodyv = np.array(bodyv)
+        self.ear = np.zeros(len(self.P))
+        self.ear[layout()["ears"]] = 1.0
+
+
+NECK = {  # neckline: (height above the neck base at the back, front dip) in metres (1.75 m body)
+    "coat": (0.035, 0.035), "uniform": (0.03, 0.025), "robe": (0.02, 0.05), "sweater": (0.022, 0.02), "jacket": (0.012, 0.06),
+    "vest": (0.012, 0.06), "shirt": (0.012, 0.045), "dress": (0.0, 0.055)}
+HEM = {"coat": -0.0, "jacket": 0.0, "uniform": 0.0, "sweater": 0.005, "shirt": 0.005, "vest": 0.04}
+COLLAR_H = {"coat": 0.032, "uniform": 0.026, "robe": 0.012, "sweater": 0.014, "jacket": 0.012, "vest": 0.008, "shirt": 0.012, "dress": 0.006}
+
+
+def hairline(rel, style, male, old):
+    """Height (above the eye centre) of the hairline at each vertex's azimuth (0 = front, 180 = back)."""
+    th = np.degrees(np.abs(np.arctan2(rel[:, 0], rel[:, 2] + 0.085)))
+    hf = 0.062 if male else 0.057
+    if old and male:
+        hf += 0.012
+    temple = hf + (0.004 if male else -0.012)
+    sb = -0.012 if male else 0.01
+    if style == "crop":
+        sb = -0.004
+    nape = {"crop": -0.062, "short": -0.075, "swept": -0.075, "bob": -0.085, "long": -0.09}.get(style, -0.08)
+    ks = [0, 28, 48, 66, 78, 88, 100, 114, 132, 152, 180]
+    hs = [hf, hf - 0.003, temple, 0.026, sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
+    return np.interp(th, ks, hs)
+
+
+def fields(c, B):
+    """Coverage fields (per base vertex, metres, > 0 = covered) for every layer of this character."""
+    P, Jm, H = B.P, B.Jm, B.H
+    k = H / 1.75
+    y = P[:, 1]
+    top, bottom = c.get("top", "jacket"), c.get("bottom", "trousers")
+    sh_y, hip_y, pel_y, spn_y, ank_y = Jm["shoulder_L"][1], Jm["hip_L"][1], Jm["pelvis"][1], Jm["spine"][1], Jm["ankle_L"][1]
+    neck = Jm["neck"]
+    nb_y = sh_y + 0.04 * k
+    back, dip = NECK.get(top, (0.015, 0.05))
+    th = np.arctan2(P[:, 0], P[:, 2] - neck[2])
+    front = np.clip(np.cos(th), 0, 1) ** 2
+    neck_y = nb_y + back * k - dip * k * front
+    skirted = bottom in ("skirt", "longskirt") or top in ("dress", "robe")
+    hem_top = (spn_y - 0.03 * k) if top in ("dress", "robe") else hip_y + HEM.get(top, -0.05) * k
+    trouser_top = (pel_y + spn_y) / 2 + 0.012 * k
+    cov = {"_neck_y": neck_y}
+    # ---- top ----
+    sleeve = c.get("sleeve", "long")
+    f = B.tw * np.minimum(neck_y - y, y - hem_top) + B.legs * (y - hem_top)
+    for s in "LR":
+        sa, cum = B.arm[s]
+        end = {"long": cum[2] - 0.012, "mid": cum[1] + 0.04, "short": cum[1] * 0.45}.get(sleeve, cum[2] - 0.012)
+        f = f + B.aw[s] * (end - sa)
+    cov["top"] = f
+    # ---- footwear ----
+    collar_y = ank_y + 0.035 * k
+    boot_top = (0.045 + c.get("boots", 0.10)) * H
+    shaft = boot_top > collar_y + 0.025
+    cov["_collar_y"], cov["_boot_top"] = collar_y, boot_top
+    cov["inshoe"] = B.legs * (collar_y - 0.02 - y) - (1 - B.legs) * 0.2
+    if shaft:
+        cov["shaft"] = B.legs * np.minimum(boot_top - y, y - (collar_y - 0.035)) - (1 - B.legs) * 0.2
+    # ---- trousers (or shorts under a skirt) ----
+    hem_b = (hip_y - 0.10 * k) if skirted else (boot_top - 0.04) if shaft else (collar_y - 0.03)
+    cov["bottom"] = B.tw * (trouser_top - y) + B.legs * np.minimum(trouser_top - y, y - hem_b) - B.arms * 0.2
+    # ---- head: hair, headscarf, hood ----
+    rel = P - B.L.eye
+    male = c["macro"].get("gender", 0.5) >= 0.5
+    old = c["macro"].get("age", 0.5) > 0.8
+    style = c.get("hair", "short")
+    head = B.hw + B.W[:, BI["neck"]] * 0.5
+    hat = c.get("hat")
+    if hat == "hood":
+        o = (rel[:, 0] / 0.074) ** 2 + ((rel[:, 1] + 0.022) / 0.098) ** 2 + (np.minimum(0, rel[:, 2] + 0.005) / 0.035) ** 2
+        f = (np.sqrt(o) - 1) * 0.07
+        f = np.where(y > sh_y - 0.03 * k, f, f - (sh_y - 0.03 * k - y) * 4)   # down to the shoulders
+        cov["hood"] = np.minimum(f, 0.12)
+        style = "none"
+    if hat == "headscarf":
+        th2 = np.degrees(np.abs(np.arctan2(rel[:, 0], rel[:, 2] + 0.085)))
+        line = np.interp(th2, [0, 35, 62, 85, 110, 140, 180], [0.044, 0.04, 0.0, -0.045, -0.07, -0.085, -0.09])
+        w = np.clip(B.hw + B.W[:, BI["neck"]], 0, 1)
+        cov["scarf"] = w * (rel[:, 1] - line) - (1 - w) * 0.03
+        style = "none" if style not in ("bun",) else "bun_hidden"
+    hwt = np.clip((head - 0.2) / 0.3, 0, 1)      # smooth blend: no ragged edge where head / neck weights meet
+    if style not in ("none", "bun_hidden"):
+        cov["hair"] = hwt * (rel[:, 1] - hairline(rel, style, male, old)) - (1 - hwt) * 0.05
+    elif style == "bun_hidden" or hat in ("hood",):
+        cov["_hairpaint"] = hwt * (rel[:, 1] - hairline(rel, c.get("hair", "short"), male, old)) - (1 - hwt) * 0.05
+    for key in ("hair", "_hairpaint"):     # never hair on the ears
+        if key in cov:
+            cov[key] = cov[key] - B.ear * 0.05
+    cov["_style"] = style
+    return cov
+
+
+SHELL = {"crop": 0.0015, "short": 0.0065, "swept": 0.009, "bob": 0.008, "long": 0.007, "bun": 0.005, "braid": 0.005, "pony": 0.005}
+
+
+def hide_field(cov):
+    """Where the skin is hidden by an outer layer (> 0)."""
+    g = [cov[k] for k in ("top", "bottom", "shaft", "inshoe") if k in cov]
+    if "hair" in cov and SHELL.get(cov["_style"], 0) > 0.003:
+        g.append(cov["hair"] - 0.03)
+    for k in ("scarf", "hood"):
+        if k in cov:
+            g.append(cov[k] - 0.03)
+    return np.max(np.stack(g), 0)
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# layers: copies of body faces with a smooth, snapped border
+# ----------------------------------------------------------------------------------------------------------------
+class Layer:
+    def __init__(self, name, pos, base, faces, fuv, cov):
+        self.name, self.pos, self.base, self.faces, self.fuv, self.cov = name, pos, base, faces, fuv, cov
+        self.mask = np.zeros((len(pos), 3))
+        self.W = None
+
+    def edges(self):
+        e = {}
+        for f in self.faces:
+            k = len(f)
+            for a in range(k):
+                i, j = f[a], f[(a + 1) % k]
+                key = (min(i, j), max(i, j))
+                e[key] = e.get(key, 0) + 1
+        return e
+
+    def boundary_loops(self):
+        nb = {}
+        for (i, j), n in self.edges().items():
+            if n == 1:
+                nb.setdefault(i, []).append(j)
+                nb.setdefault(j, []).append(i)
+        loops, seen = [], set()
+        for s in nb:
+            if s in seen:
+                continue
+            loop, prev, cur = [s], None, s
+            seen.add(s)
+            while True:
+                nxt = [x for x in nb[cur] if x != prev and x not in seen]
+                if not nxt:
+                    break
+                prev, cur = cur, nxt[0]
+                loop.append(cur)
+                seen.add(cur)
+            if len(loop) > 5:
+                loops.append(loop)
+        return loops
+
+
+def build_layer(B, name, cov, iso=0.0, faces=None, min_area=3e-9):
+    F, FUV = B.F, layout()["FUV"]
+    cand = B.faces if faces is None else faces
+    sel = [fi for fi in cand if cov[list(F[fi][0])].max() > iso]
+    if not sel:
+        return None
+    used = sorted({v for fi in sel for v in F[fi][0]})
+    idx = {v: i for i, v in enumerate(used)}
+    pos0 = B.P[used].copy()
+    cv = cov[used].copy()
+    nb = [set() for _ in used]
+    loc = []
+    for fi in sel:
+        vs = [idx[v] for v in F[fi][0]]
+        loc.append(vs)
+        for a in vs:
+            nb[a].update(vs)
+    pos = pos0.copy()
+    snapped = np.zeros(len(used), bool)
+    for i in np.nonzero(cv <= iso)[0]:
+        acc = [pos0[i] + (iso - cv[i]) / (cv[j] - cv[i]) * (pos0[j] - pos0[i]) for j in nb[i] if j != i and cv[j] > iso]
+        if acc:
+            pos[i] = np.mean(acc, 0)
+            snapped[i] = True
+    cvn = np.where(snapped, iso, cv)
+    faces_l, fuv_l = [], []
+    for fi, vs in zip(sel, loc):
+        k = len(vs)
+        uv0 = FUV[fi]
+        uv = uv0.copy()
+        for a in range(k):
+            i = vs[a]
+            if not snapped[i]:
+                continue
+            p0 = pos0[i]
+            e1, e2 = pos0[vs[(a + 1) % k]] - p0, pos0[vs[(a - 1) % k]] - p0
+            d = pos[i] - p0
+            M = np.array([[e1 @ e1, e1 @ e2], [e1 @ e2, e2 @ e2]])
+            try:
+                al, be = np.linalg.solve(M, [d @ e1, d @ e2])
+            except np.linalg.LinAlgError:
+                continue
+            uv[a] = uv0[a] + al * (uv0[(a + 1) % k] - uv0[a]) + be * (uv0[(a - 1) % k] - uv0[a])
+        q = pos[vs]
+        area = 0.5 * np.linalg.norm(np.cross(q[1] - q[0], q[2] - q[0])) + (0.5 * np.linalg.norm(np.cross(q[2] - q[0], q[3] - q[0])) if k == 4 else 0)
+        if area < min_area:
+            continue
+        faces_l.append(vs)
+        fuv_l.append(uv)
+    L = Layer(name, pos, np.array(used), faces_l, fuv_l, cvn)
+    L.W = B.W[L.base].copy()
+    return L
+
+
+
+def layer_normals(L, B):
+    N = vertex_normals(L.pos, L.faces)
+    N = N + (L.nb if getattr(L, "nb", None) is not None else B.N[L.base])
+    return N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+
+
+def taubin(L, iters, lam=0.5, mu=-0.53, pin=None):
+    """Smooth a layer without shrinking it; border vertices only slide along the border (straightens it)."""
+    if not iters:
+        return
+    e = L.edges()
+    ii, jj = [], []
+    bnd = np.zeros(len(L.pos), bool)
+    for (i, j), n in e.items():
+        if n == 1:
+            bnd[i] = bnd[j] = True
+    for (i, j), n in e.items():
+        both_b = bnd[i] and bnd[j] and n == 1
+        for a, b in ((i, j), (j, i)):
+            if bnd[a] and not both_b:
+                continue          # border vertices only listen to border neighbours
+            ii.append(a)
+            jj.append(b)
+    ii, jj = np.array(ii), np.array(jj)
+    cnt = np.bincount(ii, minlength=len(L.pos)).astype(float)
+    fix = cnt == 0
+    if pin is not None:
+        fix |= pin
+    for _ in range(iters):
+        for f in (lam, mu):
+            acc = np.zeros_like(L.pos)
+            np.add.at(acc, ii, L.pos[jj])
+            avg = acc / np.maximum(cnt, 1)[:, None]
+            d = avg - L.pos
+            d[fix] = 0
+            L.pos = L.pos + f * d
+
+
+def offset_layer(L, B, amount):
+    L.pos = L.pos + layer_normals(L, B) * np.asarray(amount, float).reshape(-1, 1)
+
+
+def inflate(L, B, amount):
+    """Loosen a garment: push torso vertices out toward a smooth elliptical shell (hides anatomy under coats)."""
+    P = B.P
+    tsel = np.isin(np.array(B.vb), ["hips", "spine", "chest"]) & np.isin(np.arange(len(P)), B.bodyv)
+    T = P[tsel]
+    y0, y1 = B.Jm["hip_L"][1] - 0.2, B.Jm["shoulder_L"][1] - 0.02
+    torso = (B.tw[L.base] > 0.6) & (L.pos[:, 1] > y0) & (L.pos[:, 1] < y1)
+    for i in np.nonzero(torso)[0]:
+        p = L.pos[i]
+        m = T[np.abs(T[:, 1] - p[1]) < 0.015]
+        if len(m) < 8:
+            continue
+        cx, cz = (m[:, 0].max() + m[:, 0].min()) / 2, (m[:, 2].max() + m[:, 2].min()) / 2
+        rx, rz = (m[:, 0].max() - m[:, 0].min()) / 2, (m[:, 2].max() - m[:, 2].min()) / 2
+        dx, dz = p[0] - cx, p[2] - cz
+        r = math.hypot(dx, dz)
+        if r < 1e-5:
+            continue
+        ang = math.atan2(dz / max(rz, 1e-3), dx / max(rx, 1e-3))
+        target = math.hypot(math.cos(ang) * rx, math.sin(ang) * rz) * 1.04 + 0.006
+        nr = r + (max(r, target) - r) * amount
+        if r > target:
+            nr = nr * (1 - 0.5 * amount) + target * 0.5 * amount
+        L.pos[i, 0] = cx + dx / r * nr
+        L.pos[i, 2] = cz + dz / r * nr
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Blender objects, masks and weights
+# ----------------------------------------------------------------------------------------------------------------
+def mesh_from(name, verts, faces, uvs=None):
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([tuple(v) for v in verts], [], [list(f) for f in faces])
+    if uvs is not None:
+        uvl = me.uv_layers.new(name="UVMap")
+        uvl.data.foreach_set("uv", np.asarray(uvs, dtype=np.float32).ravel())
+    me.update()
+    for p in me.polygons:
+        p.use_smooth = True
+    o = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(o)
+    return o
+
+
+def set_mask(o, m):
+    m = np.broadcast_to(np.asarray(m, float), (len(o.data.vertices), 3))
+    a = o.data.attributes.get("_mask") or o.data.attributes.new("_mask", "FLOAT_VECTOR", "POINT")
+    a.data.foreach_set("vector", np.ascontiguousarray(m, dtype=np.float32).ravel())
+
+
+def layer_object(L):
+    uvs = [uv for f in L.fuv for uv in f]
+    o = mesh_from(L.name, to_bl_np(L.pos), L.faces, uvs)
+    set_mask(o, L.mask)
+    WSTORE[o.name] = L.W
+    return o
+
+
+def obj_world_verts(o):
+    bpy.context.view_layer.update()
+    M = np.array(o.matrix_world)
+    co = np.array([v.co for v in o.data.vertices])
+    return co @ M[:3, :3].T + M[:3, 3]
+
+
+def set_cell_uvs(o, cell, proj="xz", per_face=None):
+    """UVs inside a material cell: a planar projection of the object (or per-face cells via per_face(poly)->name)."""
+    me = o.data
+    co = np.array([v.co for v in me.vertices])
+    li = np.array([l.vertex_index for l in me.loops])
+    ax = {"x": 0, "y": 1, "z": 2}
+    a_, b_ = ax[proj[0]], ax[proj[1]]
+    lo, hi = co.min(0), co.max(0)
+    span = np.maximum(hi - lo, 1e-6)
+    a = (co[li, a_] - lo[a_]) / span[a_]
+    b = (co[li, b_] - lo[b_]) / span[b_]
+    uv = cell_uv(cell, a, b)
+    if per_face is not None:
+        for p in me.polygons:
+            nm = per_face(p)
+            if nm != cell:
+                for l in p.loop_indices:
+                    uv[l] = cell_uv(nm, a[l:l + 1], b[l:l + 1])[0]
+    uvl = me.uv_layers.get("UVMap") or me.uv_layers.new(name="UVMap")
+    uvl.data.foreach_set("uv", uv.astype(np.float32).ravel())
+
+
+def piece(o, cell, mask=(0, 0, 0), proj="xz", W=None, bone=None):
+    """Finish an extra piece: cell UVs, shading mask and skin weights (a bone name, or a per-vertex weight matrix)."""
+    BC.apply_modifiers(o) if o.modifiers else None
+    set_cell_uvs(o, cell, proj)
+    set_mask(o, mask)
+    if W is None:
+        W = np.zeros((len(o.data.vertices), len(BONE_NAMES)))
+        W[:, BI[bone or "head"]] = 1
+    WSTORE[o.name] = W
+    return o
+
+
+def nearest_weights(pts_bl, ref_bl, ref_W, k=4):
+    """Weights for points from the k nearest reference points (inverse-distance blended)."""
+    kd = kdtree.KDTree(len(ref_bl))
+    for i, p in enumerate(ref_bl):
+        kd.insert(V(p), i)
+    kd.balance()
+    out = np.zeros((len(pts_bl), ref_W.shape[1]))
+    for i, p in enumerate(pts_bl):
+        hits = kd.find_n(V(p), k)
+        w = np.array([1.0 / max(d, 1e-4) for _, _, d in hits])
+        out[i] = (w[:, None] * ref_W[[j for _, j, _ in hits]]).sum(0) / w.sum()
+    return out
+
+
+def apply_weights(o, arm):
+    W = np.asarray(WSTORE.pop(o.name))
+    o.vertex_groups.clear()
+    for j, bn in enumerate(BONE_NAMES):
+        col = W[:, j]
+        nz = np.nonzero(col > 0.004)[0]
+        if not len(nz):
+            continue
+        vg = o.vertex_groups.new(name=bn)
+        for i in nz:
+            vg.add([int(i)], float(col[i]), "REPLACE")
+    o.parent = arm
+    m = o.modifiers.new("arm", "ARMATURE")
+    m.object = arm
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# painting
+# ----------------------------------------------------------------------------------------------------------------
+def rasterize(B, face_ids, res):
+    """Per covered texel: pixel x/y, 3D position, face, barycentrics and the 3 base vertex ids."""
+    FUV, P, F = layout()["FUV"], B.P, B.F
+    out = [[] for _ in range(6)]
+    for fi in face_ids:
+        vs = F[fi][0]
+        uvf = FUV[fi]
+        for a, b, c in ([(0, 1, 2), (0, 2, 3)] if len(vs) == 4 else [(0, 1, 2)]):
+            uv = np.array([uvf[a], uvf[b], uvf[c]]) * res
+            uv[:, 1] = res - uv[:, 1]
+            x0, y0 = np.floor(uv.min(axis=0)).astype(int)
+            x1, y1 = np.ceil(uv.max(axis=0)).astype(int)
+            x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, res - 1), min(y1, res - 1)
+            if x1 < x0 or y1 < y0:
+                continue
+            gx, gy = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
+            gx, gy = gx.ravel(), gy.ravel()
+            (ax, ay), (bx, by), (cx, cy) = uv
+            den = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+            if abs(den) < 1e-12:
+                continue
+            l1 = ((by - cy) * (gx - cx) + (cx - bx) * (gy - cy)) / den
+            l2 = ((cy - ay) * (gx - cx) + (ax - cx) * (gy - cy)) / den
+            l3 = 1 - l1 - l2
+            ok = (l1 >= -0.03) & (l2 >= -0.03) & (l3 >= -0.03)
+            if not ok.any():
+                continue
+            bc = np.stack([l1[ok], l2[ok], l3[ok]], 1)
+            bc = np.clip(bc, 0, None)
+            bc /= bc.sum(1, keepdims=True)
+            tv = np.array([vs[a], vs[b], vs[c]])
+            out[0].append(gx[ok].astype(int))
+            out[1].append(gy[ok].astype(int))
+            out[2].append(bc @ P[tv])
+            out[3].append(np.full(ok.sum(), fi))
+            out[4].append(bc)
+            out[5].append(np.tile(tv, (ok.sum(), 1)))
+    return [np.concatenate(x) for x in out]
+
+
+def dilate(img, mask, n=6):
+    """Bleed filled texels outward so mip-maps never pull in empty background at UV seams."""
+    img, mask = img.copy(), mask.copy()
+    for _ in range(n):
+        acc = np.zeros_like(img)
+        cnt = np.zeros(mask.shape)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            m2 = np.roll(np.roll(mask, dy, 0), dx, 1)
+            acc += np.roll(np.roll(img, dy, 0), dx, 1) * m2[..., None]
+            cnt += m2
+        new = (~mask) & (cnt > 0)
+        img[new] = acc[new] / cnt[new][:, None]
+        mask = mask | new
+    return img, mask
+
+
+def shoe_hex(c):
+    """One footwear colour for the painted boot shaft and the shoe (cell): no mismatch."""
+    return c.get("shoeColor", c.get("trimColor", "2a1d16"))
+
+
+def fabric(c, key, q, seed, L):
+    fab = c.get("fabric", {}).get(key, "wool" if key in ("top", "colA") else "twill" if key in ("bottom", "colB") else "leather")
+    if fab == "leather":
+        k = 0.88 + 0.16 * vnoise(q, 260, seed) + 0.05 * vnoise(q, 1900, seed)
+    elif fab == "twill":
+        k = 0.9 + 0.05 * np.sin((q[:, 0] + q[:, 1]) * 2600) + 0.08 * vnoise(q, 180, seed)
+    else:  # wool / knit
+        k = 0.89 + 0.045 * np.sin(q[:, 1] * 3000) * np.sin(q[:, 0] * 3000 + q[:, 2] * 3000) + 0.09 * vnoise(q, 150, seed)
+    return k
+
+
+def hair_strands(c, rel, style, seed, fine=1.0):
+    """0..1 strand value for points relative to the eye centre (lines follow the comb direction of the style)."""
+    if style in ("swept", "bun", "braid", "pony", "bun_hidden"):
+        a = np.arctan2(rel[:, 0], rel[:, 1] + 0.03)          # combed back: lines run front to back
+    else:
+        a = np.arctan2(rel[:, 0], rel[:, 2] + 0.08)          # from the crown: lines run down from the top
+    j = vnoise(rel * np.array([1.0, 1.0, 1.0]), 60, seed) * 2.5
+    v = (0.55 + 0.2 * np.sin(a * 70 + j) + 0.15 * np.sin(a * 190 * fine + j * 1.7 + 1.3) + 0.1 * np.sin(a * 470 * fine + j * 2.3 + 0.4))
+    return np.clip(v, 0, 1)
+
+
+def paint(c, B, cov, res, path_out):
+    lay = layout()
+    L = B.L
+    px, py, pos, fid, bc, tv = rasterize(B, B.faces, res)
+    fld = lambda arr: (arr[tv] * bc).sum(1)
+    part = np.array([lay["part"][f] for f in fid])
+    seed = (sum(map(ord, c["id"])) % 97) * 0.37
+    male = c["macro"].get("gender", 0.5) >= 0.5
+    rng = np.random.default_rng(sum(map(ord, c["id"])) * 7919)
+    rel = pos - L.eye
+    front = ss(-0.035, -0.015, rel[:, 2])            # front of the face (0 at the ears)
+    # ---------------- skin ----------------
+    skin = hexc(c["skin"])
+    col = np.tile(skin, (len(px), 1))
+    lum = 1 + 0.035 * (vnoise(pos, 22, seed) - 0.5) + 0.02 * (vnoise(pos, 90, seed + 3) - 0.5) + 0.012 * (vnoise(pos, 700, seed + 5) - 0.5)
+    red = 0.02 * (vnoise(pos, 40, seed + 9) - 0.5)
+    col = col * lum[:, None] * (1 + np.outer(red, [1, -0.4, -0.6]))
+    warm = np.array([1.0, 0.86, 0.82])
+    isface = np.isin(part, ["face", "scalp", "lidL", "lidR", "mouth"])
+    earf = fld(B.ear)
+
+    def tint(m, rgb, k=1.0):
+        nonlocal col
+        m = np.clip(m * k, 0, 1)[:, None]
+        col = col * (1 - m) + col * np.asarray(rgb)[None, :] * m
+
+    def over(m, rgb):
+        nonlocal col
+        m = np.clip(m, 0, 1)[:, None]
+        col = col * (1 - m) + np.asarray(rgb)[None, :] * m
+    blush = c.get("blush", 0.22 if not male else 0.14)
+    for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
+        ch = e + np.array([0.014 * sg, -0.032, 0.0])
+        tint(blush * g2(((pos - ch) ** 2 * np.array([1, 1.4, 0.3])).sum(1), 0.017) * front * isface, warm)
+        # under-eye: slightly darker and cooler
+        ue = e + np.array([0.002 * sg, -0.014, 0.004])
+        tint(0.07 * g2(((pos - ue) ** 2 * np.array([0.6, 2.5, 1])).sum(1), 0.009) * front * isface, [0.88, 0.86, 0.9])
+    nose = np.array([0, L.eye[1] - 0.045, L.eye[2] + 0.03])
+    tint(0.3 * g2(((pos - nose) ** 2 * np.array([1, 0.8, 0.5])).sum(1), 0.011) * front * isface, warm)
+    tint(0.2 * earf, warm)
+    tint(0.04 * ss(0.02, 0.06, rel[:, 1]) * front * isface, [1.03, 1.02, 1.0])          # forehead a touch lighter
+    # ---- lips ----
+    lip_c = hexc(c.get("lip", "b06a62" if not male else "a8706a"))
+    xs, ys = L.lip_line
+    t = (pos[:, 0] - L.lip_cx) / max(L.lip_w, 0.018)
+    d = pos[:, 1] - np.interp(pos[:, 0], xs, ys)
+    lipfront = ss(L.lip_z - 0.025, L.lip_z - 0.012, pos[:, 2]) * (np.abs(t) < 1.1) * isface
+    sc = L.lip_w / 0.024
+    hu0, hl0 = (0.0074 if male else 0.0082) * sc, (0.0092 if male else 0.0108) * sc
+    at = np.clip(np.abs(t), 0, 1)
+    hu = hu0 * (1 - at ** 2.3) ** 0.55 * (1 - 0.16 * np.exp(-(t / 0.13) ** 2)) * (1 + 0.1 * np.exp(-((at - 0.3) / 0.15) ** 2))
+    hl = hl0 * (1 - at ** 2.0) ** 0.7
+    mu = ss(hu + 0.0007, hu - 0.0004, d) * ss(-0.0012, 0.0, d)
+    ml = ss(hl + 0.0008, hl - 0.0005, -d) * ss(-0.0012, 0.0, -d)
+    lipm = np.clip(np.maximum(mu, ml) * lipfront * ss(1.05, 0.9, np.abs(t)), 0, 1)
+    lipcol = skin * 0.3 + lip_c * 0.7
+    over(lipm * 0.85, lipcol)
+    tint(lipm * mu * 0.1, [0.9, 0.88, 0.88])                                        # upper lip a touch darker
+    tint(lipm * ml * 0.1 * g2(t ** 2 + ((-d - hl0 * 0.45) / 0.004) ** 2, 1.0), [1.12, 1.1, 1.1])   # lower lip highlight
+    tint(0.4 * g2(d ** 2, 0.0005) * lipfront * ss(1.15, 0.85, np.abs(t)), [0.55, 0.45, 0.45])   # contact line
+    tint(0.05 * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge
+    for sg in (1, -1):
+        cn = np.array([sg * L.lip_w, np.interp(sg * L.lip_w, xs, ys), L.lip_z - 0.008])
+        tint(0.18 * g2(((pos - cn) ** 2).sum(1), 0.0035) * isface, [0.75, 0.68, 0.66])   # mouth corners
+    # ---- eyes: lash line, lid crease, inner corner ----
+    brow_c = hexc(c.get("browColor", c.get("hairColor", "2e2119")))
+    hair_c = hexc(c.get("hairColor", "2e2119"))
+    lash_c = brow_c * 0.35 + np.array([0.02, 0.015, 0.012])
+    for s, e, sg in (("L", L.eyeL, 1), ("R", L.eyeR, -1)):
+        dx = (pos[:, 0] - e[0]) * sg
+        dy = pos[:, 1] - e[1]
+        near = (np.abs(dx) < 0.024) & (np.abs(dy) < 0.022) & (rel[:, 2] > -0.03) & isface
+        (ux, uy), (lx, ly) = L.lid[s]
+        ym = np.interp(dx, ux, uy)
+        inside = (dx > ux.min() - 0.001) & (dx < ux.max() + 0.002)
+        dd = dy - ym
+        thick = 0.0006 + 0.0007 * ss(-0.006, 0.012, dx)
+        lash = ss(-0.0006, 0.0, dd) * (1 - ss(thick * 0.5, thick + 0.0004, dd)) * inside * near
+        lash *= ss(ux.min() - 0.001, ux.min() + 0.003, dx) * ss(ux.max() + 0.0012, ux.max() - 0.001, dx)
+        wing = g2(((dx - ux.max() + 0.0005) / 0.0018) ** 2 + ((dd - 0.0004) / 0.001) ** 2, 1.0) * near
+        over(np.clip(lash * 0.82 + wing * 0.05, 0, 1), lash_c)
+        crease = g2((dd - 0.0058 - 0.0012 * ss(-0.01, 0.01, dx)) ** 2, 0.0013) * inside * near * ss(-0.016, -0.008, dx)
+        tint(crease * 0.16, [0.82, 0.74, 0.72])
+        tint(g2(((dd - 0.003) / 0.003) ** 2, 1.0) * inside * near * 0.05, [0.92, 0.88, 0.9])      # lid
+        ylo = np.interp(dx, lx, ly)
+        lo_line = g2(((dy - ylo + 0.0005) / 0.0008) ** 2, 1.0) * ((dx > lx.min()) & (dx < lx.max())) * near
+        tint(lo_line * 0.22, [0.7, 0.62, 0.6])
+        inner = g2(((dx - ux.min() + 0.002) / 0.004) ** 2 + (dy / 0.004) ** 2, 1.0) * near
+        tint(inner * 0.18, [0.86, 0.72, 0.72])
+    # ---- eyebrows: hair strokes placed from the eye centres ----
+    bt = c.get("browThick", 0.5)
+    nstr = 260 if res >= 2048 else 200
+    for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
+        dx = (pos[:, 0] - e[0]) * sg
+        dy = pos[:, 1] - e[1]
+        near = (dx > -0.024) & (dx < 0.034) & (dy > 0.004) & (dy < 0.036) & (rel[:, 2] > -0.03) & isface
+        idx = np.nonzero(near)[0]
+        if not len(idx):
+            continue
+        X, Y = dx[idx], dy[idx]
+        lift = c.get("browLift", 0.0)
+        T = lambda t: (-0.0185 + 0.047 * t, np.interp(t, [0, 0.35, 0.68, 1.0], [0.0150, 0.0182, 0.0198, 0.0150]) + lift,
+                       np.interp(t, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt))
+        tk = rng.random(nstr) ** 0.85
+        bx, by, bw = T(tk)
+        n = rng.uniform(0.0, 1.0, nstr)
+        rx, ry = bx, by + n * bw
+        ang = np.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [78, 52, 16, -14]) + rng.normal(0, 7, nstr) - 10 * (n - 0.5))
+        ln = np.interp(tk, [0, 0.4, 1.0], [0.0042, 0.0056, 0.0040]) * rng.uniform(0.8, 1.15, nstr)
+        ex, ey = rx + np.cos(ang) * ln, ry + np.sin(ang) * ln
+        wd = (0.00042 if res >= 2048 else 0.0005) * rng.uniform(0.8, 1.2, nstr)
+        sx, sy = ex - rx, ey - ry
+        L2 = sx * sx + sy * sy
+        tt = np.clip(((X[:, None] - rx[None]) * sx[None] + (Y[:, None] - ry[None]) * sy[None]) / L2[None], 0, 1)
+        dd = np.hypot(X[:, None] - (rx[None] + tt * sx[None]), Y[:, None] - (ry[None] + tt * sy[None]))
+        cvg = np.clip(1 - dd / (wd[None] * (1.15 - 0.55 * tt)), 0, 1)
+        alpha = 1 - np.prod(1 - 0.7 * cvg, axis=1)
+        # soft base tint under the strokes
+        cbx, cby, cbw = T(np.clip((X + 0.0185) / 0.047, 0, 1))
+        inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(-0.0205, -0.0165, X) * ss(0.0305, 0.0275, X)
+        alpha = np.clip(np.maximum(alpha, 0.0) + 0.34 * inb * (1 - alpha), 0, 0.9)
+        m = np.zeros(len(px))
+        m[idx] = alpha
+        over(m, brow_c)
+    # ---- stubble ----
+    stub = c.get("stubble", 0.0)
+    if stub:
+        ax_ = np.abs(pos[:, 0])
+        my = np.interp(0, xs, ys)
+        top_b = np.interp(ax_, [0, 0.012, 0.03, 0.048, 0.062, 0.08], [my + 0.017, my + 0.013, my + 0.012, my + 0.026, L.eye[1] - 0.034, L.eye[1] - 0.012])
+        reg = ss(-0.002, 0.008, top_b - pos[:, 1]) * ss(-0.1, -0.06, rel[:, 2]) * ss(my - 0.13, my - 0.10, pos[:, 1]) * isface * (earf < 0.5)
+        reg *= 1 - lipm
+        reg *= 1 - 0.85 * g2(t ** 2 + ((d + 0.0) / 0.012) ** 2, 1.0) * (np.abs(t) < 1.2)
+        dots = (hash01(pos, 2600, seed) > 0.55).astype(float) * 0.7 + 0.3
+        a = np.clip(stub * reg * (0.3 + 0.4 * dots), 0, 0.62)
+        tint(a * 0.5, [0.86, 0.86, 0.9])
+        over(a * 0.4, hair_c * 0.8)
+    # ---- scalp, hairline feathering ----
+    style = cov["_style"]
+    hcov = fld(cov["hair"]) if "hair" in cov else (fld(cov["_hairpaint"]) if "_hairpaint" in cov else None)
+    ears = earf > 0.4
+    if hcov is not None:
+        st = hair_strands(c, rel, style, seed, fine=1.6)
+        st2 = hair_strands(c, rel, style, seed + 1.7, fine=3.0)
+        band = (hcov < 0) & (hcov > -0.007) & ~ears
+        u = ss(-0.007, 0.0, hcov)
+        fa = (u ** 1.3 * ss(0.8 - 0.22 * u, 0.86 - 0.22 * u, st2) * 0.75 + 0.1 * u ** 3) * band   # sparse fine hairs
+        over(fa, hair_c * 0.9 + skin * 0.1)
+        under = (hcov >= 0) & ~ears
+        st3 = hair_strands(c, rel, style, seed + 4.1, fine=2.2)
+        k = 0.6 + 0.32 * st ** 1.2 + 0.16 * st3 - 0.06
+        roots = 1 - 0.1 * ss(0.012, 0.0, hcov)
+        hcol = hair_c[None, :] * (k * roots)[:, None]
+        sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
+        hcol = hcol * sheen[:, None]
+        if style == "crop":       # very short hair: mostly the scalp showing through
+            hcol = hcol * 0.75 + col * 0.25 * (0.6 + 0.4 * st[:, None])
+        col[under] = hcol[under]
+    # ---------------- garments (outermost layer wins) ----------------
+    shirt_c = hexc(c.get("shirtColor", "d8d0c4"))
+    order = [("hood", c.get("colorA")), ("scarf", c.get("accentColor")), ("top", c.get("colorA", "444a55")),
+             ("shaft", shoe_hex(c)), ("inshoe", shoe_hex(c)), ("bottom", c.get("colorB", "2a2a30"))]
+    taken = np.zeros(len(px), bool)
+    for key, chex in order:
+        if key not in cov:
+            continue
+        f = fld(cov[key])
+        m = (f > -0.003) & ~taken
+        if key == "inshoe":
+            m &= f > 0.0
+        if not m.any():
+            continue
+        taken |= m
+        q = pos[m]
+        cc = hexc(chex or "444a55")
+        fk = {"hood": "top", "scarf": "colA", "top": "top", "shaft": "shoe", "inshoe": "shoe", "bottom": "bottom"}[key]
+        k = fabric(c, fk, q, seed, L)
+        k = k * (1 - 0.1 * ss(0.012, 0.0, f[m]))                # hem / edge shadow
+        if key in ("top", "bottom", "hood"):
+            k = k * (0.94 + 0.06 * np.clip((q[:, 1] - L.ground) / (0.5 * L.H), 0, 1))
+        cm = cc[None, :] * k[:, None]
+        if key == "top" and c.get("top") == "vest":
+            arm = fld(B.arms)[m]
+            vneck = (q[:, 2] > B.Jm["chest"][2] - 0.02) & (q[:, 1] > B.Jm["chest"][1] - 0.02) & (np.abs(q[:, 0]) < 0.06 * (q[:, 1] - B.Jm["chest"][1] + 0.08) / 0.2)
+            sm = np.clip(ss(0.4, 0.6, arm) + vneck, 0, 1)
+            cm = cm * (1 - sm[:, None]) + (shirt_c[None, :] * (0.93 + 0.07 * vnoise(q, 200, seed))[:, None]) * sm[:, None]
+        col[m] = cm
+    img = np.zeros((res, res, 3))
+    mask = np.zeros((res, res), bool)
+    img[py, px] = np.clip(col, 0, 1)
+    mask[py, px] = True
+    paint_cells(c, img, mask, res, seed)
+    img, mask = dilate(img, mask, 10 if res >= 2048 else 8)
+    img[~mask] = img[mask].mean(axis=0)
+    from PIL import Image
+    Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(path_out, quality=c.get("jpegQ", 88 if res >= 2048 else 87))
+    return path_out
+
+
+def paint_cells(c, img, mask, res, seed):
+    """Material cells: eye disc, hair, leather, sole, fabrics, metal, lashes, skin, glow, shirt."""
+    def grid(name):
+        u0, v0, s = cell_rect(name)
+        x0, x1 = int(round(u0 * res)), int(round((u0 + s) * res))
+        y0, y1 = int(round((1 - v0 - s) * res)), int(round((1 - v0) * res))
+        gx, gy = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
+        a = (gx + 0.5 - u0 * res) / (s * res)
+        b = 1 - (gy + 0.5 - (1 - v0 - s) * res) / (s * res)
+        return gx, gy, a, b
+
+    def put(gx, gy, rgb):
+        img[gy, gx] = np.clip(rgb, 0, 1)
+        mask[gy, gx] = True
+    rng = np.random.default_rng(int(seed * 1000) + 11)
+    # ---- eye ----
+    gx, gy, a, b = grid("eye")
+    dxe, dye = (a - 0.5) / 0.47, (b - 0.5) / 0.47
+    r = np.hypot(dxe, dye)
+    th = np.arctan2(dye, dxe)
+    iris_c = hexc(c.get("eyes", "5a4030"))
+    ir, pr = c.get("irisR", 0.33), c.get("pupilR", 0.12)
+    sclera = np.array([0.75, 0.71, 0.67]) * (1 - 0.3 * ss(0.45, 1.0, r))[..., None]
+    sclera = sclera * (1 - 0.06 * ss(0.5, 1.0, np.abs(dxe))[..., None] * np.array([0.2, 1, 1]))   # pinkish corners
+    p3 = np.stack([np.cos(th) * 3, np.sin(th) * 3, r * 5], -1).reshape(-1, 3)
+    fib = (0.5 + 0.28 * np.sin(th * 41 + 2.5 * vnoise(p3, 1.1, seed).reshape(r.shape)) + 0.22 * np.sin(th * 97 + 4 * vnoise(p3 * 1.7, 1.3, seed + 2).reshape(r.shape)))
+    rr = (r - pr) / max(ir - pr, 1e-3)
+    ring = 1.0 + 0.35 * g2((rr - 0.25) ** 2, 0.12) - 0.45 * ss(0.7, 1.0, rr)          # light collarette, dark rim
+    irc = iris_c[None, None, :] * (0.55 + 0.75 * fib[..., None]) * ring[..., None]
+    irc = irc * (1 - 0.35 * ss(0.15, -0.1, dye)[..., None] * 0) + 0.04
+    col = np.where((r < ir)[..., None], irc, sclera)
+    limb = g2((r - ir) ** 2, 0.022) * 0.55
+    col = col * (1 - limb[..., None])
+    col = np.where((r < pr)[..., None], np.array([0.02, 0.018, 0.016]), col)
+    col = col * (1 - 0.25 * ss(0.3, 0.9, dye)[..., None] * (r < 1.0)[..., None])        # upper lid shadow
+    cl = g2((dxe + 0.17) ** 2 + (dye - 0.17) ** 2, 0.045)
+    col = col + np.clip(cl * 1.6, 0, 0.95)[..., None] * np.array([1.0, 1.0, 1.0])
+    col = np.where((r > 1.0)[..., None], np.array([0.6, 0.55, 0.52]), col)
+    put(gx, gy, col)
+    # ---- flat-ish cells ----
+    hair_c = hexc(c.get("hairColor", "2e2119"))
+    shoe = hexc(shoe_hex(c))
+    cells = {"hair": hair_c, "shoe": shoe, "sole": shoe * 0.35 + 0.02, "colA": hexc(c.get("colorA", "444a55")), "colB": hexc(c.get("colorB", "2a2a30")),
+             "acc": hexc(c.get("accentColor", "8a3a2a")), "trim": hexc(c.get("trimColor", "2a1d16")), "metal": hexc(c.get("metalColor", "b09060")),
+             "lash": hexc(c.get("browColor", c.get("hairColor", "2e2119"))) * 0.3 + 0.015, "skin": hexc(c["skin"]),
+             "glow": hexc(c.get("glowColor", "ffb050")), "shirt": hexc(c.get("shirtColor", "d8d0c4"))}
+    for name, cc in cells.items():
+        gx, gy, a, b = grid(name)
+        p3 = np.stack([a, b, np.zeros_like(a)], -1).reshape(-1, 3)
+        if name == "hair":
+            k = 0.8 + 0.12 * np.sin(a * 60 + 2 * vnoise(p3, 3, seed).reshape(a.shape)) + 0.08 * np.sin(a * 151 + 1.3)
+        elif name in ("shoe", "sole"):
+            k = 0.9 + 0.12 * vnoise(p3, 9, seed).reshape(a.shape)
+        elif name in ("colA", "colB", "acc"):    # skirts, coat tails, aprons: the same mean shade as the painted garments
+            k = 0.84 + 0.07 * vnoise(p3, 6, seed).reshape(a.shape)
+        else:
+            k = 0.93 + 0.08 * vnoise(p3, 6, seed).reshape(a.shape)
+        put(gx, gy, cc[None, None, :] * k[..., None])
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# eyes, lashes
+# ----------------------------------------------------------------------------------------------------------------
+def sphere_fit(p):
+    A = np.c_[2 * p, np.ones(len(p))]
+    sol = np.linalg.lstsq(A, (p ** 2).sum(1), rcond=None)[0]
+    cen = sol[:3]
+    return cen, math.sqrt(max(sol[3] + cen @ cen, 1e-12))
+
+
+def eye_objects(B, c):
+    ev, ef = fit_proxy("eyes/high-poly/high-poly.mhclo", B.P * 10)
+    par = list(range(len(ev)))
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+    for f in ef:
+        for v in f[1:]:
+            par[find(v)] = find(f[0])
+    comps = {}
+    for i in range(len(ev)):
+        comps.setdefault(find(i), []).append(i)
+    out = []
+    for side in (1, -1):
+        cs = [vs for vs in comps.values() if np.sign(ev[vs, 0].mean()) == side]
+        # the outer (cornea) shell reaches furthest forward: it carries the painted iris and the gloss
+        vs = max(cs, key=lambda vs: ev[vs, 2].max())
+        cen, rad = sphere_fit(ev[vs])
+        keep = set(vs)
+        faces = [f for f in ef if f[0] in keep]
+        remap = {v: i for i, v in enumerate(vs)}
+        P = ev[vs]
+        d = (P - cen) / np.linalg.norm(P - cen, axis=1, keepdims=True)
+        phi = np.arccos(np.clip(d[:, 2], -1, 1))
+        al = np.arctan2(d[:, 1], d[:, 0])
+        rr = np.clip(phi / (math.pi / 2), 0, 1.0)
+        a = 0.5 + 0.47 * rr * np.cos(al)
+        b = 0.5 + 0.47 * rr * np.sin(al)
+        uvv = cell_uv("eye", a, b, inset=0.0)
+        fl = [[remap[v] for v in f] for f in faces]
+        uvs = [uvv[v] for f in fl for v in f]
+        o = mesh_from("eye", to_bl_np(P), fl, uvs)
+        dec = o.modifiers.new("dec", "DECIMATE")
+        dec.ratio = 0.45
+        BC.apply_modifiers(o)
+        set_mask(o, (0.0, 1.0, 0.0))
+        W = np.zeros((len(o.data.vertices), len(BONE_NAMES)))
+        W[:, BI["head"]] = 1
+        WSTORE[o.name] = W
+        out.append(o)
+    # upper lashes: the MakeHuman lash strips shortened toward the lid so they read as a lash line, not a band
+    _, _, F = mh.base()
+    for s, e in (("l", B.L.eyeL), ("r", B.L.eyeR)):
+        fs = [f for f in F if f[2] == f"helper-{s}-eyelashes-2"]
+        used = sorted({v for f in fs for v in f[0]})
+        rm = {v: i for i, v in enumerate(used)}
+        P = B.P[used].copy()
+        dist = np.linalg.norm(P - e, axis=1)
+        r0 = dist.min()
+        P = e + (P - e) * ((r0 + 0.5 * (dist - r0)) / dist)[:, None]
+        fl = [[rm[v] for v in f[0]] for f in fs]
+        uvs = [cell_uv("lash", np.array([0.5]), np.array([0.5]))[0] for f in fl for _ in f]
+        o = mesh_from("lashes", to_bl_np(P), fl, uvs)
+        set_mask(o, (0.0, 0.0, 0.5))
+        W = np.zeros((len(P), len(BONE_NAMES)))
+        W[:, BI["head"]] = 1
+        WSTORE[o.name] = W
+        out.append(o)
+    return out
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# shoes: hull of the real foot, remeshed, with a sole edge; weighted like the foot skin
+# ----------------------------------------------------------------------------------------------------------------
+def shoe_objects(B, c, cov):
+    out = []
+    collar = cov["_collar_y"]
+    bodyv = set(B.bodyv.tolist())
+    for s in "LR":
+        sel = np.array([i for i in B.bodyv if (B.vb[i] in (f"foot_{s}", f"toe_{s}") or (B.vb[i] == f"shin_{s}" and B.P[i, 1] < collar + 0.012))])
+        pts = B.P[sel] + B.N[sel] * 0.0075
+        bm = bmesh.new()
+        for p in to_bl_np(pts):
+            bm.verts.new(p)
+        bmesh.ops.convex_hull(bm, input=bm.verts)
+        o = BC.mesh_obj("shoe", bm)
+        rm = o.modifiers.new("remesh", "REMESH")
+        rm.mode, rm.voxel_size = "VOXEL", 0.0055
+        sm = o.modifiers.new("smooth", "SMOOTH")
+        sm.factor, sm.iterations = 0.5, 4
+        BC.apply_modifiers(o)
+        me = o.data
+        co = np.array([v.co for v in me.vertices])
+        zb = co[:, 2].min()
+        # open the top (the leg goes in) and stretch the bottom band down to the ground: a sole with a straight edge
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_center_median().z > collar], context="FACES")
+        fwd = to_bl(B.Jm["toe_" + s]) - to_bl(B.Jm["ankle_" + s])
+        fwd.z = 0
+        fwd.normalize()
+        ax0 = to_bl(B.Jm["ankle_" + s])
+        band = 0.014
+        for v in bm.verts:
+            z = v.co.z - zb
+            if z < band:
+                v.co.z = z / band * (zb + band)
+            if v.co.z < 0.016:      # sole lip
+                rel = v.co - ax0
+                along = rel.dot(fwd)
+                perp = rel - fwd * along
+                perp.z = 0
+                if perp.length > 1e-4:
+                    v.co += perp.normalized() * 0.0022 * (1 - v.co.z / 0.016)
+        bm.to_mesh(me)
+        bm.free()
+        dec = o.modifiers.new("dec", "DECIMATE")
+        dec.ratio = min(1.0, 520 / max(1, len(me.polygons) * 2))
+        BC.apply_modifiers(o)
+        BC.smooth(o)
+        set_cell_uvs(o, "shoe", "yz", per_face=lambda p: "sole" if p.center.z < 0.012 else "shoe")
+        zz = np.array([v.co.z for v in o.data.vertices])
+        set_mask(o, np.stack([np.zeros_like(zz), np.where(zz < 0.012, 0.1, 0.42), np.zeros_like(zz)], 1))
+        ref = np.array([i for i in B.bodyv if B.vb[i] in (f"foot_{s}", f"toe_{s}", f"shin_{s}") and B.P[i, 1] < collar + 0.05])
+        WSTORE[o.name] = nearest_weights(obj_world_verts(o), to_bl_np(B.P[ref]), B.W[ref], 4)
+        out.append(o)
+    _ = bodyv
+    return out
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# hair pieces, hats, accessories
+# ----------------------------------------------------------------------------------------------------------------
+def head_frame(B):
+    hv = np.array([i for i in B.bodyv if B.vb[i] == "head"])
+    Hp = B.P[hv]
+    return Hp
+
+
+def hair_sheet(B, c, ref, a0, a1, y_top, y_bot, clear=0.004, flare=0.03, seg=30, rows=8, narrow=0.0, tip=0.0, vol=0.008, name="hair_sheet"):
+    """Hanging hair: an arc of strands (azimuth a0..a1 deg, 0 = front, narrowing by `narrow` deg per side toward the
+    ends) from y_top down to y_bot, hugging the reference surface (head + hair shell + neck/shoulders, MH coords)."""
+    L = B.L
+    cz = L.eye[2] - 0.085
+    rel = ref - np.array([0, 0, cz])
+    th_v = np.degrees(np.arctan2(rel[:, 0], rel[:, 2]))
+    rad_v = np.hypot(rel[:, 0], rel[:, 2])
+    verts, uvs_v = [], []
+    for r in range(rows):
+        t = r / (rows - 1)
+        lo, hi = a0 + narrow * t, a1 - narrow * t
+        for k in range(seg):
+            u = k / (seg - 1)
+            yb = y_bot + tip * abs(2 * u - 1) ** 1.5          # longer at the centre of the back, shorter at the sides
+            yy = y_top + (yb - y_top) * t
+            a = lo + (hi - lo) * u
+            m = (np.abs(((th_v - a + 180) % 360) - 180) < 9) & (np.abs(ref[:, 1] - yy) < 0.018)
+            base_r = rad_v[m].max() if m.any() else 0.08
+            edge = min(u, 1 - u)
+            # starts inside the hair shell (hidden) and grows through it: a layered edge, not a visible seam
+            rr = base_r + clear + (vol + 0.006) * ss(0.0, 0.4, t) + flare * ss(0.4, 1.0, t) ** 1.4 - 0.004 * ss(0.15, 0.0, edge) * ss(0.2, 0.5, t)
+            rr += 0.0028 * (0.6 * math.sin(math.radians(a) * 23 + 1.3) + 0.4 * math.sin(math.radians(a) * 47)) * ss(0.15, 0.5, t)
+            ar = math.radians(a)
+            verts.append([math.sin(ar) * rr, yy, cz + math.cos(ar) * rr])
+            uvs_v.append((u, 1 - t))
+    P = np.array(verts)
+    # follow the surface below: never cut through anything further down (radius only grows downward)
+    for k in range(seg):
+        for r in range(1, rows):
+            i, j = r * seg + k, (r - 1) * seg + k
+            ri = math.hypot(P[i, 0], P[i, 2] - cz)
+            rj = math.hypot(P[j, 0], P[j, 2] - cz)
+            if ri < rj - 0.002:
+                f = (rj - 0.002) / max(ri, 1e-6)
+                P[i, 0] *= f
+                P[i, 2] = cz + (P[i, 2] - cz) * f
+    jit = 0.01 * np.sin(np.arange(seg) * 2.3) * np.sin(np.arange(seg) * 0.7 + 1)
+    P[(rows - 1) * seg:, 1] += jit
+    # outer surface: thickness grows from ~0 at the top (no step where it leaves the shell) to 6 mm at the ends
+    th = 0.0012 + 0.006 * ss(0.25, 0.6, np.repeat(np.arange(rows) / (rows - 1), seg))
+    rad = np.hypot(P[:, 0], P[:, 2] - cz)
+    Q = P.copy()
+    Q[:, 0] *= (rad + th) / rad
+    Q[:, 2] = cz + (P[:, 2] - cz) * (rad + th) / rad
+    n = rows * seg
+    verts = np.concatenate([P, Q])
+    faces = []
+    for r in range(rows - 1):
+        for k in range(seg - 1):
+            i = r * seg + k
+            faces.append([i, i + 1, i + seg + 1, i + seg])                     # inner (faces the head)
+            faces.append([n + i, n + i + seg, n + i + seg + 1, n + i + 1])     # outer
+    edges = [((rows - 1) * seg + k, (rows - 1) * seg + k + 1) for k in range(seg - 1)]
+    edges += [(r * seg, (r + 1) * seg) for r in range(rows - 1)] + [(r * seg + seg - 1, (r + 1) * seg + seg - 1) for r in range(rows - 1)]
+    for i, j in edges:   # close the ends (both windings: visible from either side)
+        faces.append([i, j, n + j, n + i])
+        faces.append([i, n + i, n + j, j])
+    uv = np.array(uvs_v + uvs_v)
+    o = mesh_from(name, to_bl_np(verts), faces, [cell_uv("hair", uv[v, 0] * 0.7 + 0.15, uv[v, 1]) for f in faces for v in f])
+    BC.smooth(o)
+    set_mask(o, (0, 0, 1))
+    pts = obj_world_verts(o)
+    W = np.zeros((len(pts), len(BONE_NAMES)))
+    hy, ny = B.Jm["head"][1], B.Jm["neck"][1] - 0.06
+    wh = np.clip((pts[:, 2] - ny) / max(hy - ny, 1e-3), 0, 1) * 0.65 + 0.35
+    W[:, BI["head"]] = wh
+    W[:, BI["neck"]] = (1 - wh) * 0.5
+    W[:, BI["chest"]] = (1 - wh) * 0.5
+    WSTORE[o.name] = W
+    return o
+
+
+def ring_fit(pts_bl, z, dz=0.015, n=36):
+    """Per-angle radius of a point cloud's horizontal slice around its centre (Blender coords)."""
+    m = pts_bl[np.abs(pts_bl[:, 2] - z) < dz]
+    if len(m) < 8:
+        m = pts_bl[np.argsort(np.abs(pts_bl[:, 2] - z))[:60]]
+    cx, cy = (m[:, 0].max() + m[:, 0].min()) / 2, (m[:, 1].max() + m[:, 1].min()) / 2
+    ang = np.arctan2(m[:, 1] - cy, m[:, 0] - cx)
+    rad = np.hypot(m[:, 0] - cx, m[:, 1] - cy)
+    bins = ((ang + math.pi) / (2 * math.pi) * n).astype(int) % n
+    R = np.zeros(n)
+    for b, r in zip(bins, rad):
+        R[b] = max(R[b], r)
+    if (R == 0).any():
+        good = np.nonzero(R > 0)[0]
+        R = np.interp(np.arange(n), np.r_[good - n, good, good + n], np.r_[R[good], R[good], R[good]])
+    R = (np.roll(R, 1) + 2 * R + np.roll(R, -1)) / 4
+    return (cx, cy), R
+
+
+def ring_tube(name, rings, n=36, cap=False):
+    """rings: list of (z, (cx, cy), R[n], pad) -> lofted closed-around tube."""
+    verts, faces = [], []
+    for z, (cx, cy), R, pad in rings:
+        for k in range(n):
+            a = -math.pi + (k + 0.5) * 2 * math.pi / n
+            verts.append((cx + math.cos(a) * (R[k] + pad), cy + math.sin(a) * (R[k] + pad), z))
+    for r in range(len(rings) - 1):
+        for k in range(n):
+            i, j = r * n + k, r * n + (k + 1) % n
+            faces.append([i, j, j + n, i + n])
+    return mesh_from(name, verts, faces)
+
+
+def band_from_loop(name, L, loop, B, up, out, h, cell):
+    """A collar / cuff band lofted from a layer's border loop (so it sits exactly on the garment edge)."""
+    P = L.pos[loop]
+    cen = P.mean(0)
+    rings = []
+    for k, (du, do) in enumerate(((-0.006, 0.0012), (h * 0.5, 0.0035), (h, 0.002 + out))):
+        hor = P - cen
+        hor[:, 1] = 0
+        hor /= np.maximum(np.linalg.norm(hor, axis=1, keepdims=True), 1e-6)
+        rings.append(P + up * du + hor * do)
+    n = len(loop)
+    verts = np.concatenate(rings)
+    faces = []
+    for r in range(2):
+        for k in range(n):
+            i, j = r * n + k, r * n + (k + 1) % n
+            faces.append([i, j, j + n, i + n])
+    o = mesh_from(name, to_bl_np(verts), faces)
+    sol = o.modifiers.new("solid", "SOLIDIFY")
+    sol.thickness, sol.offset = 0.0025, -1
+    BC.apply_modifiers(o)
+    W = np.tile(L.W[loop], (3, 1))
+    o2 = piece(o, cell, (0, 0, 0), "xz", W=None)
+    WSTORE[o2.name] = nearest_weights(obj_world_verts(o2), to_bl_np(verts), W, 2)
+    return o2
+
+
+def rope_from_loop(name, L, loop, radius, cell, closed=True):
+    """A soft rolled hem: a thin tube along a layer border loop (sits on the edge, weighted like it)."""
+    P = L.pos[loop]
+    n = len(P)
+    seg = 6
+    verts = []
+    for i in range(n):
+        t = P[(i + 1) % n] - P[i - 1]
+        t /= max(np.linalg.norm(t), 1e-9)
+        a = np.cross(t, [0, 1, 0]) if abs(t[1]) < 0.9 else np.cross(t, [1, 0, 0])
+        a /= np.linalg.norm(a)
+        b = np.cross(t, a)
+        for k in range(seg):
+            ang = 2 * math.pi * k / seg
+            verts.append(P[i] + (a * math.cos(ang) + b * math.sin(ang)) * radius)
+    faces = []
+    for i in range(n if closed else n - 1):
+        j = (i + 1) % n
+        for k in range(seg):
+            faces.append([i * seg + k, i * seg + (k + 1) % seg, j * seg + (k + 1) % seg, j * seg + k])
+    o = mesh_from(name, to_bl_np(np.array(verts)), faces)
+    BC.smooth(o)
+    piece(o, cell, (0, 0, 0), "xz")
+    WSTORE[o.name] = np.repeat(L.W[loop], seg, axis=0)
+    return o
+
+
+def extras(c, B, cov, layers):
+    """Fitted pieces: skirts / coat tails, belt, collar, scarf, buttons, bag, hats, hair pieces, glasses, mask."""
+    out = []
+    J, L, H = B.J, B.L, B.H
+    top, bottom, accs = c.get("top"), c.get("bottom", "trousers"), c.get("acc", [])
+    waist_z = J["spine"].z - 0.01
+    hip_z = (J["hip_L"].z + J["pelvis"].z) / 2
+    lay_pts = {k: to_bl_np(v.pos) for k, v in layers.items() if v is not None}
+    lay_W = {k: v.W for k, v in layers.items() if v is not None}
+    body_bl = to_bl_np(B.P[B.bodyv])
+    cloth_pts = np.concatenate([lay_pts[k] for k in ("top", "bottom") if k in lay_pts] + [body_bl[np.isin(np.array(B.vb)[B.bodyv], ["hips", "spine", "thigh_L", "thigh_R"])]])
+    # ---- skirt / coat tails / robe ----
+    length = {"coat": 0.24, "robe": 0.45, "dress": 0.36, "jacket": 0.1, "uniform": 0.11}.get(top, 0.0)
+    if bottom == "longskirt":
+        length = max(length, 0.46)
+    elif bottom == "skirt":
+        length = max(length, 0.30)
+    if length:
+        top_z = waist_z if top in ("dress", "robe") or bottom != "trousers" else hip_z + 0.045
+        bot_z = max(0.07, top_z - length * H)
+        legs = body_bl[np.isin(np.array(B.vb)[B.bodyv], ["hips", "thigh_L", "thigh_R", "spine", "shin_L", "shin_R"])]
+        rings = []
+        under = top not in ("dress", "robe") and bottom != "trousers" and "top" in lay_pts   # skirt tucked under a top
+        if under:      # starts hidden under the top, then clears the top's (flared) hem
+            tp = lay_pts["top"][np.abs(lay_pts["top"][:, 0]) < 0.22]
+            zh = tp[:, 2].min()
+            _, Rh = ring_fit(tp, zh + 0.012, 0.012)
+            inner = np.concatenate([lay_pts.get("bottom", np.zeros((0, 3))), body_bl[np.isin(np.array(B.vb)[B.bodyv], ["hips", "spine"])]])
+            c0, R0 = ring_fit(inner, top_z, 0.012)
+            top_z = max(top_z, zh + 0.05)
+            c0, R0 = ring_fit(inner, top_z, 0.012)
+        else:
+            c0, R0 = ring_fit(cloth_pts, top_z, 0.012)
+        fl_k = {"coat": 0.3, "robe": 0.42, "jacket": 0.12, "uniform": 0.1}.get(top, 0.4 if bottom == "longskirt" else 0.36)
+        prevR = R0
+        for i in range(12):
+            t = i / 11
+            z = top_z + (bot_z - top_z) * t
+            ci, Ri = ring_fit(legs, max(z, J["knee_L"].z), 0.02)
+            Ri = np.maximum(Ri, prevR * (0.985 if z > hip_z else 1.0)) if i else R0
+            if under and i and z < zh + 0.02:
+                Ri = np.maximum(Ri, Rh + 0.006)
+            fl = 1 + t * fl_k
+            pad = 0.004 + 0.012 * t
+            rings.append((z, (0.0, c0[1] * (1 - t) + (ci[1] + 0.004) * t), Ri * (fl if i else 1.0), pad))
+            prevR = Ri
+        if under:   # emerge right under the top's hem edge (the visible line is the hem itself)
+            rings = [(zh + 0.03, rings[0][1], R0, 0.003), (zh - 0.004, rings[0][1], np.maximum(R0, Rh - 0.003), 0.0),
+                     (zh - 0.026, rings[0][1], np.maximum(R0, Rh + 0.004), 0.004)] + [r for r in rings[1:] if r[0] < zh - 0.05]
+        o = ring_tube("skirt", rings)
+        if top in ("coat", "jacket") and bottom == "trousers":   # coats / jackets: a front vent, closed at the waist
+            bm = bmesh.new()
+            bm.from_mesh(o.data)
+            kill = [f for f in bm.faces if f.calc_center_median().y < -0.02 and abs(f.calc_center_median().x) < 0.1 * (top_z - f.calc_center_median().z) - 0.004]
+            bmesh.ops.delete(bm, geom=kill, context="FACES")
+            bm.to_mesh(o.data)
+            bm.free()
+        cloth_shell(o, 0.005)
+        cell = "colA" if top in ("coat", "robe", "dress", "jacket", "uniform") and bottom == "trousers" or top in ("robe", "dress") else "colB"
+        piece(o, cell, (0, 0, 0), "xz")
+        WSTORE[o.name] = skirt_weights(obj_world_verts(o), J, H, top_z, long=length > 0.4)
+        out.append(o)
+        if "apron" in accs:
+            ap = ring_tube("apron", [(z, cc, R * 1.05, p + 0.008) for z, cc, R, p in rings[:6]])
+            bm = bmesh.new()
+            bm.from_mesh(ap.data)
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_center_median().y > rings[0][1][1] - 0.03], context="FACES")
+            bm.to_mesh(ap.data)
+            bm.free()
+            cloth_shell(ap, 0.003)
+            piece(ap, "acc", (0, 0, 0), "xz")
+            WSTORE[ap.name] = skirt_weights(obj_world_verts(ap), J, H, top_z, long=length > 0.4)
+            out.append(ap)
+    elif "apron" in accs:
+        c0, R0 = ring_fit(cloth_pts, waist_z, 0.012)
+        rings = [(waist_z - i * 0.06, c0, R0, 0.008 + 0.004 * i) for i in range(6)]
+        ap = ring_tube("apron", rings)
+        bm = bmesh.new()
+        bm.from_mesh(ap.data)
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_center_median().y > c0[1] - 0.03], context="FACES")
+        bm.to_mesh(ap.data)
+        bm.free()
+        cloth_shell(ap, 0.003)
+        piece(ap, "acc", (0, 0, 0), "xz")
+        WSTORE[ap.name] = skirt_weights(obj_world_verts(ap), J, H, waist_z, long=False)
+        out.append(ap)
+    # ---- belt (fitted to the garment surface) ----
+    if "belt" in accs or top in ("robe", "uniform"):
+        src = np.concatenate([lay_pts[k] for k in ("top", "bottom") if k in lay_pts])
+        srcW = np.concatenate([lay_W[k] for k in ("top", "bottom") if k in lay_pts])
+        cc, R = ring_fit(src[np.abs(src[:, 0]) < 0.3], waist_z, 0.012)
+        hh = 0.02 if top in ("robe", "coat") else 0.016
+        o = ring_tube("belt", [(waist_z - hh, cc, R, 0.0035), (waist_z, cc, R, 0.0045), (waist_z + hh, cc, R, 0.0035)])
+        piece(o, "trim", (0, 0.3, 0), "xz")
+        WSTORE[o.name] = nearest_weights(obj_world_verts(o), src, srcW, 3)
+        out.append(o)
+    # ---- collar band on the real neckline ----
+    T = layers.get("top")
+    if T is not None and top and c.get("hat") != "hood":
+        loops = T.boundary_loops()
+        if loops:
+            neck_loop = max(loops, key=lambda lp: T.pos[lp, 1].mean() - 2 * np.abs(T.pos[lp, 0]).mean())
+            if T.pos[neck_loop, 1].mean() > B.Jm["chest"][1]:
+                h = COLLAR_H.get(top, 0.01) * H / 1.75
+                o = band_from_loop("collar", T, neck_loop, B, np.array([0, 1.0, 0]), 0.004 if h > 0.02 else 0.0, h, "colA")
+                out.append(o)
+            # cuffs: short bands on the sleeve ends
+            for lp in loops:
+                if lp is neck_loop:
+                    continue
+                q = T.pos[lp]
+                if np.abs(q[:, 0]).mean() > 0.25 and len(lp) > 8:
+                    axis = B.Jm["wrist_L" if q[:, 0].mean() > 0 else "wrist_R"] - B.Jm["elbow_L" if q[:, 0].mean() > 0 else "elbow_R"]
+                    axis = axis / np.linalg.norm(axis)
+                    out.append(band_from_loop("cuff", T, lp, B, -axis, 0.0, 0.012, "colA"))
+    # ---- scarf ----
+    if "scarf" in accs:
+        nz = J["neck"].z + 0.012
+        neckp = body_bl[np.isin(np.array(B.vb)[B.bodyv], ["neck"])]
+        if T is not None:
+            tp = lay_pts["top"]
+            neckp = np.concatenate([neckp, tp[(tp[:, 2] > nz - 0.05) & (np.abs(tp[:, 0]) < 0.075 * H / 1.75)]])
+        cc, R = ring_fit(neckp, nz - 0.012, 0.018)
+        o = loft("scarf", [(nz - 0.04, cc, R, 0.006), (nz - 0.022, cc, R, 0.011), (nz - 0.002, cc, R * 0.97, 0.011), (nz + 0.016, cc, R * 0.93, 0.008), (nz + 0.026, cc, R * 0.9, 0.004)])
+        piece(o, "acc", (0, 0, 0), "xz", bone="neck")
+        out.append(o)
+        ch = J["chest"]
+        crx = ring_fit(cloth_pts, ch.z + 0.06, 0.015)[1]
+        cry = crx[9]  # front radius (angle -90 deg)
+        tail = BC.tube("scarf_tail", [V((0.03, cc[1] - R[9] - 0.01, nz - 0.03)), V((0.034, ch.y - cry - 0.022, ch.z + 0.06)), V((0.036, ch.y - cry - 0.026, ch.z - 0.04)), V((0.037, ch.y - cry - 0.02, ch.z - 0.12))],
+                       [(0.028, 0.004)] * 4, seg=8)
+        piece(tail, "acc", (0, 0, 0), "xz", bone="chest")
+        out.append(tail)
+    # ---- buttons down the front (on the garment surface) ----
+    if (top in ("coat", "uniform") or "buttons" in accs) and T is not None:
+        tp = lay_pts["top"]
+        for i in range(5):
+            z = J["neck"].z - 0.075 - i * 0.075
+            if z < hip_z + 0.02:
+                break
+            m = tp[(np.abs(tp[:, 2] - z) < 0.012) & (np.abs(tp[:, 0]) < 0.02)]
+            if not len(m):
+                continue
+            yf = m[:, 1].min()
+            bm = bmesh.new()
+            bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.006)
+            for v in bm.verts:
+                v.co.y *= 0.55
+            o = BC.mesh_obj("button", bm)
+            o.location = V((0.0, yf - 0.001, z))
+            BC.apply_modifiers(o)
+            bpy.context.view_layer.update()
+            o.data.transform(o.matrix_world)
+            o.matrix_world = Matrix.Identity(4)
+            piece(o, "metal", (0, 0.6, 0), "xz", bone="chest" if z > J["chest"].z else "spine")
+            out.append(o)
+    # ---- satchel ----
+    if "satchel" in accs:
+        cc, R = ring_fit(cloth_pts, hip_z, 0.02)
+        rx = R[18]   # +x side radius
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.bevel(bm, geom=bm.edges, offset=0.25, segments=2, affect="EDGES")
+        for v in bm.verts:
+            v.co = V((v.co.x * 0.05 + (rx + 0.035), v.co.y * 0.22 + cc[1], v.co.z * 0.17 + hip_z + 0.02))
+        o = BC.mesh_obj("satchel", bm)
+        piece(o, "trim", (0, 0.25, 0), "yz", bone="hips")
+        out.append(o)
+        sh = J["shoulder_L"]
+        strap = BC.tube("strap", [V((rx + 0.03, cc[1] - 0.02, hip_z + 0.1)), V((0.04, J["chest"].y - 0.13, J["chest"].z)), V((-sh.x + 0.03, sh.y - 0.05, sh.z + 0.06)),
+                                  V((-sh.x + 0.02, sh.y + 0.06, sh.z + 0.04)), V((0.05, J["chest"].y + 0.12, J["chest"].z - 0.02)), V((rx + 0.03, cc[1] + 0.03, hip_z + 0.1))],
+                        [(0.02, 0.003)] * 6, seg=6)
+        piece(strap, "trim", (0, 0.2, 0), "xz", bone="chest")
+        out.append(strap)
+    # ---- head pieces ----
+    hcen = to_bl(L.eye)
+    Hp = to_bl_np(head_frame(B))
+    hm = Hp[np.abs(Hp[:, 2] - (hcen.z + 0.03)) < 0.02]
+    hrx = (hm[:, 0].max() - hm[:, 0].min()) / 2
+    hry = (hm[:, 1].max() - hm[:, 1].min()) / 2
+    hc = V(((hm[:, 0].max() + hm[:, 0].min()) / 2, (hm[:, 1].max() + hm[:, 1].min()) / 2, hcen.z + 0.02))
+    hs = hrx / 0.86
+    hat, style = c.get("hat"), cov["_style"]
+    vol = SHELL.get(style, 0.0)
+    out += hat_pieces(c, B, layers)
+    for key, cell, rad in (("scarf", "acc", 0.0045), ("hood", "colA", 0.006)):
+        Lx = layers.get(key)
+        if Lx is not None:
+            loops = Lx.boundary_loops()
+            if loops:
+                out.append(rope_from_loop(key + "_hem", Lx, max(loops, key=len), rad, cell))
+    if hat == "headscarf":   # knot at the nape with two short tails
+        nape = hc + V((0, hry * 0.95, -0.07))
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=1.0)
+        for v in bm.verts:
+            v.co = V((v.co.x * 0.026, v.co.y * 0.014, v.co.z * 0.018))
+        o = BC.mesh_obj("knot", bm)
+        o.data.transform(Matrix.Translation(nape))
+        piece(o, "acc", (0, 0, 0), "xz", bone="head")
+        out.append(o)
+        for sd in (-1, 1):
+            tl = BC.tube("knot_tail", [nape + V((sd * 0.008, 0.004, -0.004)), nape + V((sd * 0.018, 0.012, -0.045)), nape + V((sd * 0.024, 0.02, -0.085))],
+                         [(0.016, 0.003), (0.02, 0.003), (0.012, 0.002)], seg=8)
+            piece(tl, "acc", (0, 0, 0), "xz", bone="head")
+            out.append(tl)
+    if hat not in ("hood", "headscarf"):
+        hp = []
+        if style == "bun":
+            bm = bmesh.new()
+            bmesh.ops.create_uvsphere(bm, u_segments=18, v_segments=12, radius=1.0)
+            for v in bm.verts:
+                v.co = V((v.co.x * 0.04, v.co.y * 0.034, v.co.z * 0.036))
+            o = BC.mesh_obj("bun", bm)
+            o.data.transform(Matrix.Translation(hc + V((0, hry * 0.86 + vol, hrx * 0.5))))
+            hp.append((o, "head"))
+        if style in ("braid", "pony"):
+            if style == "braid":
+                for i in range(6):
+                    r = 0.018 - i * 0.002
+                    bm = bmesh.new()
+                    bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=8, radius=1.0)
+                    for v in bm.verts:
+                        v.co = V((v.co.x * r, v.co.y * r, v.co.z * r * 1.5))
+                    o = BC.mesh_obj("braid", bm)
+                    o.data.transform(Matrix.Translation(hc + V((0, hry * 0.98 + i * 0.008 + vol, -0.03 - i * 0.032))))
+                    hp.append((o, "head" if i < 2 else "neck"))
+            else:
+                pts = [hc + V((0, hry * 0.95, 0.03)), hc + V((0, hry * 1.1 + 0.01, -0.03)), hc + V((0, hry * 1.12 + 0.02, -0.1)), hc + V((0, hry * 1.05 + 0.03, -0.17))]
+                o = BC.tube("pony", pts, [(0.022, 0.02), (0.02, 0.018), (0.016, 0.014), (0.006, 0.005)], seg=12)
+                hp.append((o, "head"))
+        for o, bone in hp:
+            BC.smooth(o)
+            piece(o, "hair", (0, 0, 1), "xz", bone=bone)
+            out.append(o)
+        if style in ("long", "bob"):
+            ref = [head_frame(B), B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["neck", "chest", "clavicle_L", "clavicle_R"])]]
+            if layers.get("top") is not None:
+                ref.append(layers["top"].pos)
+            ref = np.concatenate(ref)
+            if style == "long":
+                out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.105, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.02, narrow=36, rows=15, tip=0.07, seg=34, vol=vol))
+            else:
+                out.append(hair_sheet(B, c, ref, 70, 290, L.eye[1] + 0.105, L.eye[1] - 0.078, clear=0.003, flare=0.012, rows=12, tip=0.012, vol=vol))
+    if "glasses" in accs:
+        for e in (L.eyeL, L.eyeR):
+            bm = bmesh.new()
+            bmesh.ops.create_circle(bm, cap_ends=False, segments=16, radius=0.017)
+            bmesh.ops.rotate(bm, verts=bm.verts, cent=V((0, 0, 0)), matrix=Matrix.Rotation(math.pi / 2, 3, "X"))
+            o = BC.mesh_obj("lens", bm)
+            o.modifiers.new("skin", "SKIN")
+            for dd in o.data.skin_vertices[0].data:
+                dd.radius = (0.0012, 0.0012)
+            BC.apply_modifiers(o)
+            o.data.transform(Matrix.Translation(to_bl(e) + V((0, -0.02, 0))))
+            piece(o, "metal", (0, 0.6, 0), "xz", bone="head")
+            out.append(o)
+    if "mask" in accs:
+        o = BC.shell("mask", hc + V((0, -0.006, 0)), hrx * 1.1, hry * 1.12, hrx * 1.45, lambda p: p.y < -0.3 and -0.75 < p.z < 0.62, seg=(36, 24))
+        bpy.context.view_layer.update()
+        o.data.transform(o.matrix_world)
+        o.matrix_world = Matrix.Identity(4)
+        piece(o, "metal", (0, 0.5, 0), "xz", bone="head")
+        out.append(o)
+    return out
+
+
+def loft(name, rings, n=36, cap_top=False, front=None):
+    """rings: [(z, (cx, cy), R[n], pad)] (Blender coords) -> quad tube; cap_top closes the last ring with a fan;
+    front=(a0, a1) keeps only the arc of angles a0..a1 (radians, -pi/2 = front) -> an open strip (visors)."""
+    verts, faces = [], []
+    ks = list(range(n))
+    angs = [-math.pi + (k + 0.5) * 2 * math.pi / n for k in ks]
+    if front is not None:
+        angs = list(np.linspace(front[0], front[1], n))
+    for z, (cx, cy), R, pad in rings:
+        for k, a in enumerate(angs):
+            kk = int(((a + math.pi) / (2 * math.pi) * len(R))) % len(R)
+            rr = (R[kk] if hasattr(R, "__len__") else R) + pad
+            verts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr, z))
+    m = len(angs)
+    for r in range(len(rings) - 1):
+        for k in range(m if front is None else m - 1):
+            i, j = r * m + k, r * m + (k + 1) % m
+            faces.append([i, j, j + m, i + m])
+    if cap_top:
+        z, (cx, cy), _, _ = rings[-1]
+        top = np.array(verts[-m:])
+        verts.append((top[:, 0].mean(), top[:, 1].mean(), z + 0.004))
+        c0 = len(verts) - 1
+        for k in range(m):
+            faces.append([(len(rings) - 1) * m + k, (len(rings) - 1) * m + (k + 1) % m, c0])
+    return mesh_from(name, verts, faces)
+
+
+def hat_pieces(c, B, layers):
+    """Hats fitted to the real head (+ hair): crown rings measured at their own heights, brims / visors on the band."""
+    hat = c.get("hat")
+    if hat not in ("cap", "fedora", "tophat", "warden"):
+        return []
+    k = B.H / 1.75
+    hp = to_bl_np(head_frame(B))
+    if layers.get("hair") is not None:
+        hp = np.concatenate([hp, to_bl_np(layers["hair"].pos)])
+    eye_z = B.L.eye[1]
+    zb = eye_z + {"cap": 0.046, "fedora": 0.05, "tophat": 0.052, "warden": 0.047}[hat] * k
+    cc, R = ring_fit(hp, zb, 0.01)
+    top = hp[:, 2].max()
+    cell = {"clothA": "colA", "clothB": "colB", "accent": "acc"}.get(c.get("hatMat", "trim"), "trim")
+    out, pad = [], 0.0045
+    if hat == "cap":   # flat cap: roomy crown sloping forward over a short peak
+        fwd = 0.016 * k
+        rings = [(zb - 0.003, cc, R, pad)]
+        for f, sc in ((0.35, 1.07), (0.7, 1.08), (1.0, 0.92)):
+            z = zb + (top - zb) * 0.8 * f + 0.004
+            ci, Ri = ring_fit(hp, min(z, top - 0.01), 0.008)
+            rings.append((z, (cc[0], cc[1] - fwd * f), np.maximum(Ri, R * (1.0 - 0.45 * f)) * sc, pad + 0.004))
+        crown = loft("cap", rings, cap_top=True)
+        visor = loft("visor", [(zb + 0.001, cc, R, pad - 0.003), (zb - 0.01 * k, cc, R, pad + 0.046 * k)], n=14, front=(-math.pi / 2 - 0.85, -math.pi / 2 + 0.85))
+    else:
+        h = {"fedora": 0.08, "tophat": 0.17, "warden": 0.058}[hat] * k
+        fl = {"fedora": 0.96, "tophat": 1.03, "warden": 1.07}[hat]
+        rings = [(zb - 0.004, cc, R, pad), (zb + h * 0.5, cc, R * (1 + (fl - 1) * 0.5), pad), (zb + h, cc, R * fl, pad)]
+        crown = loft(hat, rings, cap_top=True)
+        if hat == "warden":
+            visor = loft("visor", [(zb + 0.002, cc, R, pad - 0.001), (zb - 0.02 * k, cc, R, pad + 0.05 * k)], n=14, front=(-math.pi / 2 - 1.0, -math.pi / 2 + 1.0))
+            band = loft("band", [(zb - 0.004, cc, R, pad + 0.0015), (zb + 0.022 * k, cc, R, pad + 0.0015 + 0.001)])
+            piece(band, "trim", (0, 0.3, 0), "xz", bone="head")
+            out.append(band)
+        else:
+            bw = {"fedora": 0.05, "tophat": 0.04}[hat] * k
+            visor = loft("brim", [(zb + 0.001, cc, R, pad - 0.002), (zb - (0.006 if hat == "fedora" else 0.0), cc, R, pad + bw)])
+    for o in (crown, visor):
+        sol = o.modifiers.new("solid", "SOLIDIFY")
+        sol.thickness = 0.0035
+        BC.apply_modifiers(o)
+        BC.smooth(o)
+        piece(o, cell, (0, 0.08, 0), "xz", bone="head")
+        out.append(o)
+    return out
+
+
+def cloth_shell(o, thickness):
+    """Give a cloth sheet its thickness, with the hem / edge rim on its own normals (smooth normals averaged across the
+    rim turn the whole hem dark)."""
+    sol = o.modifiers.new("solid", "SOLIDIFY")
+    sol.thickness = thickness
+    es = o.modifiers.new("split", "EDGE_SPLIT")
+    es.split_angle = math.radians(55)
+    es.use_edge_sharp = False
+    BC.apply_modifiers(o)
+
+
+def skirt_weights(pts, J, H, top_z, long=False):
+    """Skirts / coat tails: hips at the waist, then mostly the thigh on the same side (by the knee, so a striding leg
+    carries its half of the skirt instead of poking through it), with a little shin toward a long hem. The two sides
+    blend over the whole front / back panel, so the cloth stretches between the legs instead of splitting into two
+    rigid boards. An apron takes the same weights as the skirt under it (they move as one)."""
+    W = np.zeros((len(pts), len(BONE_NAMES)))
+    t = np.clip((top_z - pts[:, 2]) / (0.2 * H), 0, 1)
+    back = np.clip((pts[:, 1] - J["pelvis"].y) / 0.08, 0, 1)        # the back panel stays a little more with the hips
+    lw = t ** 0.8 * (1 - 0.25 * back) * 0.85
+    sx = np.clip(pts[:, 0] / 0.11, -1, 1)
+    sx = np.sin(sx * math.pi / 2)
+    kz = J["knee_L"].z
+    below = np.clip((kz + 0.02 - pts[:, 2]) / 0.22, 0, 1) * 0.75     # below the knee the hem hangs from the shin
+    W[:, BI["hips"]] = 1 - lw
+    for s_, side in (("L", 0.5 + 0.5 * sx), ("R", 0.5 - 0.5 * sx)):
+        W[:, BI["thigh_" + s_]] = lw * side * (1 - below)
+        W[:, BI["shin_" + s_]] = lw * side * below
+    return W
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# build one character
+# ----------------------------------------------------------------------------------------------------------------
+def budget(c):
+    if c.get("tris"):
+        return c["tris"]
+    if c["id"] == "arin":
+        return 16000
+    if c["id"].startswith("town_") or c["macro"].get("age", 0.5) < 0.25:
+        return 9000
+    return 11000
+
+
+def build(c, tex_dir):
+    B = Body(c)
+    cov = fields(c, B)
+    style = cov["_style"]
+    lay_parts = layout()["part"]
+    res = c.get("res", 2048 if c["id"] == "arin" else 1024)
+    tex = paint(c, B, cov, res, os.path.join(tex_dir, c["id"] + ".jpg"))
+    layers = {}
+    H = B.H
+    # ---- skin (with a 2 cm band under every garment border) ----
+    hide = hide_field(cov)
+    for key in ("scarf", "hood"):      # ears under a headscarf / hood are tucked away
+        if key in cov:
+            earv = layout()["ears"]
+            hide[earv] = np.maximum(hide[earv], np.where(cov[key][earv] > -0.01, 0.05, hide[earv]))
+    skin = build_layer(B, "skin", -hide, iso=-0.02)
+    hpaint = cov.get("hair", cov.get("_hairpaint"))
+    sk = ss(-0.006, 0.0, -hide[skin.base])
+    hb = ss(-0.002, 0.004, hpaint[skin.base]) if hpaint is not None else 0
+    ears = np.zeros(len(skin.base))
+    skin.mask = np.stack([sk * (1 - hb), np.zeros_like(sk), hb * np.ones_like(sk)], 1)
+    _ = ears
+    layers["skin"] = skin
+    # ---- garments ----
+    thick = {"coat": 0.012, "robe": 0.012, "jacket": 0.009, "uniform": 0.009, "sweater": 0.008, "vest": 0.007, "shirt": 0.006, "dress": 0.006}.get(c.get("top"), 0.008)
+    if "bottom" in cov:
+        Lb = build_layer(B, "bottom", cov["bottom"])
+        if Lb is not None:
+            taubin(Lb, 4)
+            offset_layer(Lb, B, 0.0055 * (0.35 + 0.65 * ss(0.0, 0.02, Lb.cov)))
+            layers["bottom"] = Lb
+    if "shaft" in cov:
+        Ls = build_layer(B, "shaft", cov["shaft"])
+        if Ls is not None:
+            taubin(Ls, 4)
+            offset_layer(Ls, B, 0.0085 * (0.6 + 0.4 * ss(0.0, 0.015, Ls.cov)))
+            Ls.mask[:, 1] = 0.42
+            layers["shaft"] = Ls
+    if "top" in cov:
+        Lt = build_layer(B, "top", cov["top"])
+        if Lt is not None:
+            loose = {"coat": 10, "robe": 12, "jacket": 8, "uniform": 8, "sweater": 8, "dress": 8}.get(c.get("top"), 6)
+            taubin(Lt, loose)
+            offset_layer(Lt, B, thick * (0.4 + 0.6 * ss(0.0, 0.02, Lt.cov)))
+            amt = {"coat": 1.0, "robe": 1.0, "jacket": 0.85, "uniform": 0.8, "sweater": 0.75, "dress": 0.7}.get(c.get("top"), 0.5)
+            inflate(Lt, B, amt)
+            taubin(Lt, 2)
+            layers["top"] = Lt
+    head_faces = [fi for fi in B.faces if lay_parts[fi] in ("face", "scalp")]
+    if "hair" in cov and SHELL.get(style, 0) > 0:
+        Lh = build_layer(B, "hair", cov["hair"], faces=head_faces)
+        if Lh is not None:
+            vol = SHELL[style]
+            rel = Lh.pos - B.L.eye
+            shape = 0.55 + 0.45 * ss(-0.02, 0.07, rel[:, 1])
+            if style == "swept":
+                shape = shape + 0.7 * g2(((rel[:, 2] - 0.0) / 0.04) ** 2 + ((rel[:, 1] - 0.075) / 0.035) ** 2, 1.0)
+            taubin(Lh, 3, pin=Lh.cov <= 0.0005)
+            seed = (sum(map(ord, c["id"])) % 97) * 0.37
+            clumps = hair_strands(c, rel, style, seed, fine=0.6) - 0.5     # combed clumps: relief along the strands
+            offset_layer(Lh, B, 0.0004 + vol * (shape + 0.45 * clumps) * ss(0.0, 0.03, Lh.cov))
+            taubin(Lh, 2, pin=Lh.cov <= 0.0005)
+            Lh.mask[:, 2] = 1
+            layers["hair"] = Lh
+    for key, off in (("scarf", 0.015), ("hood", 0.016)):
+        if key in cov:
+            faces = [fi for fi in B.faces if lay_parts[fi] not in ("mouth", "lidL", "lidR")]
+            Lx = build_layer(B, key, cov[key], faces=faces)
+            if Lx is not None:
+                # cloth passes over the ears: press them flat against the side of the skull
+                rel0 = B.P - B.L.eye
+                sk = B.P[(np.abs(rel0[:, 1] - 0.03) < 0.006) & (rel0[:, 2] < -0.05) & (rel0[:, 2] > -0.12) & (B.hw > 0.5)]
+                xs = np.abs(sk[:, 0] - B.L.eye[0]).max() if len(sk) else 0.072
+                em = B.ear[Lx.base] > 0.5
+                Lx.nb = B.N[Lx.base].copy()
+                if em.any():
+                    sx = np.sign(Lx.pos[em, 0] - B.L.eye[0])
+                    Lx.pos[em, 0] = B.L.eye[0] + sx * np.minimum(np.abs(Lx.pos[em, 0] - B.L.eye[0]), xs)
+                    Lx.nb[em] = np.stack([sx, np.zeros_like(sx), np.zeros_like(sx)], 1)
+                taubin(Lx, 10 if key == "hood" else 14)
+                rel = Lx.pos - B.L.eye
+                bump = 0.0
+                hw = np.clip(B.hw[Lx.base] + B.W[Lx.base, BI["neck"]], 0, 1) if key == "hood" else 1.0
+                if key == "scarf" and c.get("hair") == "bun":
+                    bump = 0.03 * g2(rel[:, 0] ** 2 + ((rel[:, 1] - 0.07) / 1.0) ** 2 + ((rel[:, 2] + 0.15) / 0.6) ** 2, 0.035)
+                if key == "hood":   # snug at the face opening, loose and a little peaked behind; a slim mantle on the shoulders
+                    bump = 0.022 * ss(0.0, 0.07, Lx.cov) * hw + 0.012 * g2(rel[:, 0] ** 2 + ((rel[:, 1] - 0.06) / 1.2) ** 2 + ((rel[:, 2] + 0.12) / 0.8) ** 2, 0.04)
+                offset_layer(Lx, B, off * (0.35 + 0.65 * ss(0.0, 0.02, Lx.cov)) + bump)
+                taubin(Lx, 2)
+                layers[key] = Lx
+    parts = [layer_object(Lr) for Lr in layers.values()]
+    parts += eye_objects(B, c)
+    parts += shoe_objects(B, c, cov)
+    ex = extras(c, B, cov, layers)
+    cloth = [o for o in ex if o.name.startswith(("skirt", "apron"))]    # already even quads: kept out of decimation
+    parts += [o for o in ex if o not in cloth]
+    # ---- rig + weights + one material ----
+    arm = BC.build_armature(c["id"], B.J)
+    for o in parts + cloth:
+        apply_weights(o, arm)
+    mat = atlas_material(c, tex)
+    for o in parts + cloth:
+        o.data.materials.clear()
+        o.data.materials.append(mat)
+        if not o.data.uv_layers:
+            o.data.uv_layers.new(name="UVMap")
+        if not o.data.attributes.get("_mask"):
+            set_mask(o, (0, 0, 0))
+
+    def join(objs):
+        for o in bpy.context.view_layer.objects:
+            o.select_set(False)
+        for o in objs:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = objs[0]
+        bpy.ops.object.join()
+        return objs[0]
+    mesh = join(parts)
+    mesh.name = c["id"] + "_mesh"
+    cloth_tris = sum(len(p.vertices) - 2 for o in cloth for p in o.data.polygons)
+    decimate_protected(mesh, B, budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0)
+    if cloth:
+        mesh = join([mesh] + cloth)
+        print("  + cloth", cloth_tris, "tris", flush=True)
+    arm["character"] = c["id"]
+    return arm, mesh
+
+
+def select_class(mesh, cls, which):
+    """Select one decimation class; open borders (garment hems, hairline, boot tops, collars) stay unselected so the
+    collapse never touches them (they keep their smooth snapped shape)."""
+    bm = bmesh.from_edit_mesh(mesh.data)
+    for f in bm.faces:
+        f.select_set(cls(f.calc_center_median()) == which)
+    bm.select_flush_mode()
+    for e in bm.edges:
+        if e.is_boundary:
+            for v in e.verts:
+                v.select_set(False)
+    bmesh.update_edit_mesh(mesh.data)
+
+
+def decimate_protected(mesh, B, target, face_keep=1.0):
+    """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest."""
+    e = to_bl(B.L.eye)
+    hc = to_bl(B.L.eye + np.array([0, 0.02, -0.08]))
+
+    def cls(p):
+        d = p - e
+        if d.y < 0.03 and -0.13 < d.z < 0.075 and abs(d.x) < 0.075:
+            return "face"
+        if (p - hc).length < 0.2 and p.z > B.J["neck"].z - 0.02:
+            return "head"
+        return "body"
+    bpy.context.view_layer.objects.active = mesh
+    bpy.ops.object.mode_set(mode="EDIT")
+
+    def counts():
+        bm = bmesh.from_edit_mesh(mesh.data)
+        n = {"face": 0, "head": 0, "body": 0}
+        for f in bm.faces:
+            n[cls(f.calc_center_median())] += len(f.verts) - 2
+        return n
+    n = counts()
+    total = sum(n.values())
+    if total > target:
+        head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
+        for _ in range(12):
+            body_k = (target - n["face"] * face_keep - n["head"] * head_k) / max(n["body"], 1)
+            if body_k >= 0.2:
+                break
+            head_k = max(0.22, head_k * 0.85)
+            face_keep = max(0.6, face_keep * 0.95)
+        body_k = max(body_k, 0.12)
+        for which, ratio in (("body", body_k), ("head", head_k), ("face", face_keep)):
+            if ratio >= 0.999:
+                continue
+            select_class(mesh, cls, which)
+            bpy.ops.mesh.decimate(ratio=float(np.clip(ratio, 0.05, 1.0)))
+        n2 = counts()
+        tot2 = sum(n2.values())
+        if tot2 > target * 1.01:   # land on the budget: the body takes the overshoot
+            select_class(mesh, cls, "body")
+            bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)))
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    print("  decimate", c_id(mesh), n, "->", sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris (target", target, ")", flush=True)
+
+
+def c_id(mesh):
+    return mesh.name.replace("_mesh", "")
+
+
+def atlas_material(c, tex_path):
+    m = bpy.data.materials.new(c["id"] + "_atlas")
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes.get("Principled BSDF")
+    im = nt.nodes.new("ShaderNodeTexImage")
+    im.image = bpy.data.images.load(tex_path)
+    nt.links.new(im.outputs["Color"], bsdf.inputs["Base Color"])
+    bsdf.inputs["Roughness"].default_value = 0.82
+    m["slot"] = "atlas"
+    return m
+
+
+# ----------------------------------------------------------------------------------------------------------------
+def main():
+    out = os.path.abspath(sys.argv[-1] if len(sys.argv) > 1 and not sys.argv[-1].endswith(".py") else "out")
+    tex_dir = os.path.join(out, "tex")
+    os.makedirs(tex_dir, exist_ok=True)
+    only = os.environ.get("ONLY")
+    BC.clear()
+    objs = []
+    for c in CAST:
+        if only and c["id"] not in only.split(","):
+            continue
+        arm, mesh = build(c, tex_dir)
+        objs += [arm, mesh]
+        print("built", c["id"], sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris", flush=True)
+    BC.export(os.path.join(out, "cast.glb"), set(objs), False, attributes=True)
+    # reference rig + clips from an average body
+    BC.clear()
+    P = mh.sculpt(dict(gender=0.5))
+    P = P - np.array([0, P[:, 1].min(), 0])
+    ref = BC.build_armature("rig", rig_points(P))
+    BC.bake_clips(ref, P[:, 1].max())
+    BC.export(os.path.join(out, "anims.glb"), {ref}, True)
+    print("done ->", out)
+
+
+if __name__ == "__main__":
+    main()

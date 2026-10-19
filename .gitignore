@@ -3,3 +3,5 @@ node_modules/
 .DS_Store
 # build output (scripts/build-www.mjs)
 www/
+__pycache__/
+*.pyc
