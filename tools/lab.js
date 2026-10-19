@@ -1,7 +1,7 @@
 // Human Lab: renders head/body/hair modules under fixed, realistic lighting for review and judging.
 // URL params:
 //   head=../src/human/head.js  body=../src/human/body.js  hair=../src/human/hair.js
-//   view=portrait|profile|threeq|full|lineup|walk|eyes   preset=kai|mira|witness|sera|niko|tala|rook|iven|jun|hale|brandt|child  names=<comma list for lineup>
+//   view=portrait|profile|threeq|full|torso|back|lineup|walk|eyes   preset=kai|mira|witness|sera|niko|tala|rook|iven|jun|hale|brandt|child  names=<comma list for lineup>
 //   detail=high|medium|low   t=<seconds for walk pose>   bg=studio|city|sunset
 //   ref=1  show the owner's reference art (assets/cast/<preset>_ref.png) beside the render (kai, mira, witness, sera)
 import * as THREE from 'three';
@@ -12,11 +12,11 @@ const view = q.get('view') || 'portrait';
 const detail = q.get('detail') || 'high';
 
 export const PRESETS = {
-  kai: { ref: 'kai', head: { sex: 0, age: 32, skin: 0xc08a64, eyeColor: 0x2e2216, seed: 11, shape: { jaw: 0.45, cheek: 0.35, nose: 0.2, noseWidth: -0.05, lips: -0.05, brow: 0.45, eyeSize: -0.2, faceLength: 0.15, chin: 0.25 }, marks: { stubble: 0.95, wrinkles: 0.15 } },
-         hair: { style: 'messy', color: 0x0d0a09, beard: 'stubble', beardColor: 0x14100d },
+  kai: { ref: 'kai', head: { sex: 0, age: 32, skin: 0xc08a64, eyeColor: 0x2e2216, seed: 11, shape: { jaw: 0.45, cheek: 0.35, nose: 0.2, noseWidth: -0.05, lips: -0.05, brow: 0.35, eyeSize: 0.05, faceLength: 0.1, chin: 0.3 }, marks: { stubble: 0.95, wrinkles: 0.15 } },
+         hair: { style: 'quiff', color: 0x15100c, beard: 'stubble', beardColor: 0x14100d },
          body: { height: 1.83, sex: 0, build: 1.05, age: 32, skin: 0xc08a64, outfit: { top: { type: 'jacket', color: 0x1c1d20, material: 'leather', hood: true }, pants: { type: 'trousers', color: 0x2a2c2f }, shoes: { type: 'boots', color: 0x1b1611 }, gloves: 0x1d1a17, belt: 0x2a1d14, strap: true, wristMark: true } } },
   mira: { ref: 'mira', head: { sex: 1, age: 28, skin: 0xe2b394, eyeColor: 0x5a6a72, seed: 22, shape: { jaw: -0.35, cheek: 0.55, nose: -0.1, noseWidth: -0.3, lips: 0.45, brow: -0.3, eyeSize: 0.35, faceLength: 0.05, chin: -0.05 }, marks: { freckles: 0.05 } },
-         hair: { style: 'bob', color: 0x140e0b },
+         hair: { style: 'long', color: 0x1a120e },
          body: { height: 1.69, sex: 1, build: 0.95, age: 30, skin: 0xd9a585, outfit: { top: { type: 'armored', color: 0x1c2026, material: 'leather' }, pants: { type: 'trousers', color: 0x1f2227 }, shoes: { type: 'boots', color: 0x15120f }, belt: 0x1a1612 } } },
   witness: { ref: 'witness', head: { sex: 0, age: 58, skin: 0xb3815f, eyeColor: 0x2e2216, seed: 11, shape: { jaw: 0.45, cheek: 0.25, nose: 0.25, noseWidth: -0.05, lips: -0.25, brow: 0.55, eyeSize: -0.25, faceLength: 0.2, chin: 0.25 }, marks: { scar: true, wrinkles: 0.8 } },
          hair: { style: 'grey-swept', color: 0x9a9690, beard: 'full', beardColor: 0x8a8580 },
@@ -64,10 +64,10 @@ scene.background = new THREE.Color(bg === 'sunset' ? 0x3a2a24 : bg === 'city' ? 
 const pm = new THREE.PMREMGenerator(renderer);
 scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.55;
-const key = new THREE.DirectionalLight(bg === 'sunset' ? 0xffc08a : 0xfff0e2, 2.6); key.position.set(1.6, 2.6, 2.4); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0003; key.shadow.normalBias = 0.01;
+const key = new THREE.DirectionalLight(bg === 'sunset' ? 0xffc08a : 0xffe6cc, 2.8); key.position.set(1.5, 2.0, 1.7); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0003; key.shadow.normalBias = 0.01;
 Object.assign(key.shadow.camera, { left: -2, right: 2, top: 2.5, bottom: -0.5, near: 0.1, far: 10 }); scene.add(key);
-const rim = new THREE.DirectionalLight(bg === 'city' ? 0x5fe6ff : 0x9fc4ff, 2.2); rim.position.set(-2, 2, -2.5); scene.add(rim);
-const fill = new THREE.DirectionalLight(0xffd2b0, 0.5); fill.position.set(-2, 1, 2); scene.add(fill);
+const rim = new THREE.DirectionalLight(bg === 'city' ? 0x5fe6ff : 0xdfe8ff, 1.6); rim.position.set(-2, 2, -2.5); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xcfdcff, 0.75); fill.position.set(-2, 0.8, 2); scene.add(fill);
 const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 48), new THREE.MeshStandardMaterial({ color: 0x23272c, roughness: 0.7 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
 const headMod = await tryImport(q.get('head'));
@@ -79,7 +79,7 @@ function fallbackHead() { const g = new THREE.Group(); const m = new THREE.Mesh(
 function build(presetName) {
   const P = PRESETS[presetName] || PRESETS.kai;
   const t0 = performance.now();
-  const head = headMod?.createHead ? headMod.createHead({ ...P.head, detail }) : fallbackHead();
+  const head = headMod?.createHead ? headMod.createHead({ likeness: q.get('likeness') === '0' ? null : P.ref, hair: P.hair.color, hairStyle: P.hair.style, beardColor: P.hair.beardColor, ...P.head, detail }) : fallbackHead();
   if (hairMod?.createHair) head.group.add(hairMod.createHair({ ...P.hair, detail }, head));
   let body = null, root = new THREE.Group();
   if (bodyMod?.createBody) {
@@ -109,6 +109,8 @@ if (view === 'lineup') {
   if (view === 'threeq') { cam.fov = 22; cam.position.set(eye.x + 0.62, eye.y + 0.05, eye.z + 0.72); cam.lookAt(eye.x, eye.y - 0.01, eye.z); }
   if (view === 'profile') { cam.fov = 22; cam.position.set(eye.x + 0.95, eye.y, eye.z + 0.02); cam.lookAt(eye.x, eye.y - 0.01, eye.z + 0.02); }
   if (view === 'eyes') { cam.fov = 12; cam.position.set(eye.x + 0.05, eye.y + 0.01, eye.z + 0.55); cam.lookAt(eye.x, eye.y, eye.z + 0.05); }
+  if (view === 'torso') { const h = a.P.body.height; cam.fov = 28; cam.position.set(0.75, h * 0.66, 1.75); cam.lookAt(0, h * 0.6, 0); }
+  if (view === 'back') { const h = a.P.body.height; cam.fov = 28; cam.position.set(-1.0, h * 0.62, -3.4); cam.lookAt(0, h * 0.5, 0); }
   if (view === 'full' || view === 'walk') { cam.fov = 28; const h = a.P.body.height; cam.position.set(1.3, h * 0.62, 3.6); cam.lookAt(0, h * 0.5, 0); }
   a.head.setGaze?.(cam.position);
 }
@@ -126,6 +128,12 @@ function pose(a, t) {
 if (q.get('ref') !== null && actors.length === 1 && actors[0].P.ref) { cam.setViewOffset(W, H, W / 4, 0, W, H); }
 const T = parseFloat(q.get('t') || '0.35');
 for (const a of actors) { if (view === 'walk') pose(a, T); a.head.setBlink?.(parseFloat(q.get('blink') || '0')); a.head.setMouth?.(parseFloat(q.get('mouth') || '0')); a.head.update?.(0.016); }
+if (q.get('clay') !== null) { // untextured clay render for judging form
+  const clay = new THREE.MeshStandardMaterial({ color: 0xb8aea4, roughness: 0.75 });
+  scene.traverse(o => { if (o.isMesh && o.material && o.material.name !== 'hair' && !o.material.transparent) o.material = clay; });
+  key.position.set(2.4, 1.6, 1.2); key.intensity = 3.2; fill.intensity = 0.25; rim.intensity = 0.6;
+}
+if (headMod?.headsReady) await headMod.headsReady();
 scene.updateMatrixWorld(true);
 renderer.render(scene, cam);
 const info = renderer.info.render;
