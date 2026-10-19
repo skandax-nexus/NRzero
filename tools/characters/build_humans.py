@@ -522,6 +522,10 @@ class Body:
         self.P = relax_hands(P - np.array([0, P[:, 1].min(), 0]))
         _, _, self.F = mh.base()
         self.faces = [i for i, f in enumerate(self.F) if f[2] == "body"]
+        wear = [w if isinstance(w, str) else w[0] for w in c.get("wear", [])]
+        if "sandals" in wear:      # costume sandals: the bare sole stands on the sandal (the shoe hull is not stretched down)
+            bv = np.unique(np.concatenate([np.asarray(self.F[i][0]) for i in self.faces]))
+            self.P = self.P - np.array([0, self.P[bv, 1].min() - 0.012, 0])
         self.W = dense_weights(len(self.P))
         self.vb = [BONE_NAMES[i] for i in self.W.argmax(1)]
         self.L = Landmarks(self.P)
@@ -572,6 +576,10 @@ def hairline(rel, style, male, old):
             "locs": -0.086, "undercut": -0.058, "fade": -0.055, "pixie": -0.078}.get(style, -0.08)
     ks = [0, 28, 48, 66, 78, 88, 100, 114, 132, 152, 180]
     hs = [hf, hf - 0.003, temple, 0.026, sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
+    if style == "waves":            # messy: strand tips of different lengths along the fringe and over the ears
+        ar = np.radians(th)
+        jag = 0.5 + 0.5 * np.sin(ar * 11 + 0.7) * np.sin(ar * 5 + 2.1)
+        return np.interp(th, ks, hs) - (0.016 * ss(75, 20, th) + 0.008 * ((th >= 70) & (th < 125))) * jag + 0.006 * ss(30, 0, th) * (rel[:, 0] > 0)
     if style == "pixie":            # side-swept: the fringe dips on one side only
         return np.interp(th, ks, hs) - 0.008 * np.clip(rel[:, 0] / 0.05, 0, 1) * (np.abs(rel[:, 0]) < 0.06)
     return np.interp(th, ks, hs)
@@ -854,6 +862,10 @@ def layer_object(L):
     uvs = [uv for f in L.fuv for uv in f]
     o = mesh_from(L.name, to_bl_np(L.pos), L.faces, uvs)
     set_mask(o, L.mask)
+    keep = getattr(L, "tail_mask", None)
+    if keep is not None:      # cloth tails keep their full density (decimation would cut chords into the legs under them)
+        a = o.data.attributes.new("_keep", "FLOAT", "POINT")
+        a.data.foreach_set("value", np.asarray(keep, dtype=np.float32))
     WSTORE[o.name] = L.W
     return o
 
@@ -2166,8 +2178,11 @@ def build(c, tex_dir):
                 if key == "scarf" and c.get("hair") == "bun":
                     bump = 0.03 * g2(rel[:, 0] ** 2 + ((rel[:, 1] - 0.07) / 1.0) ** 2 + ((rel[:, 2] + 0.15) / 0.6) ** 2, 0.035)
                 if key == "hood":   # snug at the face opening, loose and a little peaked behind; a slim mantle on the shoulders
-                    bump = 0.022 * ss(0.0, 0.07, Lx.cov) * hw + 0.012 * g2(rel[:, 0] ** 2 + ((rel[:, 1] - 0.06) / 1.2) ** 2 + ((rel[:, 2] + 0.12) / 0.8) ** 2, 0.04)
+                    big = 1.4 if costume_mode else 1.0
+                    bump = 0.022 * big * ss(0.0, 0.07, Lx.cov) * hw + 0.012 * big * g2(rel[:, 0] ** 2 + ((rel[:, 1] - 0.06) / 1.2) ** 2 + ((rel[:, 2] + 0.12) / 0.8) ** 2, 0.04)
                 offset_layer(Lx, B, off * (0.35 + 0.65 * ss(0.0, 0.02, Lx.cov)) + bump)
+                if key == "hood" and costume_mode:
+                    costume.hood_drape(Lx, B)
                 taubin(Lx, 2)
                 if costume_mode:       # over whatever the costume put on the shoulders
                     costume.push_out(Lx, B, cov["_OFF"][Lx.base] + 0.004)
@@ -2177,10 +2192,12 @@ def build(c, tex_dir):
     parts += eye_objects(B, c)
     if costume_mode:
         ex = costume.extras(c, B, cov, layers)
+        if os.environ.get("PIECES"):
+            print("  pieces", sorted(o.name for o in ex))
     else:
         parts += shoe_objects(B, c, cov)
         ex = extras(c, B, cov, layers)
-    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet"))]    # even quads / thin shells: no decimation
+    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet", "strap_"))]    # even quads / thin shells: no decimation
     parts += [o for o in ex if o not in cloth]
     if costume_mode:      # aux pieces packed, their uvs mapped, then the atlas painted (it needs the pieces)
         costume.aux_pack()
@@ -2223,8 +2240,9 @@ def select_class(mesh, cls, which):
     """Select one decimation class; open borders (garment hems, hairline, boot tops, collars) stay unselected so the
     collapse never touches them (they keep their smooth snapped shape)."""
     bm = bmesh.from_edit_mesh(mesh.data)
+    keep = bm.verts.layers.float.get("_keep")
     for f in bm.faces:
-        f.select_set(cls(f.calc_center_median()) == which)
+        f.select_set(cls(f.calc_center_median()) == which and not (keep is not None and any(v[keep] > 0.5 for v in f.verts)))
     bm.select_flush_mode()
     for e in bm.edges:
         if e.is_boundary:
@@ -2250,11 +2268,17 @@ def decimate_protected(mesh, B, target, face_keep=1.0):
 
     def counts():
         bm = bmesh.from_edit_mesh(mesh.data)
+        kl = bm.verts.layers.float.get("_keep")
         n = {"face": 0, "head": 0, "body": 0}
+        kept = 0
         for f in bm.faces:
-            n[cls(f.calc_center_median())] += len(f.verts) - 2
-        return n
-    n = counts()
+            if kl is not None and any(v[kl] > 0.5 for v in f.verts):
+                kept += len(f.verts) - 2
+            else:
+                n[cls(f.calc_center_median())] += len(f.verts) - 2
+        return n, kept
+    n, kept = counts()
+    target = max(target - kept, 2000)          # protected cloth tails are not decimated
     total = sum(n.values())
     if total > target:
         head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
@@ -2270,13 +2294,15 @@ def decimate_protected(mesh, B, target, face_keep=1.0):
                 continue
             select_class(mesh, cls, which)
             bpy.ops.mesh.decimate(ratio=float(np.clip(ratio, 0.05, 1.0)))
-        n2 = counts()
+        n2, _ = counts()
         tot2 = sum(n2.values())
         if tot2 > target * 1.01:   # land on the budget: the body takes the overshoot
             select_class(mesh, cls, "body")
             bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)))
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
+    if mesh.data.attributes.get("_keep"):
+        mesh.data.attributes.remove(mesh.data.attributes["_keep"])
     print("  decimate", c_id(mesh), n, "->", sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris (target", target, ")", flush=True)
 
 

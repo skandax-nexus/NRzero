@@ -101,8 +101,11 @@ export default {
   id: 'm5', act: 'ACT I · THE WORLD THAT REMEMBERS', title: 'The Village That Never Existed', sub: 'The village · three states',
   async run(game) {
     const { ui, audio } = game, T = game.temporal, renderer = game.engine.renderer;
-    const t0 = performance.now(); let tP = t0; const PERF = (n) => { const t = performance.now(); console.log('m5 build', n, Math.round(t - tP), 'ms'); tP = t; };
+    const tick = () => new Promise(r => setTimeout(r, 0));
+    const t0 = performance.now(); let tP = t0; const PERF = async (n) => { const t = performance.now(); console.log('m5 build', n, Math.round(t - tP), 'ms'); await new Promise(r => setTimeout(r, 30)); tP = performance.now(); };
     const scene = game.newScene({ background: 0x9ab0c0, exposure: 1.0, bloom: 0.45, bloomThreshold: 0.92, envIntensity: 1, killY: -40, residue: true });
+    // render an empty frame while the valley builds (the build yields often; drawing a half-built scene would be slow)
+    const blank = new THREE.Scene(); blank.background = new THREE.Color(0x000000); game.engine.setScene(blank);
     RZ.init(renderer, { quality: game.engine.quality || 'medium' });
     const Q = RZ.getQuality();
     game.onUpdate(dt => RZ.update(dt));
@@ -162,7 +165,7 @@ export default {
       renderer.toneMappingExposure = y.exposure;
     };
 
-    PERF('sky');
+    await PERF('sky');
     // ======================================================================================
     // terrain: rectilinear grid with exact lines at the retaining wall and the Keepers' Door
     // ======================================================================================
@@ -170,17 +173,26 @@ export default {
     const xs = V.axis(-260, 260, -42, 44, fineStep, [WALL.x0, WALL.x1, -15.2, -12.8]);
     const zs = V.axis(-300, 230, -74, 58, fineStep, [DOOR.z0, DOOR.z1, WALL.z0, WALL.z1]);
     const hole = [[WALL.x0 - 0.01, DOOR.z0, WALL.x1 + 0.01, DOOR.z1]];
-    const terMatHolder = RZ.terrain({ size: 4, segments: 2, heightFn: () => 0, texSize: Q === 'low' ? 256 : undefined, waterLevel: -0.6, rockSlope: 0.4, dirt: 0.32,
-      layers: [['grass', { color: 0x58692c, dry: 0x8f8448, dryness: 0.4, bare: 0.55 }], ['dirt', { color: 0x6a5238, damp: 0.3 }], ['rock', { color: 0x8a7c66, color2: 0x675a49 }], ['sand', { color: 0x9c8a6a }]] });
+    // the build yields between bakes: one long synchronous task lets the renderer's garbage pile up to several GB
+    const terLayers = [['grass', { color: 0x58692c, dry: 0x8f8448, dryness: 0.4, bare: 0.55 }], ['dirt', { color: 0x6a5238, damp: 0.3 }], ['rock', { color: 0x8a7c66, color2: 0x675a49 }], ['sand', { color: 0x9c8a6a }]];
+    const terTex = Q === 'low' ? 256 : RZ.tier().texHero;
+    for (const [k, prm] of terLayers) { RZ.textureSet(k, prm, { size: terTex }); await tick(); }
+    const terMatHolder = RZ.terrain({ size: 4, segments: 2, heightFn: () => 0, texSize: terTex, waterLevel: -0.6, rockSlope: 0.4, dirt: 0.32, layers: terLayers });
+    await tick();
     const terMat = terMatHolder.material, terCfg = terMat.userData.rzUniforms.rzTCfg.value;
     const terBase = new THREE.Mesh(V.gridTerrain(VAL.hBase, xs, zs, hole), terMat); terBase.receiveShadow = true; terBase.name = 'terrain';
+    await tick();
     const terEroded = new THREE.Mesh(V.gridTerrain(VAL.hEroded, xs.filter(x => x > -70 && x < 70), zs.filter(z => z > -90 && z < 90), hole), terMat); terEroded.receiveShadow = true;
     vis(terBase, STATES, () => !(T.current === 'abandoned' && !S.diverted));
     // the eroded variant only covers the valley; beyond it the base terrain is identical, so show the base outside
     vis(terEroded, ['abandoned'], () => !S.diverted);
+    await tick();
     const terOuter = new THREE.Mesh(V.gridTerrain(VAL.hBase, xs, zs, [[-60, -80, 60, 80]]), terMat); terOuter.receiveShadow = true;
+    await tick();
     vis(terOuter, ['abandoned'], () => !S.diverted);
+    await tick();
     scene.add(RZ.mountains({ center: [0, -30], radius: [320, 760], height: 190, seed: 8, rock: 0x5e564c, grass: 0x3c4a2c, snowLine: 170 }));
+    await tick();
     scene.add(RZ.hazeLayer({ center: [0, -30], radius: 280, height: 90, color: 0xc0c4c4, opacity: 0.4 }));
 
     // terrain + features under the player / NPCs
@@ -224,7 +236,7 @@ export default {
       return -Infinity;
     };
 
-    PERF('terrain');
+    await PERF('terrain');
     // ======================================================================================
     // materials
     // ======================================================================================
@@ -233,7 +245,9 @@ export default {
     const P = {
       cutStone: { color: 0xb8aa8c, joint: 0x7c705e, rows: 6, weathering: 0.6 }, plaster: { color: 0xd4b68e, under: 0x9a8064, damage: 0.3, dirt: 0.6 },
       wood: { color: 0x8c6644, planks: 3, weathered: 0.6 }, dirt: { color: 0x8a6c4c, damp: 0.3, pebbles: 0.5 }, paintedMetalPanel: { color: 0x9aa0a6, cols: 1, rows: 1, wear: 0.5, grime: 0.6, gloss: 0.4 },
+      concrete: { color: 0x8a8780, stains: 1, formwork: 1 }, gravel: { color: 0x7a7266 }, moss: {}, rock: {},
     };
+    for (const k of Object.keys(P)) { RZ.textureSet(k, P[k]); await tick(); }
     const mk = (kind, tint, o = {}) => pbr(kind, { mapping: 'world', params: P[kind] || o.params, tint, ...o });
     const MOSS = { kind: 'moss', amount: 0.5, ground: 0.6 };
     const MAT = {
@@ -242,14 +256,14 @@ export default {
       textile: new THREE.MeshStandardMaterial({ roughness: 0.92, map: canvasTex(128, 256, (g, w, h) => { const c = ['#8a2a1c', '#c89a3a', '#2f5a5a', '#d8c8a0']; for (let y = 0; y < h; y += 16) { g.fillStyle = c[(y / 16) % 4]; g.fillRect(0, y, w, 16); } for (let k = 0; k < 600; k++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.12})`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }, 'm5textile') }),
       ruin: mk('cutStone', 0xc6bdac, { overlay: MOSS }), timberOld: mk('wood', 0x7a7068),
       drown: mk('cutStone', 0x8a8676, { overlay: { ...MOSS, amount: 0.8, ground: 0.9 } }), wallNew: mk('cutStone', 0xffffff), cave: mk('cutStone', 0x948a7a),
-      concrete: mk('concrete', 0xffffff, { params: { color: 0x8a8780, stains: 1, formwork: 1 } }), steel: mk('paintedMetalPanel', 0x4c545a),
-      gravel: mk('gravel', 0xffffff, { params: { color: 0x7a7266 } }), mud: mk('dirt', 0x6a5e54, { roughness: 1 }), dirt: mk('dirt', 0xffffff),
+      concrete: mk('concrete', 0xffffff), steel: mk('paintedMetalPanel', 0x4c545a),
+      gravel: mk('gravel', 0xffffff), mud: mk('dirt', 0x6a5e54, { roughness: 1 }), dirt: mk('dirt', 0xffffff),
     };
     const stoneChunks = tint => pbr('cutStone', { mapping: 'triplanar', space: 'object', vertexColors: true, params: P.cutStone, tint });
     const laneMat = (base, opacity) => { const m = mk('dirt', base); m.alphaMap = V.edgeAlpha('lane'); m.transparent = true; m.opacity = opacity; m.depthWrite = false; m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2; return m; };
     const discMat = (base, opacity) => { const m = laneMat(base, opacity); m.alphaMap = V.edgeAlpha('disc'); return m; };
 
-    PERF('materials');
+    await PERF('materials');
     // ======================================================================================
     // the village: houses, lanes, plaza, props (per state, merged)
     // ======================================================================================
@@ -275,9 +289,11 @@ export default {
     const housesF = vis(binF.build(houseMatsF), ['flooded']);
     vis(binFe.build(houseMatsF), ['flooded'], () => S.diverted);
     for (const g of [housesT, housesA, housesF]) { g.userData.blockKids = true; g.children.forEach(m => game.blocker(m)); }
+    await tick();
     vis(RZ.rocks({ shape: 'chunk', placements: rubA, heightAt: VAL.hBase, seed: 4, material: stoneChunks(0xc6bdac) }), ['abandoned']);
     vis(RZ.rocks({ shape: 'chunk', placements: rubF, heightAt: VAL.hBase, seed: 6, material: stoneChunks(0x8a8676) }), ['flooded']);
     vis(RZ.rocks({ shape: 'chunk', placements: rubErode, heightAt: VAL.hEroded, seed: 7 }), ['abandoned'], () => !S.diverted);
+    await tick();
     // lanes and the plaza (packed earth); faint in the abandoned state
     const LANES = [[[-2, 3], [-3, 12], [-4.5, 20], [-6, 30], [-12, 34], [-22, 30], [-28, 27]], [[-2, 3], [3, 4], [8.2, 5.5]], [[-2, 3], [-4, -8], [-5, -14], [-4, -24], [-6, -30], [-14, -32], [-22, -34]], [[-2, 3], [6, -8], [8, -14]], [[18.6, 12], [21, 0], [21, -20], [20.5, -38], [20.5, -48]]];
     for (const [st, op, base] of [['thriving', 0.95, 0x7d6448], ['abandoned', 0.45, 0x6a5a40]]) {
@@ -286,6 +302,7 @@ export default {
       vis(new THREE.Mesh(V.groundDisc(-2, 3, 8.5, 7.5, VAL.hBase, 3), dm), [st]).receiveShadow = true;
       vis(new THREE.Mesh(V.groundDisc(-24.5, 0.5, 5.5, 5, VAL.hBase, 5), dm), [st]).receiveShadow = true;
     }
+    await tick();
     // jars, baskets, woodpiles, drying racks (thriving); broken jars (abandoned)
     const jarG = V.jarGeometry(1), clay = pbr('plaster', { mapping: 'object', params: P.plaster, tint: 0xd08a62 });
     const jars = [], jarsA = [];
@@ -302,6 +319,7 @@ export default {
       vis(V.instances(kilnG, MAT.roof, [{ x, y: TY, z, s: 1, sy: 1.2 }]), ['thriving']); col([x - 0.95, TY, z - 0.95], [x + 0.95, TY + 1.2, z + 0.95], ['thriving']);
       vis(V.instances(kilnG, MAT.ruin, [{ x, y: TY - 0.2, z, s: 0.9, sy: 0.6 }]), ['abandoned']);
     }
+    await tick();
     // the plaza fire with storytellers (thriving)
     const fire = new THREE.PointLight(0xff8a30, 14, 12, 1.6); fire.position.set(-1, 1.0, 6); scene.add(fire);
     const flame = vis(new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.0, 10), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })), ['thriving']); flame.position.set(-1, VAL.hBase(-1, 6) + 0.5, 6);
@@ -330,7 +348,7 @@ export default {
     vis(V.instances(new THREE.BoxGeometry(0.4, 2.2, 4.0), MAT.foot, [{ x: 6.55, y: VAL.hBase(6.5, 1.9) + 1.0, z: 1.9, ry: 0.2 }]), ['thriving']);
     col([6.2, -0.5, 0], [6.9, 2.2, 3.8], ['thriving']);
 
-    PERF('village');
+    await PERF('village');
     // ======================================================================================
     // the retaining wall, the Keepers' Door, the weep holes, the Water Ring
     // ======================================================================================
@@ -377,7 +395,7 @@ export default {
     const ringLight = new THREE.PointLight(0xffb060, 0, 8, 1.6); ringLight.position.set(-15.4, TY + 2, doorMid); scene.add(ringLight);
     game.onUpdate((dt, t) => { wRing.userData.glyph.material.emissiveIntensity = 0.25 + (ringLight.intensity > 0 ? 2 : 0) + Math.sin(t * 1.3) * 0.08; });
 
-    PERF('wall');
+    await PERF('wall');
     // ======================================================================================
     // the head works on the shelf: the village sluice, the rockfall, the bridges, the levee
     // ======================================================================================
@@ -394,6 +412,7 @@ export default {
     const windlass = vis(new THREE.Group(), ['thriving']); windlass.position.set(A53 + 4.4, 3.5, HZ);
     const wdrum = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.2, 10), MAT.timber); wdrum.rotation.x = Math.PI / 2; wdrum.position.y = 0.5; windlass.add(wdrum);
     for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.2, 0.06), MAT.timber); sp.position.y = 0.5; sp.rotation.z = k * Math.PI / 4; wdrum.add(sp); }
+    await tick();
     // the B mouth: rockfall (pre-diversion), then a second sluice frame + deck (post)
     const BOULD = [{ x: VAL.B(-53.6) - 0.9, z: -53.6, s: 1.35 }, { x: VAL.B(-52.6) + 1.2, z: -52.6, s: 1.2 }, { x: VAL.B(-51.6) - 0.2, z: -51.6, s: 1.1 }];
     const rockGeo = RZ.rockGeometry({ seed: 21, size: [1, 0.8, 0.9] });
@@ -407,10 +426,12 @@ export default {
     vis(V.instances(deckG, MAT.timber, [{ x: B55, y: 3.28, z: HZ }]), ['thriving'], () => S.diverted);
     vis(V.instances(deckG, MAT.ruin, [{ x: B55, y: 3.28, z: HZ }]), ['abandoned', 'flooded'], () => S.diverted);
     for (const p of bPiers) col([p.x - 0.55, 0, HZ - 1.2], [p.x + 0.55, 3.8, HZ + 1.2], null, () => S.diverted);
+    await tick();
     // the old stone bridge over the river on the shelf (all states)
     const bridgeG = new THREE.BoxGeometry(10.8, 0.36, 2.6);
     vis(V.instances(bridgeG, MAT.wallNew, [{ x: R64, y: 3.02, z: -64 }]), ['thriving']);
     vis(V.instances(bridgeG, MAT.ruin, [{ x: R64, y: 3.02, z: -64 }]), ['abandoned', 'flooded']);
+    await tick();
     // the levee along the eastern channel (built after the diversion; 2049: the causeway)
     const dykeGeo = V.sweepZ(dykeX, -48.5, 46.2, 1.0, (z, c) => { const g = VAL.hBase(c - 5, z) - 0.4; return [[-4.6, g], [-3.0, 2.6 - 2.1 * 0.7], [-0.9, 2.6], [0.9, 2.6], [1.2, -1.2]]; });
     const dykeT = vis(new THREE.Mesh(dykeGeo, MAT.wallNew), ['thriving'], () => S.diverted); dykeT.scale.y = 1.15 / 2.6;
@@ -420,7 +441,7 @@ export default {
     // stone piles and a work crew on the new levee (thriving, after the diversion)
     vis(RZ.rocks({ shape: 'chunk', placements: Array.from({ length: 24 }, (_, i) => ({ x: dykeX(-30 + i * 2.5) - 2.6, z: -30 + i * 2.5, scale: 0.3 + R() * 0.25, sink: 0.05 })), heightAt: VAL.hBase, seed: 12 }), ['thriving'], () => S.diverted);
 
-    PERF('headworks');
+    await PERF('headworks');
     // ======================================================================================
     // water: rivers per state and story, the 2049 reservoir, the spring and the field feeders
     // ======================================================================================
@@ -441,6 +462,7 @@ export default {
     vis(rectWater([0.5, -46.5, 19.5, 116], -0.35, VAL.hEroded, { flow: [0, 0.05] }), ['abandoned'], () => !S.diverted);
     const reservoir = vis(rectWater([-36, -49, 76, 106], 2.0, hB, { res: 160, deep: 0x0a2024, shallow: 0x2e4c44, waves: 0.55 }), ['flooded'], () => !S.drained);
     vis(rectWater([-14, -46.5, 50, 104], -1.05, hB, { res: 128, deep: 0x1a2a24, shallow: 0x4a5a44, waves: 0.25 }), ['flooded'], () => S.drained);
+    await tick();
     // cascades off the shelf
     const cascA = RZ.waterfall({ top: [VAL.A(-47.2), 2.55, -47.2], height: 3.2, width: 4.2, dir: [0, 1], lip: 0.6 });
     const cascB = RZ.waterfall({ top: [VAL.B(-47.2), 2.55, -47.2], height: 3.2, width: 4.2, dir: [0, 1], lip: 0.6 });
@@ -448,6 +470,7 @@ export default {
     const cascAF = RZ.waterfall({ top: [VAL.A(-47.2), 2.55, -47.2], height: 1.2, width: 4.2, dir: [0, 1], lip: 0.6 }), cascBF = RZ.waterfall({ top: [VAL.B(-47.2), 2.55, -47.2], height: 1.2, width: 4.2, dir: [0, 1], lip: 0.6 });
     vis(cascAF, ['flooded'], () => !S.diverted && !S.drained); vis(cascBF, ['flooded'], () => S.diverted && !S.drained);
     vis(cascA.clone(), ['flooded'], () => !S.diverted && S.drained); vis(cascB.clone(), ['flooded'], () => S.diverted && S.drained);
+    await tick();
     // the spring: cliff waterfall, pool, leat along the terrace foot, and three field feeders
     const springTop = VAL.hBase(-35.4, -33);
     const spring = RZ.waterfall({ top: [-35.2, springTop, -33], height: springTop - 2.6, width: 1.8, dir: [1, 0.1], lip: 0.4 });
@@ -459,7 +482,7 @@ export default {
     const yardFlood = vis(new THREE.Mesh(V.groundDisc(-23.2, 0.2, 3.2, 2.6, hB, 9, 0.04), (() => { const m = mk('dirt', 0x5a4c40); m.alphaMap = V.edgeAlpha('disc'); m.transparent = true; m.depthWrite = false; m.roughness = 0.1; m.polygonOffset = true; m.polygonOffsetFactor = -3; return m; })()), ['thriving'], () => S.gates[1]);
     yardFlood.receiveShadow = true;
 
-    PERF('water');
+    await PERF('water');
     // ======================================================================================
     // crops (thriving) and the caretaker's garden (2049)
     // ======================================================================================
@@ -469,11 +492,12 @@ export default {
     vis(V.cropMesh(crop(-24, -18.5, 13, 21, 0.9, 1.1, 0.15), { kind: 'garden', hue: 100, seed: 3 }), ['flooded'], () => S.quest);
     vis(V.cropMesh(crop(-24, -18.5, 13, 21, 1.6, 1.4, 0.4).map(p => ({ ...p, s: p.s * 0.6, sy: 0.4 })), { kind: 'garden', hue: 44, seed: 5 }), ['flooded'], () => !S.quest);
 
-    PERF('crops');
+    await PERF('crops');
     // ======================================================================================
     // 2049: the dam, the outlet tower, the buoy, the signs, the caretaker's cottage, the gravel bar
     // ======================================================================================
     const dam = vis(new THREE.Mesh(V.damGeometry(), MAT.concrete), ['flooded']); dam.castShadow = dam.receiveShadow = true;
+    await tick();
     const towerM = vis(new THREE.Mesh(V.towerGeometry(), MAT.concrete), ['flooded']); towerM.position.set(TOWER.x, 0, TOWER.z); towerM.castShadow = true; game.blocker(towerM);
     const railM = MAT.steel;
     const rail = V.railRing(3.6, 2.8, railM); rail.position.set(TOWER.x, 0, TOWER.z); vis(rail, ['flooded']);
@@ -509,6 +533,7 @@ export default {
     const poles = []; for (let k = 0; k < 6; k++) poles.push({ x: 39 + k * 0.5, y: hB(39 + k * 0.5, 50 - k * 18) - 0.3, z: 50 - k * 18 });
     vis(V.instances(new THREE.CylinderGeometry(0.12, 0.16, 9, 6), MAT.timberOld, poles.map(p => ({ ...p, y: p.y + 4.5 }))), ['flooded']);
     for (let k = 0; k < 5; k++) { const a = poles[k], b = poles[k + 1]; vis(cableCurve([[a.x, a.y + 8.6, a.z], [(a.x + b.x) / 2, (a.y + b.y) / 2 + 7.2, (a.z + b.z) / 2], [b.x, b.y + 8.6, b.z]], 0.015), ['flooded']); }
+    await tick();
     // the caretaker's cottage and garden fence on the west terrace
     const cot = new V.MergeBin();
     cot.add('wall', new THREE.BoxGeometry(5.2, 2.6, 4.2), V.mat4(-27.6, TY + 1.3, 22.4));
@@ -521,11 +546,12 @@ export default {
     col([-30.2, TY - 0.2, 20.3], [-25.0, TY + 2.8, 24.5], ['flooded']);
     const barGeo = V.sweepX(() => 30, -16.8, 24.6, 0.8, (x) => { const g = hB(x, 30) - 0.3; return [[-2.4, Math.min(g, 1.2)], [-1.0, 2.25], [1.0, 2.25], [2.4, Math.min(g, 1.2)]]; });
     vis(new THREE.Mesh(barGeo, MAT.gravel), ['flooded'], () => S.quest).receiveShadow = true;
+    await tick();
     // dead trees standing in the reservoir
     const deadSpots = [[-3, -12], [2, 8], [-6, 19], [7.5, -9], [-1, 28], [18, -20], [20.5, 2], [18, 22], [-8, 34], [11, 36]];
     vis(RZ.forest({ species: 'dead', placements: deadSpots.map(([x, z]) => ({ x, z, scale: 0.7 + R() * 0.4 })), heightAt: hB, seed: 13, impostors: false, variants: 2 }), ['flooded']);
 
-    PERF('2049');
+    await PERF('2049');
     // ======================================================================================
     // vegetation: grass per state, the shared hill forest, village trees, boulders
     // ======================================================================================
@@ -549,8 +575,11 @@ export default {
     };
     const grassRect = [-42, -76, 86, 134];
     vis(RZ.instancedGrass({ rect: grassRect, heightAt: hB, mask: grassMask('thriving'), radius: 26, height: 0.38, color: 0x5d7a2c, tipColor: 0xb8b060, seed: 3 }).mesh, ['thriving']);
+    await tick();
     vis(RZ.instancedGrass({ rect: grassRect, heightAt: hB, mask: grassMask('abandoned'), radius: 26, height: 0.62, color: 0x667634, tipColor: 0xc4b070, dryColor: 0xa89a60, seed: 4 }).mesh, ['abandoned']);
+    await tick();
     vis(RZ.instancedGrass({ rect: grassRect, heightAt: hB, mask: grassMask('flooded'), radius: 26, height: 0.45, color: 0x527230, tipColor: 0xa8a85a, seed: 5 }).mesh, ['flooded']);
+    await tick();
     // hills forest (shared): placements outside the playable valley
     const hillTrees = [], hillConifers = [], rr = RZ.rng(77);
     for (let k = 0; k < 1300; k++) {
@@ -563,20 +592,24 @@ export default {
       (h > 30 || rr() < 0.4 ? hillConifers : hillTrees).push({ x, z, scale: 0.8 + rr() * 0.6 });
     }
     scene.add(RZ.forest({ species: 'broadleaf', placements: hillTrees, heightAt: hB, focus: [0, 0], lodDistance: 70, seed: 2, budgetScale: 0.45 }));
+    await tick();
     scene.add(RZ.forest({ species: 'conifer', placements: hillConifers, heightAt: hB, focus: [0, 0], lodDistance: 70, seed: 5, budgetScale: 0.4 }));
+    await tick();
     // village trees: orchard / shade trees (thriving), the forest coming back (abandoned)
     const villageT = [[-12, 30], [6, 20], [10, 28], [-17, 25], [16.5, 4], [17, -12], [-24, -14], [-31, 10], [-6, -26], [22, 26], [23, 10], [-30, -8]];
     vis(RZ.forest({ species: 'broadleaf', placements: villageT.map(([x, z]) => ({ x, z, scale: 0.55 + R() * 0.25 })), heightAt: hB, seed: 7, impostors: false, variants: 2, focus: [0, 0] }), ['thriving']);
+    await tick();
     const wildT = [...villageT, [-2, 0], [-6, 8], [1, -9], [-4, 20], [-20, 6], [-26, -20], [-22, 18], [13, 18], [-11, -24], [3, 30], [-16, -30], [5, -22]];
     vis(RZ.forest({ species: 'broadleaf', placements: wildT.map(([x, z]) => ({ x: x + 0.5, z, scale: 0.6 + R() * 0.45 })), heightAt: hB, seed: 9, impostors: false, variants: 2, focus: [0, 0] }), ['abandoned']);
     vis(RZ.forest({ species: 'shrub', placements: Array.from({ length: 30 }, () => ({ x: -30 + R() * 50, z: -30 + R() * 62, scale: 0.6 + R() * 0.6 })).filter(p => !inHouse(p.x, p.z) && hB(p.x, p.z) > -0.2), heightAt: hB, seed: 10, impostors: false, variants: 2 }), ['abandoned']);
+    await tick();
     // boulders along the escarpment and the banks (shared)
     const bould = [];
     for (let k = 0; k < 46; k++) { const x = -12 + R() * 48, z = -44.2 - R() * 3.6; if (Math.abs(x - VAL.A(z)) < 4.5 || Math.abs(x - VAL.B(z)) < 4.5 || (x > 16 && x < 25)) continue; bould.push({ x, z, scale: 0.9 + R() * 1.8 }); }
     for (let k = 0; k < 30; k++) { const z = -40 + R() * 90, side = R() < 0.5 ? -1 : 1, x = VAL.A(z) + side * (4.4 + R() * 1.5); if (inHouse(x, z) || x < 8) continue; bould.push({ x, z, scale: 0.4 + R() * 0.7 }); }
     scene.add(RZ.rocks({ placements: bould, heightAt: hB, seed: 3, moss: 0.4 }));
 
-    PERF('vegetation');
+    await PERF('vegetation');
     // ======================================================================================
     // the tunnel and the machine chamber (under the terrace)
     // ======================================================================================
@@ -654,15 +687,18 @@ export default {
     });
     inner.visible = false; innerMesh.children.forEach(m => { m.visible = false; });
 
-    PERF('interior');
+    await PERF('interior');
     // ======================================================================================
     // characters
     // ======================================================================================
     const kai = game.player.char;
     const niko = game.actor('niko', null, -27.5, TY, 31.5, Math.PI);
     const tala = game.actor('tala', null, 7.8, 0, 5.5, Math.PI / 2); vis(tala.root, ['thriving']);
+    await tick();
     const ama = game.actor('caretaker', null, -23.6, TY, 19.6, Math.PI / 2 + 0.3); vis(ama.root, ['flooded']); V.dressCaretaker(ama);
+    await tick();
     const potter = game.actor('potter', null, -22.8, TY, -1.6, -Math.PI / 2); vis(potter.root, ['thriving']);
+    await tick();
     const walkers = [];
     const crowd = (lane, look) => { const w = new Walker(game, look || ancientLook(R), lane); w.c.root.position.y = VAL.hBase(lane.x, lane.z0); vis(w.c.root, ['thriving']); walkers.push(w); return w; };
     // lanes run between the houses (checked against V.HOUSES); everyone stands on the terrain
@@ -705,7 +741,8 @@ export default {
       if (dK < 0.55) { n.x += (n.x - p.x) / Math.max(dK, 0.01) * 0.02; n.z += (n.z - p.z) / Math.max(dK, 0.01) * 0.02; }
     });
 
-    PERF('characters');
+    await PERF('characters');
+    game.engine.setScene(scene);
     // ======================================================================================
     // the ground under Kai: terrain + features, walkability (banks, deep water, bounds), snapping
     // ======================================================================================

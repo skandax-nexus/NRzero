@@ -155,7 +155,8 @@ def f_top(g, B, LM, cov):
     elif g.get("tail"):
         hem_y = max(hem_y, LM["crotch"] + 0.045 * k)
     g["_hem_y"] = hem_y
-    f = B.tw * np.minimum(neck_y - y, y - hem_y) + B.legs * (y - hem_y)
+    twn = np.clip(B.tw + B.W[:, BH.BI["neck"]], 0, 1)        # the neckline follows neck_y, not the torso-weight falloff
+    f = twn * np.minimum(neck_y - y, y - hem_y) + B.legs * (y - hem_y)
     sleeve = g.get("sleeve", "long")
     for s in "LR":
         sa, _, _, cum = vc["arm" + s]
@@ -217,8 +218,9 @@ def f_limb(g, B, LM, cov):
             kl = lcum[1]
             e = ((sl - kl - 0.008) / (0.068 * k)) ** 2 + (la / 62.0) ** 2
             pad = (1 - np.sqrt(e)) * 0.05
-            strap = np.minimum(0.011 - np.abs(sl - kl - 0.085 * k), 0.4) * (np.abs(la) > 40)
-            strap2 = np.minimum(0.009 - np.abs(sl - kl + 0.075 * k), 0.4) * (np.abs(la) > 40)
+            side_ = np.radians(np.abs(la) - 40) * rl          # straps only round the sides / back (> 0 there)
+            strap = np.minimum(0.0095 - np.abs(sl - kl - 0.085 * k), side_)
+            strap2 = np.minimum(0.0085 - np.abs(sl - kl + 0.075 * k), side_)
             fs = lw * np.maximum(pad, np.maximum(strap, strap2)) - (1 - lw) * 0.2
         else:
             continue
@@ -474,6 +476,10 @@ def fields(c, B):
             over.append(dict(G.GARMENTS["leather_belt"], type="coat_belt", color=tg["color"], fab=tg.get("fab", "cotton"), gloss=tg.get("gloss", 0.1),
                              det=["belt_holes"], glow=None, wear=0.0, buckle=True, width=0.04))
     for i, g in enumerate(over):
+        if ribbon_ok(g, cos):          # built as a ribbon in extras() (no body layer)
+            g["_ribbon"] = True
+            cov.setdefault("_ribbons", []).append(g)
+            continue
         stack.append((f"over{i}", g, f_over(g, B, LM, cov)))
         g.setdefault("hides", g.get("shape") in ("vest", "carrier", "cuirass"))
     stack.sort(key=lambda s: s[1].get("z", 50))
@@ -534,7 +540,11 @@ def build_layers(c, B, cov):
             BH.inflate(L, B, g["inflate"])
             BH.taubin(L, 2)
         shape_layer(L, B, g, LM, cov)
-        push_out(L, B, below + 0.0014)
+        need = below + 0.0014
+        if g.get("cat") == "top" and (g.get("tail") or g.get("poncho")):   # the hem loop a tail grows from stands clear
+            hem = ss(0.035, 0.0, L.cov) * (L.pos[:, 1] < LM["ch"] + 0.04) * ((B.aw["L"] + B.aw["R"])[L.base] < 0.3)
+            need = need + 0.006 * hem
+        push_out(L, B, need)
         d = ((L.pos - B.P[L.base]) * B.N[L.base]).sum(1)
         OFF[L.base] = np.maximum(OFF[L.base], d * ss(-0.004, 0.012, L.cov))
         L.mask[:, 1] = g.get("gloss", 0.0)
@@ -764,6 +774,33 @@ def garment_loops(L):
 # ----------------------------------------------------------------------------------------------------------------
 # cloth tails: lofted from the layer's own hem loop
 # ----------------------------------------------------------------------------------------------------------------
+def tail_weights(pts_bl, J, H, top_z, long=False, split_front=False, split_back=False):
+    """Skin weights of cloth tails / skirts (Blender coords: z up, -y forward). Like build_humans.skirt_weights, but the
+    thigh takes over within ~9 cm below top_z (the hem loop, or the hip for tails that start higher) and carries up to
+    97 % of the cloth in front of it, so a striding leg swings its panel along instead of pushing through it. A solid
+    panel blends both thighs across its centre (the cloth stretches between the legs); beside a front split or a back
+    vent each panel follows its own thigh. Below the knee a long hem follows the shin a little."""
+    W = np.zeros((len(pts_bl), len(BH.BONE_NAMES)))
+    t = np.clip((top_z - pts_bl[:, 2]) / (0.05 * H), 0, 1)
+    py = J["pelvis"].y
+    back = np.clip((pts_bl[:, 1] - py) / 0.06, 0, 1)        # the back panel stays a little more with the hips
+    lw = (t ** 0.7) * (1 - 0.18 * back) * 0.97
+    sx = np.sin(np.clip(pts_bl[:, 0] / 0.085, -1, 1) * math.pi / 2)
+    hard = np.zeros(len(pts_bl))
+    if split_front:
+        hard = np.maximum(hard, np.clip((py - pts_bl[:, 1]) / 0.04, 0, 1))
+    if split_back:
+        hard = np.maximum(hard, np.clip((pts_bl[:, 1] - py) / 0.04, 0, 1))
+    sx = sx * (1 - hard) + np.clip(pts_bl[:, 0] / 0.012, -1, 1) * hard
+    kz = J["knee_L"].z
+    below = np.clip((kz + 0.02 - pts_bl[:, 2]) / 0.25, 0, 1) * (0.6 if long else 0.4)
+    W[:, BH.BI["hips"]] = 1 - lw
+    for s_, side in (("L", 0.5 + 0.5 * sx), ("R", 0.5 - 0.5 * sx)):
+        W[:, BH.BI["thigh_" + s_]] = lw * side * (1 - below)
+        W[:, BH.BI["shin_" + s_]] = lw * side * below
+    return W
+
+
 def radial_table(pts, cz_of, ys, nb=72):
     """Max radius of points around (0, cz(y)) per height row and angle bin (MH coords; angle 0 = front)."""
     R = np.zeros((len(ys), nb))
@@ -811,6 +848,7 @@ def extend_tail(L, B, g, LM, cov, layers):
     M = len(lp)
     H, k = B.H, LM["k"]
     tl = g.get("tail") or {}
+    print("  tail", g["type"], "columns", M, flush=True)
     po = g.get("poncho")
     a = np.abs(((ang + 180) % 360) - 180)          # 0 front .. 180 back
     if po:
@@ -825,7 +863,7 @@ def extend_tail(L, B, g, LM, cov, layers):
     pts = [B.P[sel] + B.N[sel] * 0.004]
     for kk, LL in layers.items():
         if LL is not L and LL.g.get("cat") in ("bottom", "limb", "shaft", "skirt") or (LL is not L and kk.startswith("over") and LL.pos[:, 1].min() < hem_y):
-            keep = (LL.pos[:, 1] < hem_y + 0.02) & ((B.aw["L"] + B.aw["R"])[np.asarray(LL.base)] < 0.3)
+            keep = (LL.pos[:, 1] < hem_y + 0.02) & ((B.aw["L"] + B.aw["R"])[np.asarray(LL.base)] < 0.55)
             pts.append(LL.pos[keep])
     pts = np.concatenate(pts)
     ys = np.arange(0.0, hem_y + 0.06, 0.01)
@@ -842,7 +880,8 @@ def extend_tail(L, B, g, LM, cov, layers):
         czz = cz(np.maximum(yy, LM["crotch"])) * (1 - t * 0.0)
         yi = np.clip(np.round((yy - ys[0]) / 0.01).astype(int), 0, len(ys) - 1)
         bi = ((ang + 180) / 360 * nb).astype(int) % nb
-        fit = R[yi, bi] + 0.006 + 0.01 * t
+        fr_ = np.clip(np.cos(np.radians(ang)), 0, 1) ** 2
+        fit = R[yi, bi] + 0.008 + 0.012 * t + 0.012 * np.sqrt(t) * fr_          # room for the striding thigh
         taper = np.where(yy > LM["hip"], 0.985, 1.0)
         r = np.maximum(r_prev * taper, fit)                      # follows the body, never cuts into it
         rr = r * (1 + flare * t ** 1.3)                          # the hem swings out a little (no compounding)
@@ -855,15 +894,15 @@ def extend_tail(L, B, g, LM, cov, layers):
     depth = np.concatenate([np.zeros((1, M)), np.cumsum(np.linalg.norm(np.diff(grid, axis=0), axis=2), 0)])
     col_near = lambda deg: int(np.argmin(np.abs(((ang - deg + 180) % 360) - 180)))
     rmean = float(np.hypot(P0[:, 0], P0[:, 2] - c0z).mean())
-    cuts = []                     # (column, vent top depth, gap at the hem (m), fast)
-    if tl.get("split"):
-        cuts.append((col_near(0), tl["split"] * H, 0.11 * k, False))
+    cuts = []                     # (column, vent top depth, gap at the hem (m), fast, gap at the vent top (m))
+    if tl.get("split"):           # a front opening below the closure: the panels clear the inner thighs from the start
+        cuts.append((col_near(0), tl["split"] * H, 0.15 * k, False, 0.045 * k))
     if tl.get("vent"):
-        cuts.append((col_near(180), tl["vent"] * H, 0.035 * k, False))
+        cuts.append((col_near(180), tl["vent"] * H, 0.035 * k, False, 0.0))
     if tl.get("slits"):
-        cuts += [(col_near(90), tl["slits"] * H, 0.06 * k, False), (col_near(-90), tl["slits"] * H, 0.06 * k, False)]
+        cuts += [(col_near(90), tl["slits"] * H, 0.06 * k, False, 0.0), (col_near(-90), tl["slits"] * H, 0.06 * k, False, 0.0)]
     if po and po.get("open"):
-        cuts.append((col_near(0), 0.0, 2 * po["open"] * rmean, True))
+        cuts.append((col_near(0), 0.0, 2 * po["open"] * rmean, True, 0.0))
     cutcols = sorted({c for c, *_ in cuts})
     grid_paint = grid.copy()
     gridL = {c: grid[:, c].copy() for c in cutcols}
@@ -876,10 +915,10 @@ def extend_tail(L, B, g, LM, cov, layers):
         dR = np.zeros(M)
         dL = {c: 0.0 for c in cutcols}
         fall = S / (2 * max(len(cuts), 1))
-        for c, d0, gmax, fast in cuts:
+        for c, d0, gmax, fast, g0 in cuts:
             dm = depth[r, c]
             u_ = np.clip((dm - d0) / max(length[c] - d0, 1e-3), 0, 1)
-            gap = gmax * (ss(0.0, 0.25, u_) if fast else u_)
+            gap = (g0 + (gmax - g0) * (ss(0.0, 0.25, u_) if fast else u_)) * ss(0.0, 0.03, dm - d0)
             if gap <= 0:
                 continue
             dl = ((sm - sm[c] + S / 2) % S) - S / 2
@@ -921,9 +960,11 @@ def extend_tail(L, B, g, LM, cov, layers):
     LiL = {c: lin_base + rows * M + i * rows + np.arange(rows) for i, c in enumerate(cutcols)}
     # weights: the loop vertices' own weights fading into skirt weights
     Wl = L.W[lp]
-    top_z = float(P0[:, 1].mean())
-    Wsk = BH.skirt_weights(BH.to_bl_np(grid.reshape(-1, 3)), B.J, H, top_z, long=(end.mean() < LM["knee"] + 0.05)).reshape(rows, M, -1)
-    blend = ss(0.0, 0.45, tt)[:, None, None]
+    top_z = min(float(P0[:, 1].mean()), LM["hip"] + 0.05 * k)     # tails that start above the hip keep the torso's weights down to it
+    Wsk = tail_weights(BH.to_bl_np(grid.reshape(-1, 3)), B.J, H, top_z, long=(end.mean() < LM["knee"] + 0.05),
+                       split_front=bool(tl.get("split") is not None and tl.get("split") > 0 or (po and po.get("open"))),
+                       split_back=bool(tl.get("vent"))).reshape(rows, M, -1)
+    blend = ss(0.0, 0.07, top_z - grid[..., 1])[..., None]
     Wt = Wl[None] * (1 - blend) + Wsk * blend
     Wt /= np.maximum(Wt.sum(-1, keepdims=True), 1e-9)
     # aux uv: u = arc along the loop (column), v = down the tail
@@ -1084,13 +1125,14 @@ def grid_piece(name, grid, edge, g, flags):
 # ----------------------------------------------------------------------------------------------------------------
 # extras: collars, hood roll, skirts, belts / buckles, pouches, shoes, hats, hair pieces
 # ----------------------------------------------------------------------------------------------------------------
-COLLAR = {  # profile (a = out of the opening, o = off the garment surface) metres for a 1.75 m body
-    "stand": lambda h, fl, ln: [(-0.006, 0.0012), (h * 0.5, 0.0032 + ln * 0.5 + fl * 0.25), (h * 0.92, 0.0028 + ln + fl * 0.85), (h, 0.0012 + ln + fl)],
-    "funnel": lambda h, fl, ln: [(-0.006, 0.0014), (h * 0.45, 0.005 + fl * 0.3), (h * 0.9, 0.006 + fl * 0.8), (h, 0.003 + fl)],
-    "mandarin": lambda h, fl, ln: [(-0.005, 0.001), (h * 0.5, 0.0028), (h * 0.95, 0.0022 + ln), (h, 0.0008 + ln)],
-    "gorget": lambda h, fl, ln: [(-0.006, 0.0015), (h * 0.5, 0.004 + ln), (h * 0.95, 0.0035 + ln * 2), (h, 0.0015 + ln * 2)],
-    "rib": lambda h, fl, ln: [(-0.005, 0.001), (h * 0.5, 0.003), (h * 0.9, 0.0026 + ln), (h, 0.0008 + ln)],
-    "turtle": lambda h, fl, ln: [(-0.006, 0.001), (h * 0.35, 0.0055), (h * 0.7, 0.009), (h, 0.0045)],
+COLLAR = {  # profile (a = out of the opening, o = off the garment surface) metres for a 1.75 m body; stand kinds start
+    # 2.8 cm down inside the garment, so no sliver of neck shows where the neckline dips at the back
+    "stand": lambda h, fl, ln: [(-0.028, -0.001), (-0.006, 0.0012), (h * 0.5, 0.0032 + ln * 0.5 + fl * 0.25), (h * 0.92, 0.0028 + ln + fl * 0.85), (h, 0.0012 + ln + fl)],
+    "funnel": lambda h, fl, ln: [(-0.028, -0.001), (-0.006, 0.0014), (h * 0.45, 0.005 + fl * 0.3), (h * 0.9, 0.006 + fl * 0.8), (h, 0.003 + fl)],
+    "mandarin": lambda h, fl, ln: [(-0.028, -0.001), (-0.005, 0.001), (h * 0.5, 0.0028), (h * 0.95, 0.0022 + ln), (h, 0.0008 + ln)],
+    "gorget": lambda h, fl, ln: [(-0.028, -0.001), (-0.006, 0.0015), (h * 0.5, 0.004 + ln), (h * 0.95, 0.0035 + ln * 2), (h, 0.0015 + ln * 2)],
+    "rib": lambda h, fl, ln: [(-0.028, -0.001), (-0.005, 0.001), (h * 0.5, 0.003), (h * 0.9, 0.0026 + ln), (h, 0.0008 + ln)],
+    "turtle": lambda h, fl, ln: [(-0.028, -0.001), (-0.006, 0.001), (h * 0.35, 0.0055), (h * 0.7, 0.009), (h, 0.0045)],
     "crew": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.6, 0.0026), (h, 0.0014)],
     "shirt": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.7, 0.0028), (h, 0.0055), (h * 0.55, 0.0105), (h * 0.05 - fl * 0.4, 0.0085 + fl * 0.35)],
     "notch": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.7, 0.0028), (h, 0.0055), (h * 0.55, 0.0105), (-fl * 1.2, 0.006 + fl * 0.3)],
@@ -1177,55 +1219,56 @@ def fix_winding_out(o, inside_bl):
 
 
 def hood_roll(L, B, g, LM):
-    """A soft rolled hood resting on the upper back, from collarbone to collarbone (it reads from behind)."""
+    """A soft rolled hood resting on the upper back between the shoulder blades (it reads from behind): a flattened
+    pouch lying on the garment along a smooth arc just under the collar, tapering at both ends."""
     k = LM["k"]
     P = L.pos
-    NL = BH.layer_normals(L, B) if len(L.base) == len(L.pos) else BH.vertex_normals(L.pos, L.faces)
-    cz = zc_at(B, LM["nb"])
-    angs = np.linspace(100, 260, 22)      # 0 = front; across the back, from shoulder blade to shoulder blade
-    path, nrm = [], []
-    for a in angs:
-        ar = np.radians(a)
-        y_t = LM["nb"] - 0.012 * k - 0.045 * k * (1 - np.cos(np.radians(a - 180)) ** 2) * 0.0 - 0.02 * k * np.abs(np.cos(ar)) ** 0.5
-        if abs(a - 180) > 60:
-            y_t = y_t - 0.01 * k
-        d = np.array([np.sin(ar), 0, np.cos(ar)])
-        m = (np.abs(P[:, 1] - y_t) < 0.02) & ((P[:, [0, 2]] - [0, cz]) @ d[[0, 2]] > 0)
-        cand = P[m]
-        if len(cand) == 0:
-            cand = P[np.argsort(np.abs(P[:, 1] - y_t))[:30]]
-        proj = (cand[:, [0, 2]] - [0, cz]) @ d[[0, 2]]
-        lat = np.abs((cand[:, [0, 2]] - [0, cz]) @ np.array([d[2], -d[0]]))
-        j = np.argmax(proj - 3 * lat)
-        p = cand[j].copy()
-        nn = NL[np.nonzero(m)[0][j]] if m.any() else np.array([d[0] * 0.9, 0.4, d[2] * 0.9])
-        path.append(p)
-        nrm.append(nn)
-    path = np.array(path)
-    nrm = np.array(nrm)
-    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)
-    t = np.abs(angs - 180) / 80                      # 0 at the back centre, 1 at the ends
-    wv = (0.075 - 0.045 * t ** 1.5) * k             # cross-section height (down the back)
-    th_ = (0.03 - 0.02 * t ** 1.5) * k             # thickness off the back
-    seg = 10
-    rows = []
+    base_ok = ((B.aw["L"] + B.aw["R"])[np.asarray(L.base)] < 0.3) if len(L.base) == len(P) else np.ones(len(P), bool)
+    y0 = LM["nb"] - 0.018 * k
+    cz = zc_at(B, y0)
+    angs = np.linspace(126, 234, 25)          # 0 = front
+    t = np.abs(angs - 180) / 54                # 0 at the back centre, 1 at the ends
+    ys = y0 - 0.04 * k * t ** 1.8              # a crescent: the ends dip toward the shoulder blades
+    NLall = BH.layer_normals(L, B) if len(L.base) == len(P) else BH.vertex_normals(P, L.faces)
+    rad = np.full(len(angs), np.nan)
+    nrm = np.zeros((len(angs), 3))
+    pa = np.degrees(np.arctan2(P[:, 0], P[:, 2] - cz))
+    pr = np.hypot(P[:, 0], P[:, 2] - cz)
+    for i, (a, yy) in enumerate(zip(angs, ys)):
+        m = base_ok & (np.abs(P[:, 1] - yy) < 0.025) & (np.abs(((pa - a + 180) % 360) - 180) < 8)
+        if m.any():
+            rad[i] = pr[m].max()
+            nrm[i] = NLall[m].mean(0)
+    ok = ~np.isnan(rad)
+    idx = np.arange(len(angs))
+    rad = np.interp(idx, idx[ok], rad[ok])
+    for c_ in range(3):
+        nrm[:, c_] = np.interp(idx, idx[ok], nrm[ok, c_])
+    for _ in range(3):
+        rad[1:-1] = (rad[:-2] + 2 * rad[1:-1] + rad[2:]) / 4
+        nrm[1:-1] = (nrm[:-2] + 2 * nrm[1:-1] + nrm[2:]) / 4
+    ar = np.radians(angs)
+    dirs = np.stack([np.sin(ar), np.zeros_like(ar), np.cos(ar)], 1)
+    path = np.stack([dirs[:, 0] * rad, ys, cz + dirs[:, 2] * rad], 1)
     T = np.gradient(path, axis=0)
     T /= np.linalg.norm(T, axis=1, keepdims=True)
+    nrm -= (nrm * T).sum(1, keepdims=True) * T             # the garment's outward normal under the path
+    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)
+    down = np.array([0, -1.0, 0]) - (nrm @ np.array([0, -1.0, 0]))[:, None] * nrm
+    down -= (down * T).sum(1, keepdims=True) * T
+    down /= np.linalg.norm(down, axis=1, keepdims=True)    # along the back surface, downward
+    wv = (0.12 - 0.085 * t ** 1.3) * k                    # height of the pouch down the back
+    th_ = (0.052 - 0.042 * t ** 1.2) * k                  # thickness off the back (fullest at the centre)
+    seg = 12
+    rows = []
     for i in range(len(path)):
-        n_ = nrm[i] - (nrm[i] @ T[i]) * T[i]
-        n_ /= np.linalg.norm(n_)
-        bdir = np.cross(T[i], n_)
-        away = path[i] - np.array([0, path[i][1], cz])
-        away[1] = -0.5 * np.linalg.norm(away)
-        if bdir @ away < 0:
-            bdir = -bdir           # along the surface, away from the neck (down the back, out over the shoulder)
+        ctr = path[i] + down[i] * (wv[i] * 0.45) + nrm[i] * (th_[i] * 0.42 + 0.002)
         ring = []
         for s_ in range(seg + 1):
             u = s_ / seg * 2 * math.pi
-            # a flattened, slightly asymmetric tube: lies on the back, bulging up and out
-            a_, b_ = math.cos(u), math.sin(u)
-            pos = path[i] + bdir * (wv[i] * 0.5 * (1 - a_)) + n_ * (th_[i] * 0.5 * (1 + b_) * (0.55 + 0.45 * (1 - a_) * 0.5) + 0.002)
-            ring.append(pos)
+            cu, su = math.cos(u), math.sin(u)
+            flat = 0.55 if su < 0 else 1.0                # the side against the back is flatter
+            ring.append(ctr + down[i] * (cu * wv[i] * 0.5) + nrm[i] * (su * th_[i] * 0.5 * flat) + nrm[i] * (0.004 * cu * (cu > 0)))
         rows.append(ring)
     grid = np.array(rows)                          # path x seg+1 x 3
     gridT = np.transpose(grid, (1, 0, 2))           # rows = around, cols = along
@@ -1247,10 +1290,39 @@ def hood_roll(L, B, g, LM):
             faces.append([end * seg + s_, end * seg + s2, c_] if end else [end * seg + s2, end * seg + s_, c_])
             uvs.append([enc(s_, end), enc(s_ + 1, end), enc(s_, end)])
     o = BH.mesh_from("hood_roll", BH.to_bl_np(verts), faces, [u for f in uvs for u in f])
-    fix_winding_out(o, BH.to_bl(path.mean(0) - np.array([0, 0.03, 0])))
+    fix_winding_out(o, BH.to_bl(np.array([0.0, float(ys.mean()), cz])))
     BH.set_mask(o, (0, g.get("gloss", 0.0) * 0.8, 0))
-    BH.WSTORE[o.name] = BH.nearest_weights(BH.obj_world_verts(o), BH.to_bl_np(L.pos), L.W, 4)
+    sel = np.nonzero(base_ok)[0]
+    BH.WSTORE[o.name] = BH.nearest_weights(BH.obj_world_verts(o), BH.to_bl_np(P[sel]), L.W[sel], 6)
     return o
+
+
+def hood_drape(L, B):
+    """Hood up: below the ears the cloth falls in a near-vertical curtain from the widest part of the head to the
+    shoulders (it does not hug the jaw and neck like a balaclava); the chin closure at the front stays close."""
+    eye = B.L.eye
+    cz = eye[2] - 0.075
+    rel = L.pos - eye
+    y = rel[:, 1]
+    ang = np.degrees(np.arctan2(L.pos[:, 0], L.pos[:, 2] - cz))
+    r = np.hypot(L.pos[:, 0], L.pos[:, 2] - cz)
+    nb = 36
+    bi = ((ang + 180) / 360 * nb).astype(int) % nb
+    band = (y > -0.04) & (y < 0.01)
+    R = np.zeros(nb)
+    np.maximum.at(R, bi[band], r[band])
+    good = np.nonzero(R > 0)[0]
+    if len(good) < 6:
+        return
+    R = np.interp(np.arange(nb), np.r_[good - nb, good, good + nb], np.r_[R[good], R[good], R[good]])
+    R = (np.roll(R, 1) + 2 * R + np.roll(R, -1)) / 4
+    t = np.clip((-0.035 - y) / 0.1, 0, 1)
+    wf = ss(28, 70, np.abs(ang))                    # sides and back only
+    tgt = R[bi] * (1.0 + 0.06 * t)
+    push = np.maximum(tgt - r, 0) * wf * ss(0.0, 0.35, t)
+    nr = r + push
+    L.pos[:, 0] = L.pos[:, 0] / np.maximum(r, 1e-6) * nr
+    L.pos[:, 2] = cz + (L.pos[:, 2] - cz) / np.maximum(r, 1e-6) * nr
 
 
 def ring_grid(B, pts, ys, pad, n=40, cz=None):
@@ -1315,7 +1387,7 @@ def skirt_piece(c, B, g, LM, layers):
     fix_winding_out(o, BH.to_bl(np.array([0, top_y - length / 2, cz.mean()])))
     BH.cloth_shell(o, 0.004)
     BH.set_mask(o, (0, g.get("gloss", 0.0), 0))
-    BH.WSTORE[o.name] = BH.skirt_weights(BH.obj_world_verts(o), B.J, H, top_y, long=False)
+    BH.WSTORE[o.name] = tail_weights(BH.obj_world_verts(o), B.J, H, top_y, long=False)
     return o
 
 
@@ -1411,6 +1483,223 @@ def pieces_over(c, B, cov, layers, LM):
     return out
 
 
+# ----------------------------------------------------------------------------------------------------------------
+# straps and belts as ribbons: clean flat bands that follow the outer surface (the outermost piece on the torso)
+# ----------------------------------------------------------------------------------------------------------------
+RIBBON_SHAPES = ("harness", "strap", "belt", "sash")
+
+
+def ribbon_ok(g, cos):
+    """Straps / belts become ribbons unless a broader garment is worn over them (a poncho or cloak keeps the layer)."""
+    if g.get("shape") not in RIBBON_SHAPES or g.get("fab") == "cord":
+        return False
+    return not any(t.get("z", 50) > g.get("z", 60) for t in cos["top"])
+
+
+def support_points(B, layers, z_max):
+    """Outer surface the ribbons sit on: torso body vertices + every garment layer below z_max (no arms, head, legs)."""
+    pts, Ws = [], []
+    tor = (B.tw - B.hw - B.W[:, BH.BI["neck"]]) > 0.35
+    sel = np.intersect1d(np.nonzero(tor & (B.aw["L"] + B.aw["R"] < 0.2))[0], B.bodyv)
+    pts.append(B.P[sel] + B.N[sel] * 0.002)
+    Ws.append(B.W[sel])
+    for kk, L in layers.items():
+        g = getattr(L, "g", None) or {}
+        if kk in ("skin", "hair", "hood", "scarf") or g.get("z", 50) >= z_max:
+            continue
+        base = np.asarray(L.base)
+        m = ((B.aw["L"] + B.aw["R"])[base] < 0.2) & ((B.hw + B.W[:, BH.BI["neck"]])[base] < 0.3)
+        pts.append(L.pos[m])
+        Ws.append(L.W[m])
+    return np.concatenate(pts), np.concatenate(Ws)
+
+
+def ribbon_path(pts, p0, n, e1, e2, width, nb=88, clip_y=None):
+    """Outline (MH coords) of the support in the plane (p0, n): per angle around the slab centre, the largest radius of
+    the points within the strap's width, dilated and smoothed so the band bridges hollows instead of dipping in."""
+    rel = pts - p0
+    sel = np.abs(rel @ n) < max(width * 0.6, 0.012)
+    if clip_y is not None:              # what lies below the clip (hips, seat) must not pull the band off the back
+        sel &= pts[:, 1] >= clip_y - 0.015
+    Q = np.stack([rel[sel] @ e1, rel[sel] @ e2], 1)
+    c = (Q.max(0) + Q.min(0)) / 2
+    ang = np.arctan2(Q[:, 1] - c[1], Q[:, 0] - c[0])
+    rad = np.hypot(Q[:, 0] - c[0], Q[:, 1] - c[1])
+    bi = ((ang + math.pi) / (2 * math.pi) * nb).astype(int) % nb
+    R = np.zeros(nb)
+    np.maximum.at(R, bi, rad)
+    good = np.nonzero(R > 0)[0]
+    R = np.interp(np.arange(nb), np.r_[good - nb, good, good + nb], np.r_[R[good], R[good], R[good]])
+    Rs = R.copy()                     # fill small dips (no sideways dilation: the band follows the back's hollow)
+    for _ in range(2):
+        Rs = (np.roll(Rs, 1) + 2 * Rs + np.roll(Rs, -1)) / 4
+    R = np.maximum(R, Rs)
+    R = (np.roll(R, 1) + 2 * R + np.roll(R, -1)) / 4
+    a = -math.pi + (np.arange(nb) + 0.5) * 2 * math.pi / nb
+    P2 = np.stack([c[0] + np.cos(a) * R, c[1] + np.sin(a) * R], 1)
+    P = p0 + P2[:, :1] * e1 + P2[:, 1:] * e2
+    O2 = P2 - c
+    O = O2[:, :1] * e1 + O2[:, 1:] * e2           # outward (in the plane) ~ radial; refined from the outline below
+    T = np.roll(P, -1, 0) - np.roll(P, 1, 0)
+    T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-9)
+    On = np.cross(T, n)
+    On *= np.sign((On * O).sum(1, keepdims=True) + 1e-12)
+    On /= np.maximum(np.linalg.norm(On, axis=1, keepdims=True), 1e-9)
+    closed = True
+    if clip_y is not None:           # an open strap: drop the part below clip_y (it ends under the belt)
+        keep = P[:, 1] >= clip_y
+        if keep.all():
+            pass
+        elif keep.any():
+            i0 = int(np.nonzero(~keep)[0][-1]) + 1      # roll so the dropped run sits at the end
+            order = np.roll(np.arange(nb), -i0)
+            order = order[keep[order]]
+            P, T, On = P[order], T[order], On[order]
+            closed = False
+    return P, T, On, closed
+
+
+def ribbon_mesh(name, g, P, T, On, n, width, thick, closed, Psup, Wsup):
+    """Flat band with a rectangular, slightly crowned cross-section along path P (outer face lifted 1 mm off the
+    support); painted from its own 3D positions by the garment painter (webbing stitch rows, edge binding)."""
+    hw = width / 2
+    crown = 0.0035 if g.get("fab") in ("linen", "cotton", "wool", "felt", "woven") else 0.0008      # cloth sashes are soft rolls
+    prof = [(hw, 0.0), (0.0, crown), (-hw, 0.0), (-hw, -thick), (0.0, -thick), (hw, -thick)]
+    edge_of = [0.0, hw, 0.0, 0.0, hw, 0.0, 0.0]
+    lift = thick + 0.001
+    rows = [P + n * a_ + On * (lift + o_) for a_, o_ in prof]
+    grid = np.stack(rows + [rows[0]])                # 7 x M x 3 (closing row for uv)
+    M = len(P)
+    if closed:
+        grid = np.concatenate([grid, grid[:, :1]], 1)
+    edge = np.repeat(np.array(edge_of)[:, None], grid.shape[1], 1)
+    enc = grid_piece(name, grid, edge, g, dict(collar=0.0))
+    verts = np.concatenate(rows)
+    faces, uvs = [], []
+    nr = len(prof)
+    ncol = M if closed else M - 1
+    for r in range(nr):
+        r2 = (r + 1) % nr
+        for m in range(ncol):
+            m2 = (m + 1) % M
+            faces.append([r * M + m, r * M + m2, r2 * M + m2, r2 * M + m])
+            uvs.append([enc(r, m), enc(r, m + 1), enc(r + 1, m + 1), enc(r + 1, m)])
+    if not closed:                     # end caps
+        for end in (0, M - 1):
+            faces.append([r * M + end for r in range(nr)][::(1 if end else -1)])
+            uvs.append([enc(min(r, nr - 1), end) for r in range(nr)][::(1 if end else -1)])
+    o = BH.mesh_from(name, BH.to_bl_np(verts), faces, [u for f in uvs for u in f])
+    # outward winding: the outer face (row 0 -> 1) must face along On
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bm.normal_update()
+    bm.faces.ensure_lookup_table()
+    f0 = bm.faces[0]
+    nrm0 = np.array(f0.normal)
+    want = BH.to_bl_np(On[:1])[0]
+    if nrm0 @ want < 0:
+        bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
+    bm.to_mesh(o.data)
+    bm.free()
+    BH.set_mask(o, (0, g.get("gloss", 0.1), 0))
+    BH.WSTORE[o.name] = BH.nearest_weights(BH.obj_world_verts(o), BH.to_bl_np(Psup), Wsup, 4)
+    return o
+
+
+def buckle_on(P, T, On, n, xy, size, front=True, name="buckle", cell="metal", gloss=0.65):
+    """A small bevelled block sitting on the ribbon path at the point nearest (x, y) on its front (or back) run,
+    aligned with the strap (MH coords)."""
+    from mathutils import Matrix
+    d = np.hypot(P[:, 0] - xy[0], P[:, 1] - xy[1])
+    d = d + 9 * ((P[:, 2] > P[:, 2].mean()) != front)
+    i = int(np.argmin(d))
+    tb, ob, nbv = BH.to_bl_np(np.stack([T[i], On[i], n]))
+    if np.linalg.det(np.stack([tb, ob, nbv], 1)) < 0:
+        nbv = -nbv
+    rot = Matrix(((tb[0], ob[0], nbv[0], 0), (tb[1], ob[1], nbv[1], 0), (tb[2], ob[2], nbv[2], 0), (0, 0, 0, 1)))
+    o = rbox(name, BH.to_bl(P[i] + On[i] * (size[1] * 0.5 + 0.004)), size, rot, bevel=0.35)
+    BH.piece(o, cell, (0, gloss, 0), bone="hips")
+    return o
+
+
+def sash_knot(B, g, P, On, yb):
+    """A soft knot on the sash at the front of the hip (left or right) with two hanging ends."""
+    import bmesh
+    from mathutils import Vector, Matrix
+    s = 1 if g["knot"] == "L" else -1
+    m = np.abs(P[:, 1] - yb) < 0.03
+    j = int(np.argmax(np.where(m, P[:, 0] * s * 0.7 + P[:, 2] * 0.7, -9)))
+    ctr = BH.to_bl(P[j] + On[j] * 0.012)
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=7, radius=1.0)
+    for v in bm.verts:
+        v.co = Vector((v.co.x * 0.022, v.co.y * 0.016, v.co.z * 0.02))
+    o = BH.BC.mesh_obj("knot", bm)
+    o.data.transform(Matrix.Translation(ctr))
+    BH.piece(o, "acc", (0, 0, 0), bone="hips")
+    out = [o]
+    for dx in (-0.01, 0.012):
+        tl = BH.BC.tube("knot_tail", [ctr + Vector((dx, -0.006, -0.01)), ctr + Vector((dx * 1.6, -0.01, -0.09)), ctr + Vector((dx * 2.0, -0.008, -0.17 - dx))],
+                        [(0.026, 0.0035), (0.03, 0.0035), (0.028, 0.003)], seg=8)
+        BH.piece(tl, "acc", (0, 0, 0), bone="hips")
+        BH.WSTORE[tl.name] = tail_weights(BH.obj_world_verts(tl), B.J, B.H, B.J["spine"].z, long=False)
+        out.append(tl)
+    return out
+
+
+def ribbons(c, B, cov, layers, LM):
+    """Harness straps, slings, bandoliers and belts that are outermost on the torso (see ribbon_ok)."""
+    cos = cov["_costume"]
+    k, J = LM["k"], B.Jm
+    out, placed, buckles = [], [], []          # placed: (verts MH, W) of built ribbons; later ones sit over them
+    items = sorted(cov.get("_ribbons", []), key=lambda g: g.get("z", 60))
+
+    def add(name, g, P, T, On, n, width, thick, closed, Psup, Wsup):
+        o = ribbon_mesh(name, g, P, T, On, n, width, thick, closed, Psup, Wsup)
+        out.append(o)
+        placed.append((BH.from_bl_np(BH.obj_world_verts(o)), BH.WSTORE[o.name]))
+    for g in items:
+        Psup, Wsup = support_points(B, layers, g.get("z", 60) + 0.5)
+        if placed:
+            Psup = np.concatenate([Psup] + [p for p, _ in placed])
+            Wsup = np.concatenate([Wsup] + [w for _, w in placed])
+        shape = g["shape"]
+        thick = max(g.get("thick", 0.004), 0.0025)
+        belt_y = LM["spn"] - 0.055 * k if not g.get("waist") else LM["spn"]
+        if shape in ("harness", "strap"):      # diagonal: one shoulder top to the opposite hip, front and back
+            s = 1 if g.get("side", "L") == "L" else -1
+            p0 = np.array([0.105 * s * k, LM["sh"] + 0.065 * k, J["shoulder_L"][2]])
+            p1 = np.array([-0.14 * s * k, LM["spn"] - 0.11 * k, J["spine"][2]])
+            d = (p1 - p0) / np.linalg.norm(p1 - p0)
+            n = np.cross(d, [0, 0, 1.0])
+            n /= np.linalg.norm(n)
+            width = (0.042 if shape == "harness" else g.get("width", 0.04)) * k
+            P, T, On, closed = ribbon_path(Psup, p0, n, d, np.array([0, 0, 1.0]), width, clip_y=belt_y if shape == "harness" else None)
+            add(f"strap_{g['type']}", g, P, T, On, n, width, thick, closed, Psup, Wsup)
+            if shape == "harness":             # strap buckle on the chest, an adjuster at the back
+                buckles.append(buckle_on(P, T, On, n, (0.035 * s * k, LM["ch"] + 0.06 * k), (0.034 * k, 0.007, width + 0.004), True))
+                buckles.append(buckle_on(P, T, On, n, (-0.05 * s * k, LM["ch"] - 0.02 * k), (0.034 * k, 0.007, width + 0.004), False))
+        if shape == "sash":
+            belt_y = LM["spn"] - 0.01 * k
+        if shape in ("harness", "belt", "sash"):       # waist belt / sash (over the strap ends)
+            bw = (0.044 if shape == "harness" else g.get("width", 0.03)) * k
+            n_b = np.array([0, 1.0, 0])
+            Pall = np.concatenate([Psup] + [p for p, _ in placed])
+            P, T, On, closed = ribbon_path(Pall, np.array([0.0, belt_y, zc_at(B, belt_y)]), n_b, np.array([1.0, 0, 0]), np.array([0, 0, 1.0]), bw)
+            add(f"strap_{g['type']}_belt", g, P, T, On, n_b, bw, thick + 0.0015, closed, Psup, Wsup)
+            if shape == "harness" or g.get("buckle"):
+                buckles.append(buckle_on(P, T, On, n_b, (-0.02 * k if shape == "harness" else 0.0, belt_y), (0.05 * k, 0.008, bw + 0.006 * k), True))
+            if shape == "sash" and g.get("knot"):
+                out.extend(sash_knot(B, g, P, On, belt_y))
+    if placed:                                  # the buckles move with the ribbons under them
+        allp = BH.to_bl_np(np.concatenate([p for p, _ in placed]))
+        allw = np.concatenate([w for _, w in placed])
+        for o in buckles:
+            BH.WSTORE[o.name] = BH.nearest_weights(BH.obj_world_verts(o), allp, allw, 4)
+    return out + buckles
+
+
 def shoes(c, B, cov, feet, LM):
     """Fitted shoes: legacy hull shoe with per-type sole height / lip / toe cap; sandals: sole slab + straps."""
     if feet is None:
@@ -1428,10 +1717,11 @@ def sandals(c, B, cov, feet, LM):
         sel = np.array([i for i in B.bodyv if B.vb[i] in (f"foot_{s}", f"toe_{s}")])
         P = B.P[sel]
         low = P[P[:, 1] < P[:, 1].min() + 0.02]
+        top = max(feet.get("sole_h", 0.012), float(P[:, 1].min()) + 0.0015)
         bm = bmesh.new()
         for p in BH.to_bl_np(np.c_[low[:, 0], np.zeros(len(low)), low[:, 2]]):
             bm.verts.new(p)
-            bm.verts.new(p + Vector((0, 0, feet.get("sole_h", 0.012))))
+            bm.verts.new(p + Vector((0, 0, top)))
         bmesh.ops.convex_hull(bm, input=bm.verts)
         o = BH.BC.mesh_obj("sandal", bm)
         sc = o.modifiers.new("cast", "SMOOTH")
@@ -1641,7 +1931,7 @@ def extras(c, B, cov, layers):
                 out.append(hood_roll(Lsrc, B, dict(src or {}, det=[d for d in (src or {}).get("det", []) if d.startswith(("wear", "patches"))] +
                                                    [d for d in h.get("det", [])]), LM))
     # ---- hood / head-wrap hems ----
-    for key, cell, rad in (("scarf", "acc", 0.0045), ("hood", "colA", 0.006)):
+    for key, cell, rad in (("scarf", "acc", 0.0045), ("hood", "colA", 0.0085)):
         Lx = layers.get(key)
         if Lx is not None:
             loops = Lx.boundary_loops()
@@ -1652,7 +1942,8 @@ def extras(c, B, cov, layers):
     # ---- skirts ----
     for g in cos["skirt"]:
         out.append(skirt_piece(c, B, g, LM, layers))
-    # ---- over-layer hardware ----
+    # ---- straps / belts (ribbons) and over-layer hardware ----
+    out += ribbons(c, B, cov, layers, LM)
     out += pieces_over(c, B, cov, layers, LM)
     # ---- rolled edges (mantle wraps) ----
     for key, L in layers.items():
@@ -1718,7 +2009,7 @@ def hair_extra(c, B, cov, layers, LM):
     if style == "waves":
         ln = c.get("hairLen", "short")
         if ln == "short":      # Kai: messy waves over the brow and the tops of the ears
-            out.append(BH.hair_sheet(B, c, ref, 120, 240, L.eye[1] + 0.09, L.eye[1] - 0.045, clear=0.003, flare=0.01, rows=7, seg=18, tip=0.008, vol=vol, name="hair_nape"))
+            out.append(BH.hair_sheet(B, c, ref, 138, 222, L.eye[1] + 0.085, L.eye[1] - 0.03, clear=0.002, flare=0.004, rows=6, seg=16, narrow=8, tip=0.01, vol=vol * 0.6, name="hair_nape"))
         else:                  # chin to shoulder, side part
             out.append(BH.hair_sheet(B, c, ref, 62, 298, L.eye[1] + 0.1, L.eye[1] - 0.15 * H / 1.75, clear=0.003, flare=0.024, rows=13, seg=34, narrow=14, tip=0.03, vol=vol, name="hair_sheet"))
     elif style == "pixie":
@@ -1809,6 +2100,11 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
             g = dict(color=c.get("colorA", "444a55"), fab="cotton", det=[])
         f = fld(cov[key])
         m = (f > -0.003) & ~taken
+        col_k = (g.get("collar") or {}).get("kind")
+        if key.startswith("top") and col_k in ("stand", "funnel", "mandarin", "gorget", "rib", "turtle"):   # under the collar
+            m |= (f > -0.012) & ~taken & (pos[:, 1] > B.Jm["chest"][1]) & (arm_f < 0.5)
+        if key.startswith("top") and g.get("_tail_len"):     # the tail covers what lies just past the hem loop: no bleed
+            m |= (f > -0.022) & ~taken & (pos[:, 1] < g.get("_hem_y", 0) + 0.03) & (arm_f < 0.5)
         if key == "inshoe":
             m &= f > 0.0
         if not m.any():
@@ -1818,8 +2114,8 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         fe = f[idx]
         tl = g.get("_tail_len")
         tor_f = np.clip(1 - arm_f[idx] - leg_f[idx], 0, 1)
-        if tl and key.startswith("top"):
-            fe = np.where((tor_f > 0.5) & (pos[idx, 1] < g.get("_hem_y", 0) + 0.12), fe + tl, fe)
+        if tl and key.startswith("top"):      # the hem loop continues into the tail: no hem painting there
+            fe = np.where((arm_f[idx] < 0.5) & (pos[idx, 1] < g.get("_hem_y", 0) + 0.12), fe + tl, fe)
         head = key in ("hood", "scarf")
         X = texel_ctx(B, pos[idx], f=fe, arm=arm_f[idx] * (not head), leg=leg_f[idx] * (not head), ny=ny[idx],
                       torso=np.zeros(len(idx)) if head else tor_f)
