@@ -17,7 +17,7 @@ export default {
     // ---------- materials per era ----------
     const M = {
       '2026': { wall: concreteMaterial('#7a7670', [3, 2]), floor: concreteMaterial('#5a5650', [6, 6]), trim: glowMat(0xffa040, 2) },
-      '2049': { wall: new THREE.MeshStandardMaterial({ color: 0xd8dde2, roughness: 0.3, metalness: 0.2 }), floor: tileMaterial('#6a6e74', '#2a2c30', [12, 12], { roughness: 0.18, metalness: 0.3 }), trim: glowMat(0x5fe6ff, 2.5) },
+      '2049': { wall: new THREE.MeshStandardMaterial({ color: 0x9aa2ac, roughness: 0.35, metalness: 0.35 }), floor: tileMaterial('#6a6e74', '#2a2c30', [12, 12], { roughness: 0.18, metalness: 0.3 }), trim: glowMat(0x5fe6ff, 2.5) },
       '2196': { wall: concreteMaterial('#4a5048', [3, 2], { stains: true }), floor: concreteMaterial('#3a4036', [6, 6], { stains: true }), trim: glowMat(0x3a5a40, 0.5) },
     };
     const steel = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.35, metalness: 0.85 });

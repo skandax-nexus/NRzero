@@ -93,8 +93,19 @@ export default {
     const pool = new THREE.Mesh(new THREE.CircleGeometry(7, 40), water); pool.rotation.x = -Math.PI / 2; pool.position.set(-24, 0.06, -30); scene.add(pool);
     game.onUpdate((dt, t) => { water.normalMap.offset.set(t * 0.01, -t * 0.04); });
     // cliffs + waterfalls (from the cover)
-    const cliffMat = stoneMaterial('#6a5a48', [3, 4], 8);
-    for (const [x, z, w, h, ry] of [[-30, -48, 30, 28, 0.3], [5, -62, 40, 36, 0], [40, -48, 30, 30, -0.4], [-50, -15, 20, 24, 1.3]]) { const c = box(w, h, 8, cliffMat, x, 0, z); c.rotation.y = ry; scene.add(c); }
+    const cliffMat = new THREE.MeshStandardMaterial({ color: 0x7a6650, roughness: 0.95, flatShading: true });
+    const mossMat = new THREE.MeshStandardMaterial({ color: 0x4a5a2a, roughness: 1, flatShading: true });
+    for (const [x, z, w, h, ry] of [[-30, -48, 30, 28, 0.3], [5, -62, 40, 36, 0], [40, -48, 30, 30, -0.4], [-50, -15, 20, 24, 1.3]]) {
+      const cl = new THREE.Group(); cl.position.set(x, 0, z); cl.rotation.y = ry; scene.add(cl);
+      for (let k = 0; k < 9; k++) {
+        const g = new THREE.DodecahedronGeometry(1, 1); const gpos = g.attributes.position;
+        for (let i = 0; i < gpos.count; i++) gpos.setXYZ(i, gpos.getX(i) * (1 + (R() - 0.5) * 0.25), gpos.getY(i) * (1 + (R() - 0.5) * 0.25), gpos.getZ(i) * (1 + (R() - 0.5) * 0.25));
+        g.computeVertexNormals();
+        const rock = new THREE.Mesh(g, k % 4 === 3 ? mossMat : cliffMat);
+        rock.scale.set(w / 6 + R() * 3, h * (0.35 + R() * 0.25), 5 + R() * 3); rock.position.set(-w / 2 + (k / 8) * w, h * 0.25 + (k % 2) * h * 0.18, (R() - 0.5) * 4); rock.rotation.y = R() * 3; rock.castShadow = true;
+        cl.add(rock);
+      }
+    }
     const falls = [];
     for (const [x, y, z, w, h, ry] of [[-26, 2, -43.6, 6, 26, 0.3], [-4, 3, -57.8, 5, 33, 0], [10, 3, -57.8, 3, 33, 0], [34, 2, -44.4, 4, 28, -0.4]]) { const f = waterfall(w, h); f.position.set(x, y + h / 2 - 2, z); f.rotation.y = ry; scene.add(f); falls.push(f); }
     game.onUpdate((dt, t) => { for (const f of falls) f.userData.tex.offset.y = t * 0.45; });
