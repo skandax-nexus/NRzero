@@ -244,6 +244,9 @@ export class AudioEngine {
 
 // Chord helpers (A minor world: the three-note motif E-B-A is Kai & Mira's shared memory)
 const PROG = [[45, 57, 60, 64, 71], [41, 57, 60, 64, 69], [48, 55, 60, 64, 67], [43, 55, 59, 62, 67]];
+// Missions can add generative themes: registerTheme('name', { bpm, step(a, stepIndex, time, sixteenth) { ... } })
+export function registerTheme(name, def) { THEMES[name] = def; }
+
 const THEMES = {
   title: { bpm: 78, step(a, s, t, d) {
     const bar = Math.floor(s / 16), b = s % 16, ch = PROG[bar % 4];

@@ -2,28 +2,28 @@ import m1 from './m1_last_normal_day.js';
 import m2 from './m2_helix_goes_dark.js';
 import m3 from './m3_first_switch.js';
 import m4 from './m4_man_from_last_day.js';
+import m5 from './m05_village_never_existed.js';
+import m6 from './m06_clockmakers_house.js';
+import m7 from './m07_broken_observatory.js';
+import m8 from './m08_first_death.js';
+import m9 from './m09_nine_minutes_to_zero.js';
+import m10 from './m10_enemies_who_remember.js';
+import m11 from './m11_inverted_hospital.js';
+import m12 from './m12_man_behind_glass.js';
+import m13 from './m13_nine_minute_war.js';
+import m14 from './m14_welcome_to_2196.js';
+import m15 from './m15_city_forgot_tomorrow.js';
+import m16 from './m16_museum_failed_worlds.js';
+import m17 from './m17_witness_archive.js';
+import m18 from './m18_the_fracture.js';
+import m19 from './m19_place_outside_time.js';
+import m20 from './m20_miras_memory.js';
+import m21 from './m21_last_battle_continuum.js';
+import m22 from './m22_first_second.js';
+import m23 from './m23_afterzero.js';
 
-export const MISSIONS = [m1, m2, m3, m4];
+// All 23 story missions from the gameplay bible, in order. Unbuilt ones carry stub: true.
+export const MISSIONS = [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23];
 
-// The rest of the campaign from the gameplay bible, one entry per mission.
-export const ROADMAP = [
-  { n: 5, act: 'ACT I · THE WORLD THAT REMEMBERS', title: 'The Village That Never Existed', text: 'Three states of one village. Divert a river, reinforce a wall, release a gate.' },
-  { n: 6, act: 'ACT I · THE WORLD THAT REMEMBERS', title: 'The Clockmaker\'s House', text: 'A workshop that repeats itself. "Do not let him see the ninth minute."' },
-  { n: 7, act: 'ACT I · THE WORLD THAT REMEMBERS', title: 'The Broken Observatory', text: 'Align the instruments. They didn\'t know when. They knew who.' },
-  { n: 8, act: 'ACT I · THE WORLD THAT REMEMBERS', title: 'The First Death', text: 'Back in a changed present. Current timeline: VERSION 17.' },
-  { n: 9, act: 'ACT II · THE NINE-MINUTE WAR', title: 'Nine Minutes to Zero', text: 'A city that repeats the same nine minutes.' },
-  { n: 10, act: 'ACT II · THE NINE-MINUTE WAR', title: 'Enemies Who Remember', text: 'Captured by the Continuum. Sera helps you escape. Echo Step.' },
-  { n: 11, act: 'ACT II · THE NINE-MINUTE WAR', title: 'The Inverted Hospital', text: 'Some rooms run forward. Others run backward.' },
-  { n: 12, act: 'ACT II · THE NINE-MINUTE WAR', title: 'The Man Behind the Glass', text: 'Chase the Witness through three states of Helix.' },
-  { n: 13, act: 'ACT II · THE NINE-MINUTE WAR', title: 'The Nine-Minute War', text: 'Two factions, one stabilizer, a district\'s fate.' },
-  { n: 14, act: 'ACT III · THE LAST VERSION OF EARTH', title: 'Welcome to 2196', text: 'A beautiful, devastated world that teaches your name.' },
-  { n: 15, act: 'ACT III · THE LAST VERSION OF EARTH', title: 'The City That Forgot Tomorrow', text: 'Residents who cannot remember past today.' },
-  { n: 16, act: 'ACT III · THE LAST VERSION OF EARTH', title: 'The Museum of Failed Worlds', text: 'Objects from worlds that no longer exist.' },
-  { n: 17, act: 'ACT III · THE LAST VERSION OF EARTH', title: 'The Witness\'s Archive', text: 'Every version of Kai\'s life, recorded.' },
-  { n: 18, act: 'ACT III · THE LAST VERSION OF EARTH', title: 'The Fracture', text: 'Temporal storms across a collapsing planet.' },
-  { n: 19, act: 'ACT IV · THE UNWRITTEN SECOND', title: 'The Place Outside Time', text: 'Roads loop. Rooms connect impossibly.' },
-  { n: 20, act: 'ACT IV · THE UNWRITTEN SECOND', title: 'Mira\'s Memory', text: 'Memories that contradict one another.' },
-  { n: 21, act: 'ACT IV · THE UNWRITTEN SECOND', title: 'The Last Battle of the Continuum', text: 'Every faction converges. Confront the Witness.' },
-  { n: 22, act: 'ACT IV · THE UNWRITTEN SECOND', title: 'The First Second', text: 'Return to the original activation point.' },
-  { n: 23, act: 'FINALE', title: 'Afterzero', text: 'Choose what to preserve, and what to release.' },
-];
+// Kept for compatibility: missions not yet built are shown from MISSIONS (stub) instead.
+export const ROADMAP = [];

@@ -72,6 +72,10 @@ export const CAST = {
   child: { name: 'CHILD', role: 'Rain City' },
 };
 
+// Missions add their own characters at runtime (keeps missions independent of this file).
+// def: { name, role, bio?, look?, human?, vp?: { sex: 'm'|'f', pitch, rate, langs: ['en-GB', ...] } }
+export function registerCast(id, def) { if (!CAST[id]) CAST[id] = def; return CAST[id]; }
+
 const CITIZEN_SKINS = [0xf1c6a8, 0xd9a585, 0xb98463, 0x8c5a3a, 0x6b4029, 0xe8b996, 0xa16d4c];
 const CITIZEN_HAIR = [0x111111, 0x2a1c14, 0x5a3a22, 0x8a6a4a, 0x0e0a08, 0xb8b4ae, 0x3a2418];
 const COATS = [0x1f2a36, 0x2a2a2a, 0x3a2f2a, 0x14202a, 0x2d3640, 0x3c3226, 0x202833, 0x4a1f24];

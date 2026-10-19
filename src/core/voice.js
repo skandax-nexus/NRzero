@@ -2,6 +2,8 @@
 // No recorded or downloaded audio: every line is synthesized at runtime, with a
 // distinct voice, pitch and pace per character. Falls back silently where unsupported.
 
+import { CAST } from '../story/cast.js';
+
 const PROFILES = {
   kai:     { sex: 'm', pitch: 0.95, rate: 1.0,  langs: ['en-US', 'en-GB'] },
   mira:    { sex: 'f', pitch: 1.05, rate: 0.96, langs: ['en-GB', 'en-US'] },
@@ -55,6 +57,7 @@ export class Voice {
 
   profile(id) {
     if (PROFILES[id]) return PROFILES[id];
+    if (CAST[id]?.vp) return { langs: ['en-US', 'en-GB'], pitch: 1, rate: 1, ...CAST[id].vp };
     // unnamed barks: a stable random citizen voice per line source
     const h = [...String(id || 'x')].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) >>> 0;
     return { sex: h % 2 ? 'f' : 'm', pitch: 0.85 + (h % 7) * 0.05, rate: 0.95 + (h % 5) * 0.03, langs: ['en-US', 'en-GB'] };

@@ -109,7 +109,7 @@ function openPanel(kind) {
   } else if (kind === 'chapters') {
     const unlocked = store.get('chapter', 0);
     const rows = [
-      ...MISSIONS.map((m, i) => ({ n: i + 1, act: m.act, title: m.title, text: m.sub, i, locked: i > unlocked })),
+      ...MISSIONS.map((m, i) => ({ n: i + 1, act: m.act, title: m.title, text: m.sub, i, locked: i > unlocked, future: !!m.stub })),
       ...ROADMAP.map(r => ({ n: r.n, act: r.act, title: r.title, text: r.text, future: true })),
     ];
     let html = '<h2>CHAPTERS</h2><div class="chapters">', lastAct = '';

@@ -5,30 +5,27 @@
 import * as THREE from 'three';
 import { lidAt, clamp, smoothstep, mix } from './head_b_sdf.js';
 
-const { sqrt, sin, cos, atan2, PI, pow, abs, min, max, floor } = Math;
+const { sqrt, sin, cos, PI, pow, abs, min, max, floor } = Math;
 
-export const EYE = { R: 0.0119, corneaR: 0.0076, corneaC: 0.00554, limbA: 0.505 };
+export const EYE = { corneaR: 0.0078, limbA: 0.505 };
 
-function corneaRadius(th) {
-  const c = EYE.corneaC, rc = EYE.corneaR;
+function corneaRadius(R, th) {
+  // cornea sphere (radius rc) whose rim meets the sclera sphere (radius R) at the limbus angle
+  const rc = EYE.corneaR, a = EYE.limbA;
+  const c = R * cos(a) - sqrt(max(0, rc * rc - R * R * sin(a) * sin(a)));
   return c * cos(th) + sqrt(max(0, rc * rc - c * c * sin(th) * sin(th)));
 }
 
-/** eyeball: sclera sphere, iris recessed on a plane under the cornea. Polar uv (u around, v = theta/PI). */
-export function eyeballGeometry(S, segU, segV) {
-  const R = EYE.R * S, a = EYE.limbA;
-  const zIris = EYE.R * cos(a) * 0.985 * S;
+/** eyeball (radius R): sclera sphere, iris recessed on a plane under the cornea. Polar uv (u around, v = theta/PI). */
+export function eyeballGeometry(R, segU, segV) {
+  const a = EYE.limbA;
+  const zIris = R * cos(a) * 0.985;
   const pos = [], uv = [], idx = [];
   const thetas = [];
-  for (let j = 0; j <= segV; j++) {
-    // denser near the front: theta = PI * f(j)
-    const f = j / segV;
-    thetas.push(PI * pow(f, 1.35));
-  }
+  for (let j = 0; j <= segV; j++) thetas.push(PI * pow(j / segV, 1.35));
   for (let j = 0; j <= segV; j++) {
     const th = thetas[j];
-    let r;
-    if (th < a) r = zIris / cos(th); else r = R;
+    const r = th < a ? zIris / cos(th) : R;
     for (let i = 0; i <= segU; i++) {
       const ph = i / segU * 2 * PI;
       pos.push(r * sin(th) * cos(ph), r * sin(th) * sin(ph), r * cos(th));
@@ -45,20 +42,18 @@ export function eyeballGeometry(S, segU, segV) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
-  // the limbus step: keep sharp normals on the iris plane facing forward
   const N = g.attributes.normal;
   for (let j = 0; j <= segV; j++) if (thetas[j] < a) for (let i = 0; i <= segU; i++) N.setXYZ(j * (segU + 1) + i, 0, 0, 1);
   return g;
 }
 
-/** cornea + tear film shell covering the front of the eye (additive reflections only) */
-export function corneaGeometry(S, segU, segV) {
-  const R = EYE.R * S;
+/** cornea + tear film shell over the front of the eye (reflections only) */
+export function corneaGeometry(R, segU, segV) {
   const pos = [], idx = [];
-  const thMax = 1.9;
+  const thMax = 1.75;
   for (let j = 0; j <= segV; j++) {
-    const th = thMax * pow(j / segV, 1.2);
-    const r = max(corneaRadius(th) * S, R + 0.00012 * S);
+    const th = thMax * pow(j / segV, 1.15);
+    const r = max(corneaRadius(R, th), R + 0.00012);
     for (let i = 0; i <= segU; i++) {
       const ph = i / segU * 2 * PI;
       pos.push(r * sin(th) * cos(ph), r * sin(th) * sin(ph), r * cos(th));
@@ -108,43 +103,36 @@ export function lashTexture() {
   return t;
 }
 
-/** eyelash cards for both eyes with blink morph targets (half, full) */
-export function lashGeometry(m) {
-  const S = m.S, R = m.eyeR, T = m.lidT;
-  const pos = [], uv = [], idx = [], mA = [], mB = [];
+/** eyelash cards for both eyes (canonical metres) with a blink morph target */
+export function lashGeometry(m, F, blinkOf) {
+  const pos = [], uv = [], idx = [], mB = [];
   const fem = m.fem;
-  const rr = R + T * 0.72;
+  const rr = m.Re + m.lidT * 0.8;
   for (const side of [1, -1]) {
+    const E = [side * F.E.x, F.E.y + side * m.asym.eyeDy, F.E.z + side * m.asym.eyeDz];
     for (const upper of [true, false]) {
-      const N = upper ? 22 : 16;
+      const N = upper ? 22 : 14;
       const base = pos.length / 3;
-      const lx0 = mix(m.cMx, m.cLx, upper ? 0.16 : 0.24), lx1 = mix(m.cMx, m.cLx, upper ? 0.985 : 0.95);
+      const t0 = upper ? 0.1 : 0.25, t1 = upper ? 0.99 : 0.95;
       for (let i = 0; i <= N; i++) {
-        const t = i / N;
-        const lx = mix(lx0, lx1, t);
-        const L = lidAt(m, lx);
-        const ly = upper ? L.up + 0.0002 : L.lo - 0.0002;
-        const meet = L.lo + 0.3 * (L.up - L.lo);
-        const hz = sqrt(max(rr * rr - lx * lx - ly * ly, 1e-8));
-        const az = Math.atan2(lx, hz), el0 = Math.asin(clamp(ly / rr, -1, 1));
-        const dEl = Math.asin(clamp(meet / rr, -1, 1)) - el0;
-        const s = (lx - m.cMx) / (m.cLx - m.cMx);
-        const len = (upper ? mix(0.0085, 0.0105, fem) * (0.45 + 0.55 * sin(PI * pow(clamp(s, 0, 1), 0.85))) : mix(0.0042, 0.0055, fem) * (0.35 + 0.65 * sin(PI * clamp(s, 0, 1)))) * (1 - 0.25 * m.old);
+        const s = mix(t0, t1, i / N);
+        const az = mix(m.fis.am, m.fis.al, s);
+        const L = lidAt(m, az);
+        const el0 = upper ? L[0] - 0.02 : L[1] + 0.02;
+        const len = (upper ? mix(0.0082, 0.0102, fem) * (0.4 + 0.6 * sin(PI * pow(s, 0.8))) : mix(0.0036, 0.0048, fem) * (0.3 + 0.7 * sin(PI * s))) * (1 - 0.25 * m.old);
+        const dEl = blinkOf ? blinkOf(side, upper, az) : 0;
         for (let r = 0; r < 3; r++) {
           const f = r / 2;
-          const rad = rr + len * f * 0.9;
-          const elOff = upper ? (0.05 * f + 0.5 * f * f) * (len / 0.01) : -(0.08 * f + 0.22 * f * f) * (len / 0.005);
-          const a = az + (s - 0.55) * 0.14 * f;
-          const p = (e) => {
-            const x = (m.eyeX + rad * cos(e) * sin(a)) * side, y = m.eyeY + (side > 0 ? m.eyeDy : -m.eyeDy) + rad * sin(e), z = m.eyeZ + rad * cos(e) * cos(a);
-            return [x * S, y * S, z * S];
-          };
+          const rad = rr + len * f * 0.85;
+          // lashes leave the margin forward, then curl up (upper) / down (lower)
+          const elOff = upper ? (0.04 * f + 0.55 * f * f) * (len / 0.01) : -(0.06 * f + 0.3 * f * f) * (len / 0.005);
+          const a = az + (s - 0.5) * 0.18 * f;
+          const P = (e) => [E[0] + side * rad * cos(e) * sin(a), E[1] + rad * sin(e), E[2] + rad * cos(e) * cos(a)];
           const el = el0 + elOff;
-          const p0 = p(el), pa = p(el + dEl * 0.5), pb = p(el + dEl);
+          const p0 = P(el), pb = P(el + dEl);
           pos.push(...p0);
-          mA.push(pa[0] - p0[0], pa[1] - p0[1], pa[2] - p0[2]);
           mB.push(pb[0] - p0[0], pb[1] - p0[1], pb[2] - p0[2]);
-          uv.push(t * (upper ? 3.2 : 2.4), f * 0.98 + 0.01);
+          uv.push(s * (upper ? 3.2 : 2.4), f * 0.98 + 0.01);
         }
       }
       for (let i = 0; i < N; i++) for (let r = 0; r < 2; r++) {
@@ -153,46 +141,40 @@ export function lashGeometry(m) {
       }
     }
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  g.morphAttributes.position = [new THREE.Float32BufferAttribute(mA, 3), new THREE.Float32BufferAttribute(mB, 3)];
-  g.morphTargetsRelative = true;
-  return g;
+  return { pos: new Float32Array(pos), uv: new Float32Array(uv), idx, blink: new Float32Array(mB) };
 }
 
 // ---------------------------------------------------------------------------------------------
-/** dental arch band (upper or lower) with per-vertex colour for tooth separation */
-export function teethGeometry(m, upper, seg = 28) {
-  const S = m.S;
-  const hw = 0.0235, zF = 0.0885, k = 0.024;
-  const y0 = m.mouthY + (upper ? 0.0075 : -0.0012), y1 = m.mouthY + (upper ? -0.0008 : -0.0088);
-  const zOff = upper ? 0 : -0.0016, wsc = upper ? 1 : 0.94;
+/** dental arch band (upper or lower), canonical metres, per-vertex colour for tooth separation */
+export function teethGeometry(m, F, upper, seg = 28) {
+  const hw = m.mouthHW * 0.9, zF = m.lipZ - 0.0105, k = 0.026;
+  const yM = m.stoY;
+  const y0 = yM + (upper ? 0.0085 : -0.0006), y1 = yM + (upper ? 0.0004 : -0.0095);
+  const zOff = upper ? 0 : -0.0018, wsc = upper ? 1 : 0.93;
   const pos = [], col = [], idx = [];
-  const widths = [8.6, 6.6, 7.6, 7, 6.8, 10, 10]; // incisor .. molars (mm), per side
+  const widths = [8.6, 6.6, 7.6, 7, 6.8, 10, 10];
   const tot = widths.reduce((a, b) => a + b, 0);
-  const rows = [[0, 0], [0.45, 0], [0.85, 0], [1, 0.0007], [1, 0.0025], [0.6, 0.0029], [0, 0.0028]]; // [height frac, inward]
+  const rows = [[0, 0.0012], [0.45, 0], [0.85, 0], [1, 0.0007], [1, 0.0025], [0.6, 0.0029], [0, 0.0034]];
   for (let i = 0; i <= seg; i++) {
-    const s = i / seg * 2 - 1;                 // -1..1 across the arch
+    const s = i / seg * 2 - 1;
     const x = s * hw * wsc;
-    const z = zF + zOff - k * (x / hw) * (x / hw) * (1 + 0.6 * (x / hw) * (x / hw));
-    // outward normal of the arch in xz
-    const dzdx = -k * (2 * x / (hw * hw)) * (1 + 1.2 * (x / hw) * (x / hw));
-    const nl = sqrt(1 + dzdx * dzdx), nx = -dzdx / nl * 1, nz = 1 / nl;
-    // tooth separation shading from arc length
+    const q = x / hw;
+    const z = zF + zOff - k * q * q * (1 + 0.6 * q * q);
+    const dzdx = -k * (2 * x / (hw * hw)) * (1 + 1.2 * q * q);
+    const nl = sqrt(1 + dzdx * dzdx), nx = -dzdx / nl, nz = 1 / nl;
     const arc = abs(s) * tot * 1.08;
     let acc = 0, ti = 0; while (ti < widths.length - 1 && acc + widths[ti] < arc) acc += widths[ti++];
     const f = (arc - acc) / widths[ti];
     const gap = smoothstep(0.0, 0.12, f) * smoothstep(1.0, 0.88, f);
-    const shade = (0.55 + 0.45 * gap) * (1 - 0.35 * smoothstep(0.55, 1.0, abs(s)));
+    const shade = (0.6 + 0.4 * gap) * (1 - 0.55 * smoothstep(0.35, 1.0, abs(s)));
     for (let r = 0; r < rows.length; r++) {
       const [hf, inw] = rows[r];
       const yy = mix(y0, y1, hf) + (upper ? 1 : -1) * 0.0007 * (1 - gap) * (hf > 0.95 ? 1 : 0);
-      pos.push((x - nx * inw) * S, yy * S, (z - nz * inw) * S);
-      const edge = hf > 0.8 ? 0.92 : 1;
-      col.push(0.86 * shade * edge, 0.82 * shade * edge, 0.74 * shade * (edge < 1 ? 1.02 : 1));
+      pos.push(x - nx * inw, yy, z - nz * inw);
+      const gum = hf < 0.08 ? 1 : 0;
+      const edge = hf > 0.8 ? 0.94 : 1;
+      if (gum) col.push(0.62 * shade, 0.28 * shade, 0.28 * shade);
+      else col.push(0.84 * shade * edge, 0.8 * shade * edge, 0.72 * shade * (edge < 1 ? 1.03 : 1));
     }
   }
   const nr = rows.length;
@@ -200,25 +182,19 @@ export function teethGeometry(m, upper, seg = 28) {
     const a0 = i * nr + r, b0 = a0 + nr;
     if (upper) idx.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); else idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1);
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
+  return { pos: new Float32Array(pos), col: new Float32Array(col), idx };
 }
 
-export function tongueGeometry(m) {
-  const S = m.S;
-  const g = new THREE.SphereGeometry(1, 20, 12);
+export function tongueGeometry(m, F, wseg = 20, hseg = 12) {
+  const g = new THREE.SphereGeometry(1, wseg, hseg);
   const P = g.attributes.position;
+  const hw = m.mouthHW * 0.78;
   for (let i = 0; i < P.count; i++) {
     let x = P.getX(i), y = P.getY(i), z = P.getZ(i);
     const top = y > 0 ? 1 : 0;
-    x *= 0.0205; z *= 0.022; y *= top ? 0.0055 : 0.004;
-    y -= 0.0012 * (1 - (x / 0.0205) ** 2) * top; // central groove
-    P.setXYZ(i, x * S, (y + m.mouthY - 0.0085) * S, (z + 0.066) * S);
+    x *= hw; z *= 0.022; y *= top ? 0.0055 : 0.004;
+    y -= 0.0012 * (1 - (x / hw) ** 2) * top;
+    P.setXYZ(i, x, y + m.stoY - 0.0085, z + m.lipZ - 0.036);
   }
-  g.computeVertexNormals();
   return g;
 }

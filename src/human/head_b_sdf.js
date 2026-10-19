@@ -89,6 +89,20 @@ function catmull(p0, p1, p2, p3, t) {
   return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
 }
 /** in-place separable max filter (radius r samples) on a W x H grid */
+/** in-place separable box blur (radius r samples, repeated n times) on a W x H grid */
+function boxBlur2D(A, W, H, r, n = 2) {
+  const T = new Float32Array(max(W, H));
+  for (let it = 0; it < n; it++) {
+    for (let j = 0; j < H; j++) {
+      for (let i = 0; i < W; i++) { let s = 0, c = 0; for (let k = max(0, i - r); k <= min(W - 1, i + r); k++) { s += A[j * W + k]; c++; } T[i] = s / c; }
+      for (let i = 0; i < W; i++) A[j * W + i] = T[i];
+    }
+    for (let i = 0; i < W; i++) {
+      for (let j = 0; j < H; j++) { let s = 0, c = 0; for (let k = max(0, j - r); k <= min(H - 1, j + r); k++) { s += A[k * W + i]; c++; } T[j] = s / c; }
+      for (let j = 0; j < H; j++) A[j * W + i] = T[j];
+    }
+  }
+}
 function maxFilter2D(A, W, H, r) {
   const T = new Float32Array(max(W, H));
   for (let j = 0; j < H; j++) {
@@ -552,6 +566,7 @@ export function makeField(m) {
   }
   maxFilter2D(G2, HNX, HNY, 6);
   for (let k = 0; k < Ggrid.length; k++) Ggrid[k] = max(0.12, 1 / sqrt(1 + G2[k]));
+  boxBlur2D(Ggrid, HNX, HNY, 5, 2); // smooth the factor so it never bends the field's normals
   const hInv = 1 / HG.h;
   function Hs(x, y) { // bilinear sample of H; returns [h, g]
     let fx = (x - HG.x0) * hInv, fy = (y - HG.y0) * hInv;
@@ -608,6 +623,7 @@ export function makeField(m) {
   }
   maxFilter2D(WGg, WNZ, WNY, 4);
   for (let k = 0; k < WGg.length; k++) WGg[k] = max(0.15, 1 / sqrt(1 + WGg[k]));
+  boxBlur2D(WGg, WNZ, WNY, 4, 2);
   const wInv = 1 / WG.h;
   const WS = [0, 0];
   function Ws(y, z) {

@@ -174,6 +174,7 @@ export class Game {
     const tok = ++this.token; this.running = true;
     try {
       for (let i = startIndex; i < list.length; i++) {
+        if (list[i].stub) break; // not built yet
         onProgress?.(i);
         this.ui.objective(''); this.control = false;
         await list[i].run(this);

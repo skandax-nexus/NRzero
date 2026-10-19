@@ -218,19 +218,36 @@ export function eyeTexture(eyeColor, seed = 1) {
   return t;
 }
 
-/**
- * Eyeball material with lid-contact occlusion.
- * lid: { cMx, cMy, cLx, cLy, hU, hL, sU, sL, side } in eye-local metres (side = +1 left eye, -1 right eye)
- */
-export function makeEyeMaterial(tex, lid) {
-  const mat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.32, metalness: 0, ior: 1.38, specularIntensity: 0.6 });
-  const U = {
+const LID_GLSL = `
+uniform vec4 uFisA; uniform vec4 uFisB; uniform float uSide; uniform float uBlink;
+float lidBump( float t, float p ) { if ( t <= 0.0 || t >= 1.0 ) return 0.0; return sin( 3.14159265 * pow( t, log( 0.5 ) / log( p ) ) ); }
+// lid margins (elevation angles) at azimuth az around the eye centre: x = upper, y = lower, z = t
+vec3 lidUL( float az ) {
+  float t = ( az - uFisA.x ) / ( uFisA.y - uFisA.x );
+  float tc = clamp( t, 0.0, 1.0 );
+  float base = mix( uFisA.z, uFisA.w, tc );
+  float up = base + uFisB.x * pow( max( lidBump( tc, uFisB.z ), 0.0 ), 0.78 );
+  float lo = base - uFisB.y * pow( max( lidBump( tc, uFisB.w ), 0.0 ), 0.95 );
+  return vec3( up, lo, t );
+}`;
+
+function lidUniforms(lid) {
+  return {
     uGaze: { value: new THREE.Matrix3() },
-    uLidA: { value: new THREE.Vector4(lid.cMx, lid.cMy, lid.cLx, lid.cLy) },
-    uLidB: { value: new THREE.Vector4(lid.hU, lid.hL, Math.log(0.5) / Math.log(lid.sU), Math.log(0.5) / Math.log(lid.sL)) },
+    uFisA: { value: new THREE.Vector4(lid.am, lid.al, lid.bm, lid.bl) },
+    uFisB: { value: new THREE.Vector4(lid.hu, lid.hl, lid.pu, lid.pl) },
     uSide: { value: lid.side },
     uBlink: { value: 0 },
   };
+}
+
+/**
+ * Eyeball material with lid-contact occlusion (lid margins from the model's fissure angles).
+ * lid: { am, al, bm, bl, hu, hl, pu, pl, side }
+ */
+export function makeEyeMaterial(tex, lid) {
+  const mat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.3, metalness: 0, ior: 1.38, specularIntensity: 0.5 });
+  const U = lidUniforms(lid);
   mat.userData.uniforms = U;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
@@ -239,25 +256,17 @@ export function makeEyeMaterial(tex, lid) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSock = uGaze * position;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec3 vSock; uniform vec4 uLidA; uniform vec4 uLidB; uniform float uSide; uniform float uBlink;
-float lidBump( float s, float e ) { return sin( 3.14159265 * pow( clamp( s, 0.0, 1.0 ), e ) ); }
-vec2 lidUL( float lx ) {
-  float s = ( lx - uLidA.x ) / ( uLidA.z - uLidA.x );
-  float base = mix( uLidA.y, uLidA.w, clamp( s, 0.0, 1.0 ) );
-  float inS = step( 0.0, s ) * step( s, 1.0 );
-  float up = base + inS * uLidB.x * pow( max( lidBump( s, uLidB.z ), 0.0 ), 0.72 );
-  float lo = base - inS * uLidB.y * pow( max( lidBump( s, uLidB.w ), 0.0 ), 0.82 );
-  return vec2( up, lo );
-}
+varying vec3 vSock;
+${LID_GLSL}
 float lidOcc() {
   vec3 p = vSock; p.x *= uSide;
-  vec2 ul = lidUL( p.x );
-  float up = mix( ul.x, ul.y + 0.3 * ( ul.x - ul.y ), uBlink );
-  float dU = ( up - p.y ) * 1000.0, dL = ( p.y - ul.y ) * 1000.0;
-  float o = smoothstep( 0.0, 2.6, dU ) * 0.6 + 0.4;              // shadow under the upper lid and lashes
-  o *= smoothstep( 0.0, 1.0, dL ) * 0.2 + 0.8;
-  float s = ( p.x - uLidA.x ) / ( uLidA.z - uLidA.x );
-  o *= smoothstep( 0.0, 0.25, min( s, 1.0 - s ) ) * 0.4 + 0.6;   // canthi
+  float az = atan( p.x, p.z ), el = atan( p.y, length( p.xz ) );
+  vec3 L = lidUL( az );
+  float up = mix( L.x, L.y + 0.22 * ( L.x - L.y ), uBlink );
+  float dU = ( up - el ) * 12.0, dL = ( el - L.y ) * 12.0;          // ~ mm at the eye surface
+  float o = smoothstep( 0.0, 2.8, dU ) * 0.62 + 0.38;               // the upper lid and lashes shade the eye
+  o *= smoothstep( 0.0, 1.0, dL ) * 0.25 + 0.75;
+  o *= smoothstep( 0.0, 0.22, min( L.z, 1.0 - L.z ) ) * 0.45 + 0.55; // corners
   return o;
 }`)
       .replace('#include <aomap_fragment>', `
@@ -267,20 +276,15 @@ float lidOcc() {
         reflectedLight.directSpecular *= lo_ * lo_;
         reflectedLight.indirectSpecular *= lo_;`);
   };
-  mat.customProgramCacheKey = () => 'head_b_eye';
+  mat.customProgramCacheKey = () => 'head_b_eye2';
   return mat;
 }
 
 /** additive glossy cornea / tear film shell: only reflections are added on top of the eye */
 export function makeCorneaMaterial(lid) {
-  const mat = new THREE.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.04, metalness: 0, ior: 1.376, specularIntensity: 1.0, transparent: true, depthWrite: false });
+  const mat = new THREE.MeshPhysicalMaterial({ color: 0x000000, roughness: 0.05, metalness: 0, ior: 1.376, specularIntensity: 1.0, transparent: true, depthWrite: false });
   mat.blending = THREE.CustomBlending; mat.blendSrc = THREE.OneFactor; mat.blendDst = THREE.OneFactor; mat.blendEquation = THREE.AddEquation;
-  const U = {
-    uGaze: { value: new THREE.Matrix3() },
-    uLidA: { value: new THREE.Vector4(lid.cMx, lid.cMy, lid.cLx, lid.cLy) },
-    uLidB: { value: new THREE.Vector4(lid.hU, lid.hL, Math.log(0.5) / Math.log(lid.sU), Math.log(0.5) / Math.log(lid.sL)) },
-    uSide: { value: lid.side }, uBlink: { value: 0 },
-  };
+  const U = lidUniforms(lid);
   mat.userData.uniforms = U;
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
@@ -289,19 +293,19 @@ export function makeCorneaMaterial(lid) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSock = uGaze * position;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec3 vSock; uniform vec4 uLidA; uniform vec4 uLidB; uniform float uSide; uniform float uBlink;
-float lidBump( float s, float e ) { return sin( 3.14159265 * pow( clamp( s, 0.0, 1.0 ), e ) ); }`)
+varying vec3 vSock;
+${LID_GLSL}`)
       .replace('#include <aomap_fragment>', `
         {
           vec3 p = vSock; p.x *= uSide;
-          float s = ( p.x - uLidA.x ) / ( uLidA.z - uLidA.x );
-          float base = mix( uLidA.y, uLidA.w, clamp( s, 0.0, 1.0 ) );
-          float up = base + step( 0.0, s ) * step( s, 1.0 ) * uLidB.x * pow( max( lidBump( s, uLidB.z ), 0.0 ), 0.72 );
-          float o = smoothstep( 0.0, 1.6, ( up - p.y ) * 1000.0 ) * 0.85 + 0.15;
+          float az = atan( p.x, p.z ), el = atan( p.y, length( p.xz ) );
+          vec3 L = lidUL( az );
+          float up = mix( L.x, L.y + 0.22 * ( L.x - L.y ), uBlink );
+          float o = smoothstep( 0.0, 1.6, ( up - el ) * 12.0 ) * 0.85 + 0.15;
           reflectedLight.directSpecular *= o;
           reflectedLight.indirectSpecular *= o * 0.9;
         }`);
   };
-  mat.customProgramCacheKey = () => 'head_b_cornea';
+  mat.customProgramCacheKey = () => 'head_b_cornea2';
   return mat;
 }
