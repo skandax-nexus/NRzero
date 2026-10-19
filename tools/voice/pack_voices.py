@@ -2,7 +2,7 @@
 
   python3 tools/voice/pack_voices.py [OUT_DIR] [--chunk-kb 1200] [--src DIR]
 
-Reads assets/voice/manifest.json (written by build_voices.py) and writes OUT_DIR/pack.json plus OUT_DIR/pack-<tag>-<n>.m4a.
+Reads assets/voice/manifest.json (written by build_voices.py) and writes OUT_DIR/pack.json plus OUT_DIR/pack-<tag>-<n>.mp4.
 Each chunk is a plain concatenation of the per-line AAC files of one mission (so a mission's opening lines arrive first);
 pack.json maps every line key to [chunk index, byte offset, byte length]. Voice in src/core/voice.js falls back to the
 pack when the per-line manifest is missing, fetches a mission's chunks on its first line and slices out each clip.
@@ -35,7 +35,7 @@ def main():
             groups.setdefault(tags.get(k, 'misc'), []).append((k, f))
     os.makedirs(OUT, exist_ok=True)
     for f in os.listdir(OUT):
-        if f.startswith('pack-') and f.endswith('.m4a'):
+        if f.startswith('pack-') and f.endswith(('.m4a', '.mp4')):
             os.remove(os.path.join(OUT, f))
     chunks, lines, total = [], {}, 0
     for tag in sorted(groups, key=order):
@@ -45,7 +45,7 @@ def main():
             nonlocal buf, n
             if not buf:
                 return
-            name = f'pack-{tag}-{n}.m4a'
+            name = f'pack-{tag}-{n}.mp4'  # .mp4: the same MPEG-4 audio container, served by more hosts than .m4a
             open(os.path.join(OUT, name), 'wb').write(buf)
             chunks.append({'file': name, 'tag': tag, 'size': len(buf)})
             buf, n = bytearray(), n + 1
