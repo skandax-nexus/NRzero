@@ -66,13 +66,13 @@ def box_edge(a, a0, a1, b, b0, b1, w=0.0016, inset=0.0):
 # ----------------------------------------------------------------------------------------------------------------
 def T(**kw):
     d = dict(cat="top", role="outer", z=50, neck=(0.02, 0.03), collar=None, hem=-0.05, sleeve="long", cuff=None, thick=0.010,
-             loose=8, inflate=0.8, fab="shell", gloss=0.3, det=[], tail=None, rim=0.004)
+             loose=8, inflate=0.8, fab="shell", gloss=0.3, det=[], tail=None, rim=0.004, ease=0.009)
     d.update(kw)
     return d
 
 
 def I(**kw):   # inner tops
-    d = T(role="inner", z=40, neck=(0.022, 0.02), hem=-0.03, thick=0.005, loose=5, inflate=0.55, fab="knit", gloss=0.0, rim=0.0)
+    d = T(role="inner", z=40, neck=(0.022, 0.02), hem=-0.03, thick=0.005, loose=5, inflate=0.55, fab="knit", gloss=0.0, rim=0.0, ease=0.004)
     d.update(kw)
     return d
 
@@ -85,7 +85,7 @@ def O(**kw):   # over layers (vests, carriers, straps, plates)
 
 def Bt(**kw):  # bottoms
     d = dict(cat="bottom", z=20, shape="trousers", thick=0.0058, loose=4, fab="twill", gloss=0.0, det=["fly", "side_seams"], tuck=False, flare=0.0,
-             top=0.012, rim=0.0025)
+             top=0.012, rim=0.0025, ease=0.008)
     d.update(kw)
     return d
 
@@ -112,9 +112,9 @@ STAND = lambda h, flare=0.0, lean=0.0, kind="stand": dict(kind=kind, h=h, flare=
 
 GARMENTS = {
     # ---------------- 2049 outer layers ----------------
-    "techshell": T(neck=(0.03, 0.018), collar=STAND(0.056, 0.002, -0.002), hem=-0.065, cuff="sealed", thick=0.0105, fab="shell", gloss=0.45,
+    "techshell": T(neck=(0.03, 0.018), collar=STAND(0.056, 0.002, -0.002), hem=-0.065, cuff="sealed", thick=0.0115, fab="shell", gloss=0.28, ease=0.012,
                    det=["taped_seams", "zip:storm", "pocket:chest_lam", "elbow_darts", "hem_cord"], hood_ok=True),
-    "longshell": T(neck=(0.032, 0.018), collar=STAND(0.06, 0.006, -0.001), hem=-0.03, cuff="sealed", thick=0.012, fab="shell", gloss=0.42,
+    "longshell": T(neck=(0.032, 0.018), collar=STAND(0.06, 0.006, -0.001), hem=-0.03, cuff="sealed", thick=0.012, fab="shell", gloss=0.28, ease=0.012,
                    tail=dict(end=0.30, flare=0.22, split=0.10, vent=0.0), det=["taped_seams", "zip:placket", "pocket:hip_slash", "elbow_darts", "belt_line"]),
     "cropped_techjacket": T(neck=(0.03, 0.02), collar=STAND(0.05, 0.003), hem=0.075, cuff="sealed", thick=0.0105, fab="shell", gloss=0.38, inflate=0.85,
                             det=["taped_seams", "zip", "led:zip", "pocket:sleeve", "hem_band"]),
@@ -147,9 +147,9 @@ GARMENTS = {
                   tail=dict(end=0.30, flare=0.22, split=0.10, vent=0.0), det=["storm_flap_trench", "placket:double", "belt_line", "pocket:hip_slash"], belt=True, epaulettes=True),
     "field_jacket_worn": T(neck=(0.024, 0.03), collar=STAND(0.032, 0.012, 0.0, "shirt"), hem=-0.06, cuff="band", thick=0.011, fab="canvas", gloss=0.0,
                            det=["placket", "pocket:utility4", "patches", "wear", "elbow_patches", "side_seams"], hood_auto="hood_down", wear=0.85, c2="8a6a3a"),
-    "poncho_hooded": T(neck=(0.03, 0.02), collar=None, hem=-0.02, sleeve="poncho", thick=0.016, loose=14, inflate=1.0, fab="canvas", gloss=0.0, z=58,
+    "poncho_hooded": T(neck=(0.03, 0.02), collar=None, hem=-0.02, sleeve="poncho", thick=0.016, loose=14, inflate=1.0, fab="canvas", gloss=0.0, z=80,
                        det=["patches", "wear", "fray"], poncho=dict(front=0.43, back=0.24, side=0.37), hood_auto="hood_up", wear=0.9, c2="6a5a44"),
-    "cloak_hooded": T(neck=(0.03, 0.02), collar=None, hem=-0.02, sleeve="poncho", thick=0.016, loose=14, inflate=1.0, fab="felt", gloss=0.0, z=58,
+    "cloak_hooded": T(neck=(0.03, 0.02), collar=None, hem=-0.02, sleeve="poncho", thick=0.016, loose=14, inflate=1.0, fab="felt", gloss=0.0, z=80,
                       det=["wear", "fray", "stitch_edges"], poncho=dict(front=None, back=0.17, side=0.19, open=0.32), hood_auto="hood_up", wear=0.6),
     "continuum_suit": T(neck=(0.04, 0.03), collar=STAND(0.045, 0.0, -0.003, "gorget"), hem=-0.06, cuff=None, thick=0.0035, loose=3, inflate=0.35, fab="satin", gloss=0.32,
                         det=["suit_lines"], plates=True, c2="e6e8ea", c3="d9a441"),
@@ -201,16 +201,16 @@ GARMENTS = {
     "jeans": Bt(fab="denim", det=["fly", "side_seams", "jeans", "topstitch"], thick=0.0055),
     "chinos": Bt(fab="twill", det=["fly", "side_seams", "pocket:slant"], thick=0.0058),
     "wide_trousers": Bt(fab="twill", det=["fly", "side_seams", "pleat_line"], thick=0.008, loose=8, flare=0.035),
-    "leggings": Bt(z=10, shape="leggings", fab="stretch", det=["side_seams"], thick=0.0022, loose=2, gloss=0.12, rim=0.0),
+    "leggings": Bt(z=10, shape="leggings", fab="stretch", det=["side_seams"], thick=0.0022, loose=2, gloss=0.12, rim=0.0, ease=0.0),
     "tech_shorts": Bt(shape="shorts", fab="softshell", det=["side_seams", "pocket:cargo_short"], thick=0.008, loose=6),
-    "leg_wraps": Bt(z=18, shape="leg_wraps", fab="linen", det=["wraps", "dye"], thick=0.0035, loose=2, rim=0.002),
+    "leg_wraps": Bt(z=18, shape="leg_wraps", fab="linen", det=["wraps", "dye"], thick=0.0035, loose=2, rim=0.002, ease=0.0),
     "canvas_trousers": Bt(fab="canvas", det=["fly", "side_seams", "patches", "wear"], thick=0.008, loose=6, wear=0.8),
-    "suit_trousers": Bt(fab="satin", det=["suit_lines"], thick=0.0032, loose=2, gloss=0.32, rim=0.0),
+    "suit_trousers": Bt(fab="satin", det=["suit_lines"], thick=0.0032, loose=2, gloss=0.32, rim=0.0, ease=0.0),
     "soft_trousers": Bt(fab="linen", det=["side_seams"], thick=0.0075, loose=8),
     # ---------------- skirts ----------------
     "tech_skirt": dict(cat="skirt", shape="pleated", fab="shell", gloss=0.3, length=0.25, pleats=14, det=["hem_band_thin"], z=26),
     # ---------------- footwear ----------------
-    "tech_boots": Ft(shaft=0.085, sole_h=0.03, lip=0.0045, toe=0.003, gloss=0.4, design="tech_boot", sole="6a6e74", fab="leather"),
+    "tech_boots": Ft(shaft=0.085, sole_h=0.026, lip=0.003, toe=0.002, gloss=0.35, design="tech_boot", sole="6a6e74", fab="leather"),
     "combat_boots": Ft(shaft=0.17, sole_h=0.026, lip=0.004, toe=0.002, gloss=0.3, design="lace_boot", sole="1a1a1a", fab="leather"),
     "safety_boots": Ft(shaft=0.1, sole_h=0.028, lip=0.0045, toe=0.006, gloss=0.25, design="safety", sole="2a2a2a", fab="leather"),
     "service_boots": Ft(shaft=0.12, sole_h=0.02, lip=0.003, toe=0.002, gloss=0.6, design="smooth_boot", sole="141414", fab="leather"),
@@ -304,7 +304,7 @@ class Ctx:
 
 FAB = {  # base roughness feel is per vertex (gloss); here: luminance texture k and micro height
     "shell": dict(n=0.035, f=90, h=0.00008), "nylon": dict(n=0.04, f=120, h=0.0001), "softshell": dict(n=0.05, f=200, h=0.00012),
-    "ripstop": dict(n=0.05, f=160, grid=0.007), "cordura": dict(n=0.07, f=260, h=0.00015), "knit": dict(n=0.07, f=240, rib=0.0045),
+    "ripstop": dict(n=0.05, f=160, grid=0.011), "cordura": dict(n=0.07, f=260, h=0.00015), "knit": dict(n=0.07, f=240, rib=0.0045),
     "fleece": dict(n=0.07, f=180, h=0.0002), "jersey": dict(n=0.05, f=220, h=0.0001), "cotton": dict(n=0.045, f=180, h=0.00008),
     "coated_twill": dict(n=0.03, f=160, twill=True), "twill": dict(n=0.06, f=180, twill=True), "stretch_twill": dict(n=0.05, f=170, twill=True),
     "denim": dict(n=0.1, f=150, twill=True, denim=True), "chambray": dict(n=0.08, f=200, h=0.0001), "flannel": dict(n=0.07, f=140, h=0.0002),
@@ -323,15 +323,15 @@ def fabric(fab, X, seed):
     q = X.q
     k = 1 + p["n"] * (vnoise(q, p["f"], seed) - 0.5) * 2 + 0.25 * p["n"] * (vnoise(q, p["f"] * 6, seed + 2) - 0.5)
     h = p.get("h", 0.0001) * (vnoise(q, p["f"] * 4, seed + 5) - 0.5)
-    if p.get("twill"):
-        tw = np.sin((q[:, 0] + q[:, 1] + q[:, 2] * 0.5) * 2 * math.pi / 0.0028)
-        k = k + 0.025 * tw
-        h = h + 0.00006 * tw
+    if p.get("twill"):     # (the weave itself is below a texel: only its diagonal mottling shows)
+        tw = vnoise(q * np.array([1.0, 1.0, 0.5]) + (q[:, 0] + q[:, 1])[:, None] * 3.0, 260, seed + 9) - 0.5
+        k = k + 0.04 * tw
+        h = h + 0.00008 * tw
     if p.get("denim"):
         k = k * (0.9 + 0.2 * vnoise(q * np.array([3.0, 0.4, 3.0]), 60, seed + 1))        # vertical slub streaks
     if p.get("rib"):
         ru = X.u if X.u is not None else q[:, 0]
-        rib = np.sin(ru * 2 * math.pi / p["rib"])
+        rib = np.sin(ru * 2 * math.pi / max(p["rib"], 0.008))
         k = k + 0.05 * rib
         h = h + 0.0003 * rib
     if p.get("grid"):
@@ -350,7 +350,7 @@ def fabric(fab, X, seed):
         k = k + 0.09 * sl + 0.07 * sv
         h = h + 0.0002 * (sl + sv)
     if p.get("web"):
-        k = k + 0.04 * np.sin(X.q[:, 1] * 2 * math.pi / 0.002 + X.u * 900)
+        k = k * (0.97 + 0.03 * vnoise(q, 500, seed + 4))
     return k, h
 
 
@@ -439,7 +439,7 @@ def paint(g, X, seed):
                 seam(l1 + l2 + l3, 0.0004, 0.7)
         elif name == "zip":
             xl = zip_x(X, arg)
-            d0 = (X.x - xl) * front * tor + (1 - front * tor) * 9
+            d0 = np.where((front > 0) & (tor > 0.5), X.x - xl, 9.0)
             if arg == "hidden":
                 seam(line(d0, 0.0015), 0.0003, 0.8)
             elif arg == "placket":
@@ -454,7 +454,7 @@ def paint(g, X, seed):
                     seam(line(d0 + 0.028, 0.0018), 0.0007, 0.65)
                     h = h + 0.0006 * ss(0.03, 0.026, -d0) * ss(-0.002, 0.002, -d0)
         elif name == "placket":
-            d0 = X.x * front * tor + (1 - front * tor) * 9
+            d0 = np.where((front > 0) & (tor > 0.5), X.x, 9.0)
             if arg == "concealed":
                 seam(line(d0 - 0.018, 0.0012), 0.00025, 0.88)
             elif arg == "double":
@@ -619,7 +619,7 @@ def paint(g, X, seed):
             h = h + 0.0002 * m
         elif name == "led":
             if arg == "zip":
-                lit(line((X.x - zip_x(X, "")) * front * tor + (1 - front * tor) * 9, 0.0045, 0.0015))
+                lit(line(np.where((front > 0) & (tor > 0.5), X.x - zip_x(X, ""), 9.0), 0.0045, 0.0015))
             elif arg == "princess":
                 lit(line(np.abs(X.x) - princess_x(X), 0.0035, 0.0015) * tor * (y < J["shoulder_L"][1] - 0.03))
             elif arg == "edges":
@@ -645,7 +645,7 @@ def paint(g, X, seed):
                 m = ss(0.022, 0.018, X.f)
             else:
                 m = ss(0.06, 0.055, X.f) * (y < J["chest"][1]) * tor
-            rib = np.sin(X.u * 2 * math.pi / 0.004) if name != "rib_ankle" else np.sin(X.la * X.rl * 0.0175 * 2 * math.pi / 0.004)
+            rib = np.sin(X.u * 2 * math.pi / 0.008) if name != "rib_ankle" else np.sin(X.la * X.rl * 0.0175 * 2 * math.pi / 0.008)
             k = k * (1 + 0.06 * rib * m)
             h = h + 0.00035 * rib * m
             if name == "hem_band":
@@ -772,9 +772,9 @@ def paint(g, X, seed):
             shade(m, 0.88)
             h = h + 0.0006 * m
             seam(line((fr - 0.45) * 0.025, 0.0012) * (np.abs(X.x) < 0.12) * (y < J["chest"][1] + 0.02), 0.0003, 0.8)
-        elif name == "webbing":
-            k = k * (1 + 0.035 * np.sin(X.f * 2 * math.pi / 0.0025))
-            seam(line(X.f - 0.003, 0.0012), 0.0002, 0.75)
+        elif name == "webbing":      # edge stitch rows and a raised centre
+            seam(line(X.f - 0.0045, 0.0014), 0.00025, 0.7)
+            k = k * (1 + 0.05 * ss(0.006, 0.0, X.f))
         elif name == "edge_bind":
             m = ss(0.009, 0.007, X.f)
             shade(m, 0.8)
@@ -782,18 +782,23 @@ def paint(g, X, seed):
         elif name == "scav_plates":
             # mismatched plates: patch id from position; each its own colour, a gap groove between them
             ch, sp = J["chest"][1], J["spine"][1]
-            cid = (np.floor((X.x + 0.3) / 0.12) + 7 * np.floor((y - sp) / 0.11) + 3 * (X.z > X.zc)).astype(int) % 4
+            px_, py_ = 0.165, 0.16
+            cx_ = np.floor((X.x + 0.33) / px_ + 0.15 * np.sin(y * 9))
+            cy_ = np.floor((y - sp + 0.02) / py_)
+            cid = (cx_ * 3 + cy_ * 5 + 2 * (X.z > X.zc)).astype(int) % 4
             pal = np.stack([base, hexc(g.get("c2", "4a4a3a")), hexc(g.get("c3", "1c2533")), hexc(g.get("c4", "b0a050"))])
             pc = pal[cid]
-            col = pc * (0.9 + 0.2 * vnoise(X.q, 30, seed + cid)[:, None])
-            gx_ = np.abs(((X.x + 0.3) / 0.12) % 1 - 0.5) * 0.12
-            gy_ = np.abs(((y - sp) / 0.11) % 1 - 0.5) * 0.11
-            groove = np.maximum(ss(0.054, 0.059, gx_), ss(0.049, 0.054, gy_))
-            seam(groove, 0.0015, 0.45)
+            col = pc * (0.88 + 0.22 * vnoise(X.q, 18, seed + 3)[:, None])
+            gx_ = np.abs(((X.x + 0.33) / px_ + 0.15 * np.sin(y * 9)) % 1 - 0.5) * px_
+            gy_ = np.abs(((y - sp + 0.02) / py_) % 1 - 0.5) * py_
+            groove = np.maximum(ss(px_ / 2 - 0.006, px_ / 2 - 0.002, gx_), ss(py_ / 2 - 0.006, py_ / 2 - 0.002, gy_))
+            seam(groove, 0.002, 0.4)
+            rivet = (np.hypot(((X.x + 0.33) / px_ % 1 - 0.5) * px_ - 0.0, 0) < 1) * 0
+            _ = rivet
             stencil = (cid == 2) * box(X.x, -0.1, 0.05, y, ch - 0.04, ch + 0.01) * (hash01(X.q, 120, seed) > 0.55) * front
             mix(stencil * 0.8, hexc("c8ccd0"))
-            road = (cid == 3) * (np.sin((X.x + y) * 2 * math.pi / 0.05) > 0.3)
-            mix(road * 0.7, hexc("e8e0d0"))
+            road = (cid == 3) * (np.sin((X.x + y) * 2 * math.pi / 0.07) > 0.55)
+            mix(road * 0.45, hexc("c8bfa8"))
         elif name == "lames":
             ph = (y - X.J["shoulder_L"][1]) / 0.035
             fr = ph - np.floor(ph)
@@ -874,6 +879,7 @@ def paint(g, X, seed):
                 shade(sc, 1.35)
                 edge = ss(0.012, 0.0, X.f)
                 shade(edge * vnoise(X.q, 200, seed), 1.3)
+    h = h * 2.2      # seams / pockets / quilting read in the normal map at game distance
     # hem / edge shade (a thin darker line where the garment ends) and soft light at the top
     k = k * (1 - 0.1 * ss(0.012, 0.0, X.f))
     k = k * (0.95 + 0.05 * np.clip(y / (0.5 * X.H), 0, 1.6) / 1.6)
@@ -900,7 +906,7 @@ def shoe_cell(g, a, b, seed):
         st = (np.sin(a * 2 * math.pi * 14) > 0.4) & lace
         col[st] = col[st] * 0.55
     if design in ("tech_boot", "sneaker"):
-        c2 = hexc(g.get("c2") or ("3a3e44" if design == "tech_boot" else "d8d4cc"))
+        c2 = hexc(g.get("c2")) if g.get("c2") else (base * 1.35 + 0.02 if design == "tech_boot" else hexc("d8d4cc"))
         panel = ((a - 0.3) ** 2 / 0.06 + (b - 0.45) ** 2 / 0.08) < 1
         col[panel] = c2 * 0.9 * k[panel][:, None]
         heel = a < 0.12

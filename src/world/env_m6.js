@@ -365,7 +365,8 @@ export function buildHouse(game, T, opts = {}) {
   const world = { groups, dyn: [], updaters: [], P };
 
   // ---------- materials ----------
-  const pm = (kind, params, o = {}) => RZ.pbrMaterial(kind, { params, mapping: 'world', ...o });
+  const PLAIN = /m6plain/.test(location.search); // DBGTMP
+  const pm = (kind, params, o = {}) => PLAIN ? new THREE.MeshStandardMaterial({ color: params.color ?? 0x888888 }) : RZ.pbrMaterial(kind, { params, mapping: 'world', ...o });
   const moss = { kind: 'moss', amount: 0.22, ground: 0.12 };
   const M = world.M = {
     cobble: pm('cutStone', { color: 0x4f4c48, joint: 0x1e1c1a, rows: 12, weathering: 0.7, wet: 1, variation: 0.6 }, { scale: 0.4, envMapIntensity: 1.3 }),

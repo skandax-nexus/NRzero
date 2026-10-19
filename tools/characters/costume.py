@@ -17,6 +17,7 @@ How a costume is made (all garment layers are copies of body faces, like the leg
   painters, so they match the torso exactly. Painters also give a height (-> normal map) and glow (-> emissive map).
 """
 import math
+import os
 import numpy as np
 import garments as G
 
@@ -564,8 +565,10 @@ def push_out(L, B, need):
 def shape_layer(L, B, g, LM, cov):
     """Per-garment shaping after the offset: wide legs, bloused / cinched hems, wide poncho sleeves, pad domes."""
     vc = B._vc
-    P = L.pos
     base = L.base
+    if g.get("ease") and g.get("cat") in ("top", "bottom"):
+        ease_limbs(L, B, g["ease"], "arm" if g["cat"] == "top" else "leg")
+    P = L.pos
     if g.get("cat") == "bottom":
         if g.get("flare"):
             for s in "LR":
@@ -602,6 +605,50 @@ def shape_layer(L, B, g, LM, cov):
         L.pos = L.pos + B.N[base] * dome[:, None]
 
 
+def ease_limbs(L, B, ease, kind):
+    """Cloth does not follow every muscle: each sleeve / trouser leg becomes a smooth tube around the limb (per angle,
+    the radius is the max over a window along the limb), plus some ease. Shoulders / hips / cuffs blend back."""
+    vc = B._vc
+    for s in "LR":
+        sl, ang, rad, cum = vc[kind + s]
+        w = (B.aw[s] if kind == "arm" else B.lw[s])[L.base]
+        m = np.nonzero(w > 0.3)[0]
+        if len(m) < 20:
+            continue
+        pts = (B.Jm["shoulder_" + s], B.Jm["elbow_" + s], B.Jm["wrist_" + s]) if kind == "arm" else (B.Jm["hip_" + s], B.Jm["knee_" + s], B.Jm["ankle_" + s])
+        P = L.pos[m]
+        s2, a2, r2, _ = limb_coords(P, list(pts), kind, 1 if s == "L" else -1)
+        nb_s, nb_a = 40, 24
+        si = np.clip((s2 / max(cum[2], 1e-3) * nb_s).astype(int), 0, nb_s - 1)
+        ai = ((a2 + 180) / 360 * nb_a).astype(int) % nb_a
+        R = np.zeros((nb_s, nb_a))
+        np.maximum.at(R, (si, ai), r2)
+        win = 2 if kind == "arm" else 3
+        Rw = R.copy()
+        for d in range(1, win + 1):
+            Rw[d:] = np.maximum(Rw[d:], R[:-d])
+            Rw[:-d] = np.maximum(Rw[:-d], R[d:])
+        Rw = (np.roll(Rw, 1, 1) + 2 * Rw + np.roll(Rw, -1, 1)) / 4
+        tgt = Rw[si, ai] * (0.94 if kind == "arm" else 0.97) + ease * (0.5 if kind == "arm" else 1.0)
+        # fade near the joint with the torso and at the cuff / hem
+        t = s2 / max(cum[2], 1e-3)
+        fade = ss(0.02, 0.12, t) * ss(1.02, 0.9, t) * np.clip((w[m] - 0.3) / 0.4, 0, 1)
+        newr = r2 + np.maximum(tgt - r2, 0) * fade
+        ax = np.zeros_like(P)
+        for a, b in zip(pts[:-1], pts[1:]):
+            pass
+        # radial direction from the chain: rebuild from the nearest segment
+        best = np.full(len(P), np.inf)
+        for a, b in zip(pts[:-1], pts[1:]):
+            q = axis_point(P, a, b)
+            d = np.linalg.norm(P - q, axis=1)
+            mm = d < best
+            best[mm] = d[mm]
+            ax[mm] = q[mm]
+        dirn = (P - ax) / np.maximum(best, 1e-6)[:, None]
+        L.pos[m] = ax + dirn * newr[:, None]
+
+
 def axis_point(P, a, b):
     ab = b - a
     t = np.clip((P - a) @ ab / (ab @ ab), 0, 1)
@@ -617,67 +664,101 @@ def vertex_uv(L):
 
 
 def add_rims(L, B, depth):
-    """Real thickness at the garment's own open borders: a strip from the border down toward the layer below.
-    Borders that are only a hide cut (under an outer garment) or the top of a tail lining get none."""
-    loops = L.boundary_loops()
-    if not loops:
+    """Real thickness at the garment's own open borders: a strip from every border edge down toward the layer below
+    (built per edge, so it never depends on loop order). Hide cuts (under an outer garment) and the tail lining get none."""
+    e = L.edges()
+    border = [(i, j) for (i, j), n in e.items() if n == 1]
+    if not border:
         return
     N = BH.layer_normals(L, B)
     tm = getattr(L, "tail_mask", None)
     if tm is not None and getattr(L, "tailN", None) is not None:
         N[tm] = L.tailN
-    lining = getattr(L, "_lining", set())
-    uv = vertex_uv(L)
-    nbr = [[] for _ in range(len(L.pos))]
+    skip = getattr(L, "_lining", set())
+    # directed border edges (as they appear in faces) + the face's third vertex: the garment side of the edge
+    side = {}
     for f in L.faces:
-        for a in range(len(f)):
-            nbr[f[a]].append(f[(a + 1) % len(f)])
-            nbr[f[a]].append(f[a - 1])
-    nv = len(L.pos)
-    add_p, add_W, add_b, add_c, add_m, faces, fuv = [], [], [], [], [], [], []
-    for lp in loops:
-        lp = list(lp)
-        if sum(v in lining for v in lp) > len(lp) / 2:
+        k = len(f)
+        for a in range(k):
+            i, j = f[a], f[(a + 1) % k]
+            key = (min(i, j), max(i, j))
+            if e.get(key) == 1:
+                side[key] = (i, j, f[(a + 2) % k])
+    uv = vertex_uv(L)
+    nv0 = len(L.pos)
+    newid = {}
+    add_p, add_i = [], []
+    faces, fuv = [], []
+    for key, (i, j, o) in side.items():
+        if i in skip or j in skip:
             continue
-        own = L.cov[lp]
-        if (tm is None or not tm[lp].any()) and np.median(own) > 0.012:
+        own = L.cov[[i, j]]
+        if (tm is None or not (tm[i] or tm[j])) and own.min() > 0.012:
             continue                      # a hide cut, not a hem
-        n = len(lp)
-        P0 = L.pos[lp]
-        dep = np.full(n, float(depth))
-        if tm is not None:
-            dep = np.where(tm[lp], L.tail_thick, dep)
-        P1 = P0 - N[lp] * dep[:, None]
-        i0, i1 = nv + np.arange(n), nv + n + np.arange(n)
-        add_p += [P0, P1]
-        add_W += [L.W[lp], L.W[lp]]
-        add_b += [L.base[lp], L.base[lp]]
-        add_c += [L.cov[lp], L.cov[lp]]
-        add_m += [L.mask[lp], L.mask[lp]]
-        nv += 2 * n
-        inward = np.array([L.pos[nbr[v]].mean(0) - L.pos[v] if nbr[v] else np.zeros(3) for v in lp])
-        Pq = np.concatenate([P0, P1])
-        ia = np.concatenate([i0, i1])
-        for a in range(n):
-            b = (a + 1) % n
-            q = [a, b, n + b, n + a]
-            nrm = np.cross(Pq[q[1]] - Pq[q[0]], Pq[q[3]] - Pq[q[0]])
-            uq = np.array([uv[lp[a]], uv[lp[b]], uv[lp[b]], uv[lp[a]]])
-            if nrm @ (inward[a] + inward[b]) > 0:      # must face away from the garment's surface
-                q, uq = [q[0], q[3], q[2], q[1]], uq[[0, 3, 2, 1]]
-            faces.append([int(ia[j]) for j in q])
-            fuv.append(uq)
+        for v in (i, j):
+            if v not in newid:
+                dep = L.tail_thick if tm is not None and tm[v] else depth
+                newid[v] = nv0 + len(add_p)
+                add_p.append(L.pos[v] - N[v] * dep)
+                add_i.append(v)
+        # face i->j belongs to the garment; the rim continues it: (j, i, i', j') keeps a consistent winding
+        faces.append([j, i, newid[i], newid[j]])
+        fuv.append(np.array([uv[j], uv[i], uv[i], uv[j]]))
     if not faces:
         return
-    L.pos = np.concatenate([L.pos] + add_p)
-    L.W = np.concatenate([L.W] + add_W)
-    L.base = np.concatenate([L.base] + add_b)
-    L.cov = np.concatenate([L.cov] + add_c)
-    L.mask = np.concatenate([L.mask] + add_m)
+    idx = np.array(add_i)
+    L.pos = np.concatenate([L.pos, np.array(add_p)])
+    L.W = np.concatenate([L.W, L.W[idx]])
+    L.base = np.concatenate([L.base, L.base[idx]])
+    L.cov = np.concatenate([L.cov, L.cov[idx]])
+    L.mask = np.concatenate([L.mask, L.mask[idx]])
     if tm is not None:
-        L.tail_mask = np.concatenate([tm, np.zeros(len(L.pos) - len(tm), bool)])
+        L.tail_mask = np.concatenate([tm, np.zeros(len(idx), bool)])
+    L._rim = set(range(nv0, len(L.pos)))
+    L._rim_src = {nv0 + i: int(v) for i, v in enumerate(idx)}
     L.faces += faces
     L.fuv += fuv
+
+
+def sorted_loop(P, lp, axis="y", center=None):
+    """Loop vertices ordered by azimuth around the loop's centre (robust for neck / hem / cuff loops)."""
+    Q = P[lp]
+    c = Q.mean(0) if center is None else center
+    if axis == "y":
+        ang = np.arctan2(Q[:, 0] - c[0], Q[:, 2] - c[2])
+    else:
+        d = axis / np.linalg.norm(axis)
+        u = np.cross(d, [0, 0, 1.0])
+        u /= max(np.linalg.norm(u), 1e-6)
+        w = np.cross(d, u)
+        ang = np.arctan2((Q - c) @ u, (Q - c) @ w)
+    o = np.argsort(ang)
+    return [lp[i] for i in o]
+
+
+def resample_loop(Q, n, smooth=3):
+    """Closed polyline -> n points evenly spaced by arc length, after a little smoothing."""
+    for _ in range(smooth):
+        Q = (np.roll(Q, 1, 0) + 2 * Q + np.roll(Q, -1, 0)) / 4
+    seg = np.linalg.norm(np.roll(Q, -1, 0) - Q, axis=1)
+    cum = np.r_[0, np.cumsum(seg)]
+    t = np.linspace(0, cum[-1], n, endpoint=False)
+    Qc = np.concatenate([Q, Q[:1]])
+    return np.stack([np.interp(t, cum, Qc[:, k]) for k in range(3)], 1)
+
+
+def garment_loops(L):
+    """The layer's own open borders (not its rim strips or tail lining)."""
+    rim, lin = getattr(L, "_rim", set()), getattr(L, "_lining", set())
+    src = getattr(L, "_rim_src", {})
+    out = []
+    for lp in L.boundary_loops():
+        if sum(v in lin for v in lp) > len(lp) / 2:
+            continue
+        if sum(v in rim for v in lp) > len(lp) / 2:      # a rim's inner edge: the garment border it was built from
+            lp = [src[v] for v in lp if v in src]
+        out.append(lp)
+    return out
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -713,9 +794,10 @@ def extend_tail(L, B, g, LM, cov, layers):
     if not cand:
         print("  ! no hem loop for tail of", g["type"])
         return
-    lp = max(cand, key=len)
-    P0 = L.pos[lp]
     cz = lambda yy: zc_at(B, yy)
+    lp = max(cand, key=len)
+    lp = sorted_loop(L.pos, lp, center=np.array([0.0, 0.0, cz(float(L.pos[lp, 1].mean()))]))
+    P0 = L.pos[lp]
     ang = np.degrees(np.arctan2(P0[:, 0], P0[:, 2] - cz(P0[:, 1])))
     # orient: angles increasing; start at the back centre (wrap seam hidden in the vent / at the back)
     da = ((np.diff(np.r_[ang, ang[0]]) + 180) % 360) - 180
@@ -743,7 +825,8 @@ def extend_tail(L, B, g, LM, cov, layers):
     pts = [B.P[sel] + B.N[sel] * 0.004]
     for kk, LL in layers.items():
         if LL is not L and LL.g.get("cat") in ("bottom", "limb", "shaft", "skirt") or (LL is not L and kk.startswith("over") and LL.pos[:, 1].min() < hem_y):
-            pts.append(LL.pos[LL.pos[:, 1] < hem_y + 0.02])
+            keep = (LL.pos[:, 1] < hem_y + 0.02) & ((B.aw["L"] + B.aw["R"])[np.asarray(LL.base)] < 0.3)
+            pts.append(LL.pos[keep])
     pts = np.concatenate(pts)
     ys = np.arange(0.0, hem_y + 0.06, 0.01)
     R = radial_table(pts, cz, ys)
@@ -752,7 +835,7 @@ def extend_tail(L, B, g, LM, cov, layers):
     tt = np.linspace(0, 1, rows)
     c0z = cz(P0[:, 1])
     r_prev = np.hypot(P0[:, 0], P0[:, 2] - c0z)
-    flare = tl.get("flare", 0.2) if not po else 0.28
+    flare = (tl.get("flare", 0.2) if not po else 0.28) * 0.45
     grid = [P0]
     for t in tt[1:]:
         yy = P0[:, 1] + (end - P0[:, 1]) * t
@@ -761,52 +844,81 @@ def extend_tail(L, B, g, LM, cov, layers):
         bi = ((ang + 180) / 360 * nb).astype(int) % nb
         fit = R[yi, bi] + 0.006 + 0.01 * t
         taper = np.where(yy > LM["hip"], 0.985, 1.0)
-        r = np.maximum(r_prev * taper, fit) * (1 + flare * (t - tt[1]) * (1 - 0.5 * (a < 30) * (not po)))
-        rr = np.maximum(r, fit)
+        r = np.maximum(r_prev * taper, fit)                      # follows the body, never cuts into it
+        rr = r * (1 + flare * t ** 1.3)                          # the hem swings out a little (no compounding)
         q = np.stack([np.sin(np.radians(ang)) * rr, yy, czz + np.cos(np.radians(ang)) * rr], 1)
         grid.append(q)
         r_prev = r
     grid = np.stack(grid)                            # rows x M x 3
-    # vents: front split, back vent, side slits, open front (cloak)
+    # vents / slits: the ring is cut at a column; below the vent top the two edges spread apart along the ring
     length = np.linalg.norm(np.diff(grid, axis=0), axis=2).sum(0)       # per column
     depth = np.concatenate([np.zeros((1, M)), np.cumsum(np.linalg.norm(np.diff(grid, axis=0), axis=2), 0)])
-    arc_front = np.radians(a) * np.hypot(P0[:, 0], P0[:, 2] - c0z)
-    arc_back = np.radians(180 - a) * np.hypot(P0[:, 0], P0[:, 2] - c0z)
-    arc_side = np.radians(np.abs(a - 90)) * np.hypot(P0[:, 0], P0[:, 2] - c0z)
-    kill = np.zeros((rows - 1, M), bool)
-    for r in range(rows - 1):
-        dm = (depth[r] + depth[r + 1]) / 2
-        if tl.get("split"):
-            d0 = tl["split"] * H
-            s = np.clip((dm - d0) / np.maximum(length - d0, 1e-3), 0, 1)
-            kill[r] |= (dm > d0) & (arc_front < 0.006 + 0.07 * s)
-        if tl.get("vent"):
-            d0 = tl["vent"] * H
-            s = np.clip((dm - d0) / np.maximum(length - d0, 1e-3), 0, 1)
-            kill[r] |= (dm > d0) & (arc_back < 0.004 + 0.012 * s)
-        if tl.get("slits"):
-            d0 = tl["slits"] * H
-            s = np.clip((dm - d0) / np.maximum(length - d0, 1e-3), 0, 1)
-            kill[r] |= (dm > d0) & (arc_side < 0.004 + 0.02 * s)
-        if po and po.get("open"):
-            kill[r] |= a < np.degrees(po["open"])
+    col_near = lambda deg: int(np.argmin(np.abs(((ang - deg + 180) % 360) - 180)))
+    rmean = float(np.hypot(P0[:, 0], P0[:, 2] - c0z).mean())
+    cuts = []                     # (column, vent top depth, gap at the hem (m), fast)
+    if tl.get("split"):
+        cuts.append((col_near(0), tl["split"] * H, 0.11 * k, False))
+    if tl.get("vent"):
+        cuts.append((col_near(180), tl["vent"] * H, 0.035 * k, False))
+    if tl.get("slits"):
+        cuts += [(col_near(90), tl["slits"] * H, 0.06 * k, False), (col_near(-90), tl["slits"] * H, 0.06 * k, False)]
+    if po and po.get("open"):
+        cuts.append((col_near(0), 0.0, 2 * po["open"] * rmean, True))
+    cutcols = sorted({c for c, *_ in cuts})
+    grid_paint = grid.copy()
+    gridL = {c: grid[:, c].copy() for c in cutcols}
+    for r in range(1, rows):
+        row = grid[r]
+        seg = np.linalg.norm(np.roll(row, -1, 0) - row, axis=1)
+        sc = np.r_[0, np.cumsum(seg)]
+        S = sc[-1]
+        sm = sc[:-1]
+        dR = np.zeros(M)
+        dL = {c: 0.0 for c in cutcols}
+        fall = S / (2 * max(len(cuts), 1))
+        for c, d0, gmax, fast in cuts:
+            dm = depth[r, c]
+            u_ = np.clip((dm - d0) / max(length[c] - d0, 1e-3), 0, 1)
+            gap = gmax * (ss(0.0, 0.25, u_) if fast else u_)
+            if gap <= 0:
+                continue
+            dl = ((sm - sm[c] + S / 2) % S) - S / 2
+            dR += np.where(dl >= 0, gap / 2 * np.clip(1 - dl / fall, 0, 1), -gap / 2 * np.clip(1 + dl / fall, 0, 1))
+            for c2 in cutcols:
+                d2 = ((sm[c2] - sm[c] + S / 2) % S) - S / 2
+                dL[c2] += -gap / 2 if c2 == c else (gap / 2 * max(0, 1 - d2 / fall) if d2 >= 0 else -gap / 2 * max(0, 1 + d2 / fall))
+        rowc = np.concatenate([row, row[:1]])
+        at = lambda sv: np.stack([np.interp(sv % S, sc, rowc[:, kk]) for kk in range(3)], -1)
+        grid[r] = at(sm + dR)
+        for c in cutcols:
+            gridL[c][r] = at(np.array([sm[c] + dL[c]]))[0]
     # add vertices (rows 1.. of the outer surface) and the lining (all rows, offset inward)
     nv0 = len(L.pos)
+    nc = len(cutcols)
     outer_idx = np.zeros((rows, M), int)
     outer_idx[0] = lp
     newp = grid[1:].reshape(-1, 3)
     outer_idx[1:] = (nv0 + np.arange((rows - 1) * M)).reshape(rows - 1, M)
-    # normals of the tail surface (radial, from the grid)
-    tang_u = np.roll(grid, -1, axis=1) - np.roll(grid, 1, axis=1)
-    tang_v = np.concatenate([grid[1:2] - grid[0:1], grid[2:] - grid[:-2], grid[-1:] - grid[-2:-1]])
-    nrm = np.cross(tang_v, tang_u)
-    radial = grid - np.stack([np.zeros_like(grid[..., 0]), grid[..., 1], cz(grid[..., 1])], -1)
-    sgn = np.sign((nrm * radial).sum(-1, keepdims=True))
-    nrm = nrm * np.where(sgn == 0, 1, sgn)
-    nrm /= np.maximum(np.linalg.norm(nrm, axis=-1, keepdims=True), 1e-9)
+    Lo = {c: np.r_[lp[c], nv0 + (rows - 1) * M + i * (rows - 1) + np.arange(rows - 1)] for i, c in enumerate(cutcols)}
+    newpL = np.concatenate([gridL[c][1:] for c in cutcols]) if nc else np.zeros((0, 3))
+    nOut = (rows - 1) * (M + nc)
+
+    def normals_of(gr):
+        tu = np.roll(gr, -1, axis=1) - np.roll(gr, 1, axis=1)
+        tv = np.concatenate([gr[1:2] - gr[0:1], gr[2:] - gr[:-2], gr[-1:] - gr[-2:-1]])
+        nn = np.cross(tv, tu)
+        radial = gr - np.stack([np.zeros_like(gr[..., 0]), gr[..., 1], cz(gr[..., 1])], -1)
+        sg = np.sign((nn * radial).sum(-1, keepdims=True))
+        nn = nn * np.where(sg == 0, 1, sg)
+        return nn / np.maximum(np.linalg.norm(nn, axis=-1, keepdims=True), 1e-9)
+    nrm = normals_of(grid)
+    nrmL = {c: nrm[:, c] for c in cutcols}
     thick = 0.0035
     lining = grid - nrm * thick
-    lin_idx = (nv0 + (rows - 1) * M + np.arange(rows * M)).reshape(rows, M)
+    liningL = {c: gridL[c] - nrmL[c] * thick for c in cutcols}
+    lin_base = nv0 + nOut
+    lin_idx = (lin_base + np.arange(rows * M)).reshape(rows, M)
+    LiL = {c: lin_base + rows * M + i * rows + np.arange(rows) for i, c in enumerate(cutcols)}
     # weights: the loop vertices' own weights fading into skirt weights
     Wl = L.W[lp]
     top_z = float(P0[:, 1].mean())
@@ -820,7 +932,7 @@ def extend_tail(L, B, g, LM, cov, layers):
     width = ucol[-1]
     tail_len = float(length.max())
     pid = aux_piece(f"tail_{g['type']}", width, tail_len, g, dict(tail=1.0))
-    gridc = np.concatenate([grid, grid[:, :1]], 1)
+    gridc = np.concatenate([grid_paint, grid_paint[:, :1]], 1)
     depthc = np.concatenate([depth, depth[:, :1]], 1)
     lengthc = np.r_[length, length[0]]
     AUX[pid]["grid"] = gridc
@@ -831,18 +943,22 @@ def extend_tail(L, B, g, LM, cov, layers):
     faces, fuv = [], []
     for r in range(rows - 1):
         for m in range(M):
-            if kill[r, m]:
-                continue
             m2 = (m + 1) % M
             cu = m + 1      # uv column of the next vertex (the last face uses the closing column)
-            q = [outer_idx[r, m], outer_idx[r + 1, m], outer_idx[r + 1, m2], outer_idx[r, m2]]
+            if m2 in Lo:     # the next column is a cut: this face uses its left copy
+                o2a, o2b = Lo[m2][r], Lo[m2][r + 1]
+                l2a, l2b = LiL[m2][r], LiL[m2][r + 1]
+            else:
+                o2a, o2b = outer_idx[r, m2], outer_idx[r + 1, m2]
+                l2a, l2b = lin_idx[r, m2], lin_idx[r + 1, m2]
+            q = [outer_idx[r, m], outer_idx[r + 1, m], o2b, o2a]
             uvq = [enc(r, m), enc(r + 1, m), enc(r + 1, cu), enc(r, cu)]
-            ql = [lin_idx[r, m], lin_idx[r, m2], lin_idx[r + 1, m2], lin_idx[r + 1, m]]
+            ql = [lin_idx[r, m], l2a, l2b, lin_idx[r + 1, m]]
             uvl = [enc(r, m), enc(r, cu), enc(r + 1, cu), enc(r + 1, m)]
             faces += [q, ql]
             fuv += [np.array(uvq), np.array(uvl)]
     # orientation check on one quad: outer faces must face outward
-    pos_all = np.concatenate([L.pos, newp, lining.reshape(-1, 3)])
+    pos_all = np.concatenate([L.pos, newp, newpL, lining.reshape(-1, 3)] + [liningL[c] for c in cutcols])
     if faces:
         q = faces[0]
         a_, b_, d_ = pos_all[q[0]], pos_all[q[1]], pos_all[q[3]]
@@ -852,11 +968,14 @@ def extend_tail(L, B, g, LM, cov, layers):
             faces = [f[::-1] for f in faces]
             fuv = [u[::-1] for u in fuv]
     L.pos = pos_all
-    L.W = np.concatenate([L.W, Wt[1:].reshape(-1, Wt.shape[-1]), Wt.reshape(-1, Wt.shape[-1])])
-    nb_ = np.concatenate([L.base, np.repeat(L.base[lp][None], rows - 1, 0).ravel(), np.repeat(L.base[lp][None], rows, 0).ravel()])
-    L.base = nb_
-    L.cov = np.concatenate([L.cov, np.full((2 * rows - 1) * M, 0.05)])
-    L.mask = np.concatenate([L.mask, np.tile(L.mask[lp[:1]], ((2 * rows - 1) * M, 1))])
+    nw = Wt.shape[-1]
+    L.W = np.concatenate([L.W, Wt[1:].reshape(-1, nw)] + [Wt[1:, c] for c in cutcols] + [Wt.reshape(-1, nw)] + [Wt[:, c] for c in cutcols])
+    lb = np.asarray(L.base)[lp]
+    L.base = np.concatenate([L.base, np.repeat(lb[None], rows - 1, 0).ravel()] + [np.repeat(lb[c], rows - 1) for c in cutcols]
+                            + [np.repeat(lb[None], rows, 0).ravel()] + [np.repeat(lb[c], rows) for c in cutcols])
+    nnew = len(pos_all) - nv0
+    L.cov = np.concatenate([L.cov, np.full(nnew, 0.05)])
+    L.mask = np.concatenate([L.mask, np.tile(L.mask[lp[:1]], (nnew, 1))])
     tm = np.zeros(len(L.pos), bool)
     tm[nv0:] = True
     tm[lp] = True
@@ -865,11 +984,14 @@ def extend_tail(L, B, g, LM, cov, layers):
     L.tail_thick = thick
     L.faces += faces
     L.fuv += fuv
-    L._lining = set(lin_idx.ravel().tolist())
+    L._lining = set(range(lin_base, len(L.pos)))
     g["_tail_len"] = tail_len
     tail_n = np.zeros((len(L.pos), 3))
     tail_n[outer_idx.ravel()] = nrm.reshape(-1, 3)
     tail_n[lin_idx.ravel()] = -nrm.reshape(-1, 3)
+    for c in cutcols:
+        tail_n[Lo[c]] = nrmL[c]
+        tail_n[LiL[c]] = -nrmL[c]
     L.tailN = tail_n[tm]
 
 
@@ -976,7 +1098,7 @@ COLLAR = {  # profile (a = out of the opening, o = off the garment surface) metr
 
 
 def collar_piece(L, B, g, LM, cell_flags):
-    loops = L.boundary_loops()
+    loops = garment_loops(L)
     if not loops:
         return None
     nl = max(loops, key=lambda lp: L.pos[lp, 1].mean() - 2 * np.abs(L.pos[lp, 0]).mean())
@@ -985,28 +1107,32 @@ def collar_piece(L, B, g, LM, cell_flags):
     col = g["collar"]
     k = LM["k"]
     prof = COLLAR[col["kind"]](col["h"] * k, col.get("flare", 0.0) * k, col.get("lean", 0.0) * k)
-    P0 = L.pos[nl]
-    n = len(nl)
+    nl = sorted_loop(L.pos, nl)
+    NLall = BH.layer_normals(L, B)
+    n = 64
+    P0 = resample_loop(L.pos[nl], n, 4)
+    near = [nl[int(np.argmin(np.linalg.norm(L.pos[nl] - p, axis=1)))] for p in P0]
+    Wl = L.W[near]
     # frames: tangent along the loop, n = garment normal, b = into the garment (away from the opening)
-    N = BH.layer_normals(L, B)[nl]
-    T = np.roll(P0, -1, 0) - np.roll(P0, 1, 0)
-    T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-9)
-    Bv = np.cross(N, T)
-    # orient b to point away from the opening: the opening is toward the neck (up), so -b must point up-ish
+    N = NLall[near]
+    N = (np.roll(N, 1, 0) + 2 * N + np.roll(N, -1, 0)) / 4
+    N /= np.linalg.norm(N, axis=1, keepdims=True)
+    # frames: a = up the neck (vertical), o = out from the neck axis (horizontal); notch lapels fold down the chest
     cen = P0.mean(0)
     up = np.array([0, 1.0, 0])
-    outdir = up + 0.0 * (P0 - cen)
-    sgn = np.sign((Bv * outdir).sum(1, keepdims=True))
-    Bv = -Bv * np.where(sgn == 0, 1, sgn)          # now -Bv points up (out of the opening)
-    # notch / shirt collars: the front part lies down as lapels (fall outward over the chest)
+    radial = P0 - cen
+    radial[:, 1] = 0
+    radial /= np.maximum(np.linalg.norm(radial, axis=1, keepdims=True), 1e-9)
     front = np.clip(np.cos(np.arctan2(P0[:, 0], P0[:, 2] - zc_at(B, P0[:, 1]))), 0, 1) ** 2
     rows = []
     for a_, o_ in prof:
         aa = np.full(n, a_)
         oo = np.full(n, o_)
-        if col["kind"] == "notch":   # lapels: at the front the profile folds down onto the chest
-            aa = aa * (1 - 0.85 * front) + np.minimum(a_, 0.0) * 0.0
-        rows.append(P0 - Bv * aa[:, None] + N * oo[:, None])
+        dA = np.repeat(up[None], n, 0)
+        if col["kind"] == "notch":   # lapels: at the front the profile lies down along the chest
+            dA = up[None] * (1 - front[:, None]) + (-up[None] * 0.8 + radial * 0.2) * front[:, None]
+            dA /= np.linalg.norm(dA, axis=1, keepdims=True)
+        rows.append(P0 + dA * aa[:, None] + radial * oo[:, None] + N * 0.0)
     grid = np.stack(rows)                             # rows x n x 3
     # close the loop in uv: an extra column
     gridc = np.concatenate([grid, grid[:, :1]], 1)
@@ -1025,7 +1151,6 @@ def collar_piece(L, B, g, LM, cell_flags):
     fix_winding_out(o, BH.to_bl(cen + np.array([0, 0.05, 0])))
     BH.cloth_shell(o, 0.0028)
     BH.set_mask(o, (0, g.get("gloss", 0.0), 0))
-    Wl = L.W[nl]
     hn = np.r_[[0.0], np.cumsum(np.linalg.norm(np.diff(grid, axis=0), axis=2).mean(1))]
     Wr = []
     for r in range(R):
@@ -1055,8 +1180,9 @@ def hood_roll(L, B, g, LM):
     """A soft rolled hood resting on the upper back, from collarbone to collarbone (it reads from behind)."""
     k = LM["k"]
     P = L.pos
+    NL = BH.layer_normals(L, B) if len(L.base) == len(L.pos) else BH.vertex_normals(L.pos, L.faces)
     cz = zc_at(B, LM["nb"])
-    angs = np.linspace(55, 305, 26)       # 0 = front; through the back
+    angs = np.linspace(100, 260, 22)      # 0 = front; across the back, from shoulder blade to shoulder blade
     path, nrm = [], []
     for a in angs:
         ar = np.radians(a)
@@ -1072,13 +1198,13 @@ def hood_roll(L, B, g, LM):
         lat = np.abs((cand[:, [0, 2]] - [0, cz]) @ np.array([d[2], -d[0]]))
         j = np.argmax(proj - 3 * lat)
         p = cand[j].copy()
-        p[1] = y_t
+        nn = NL[np.nonzero(m)[0][j]] if m.any() else np.array([d[0] * 0.9, 0.4, d[2] * 0.9])
         path.append(p)
-        nrm.append(np.array([d[0] * 0.75, 0.66, d[2] * 0.75]))
+        nrm.append(nn)
     path = np.array(path)
     nrm = np.array(nrm)
     nrm /= np.linalg.norm(nrm, axis=1, keepdims=True)
-    t = np.abs(angs - 180) / 125                     # 0 at the back centre, 1 at the ends
+    t = np.abs(angs - 180) / 80                      # 0 at the back centre, 1 at the ends
     wv = (0.075 - 0.045 * t ** 1.5) * k             # cross-section height (down the back)
     th_ = (0.03 - 0.02 * t ** 1.5) * k             # thickness off the back
     seg = 10
@@ -1089,8 +1215,10 @@ def hood_roll(L, B, g, LM):
         n_ = nrm[i] - (nrm[i] @ T[i]) * T[i]
         n_ /= np.linalg.norm(n_)
         bdir = np.cross(T[i], n_)
-        if bdir[1] > 0:
-            bdir = -bdir           # points down the back
+        away = path[i] - np.array([0, path[i][1], cz])
+        away[1] = -0.5 * np.linalg.norm(away)
+        if bdir @ away < 0:
+            bdir = -bdir           # along the surface, away from the neck (down the back, out over the shoulder)
         ring = []
         for s_ in range(seg + 1):
             u = s_ / seg * 2 * math.pi
@@ -1529,7 +1657,7 @@ def extras(c, B, cov, layers):
     # ---- rolled edges (mantle wraps) ----
     for key, L in layers.items():
         if L.g.get("roll"):
-            for lp in L.boundary_loops():
+            for lp in garment_loops(L):
                 if len(lp) > 12:
                     out.append(BH.rope_from_loop(key + "_roll", L, lp, 0.005, "acc" if L.g.get("shape") != "belt" else "trim"))
     # ---- shoes, head pieces, hair pieces ----
@@ -1590,10 +1718,7 @@ def hair_extra(c, B, cov, layers, LM):
     if style == "waves":
         ln = c.get("hairLen", "short")
         if ln == "short":      # Kai: messy waves over the brow and the tops of the ears
-            out.append(BH.hair_sheet(B, c, ref, 62, 118, L.eye[1] + 0.085, L.eye[1] + 0.005, clear=0.002, flare=0.01, rows=6, seg=12, narrow=8, tip=0.008, vol=vol, name="hair_side"))
-            out.append(BH.hair_sheet(B, c, ref, 242, 298, L.eye[1] + 0.085, L.eye[1] + 0.005, clear=0.002, flare=0.01, rows=6, seg=12, narrow=8, tip=0.008, vol=vol, name="hair_side"))
-            out.append(BH.hair_sheet(B, c, ref, 128, 232, L.eye[1] + 0.09, L.eye[1] - 0.05, clear=0.003, flare=0.012, rows=7, seg=18, tip=0.012, vol=vol, name="hair_nape"))
-            out.append(BH.hair_sheet(B, c, ref, -32, 22, L.eye[1] + 0.105, L.eye[1] + 0.03, clear=0.003, flare=0.004, rows=6, seg=14, narrow=6, tip=0.012, vol=vol, name="hair_fringe"))
+            out.append(BH.hair_sheet(B, c, ref, 120, 240, L.eye[1] + 0.09, L.eye[1] - 0.045, clear=0.003, flare=0.01, rows=7, seg=18, tip=0.008, vol=vol, name="hair_nape"))
         else:                  # chin to shoulder, side part
             out.append(BH.hair_sheet(B, c, ref, 62, 298, L.eye[1] + 0.1, L.eye[1] - 0.15 * H / 1.75, clear=0.003, flare=0.024, rows=13, seg=34, narrow=14, tip=0.03, vol=vol, name="hair_sheet"))
     elif style == "pixie":
@@ -1742,6 +1867,8 @@ def paint_aux(c, B, img, mask, himg, gimg, spx, res, seed):
             cc, hh, gl = paint_helmet(pc["g"], X, fl, seed)
         else:
             cc, hh, gl = G.paint(pc["g"], X, seed + 0.77)
+        if os.environ.get("AUXDBG"):
+            cc = cc * 0 + np.array([1.0, 0.1, 0.1])
         img[gy, gx] = np.clip(cc, 0, 1)
         mask[gy, gx] = True
         himg[gy, gx] = hh

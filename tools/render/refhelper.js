@@ -5,7 +5,7 @@
 //                    The pose is held through game.cine (mission camera code cannot move it), the world runs a few
 //                    frames around it, then the game is paused (time stops: crowd, rain, grain freeze) and the pose
 //                    is re-applied. HUD / dialogue / letterbox DOM is hidden so only the 3D frame is captured.
-//   REF.measure(n)   times 5 full frames (composer) and 3 scene-only frames, each fenced with readPixels, and
+//   REF.measure(n)   times 3 full frames (composer) and 2 scene-only frames, each fenced with readPixels, and
 //                    records renderer counts. Results are also pushed to window.REF_LOG.
 (() => {
   const g = window.__game, E = g.engine, P = E.camera.position.constructor;
@@ -27,7 +27,7 @@
       if (v.pre) (0, eval)(v.pre);
       const a = new P(...v.p), b = new P(...v.l);
       g.cine = { from: { p: a.clone(), l: b.clone() }, to: { p: a.clone(), l: b.clone() }, t: 0, dur: 0.001, look: b.clone(), fov: v.fov || 58 };
-      REF.pose(v); await frames(v.frames || 8);
+      REF.pose(v); await frames(v.frames || 5);
       g.paused = true; g.cine = null; g.shake = 0; REF.pose(v); E.fx.uShift.value = 0; E.fx.uDamage.value = 0;
       if (v.post) (0, eval)(v.post);
       await frames(3);
@@ -36,10 +36,10 @@
     measure(name) {
       const r = E.renderer, gl = r.getContext(), px = new Uint8Array(4), t = g.time;
       const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-      E.render(t); sync(); E.render(t); sync();
-      const full = []; for (let i = 0; i < 5; i++) { const t0 = performance.now(); E.render(t); sync(); full.push(performance.now() - t0); }
+      E.render(t); sync();
+      const full = []; for (let i = 0; i < 3; i++) { const t0 = performance.now(); E.render(t); sync(); full.push(performance.now() - t0); }
       const st = { ...E.stats };
-      const sc = []; for (let i = 0; i < 3; i++) { const t0 = performance.now(); r.setRenderTarget(null); r.render(g.scene, E.camera); sync(); sc.push(performance.now() - t0); }
+      const sc = []; for (let i = 0; i < 2; i++) { const t0 = performance.now(); r.setRenderTarget(null); r.render(g.scene, E.camera); sync(); sc.push(performance.now() - t0); }
       E.render(t); sync();
       const L = { point: 0, spot: 0, dir: 0, hemi: 0, amb: 0, shadow: 0 }; let objects = 0, instanced = 0, transparent = 0; const mats = new Set();
       g.scene.traverse(o => {
@@ -55,8 +55,11 @@
         frameMs: +med(full).toFixed(1), frameMinMs: +Math.min(...full).toFixed(1), sceneOnlyMs: +med(sc).toFixed(1),
         lights: L, objects, instanced, transparent, materials: mats.size, programs: r.info.programs.length,
         textures: r.info.memory.textures, geometries: r.info.memory.geometries, era: g.temporal.current };
+      const mem = performance.memory; if (mem) res.jsHeapMB = Math.round(mem.usedJSHeapSize / 1048576);
       (window.REF_LOG = window.REF_LOG || []).push(res); return res;
     },
+    // PNG data URL of the current frame (canvas only: cheaper and steadier than a page screenshot).
+    grab() { E.render(g.time); return E.renderer.domElement.toDataURL('image/png'); },
   };
   return 'REF ready';
 })();

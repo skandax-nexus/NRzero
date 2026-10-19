@@ -51,15 +51,22 @@ catch { log('TIMEOUT waiting for ' + M.ready); await b.close(); process.exit(4);
 await p.setViewportSize({ width: w, height: h });
 await p.waitForTimeout(1500);
 log(await p.evaluate(HELPER));
-const results = [];
+// Results merge into the per-mission JSON after every view, so an interrupted run can resume with --resume
+// (skips views already recorded there).
+const file = path.join(out, `${mission}_${gfx}${mobile ? '_mobile' : ''}.json`);
+let results = flag('resume') && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
 for (const v of M.views) {
   if (only && !only.includes(v.name)) continue;
+  if (flag('resume') && results.some(r => r.view === v.name)) continue;
   log(await p.evaluate(`REF.view(${JSON.stringify(v)})`));
   const r = await p.evaluate(`REF.measure(${JSON.stringify(v.name)})`);
-  results.push(r); log(JSON.stringify(r));
-  if (!flag('noshot')) await p.screenshot({ path: path.join(out, v.name + '.png'), timeout: 300000 });
+  log(JSON.stringify(r));
+  if (!flag('noshot')) {
+    const data = await p.evaluate('REF.grab()');
+    fs.writeFileSync(path.join(out, v.name + '.png'), Buffer.from(data.split(',')[1], 'base64'));
+  }
+  results = results.filter(x => x.view !== v.name).concat([r]);
+  fs.writeFileSync(file, JSON.stringify(results, null, 1));
 }
-const file = path.join(out, `${mission}_${gfx}${mobile ? '_mobile' : ''}.json`);
-fs.writeFileSync(file, JSON.stringify(results, null, 1));
 log('saved ' + file);
 await b.close();

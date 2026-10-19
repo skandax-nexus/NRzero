@@ -2180,7 +2180,7 @@ def build(c, tex_dir):
     else:
         parts += shoe_objects(B, c, cov)
         ex = extras(c, B, cov, layers)
-    cloth = [o for o in ex if o.name.startswith(("skirt", "apron"))]    # already even quads: kept out of decimation
+    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet"))]    # even quads / thin shells: no decimation
     parts += [o for o in ex if o not in cloth]
     if costume_mode:      # aux pieces packed, their uvs mapped, then the atlas painted (it needs the pieces)
         costume.aux_pack()
