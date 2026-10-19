@@ -1,0 +1,31 @@
+{
+  "appId": "nexus.skandax.afterzero",
+  "appName": "AFTERZERO",
+  "webDir": "www",
+  "backgroundColor": "#02040a",
+  "zoomEnabled": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#02040a",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "backgroundColor": "#02040a",
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "preferredContentMode": "mobile",
+    "allowsLinkPreview": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "style": "DARK",
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}
