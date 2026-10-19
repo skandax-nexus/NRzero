@@ -7,7 +7,8 @@
   by catalog.py; each character gets a distinct speaker in its pitch band (CHARACTERS below), extras get a stable one.
 - Treatment per character with ffmpeg (phone/PA radio band, the Voice's cathedral echo, the child's raised pitch),
   loudness normalised, encoded as AAC (.m4a, mono) for every phone browser.
-- Output: assets/voice/<key>.m4a + assets/voice/manifest.json { lines: {key: file}, speakers: {id: speaker} }.
+- Output: assets/voice/<key>.m4a + assets/voice/manifest.json { lines: {key: file}, tags: {key: mission}, speakers: {id: speaker} }.
+  tools/voice/pack_voices.py packs them into a few chunk files for hosts with file-count limits.
   key = FNV-1a("speaker|text") in base 36, the same as Voice.lineKey() in src/core/voice.js. Existing files are kept.
 """
 import json, os, re, subprocess, sys, tempfile, hashlib
@@ -201,6 +202,7 @@ def main():
     for who, text in keys:
         k = fnv36(who + '|' + text)
         f = k + '.m4a'
+        manifest.setdefault('tags', {})[k] = lines[(who, text)]
         if os.path.exists(os.path.join(OUT, f)):
             manifest['lines'][k] = f
             continue

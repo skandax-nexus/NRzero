@@ -1,5 +1,5 @@
-// Spoken dialogue using the device's built-in speech engine (Web Speech API).
-// No recorded or downloaded audio: every line is synthesized at runtime, with a
+// Spoken dialogue: recorded neural performances per character (tools/voice), else the device speech engine.
+// Lines without a recording are synthesized at runtime (Web Speech API), with a
 // distinct voice, pitch and pace per character. Falls back silently where unsupported.
 
 import { CAST } from '../story/cast.js';
@@ -42,10 +42,15 @@ export class Voice {
     this.volume = this.load('voiceVolume', 1);
     this.voices = []; this.assigned = {}; this.speaking = 0;
     // recorded performances (tools/voice/build_voices.py): neural voices per character, keyed by speaker + line
-    this.recorded = null; this.clip = null;
-    if (typeof window !== 'undefined' && window.fetch) window.fetch(new globalThis.URL('../../assets/voice/manifest.json', import.meta.url).href).then(r => (r.ok ? r.json() : null)).then(m => {
-      if (m && m.lines) { this.recorded = m; this.base = new globalThis.URL('../../assets/voice/', import.meta.url).href; this.supported = true; }
-    }).catch(() => { /* no recorded voices in this build */ });
+    // (one file per line via manifest.json, or chunked per mission via pack.json where hosts limit the file count)
+    this.recorded = null; this.pack = null; this.clip = null; this.token = 0; this.chunks = []; this.decoded = new Map();
+    if (typeof window !== 'undefined' && window.fetch) {
+      this.base = new globalThis.URL('../../assets/voice/', import.meta.url).href;
+      const json = f => window.fetch(this.base + f).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      json('manifest.json').then(m => (m && m.lines ? m : json('pack.json').then(p => (p && p.chunks ? (this.pack = p) : null)))).then(m => {
+        if (m && m.lines) { this.recorded = m; this.supported = true; }
+      });
+    }
     if (!this.supported) return;
     const refresh = () => { this.voices = this.synth.getVoices().filter(v => /^en/i.test(v.lang)); this.assigned = {}; };
     refresh();
@@ -97,21 +102,72 @@ export class Voice {
     return (h >>> 0).toString(36);
   }
 
-  // Play a recorded performance if this build has one for the line; resolves when it ends.
+  // Bytes of one recorded line. Packed builds fetch the chunk holding it, then the rest of that mission's chunks.
+  clipBytes(key) {
+    const entry = this.recorded.lines[key];
+    if (!this.pack) return window.fetch(this.base + entry).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status))));
+    const [c, off, len] = entry;
+    const chunk = i => (this.chunks[i] ||= window.fetch(this.base + this.pack.chunks[i].file).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))).catch(e => { this.chunks[i] = null; throw e; }));
+    const got = chunk(c).then(buf => buf.slice(off, off + len));
+    const tag = this.pack.chunks[c].tag;
+    got.then(() => this.pack.chunks.forEach((ch, i) => { if (ch.tag === tag && !this.chunks[i]) chunk(i).catch(() => {}); })).catch(() => {});
+    return got;
+  }
+
+  // Decoded audio of a line for the game's audio graph (a few recent lines are kept for replays and choices).
+  clipBuffer(key) {
+    if (this.decoded.has(key)) return this.decoded.get(key);
+    const ctx = this.game.audio.ctx;
+    const p = this.clipBytes(key).then(b => new Promise((ok, bad) => ctx.decodeAudioData(b, ok, bad)));
+    this.decoded.set(key, p); p.catch(() => this.decoded.delete(key));
+    if (this.decoded.size > 24) this.decoded.delete(this.decoded.keys().next().value);
+    return p;
+  }
+
+  // Play a recorded performance if this build has one for the line; resolves when it ends (or is stopped).
+  // Lines play through the game's Web Audio graph when it is running (reliable on phones after the first tap),
+  // otherwise through an audio element.
   playRecorded(id, text, onWord) {
-    const file = this.recorded?.lines?.[this.lineKey(id, text)];
-    if (!file) return null;
+    const key = this.lineKey(id, text);
+    if (!this.recorded?.lines?.[key]) return null;
     this.stop();
-    const a = new window.Audio(this.base + file);
-    a.volume = Math.min(1, this.volume * (this.game.audio?.volume ?? 1));
-    this.clip = a; this.speaking++; this.duck(true);
+    const token = ++this.token, audio = this.game.audio;
+    this.speaking++; this.duck(true);
     return new Promise(res => {
-      let done = false, tick = null;
-      const fin = () => { if (done) return; done = true; clearInterval(tick); if (this.clip === a) this.clip = null; this.speaking = Math.max(0, this.speaking - 1); if (!this.speaking) this.duck(false); res(); };
-      a.onended = fin; a.onerror = fin; a.onpause = () => { if (a.ended) fin(); };
-      if (onWord) tick = setInterval(() => { if (!a.paused) onWord(); }, 260);
-      setTimeout(fin, 2500 + text.length * 120); // safety net
-      a.play().catch(fin);
+      let done = false, tick = null, url = null;
+      const fin = () => {
+        if (done) return; done = true; clearInterval(tick); clearTimeout(safety);
+        if (url) globalThis.URL.revokeObjectURL(url);
+        if (this.token === token) this.clip = null;
+        this.speaking = Math.max(0, this.speaking - 1); if (!this.speaking) this.duck(false); res();
+      };
+      const safety = setTimeout(fin, 6000 + text.length * 120); // also covers a slow first chunk on a bad connection
+      this.clip = { stop: fin }; // still loading: stopping just ends the line
+      const words = playing => { if (onWord) tick = setInterval(() => { if (playing()) onWord(); }, 260); };
+      if (audio?.ctx && audio.ctx.state === 'running' && audio.master) {
+        this.clipBuffer(key).then(buf => {
+          if (done || this.token !== token) return fin();
+          const src = audio.ctx.createBufferSource(), g = audio.ctx.createGain();
+          src.buffer = buf; g.gain.value = Math.min(1, this.volume);
+          src.connect(g).connect(audio.master);
+          src.onended = fin;
+          this.clip = { stop: () => { try { src.stop(); } catch { /* not started */ } fin(); } };
+          words(() => audio.ctx.state === 'running');
+          src.start();
+        }).catch(fin);
+        return;
+      }
+      const start = src => {
+        if (done || this.token !== token) return fin();
+        const a = new window.Audio(src);
+        a.volume = Math.min(1, this.volume * (audio?.volume ?? 1));
+        a.onended = fin; a.onerror = fin;
+        this.clip = { stop: () => { a.pause(); fin(); }, pause: () => a.pause(), resume: () => a.play().catch(fin) };
+        words(() => !a.paused);
+        a.play().catch(fin);
+      };
+      if (!this.pack) return start(this.base + this.recorded.lines[key]);
+      this.clipBytes(key).then(b => start(url = globalThis.URL.createObjectURL(new window.Blob([b], { type: 'audio/mp4' })))).catch(fin);
     });
   }
 
@@ -139,12 +195,14 @@ export class Voice {
   }
 
   stop() {
-    if (this.clip) { const c = this.clip; this.clip = null; try { c.pause(); c.onended?.(); } catch { /* ignore */ } }
+    this.token++;
+    if (this.clip) { const c = this.clip; this.clip = null; try { c.stop(); } catch { /* ignore */ } }
     if (this.synth) { try { this.synth.cancel(); } catch { /* ignore */ } }
     this.speaking = 0; this.duck(false);
   }
-  pause() { if (this.clip) this.clip.pause(); if (this.synth) try { this.synth.pause(); } catch { /* ignore */ } }
-  resume() { if (this.clip) this.clip.play().catch(() => {}); if (this.synth) try { this.synth.resume(); } catch { /* ignore */ } }
+  // (Web Audio clips pause with the game's audio context)
+  pause() { this.clip?.pause?.(); if (this.synth) try { this.synth.pause(); } catch { /* ignore */ } }
+  resume() { this.clip?.resume?.(); if (this.synth) try { this.synth.resume(); } catch { /* ignore */ } }
 
   duck(on) {
     const a = this.game.audio; if (!a?.ctx || !a.music) return;
