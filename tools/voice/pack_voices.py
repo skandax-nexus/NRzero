@@ -1,6 +1,6 @@
 """Pack the recorded lines into a few chunk files for hosts that limit the number of files (web previews, stores).
 
-  python3 tools/voice/pack_voices.py [OUT_DIR] [--chunk-kb 1200]
+  python3 tools/voice/pack_voices.py [OUT_DIR] [--chunk-kb 1200] [--src DIR]
 
 Reads assets/voice/manifest.json (written by build_voices.py) and writes OUT_DIR/pack.json plus OUT_DIR/pack-<tag>-<n>.m4a.
 Each chunk is a plain concatenation of the per-line AAC files of one mission (so a mission's opening lines arrive first);
@@ -11,12 +11,14 @@ import json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, 'assets', 'voice')
-args = [a for a in sys.argv[1:] if not a.startswith('--')]
+args = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith('--') and sys.argv[i - 1] not in ('--chunk-kb', '--src')]
 OUT = args[0] if args else SRC
 CHUNK = 1200 * 1024
 for i, a in enumerate(sys.argv):
     if a == '--chunk-kb':
         CHUNK = int(sys.argv[i + 1]) * 1024
+    if a == '--src':  # another set of the same clips (e.g. re-encoded for a test browser)
+        SRC = sys.argv[i + 1]
 
 
 def order(tag):
@@ -56,7 +58,9 @@ def main():
             buf += data
             total += len(data)
         flush()
-    pack = {'chunks': chunks, 'lines': lines, 'speakers': man.get('speakers', {}), 'credit': man.get('credit', '')}
+    first = next((open(os.path.join(SRC, f), 'rb').read(16) for g in groups.values() for _, f in g[:1]), b'')
+    kind = 'audio/webm; codecs="opus"' if first[:4] == b'\x1a\x45\xdf\xa3' else 'audio/mp4; codecs="mp4a.40.2"'
+    pack = {'type': kind, 'chunks': chunks, 'lines': lines, 'speakers': man.get('speakers', {}), 'credit': man.get('credit', '')}
     json.dump(pack, open(os.path.join(OUT, 'pack.json'), 'w'), separators=(',', ':'))
     print(f'packed {len(lines)} lines into {len(chunks)} chunks, {total / 1048576:.1f} MB')
 

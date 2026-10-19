@@ -48,7 +48,9 @@ export class Voice {
       this.base = new globalThis.URL('../../assets/voice/', import.meta.url).href;
       const json = f => window.fetch(this.base + f).then(r => (r.ok ? r.json() : null)).catch(() => null);
       json('manifest.json').then(m => (m && m.lines ? m : json('pack.json').then(p => (p && p.chunks ? (this.pack = p) : null)))).then(m => {
-        if (m && m.lines) { this.recorded = m; this.supported = true; }
+        // browsers without the clips' codec (e.g. Chromium builds without AAC) keep the speech-engine voices
+        this.type = m?.type || 'audio/mp4; codecs="mp4a.40.2"';
+        if (m && m.lines && window.Audio && new window.Audio().canPlayType(this.type) !== '') { this.recorded = m; this.supported = true; }
       });
     }
     if (!this.supported) return;
@@ -167,7 +169,7 @@ export class Voice {
         a.play().catch(fin);
       };
       if (!this.pack) return start(this.base + this.recorded.lines[key]);
-      this.clipBytes(key).then(b => start(url = globalThis.URL.createObjectURL(new window.Blob([b], { type: 'audio/mp4' })))).catch(fin);
+      this.clipBytes(key).then(b => start(url = globalThis.URL.createObjectURL(new window.Blob([b], { type: this.type.split(';')[0] })))).catch(fin);
     });
   }
 
