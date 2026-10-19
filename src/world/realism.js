@@ -337,12 +337,18 @@ const RECIPES = {
         s.ao = 1.0 - tar * 0.3;
       }`,
   },
-  // Cast concrete: formwork panel seams + tie holes, pores, runoff streaks, rust bleed, efflorescence.
+  // Cast concrete: formwork panel seams + tie holes, pores, shrinkage cracks, runoff streaks, rust bleed, efflorescence.
   concrete: {
     tile: 3, range: 0.008,
-    defaults: { color: 0x8a8884, formwork: 1, stains: 0.6, pores: 0.6, slabs: 0, wet: 0 },
-    uniforms: p => ({ uC0: lin(p.color), uP0: [p.formwork, p.stains, p.pores, p.slabs], uWet: p.wet }),
+    defaults: { color: 0x8a8884, formwork: 1, stains: 0.6, pores: 0.6, slabs: 0, cracks: 0.5, wet: 0 },
+    uniforms: p => ({ uC0: lin(p.color), uP0: [p.formwork, p.stains, p.pores, p.slabs], uP1: [p.cracks, 0, 0, 0], uWet: p.wet }),
     glsl: /* glsl */`
+      float crackC(vec2 uv){
+        vec2 w = vec2(fbm(uv, vec2(6.0), 4), fbm(uv + 0.41, vec2(6.0), 4)) - 0.5;
+        vec3 v = voronoiB(uv + w * 0.1, vec2(4.0));
+        float line = 1.0 - smoothstep(0.0, 0.01 + 0.012 * fbm(uv, vec2(20.0), 2), v.x);
+        return line * smoothstep(0.52, 0.68, fbm(uv + 0.77, vec2(3.0), 4) + uP1.x * 0.25 - 0.12) * step(0.01, uP1.x);
+      }
       float seams(vec2 uv){
         if (uP0.w > 0.5) { vec2 g = fract(uv * vec2(5.0)); vec2 d = min(g, 1.0 - g); return 1.0 - smoothstep(0.0, 0.012, min(d.x, d.y)); }
         vec2 g = fract(uv * vec2(2.0, 4.0)); vec2 d = min(g, 1.0 - g) / vec2(2.0, 4.0);
@@ -358,6 +364,7 @@ const RECIPES = {
         float h = fbm(uv, vec2(24.0), 4) * 0.0015 + fbm(uv, vec2(3.0), 4) * 0.002;
         h -= pore * 0.0025 + tieHoles(uv) * 0.008;
         h += uP0.w > 0.5 ? -seams(uv) * 0.006 : seams(uv) * 0.0008;
+        h -= crackC(uv) * 0.003;
         return h;
       }
       void shade(vec2 uv, float h, inout Surf s){
@@ -379,9 +386,11 @@ const RECIPES = {
         c = mix(c, vec3(0.75, 0.74, 0.7), eff);
         float sm = seams(uv);
         c *= 1.0 - sm * (uP0.w > 0.5 ? 0.5 : 0.15);
+        float ck = crackC(uv);
+        c = mix(c, c * 0.35, ck * 0.85);
         s.col = c;
         s.rough = 0.86 + fine * 0.1 - st * 0.08;
-        s.ao = 1.0 - tieHoles(uv) * 0.6;
+        s.ao = (1.0 - tieHoles(uv) * 0.6) * (1.0 - ck * 0.5);
         s.mask = st;
         wetten(s, uWet * (0.6 + 0.4 * mott));
       }`,
@@ -1001,6 +1010,19 @@ function ensureWorld(shader) {
  * Opt any MeshStandard/Physical material into the kit's atmosphere (sun in-scatter in the haze) and specular AA.
  *   applyAtmosphere(new THREE.MeshStandardMaterial({ color: 0x555555 }))
  */
+// Thin-leaf translucency evaluated inside the direct-light loop, so it is attenuated by shadows like the light itself
+// (an emissive back-light term would make grass in shadow glow). rzTransMask scales it per fragment.
+const TRANS_GLSL = /* glsl */`
+uniform float rzTransl; float rzTransMask = 1.0;
+void RE_Direct_RzTrans(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
+  RE_Direct_Physical(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+  float tr = 0.35 * max(dot(-geometryNormal, directLight.direction), 0.0) + 1.1 * pow(max(dot(-geometryViewDir, directLight.direction), 0.0), 4.0);
+  reflectedLight.directDiffuse += directLight.color * material.diffuseColor * tr * rzTransl * rzTransMask;
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_RzTrans
+`;
+function addTranslucency(shader) { patch(shader, 'f', '#include <lights_physical_pars_fragment>', TRANS_GLSL, 'after'); }
 export function applyAtmosphere(mat) { if (!mat.userData.rzMods || !mat.userData.rzMods.some(m => m.key === 'atm')) addMod(mat, 'atm', shader => ensureWorld(shader)); return mat; }
 // Insert code after / before an `#include <chunk>` line, or replace it. A replaced include leaves a marker
 // comment behind so later modifiers can still anchor on the same chunk.
@@ -2374,7 +2396,7 @@ function grassLayer(tuft, count, radius, U0, opts) {
   g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
   g.instanceCount = n * n;
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
-  const U = { ...U0, rzGR: { value: radius }, rzGIn: { value: opts.fadeIn || 0 }, rzGNear: { value: opts.near ? 1 : 0 } };
+  const U = { ...U0, rzGR: { value: radius }, rzGIn: { value: opts.fadeIn || 0 }, rzGNear: { value: opts.near ? 1 : 0 }, rzTransl: { value: opts.translucency ?? 0.9 } };
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, side: THREE.DoubleSide, map: opts.map || null, alphaTest: opts.map ? 0.42 : 0 });
   addMod(mat, 'grass' + (opts.map ? 'C' : 'B'), shader => {
     ensureWorld(shader);
@@ -2386,8 +2408,8 @@ function grassLayer(tuft, count, radius, U0, opts) {
       { vec2 ts = vec2(textureSize(map, 0)); vec2 dx = dFdx(vMapUv * ts), dy = dFdy(vMapUv * ts); float lod = 0.5 * log2(max(dot(dx, dx), dot(dy, dy))); diffuseColor.a *= 1.0 + max(lod, 0.0) * 0.3; }`
       : 'diffuseColor.rgb *= vGCol.rgb;', 'replace');
     patch(shader, 'f', '#include <normal_fragment_begin>', 'normal = normalize(vNormal);');
-    patch(shader, 'f', '#include <emissivemap_fragment>', `{ vec3 V = normalize(vRzWP - cameraPosition); float bl = pow(max(dot(V, rzSunD), 0.0), 3.0);
-      totalEmissiveRadiance += diffuseColor.rgb * rzSunC * bl * vGCol.a * 1.4; }`, 'replace');
+    addTranslucency(shader);
+    patch(shader, 'f', '#include <normal_fragment_maps>', 'rzTransMask = vGCol.a;', 'after');
     patch(shader, 'f', '#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= 0.45 + 0.55 * vGCol.a; reflectedLight.directDiffuse *= 0.6 + 0.4 * vGCol.a;', 'replace');
   }, U);
   const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.name = opts.near ? 'grassNear' : 'grassFar';
@@ -2485,7 +2507,7 @@ export function leafTexture(kind = 'broadleaf', o = {}) {
 // per-vertex canopy occlusion (inner cards darker), back-light translucency and wind flutter. Works with InstancedMesh.
 export function foliageMaterial(kind = 'broadleaf', o = {}) {
   const mat = new THREE.MeshStandardMaterial({ map: leafTexture(kind, o), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82, metalness: 0, color: o.color ?? 0xffffff, vertexColors: o.vertexColors ?? true });
-  const U = { rzSunD: shared.sunDir, rzSunC: shared.sunColor, rzWind: shared.wind, rzWindS: shared.windStrength, rzFlutter: { value: o.flutter ?? 1 } };
+  const U = { rzSunD: shared.sunDir, rzSunC: shared.sunColor, rzWind: shared.wind, rzWindS: shared.windStrength, rzFlutter: { value: o.flutter ?? 1 }, rzTransl: { value: o.translucency ?? 0.8 } };
   addMod(mat, 'foliage', shader => {
     ensureWorld(shader);
     patch(shader, 'v', '#include <common>', 'uniform vec3 rzWind; uniform float rzWindS, rzFlutter;');
@@ -2504,8 +2526,7 @@ export function foliageMaterial(kind = 'broadleaf', o = {}) {
     patch(shader, 'f', '#include <alphatest_fragment>', `{ vec2 ts = vec2(textureSize(map, 0)); vec2 dx = dFdx(vMapUv * ts), dy = dFdy(vMapUv * ts);
       float lod = 0.5 * log2(max(dot(dx, dx), dot(dy, dy))); diffuseColor.a *= 1.0 + max(lod, 0.0) * 0.28; }`, 'before');
     patch(shader, 'f', '#include <normal_fragment_begin>', 'normal = normalize(vNormal);');
-    patch(shader, 'f', '#include <emissivemap_fragment>', `{ vec3 V = normalize(vRzWP - cameraPosition); float bl = pow(max(dot(V, rzSunD), 0.0), 4.0);
-      totalEmissiveRadiance += diffuseColor.rgb * rzSunC * bl * 1.3; }`, 'replace');
+    addTranslucency(shader);
     // canopy occlusion (vertex colour) also dims sky light and specular inside the crown
     patch(shader, 'f', '#include <aomap_fragment>', `#ifdef USE_COLOR
       reflectedLight.indirectDiffuse *= vColor.r; reflectedLight.indirectSpecular *= vColor.r * vColor.r * 0.45;
@@ -2711,9 +2732,8 @@ function impostorMesh(imp, list, heightAt, rand, castShadow) {
       vec3 nT = texture2D(rzImpN, vMapUv).xyz * 2.0 - 1.0; if (!gl_FrontFacing) nT.z = -nT.z;
       vec3 nw = rzSafeN(T * nT.x + vec3(0.0, 1.0, 0.0) * nT.y + F * nT.z);
       normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz); }`, 'replace');
-    patch(shader, 'f', '#include <emissivemap_fragment>', `{ vec3 V = normalize(vRzWP - cameraPosition); float bl = pow(max(dot(V, rzSunD), 0.0), 4.0);
-      totalEmissiveRadiance += diffuseColor.rgb * rzSunC * bl * 1.1; }`, 'replace');
-  }, { rzImpN: { value: imp.normal.texture }, rzSunD: shared.sunDir, rzSunC: shared.sunColor });
+    addTranslucency(shader);
+  }, { rzImpN: { value: imp.normal.texture }, rzSunD: shared.sunDir, rzSunC: shared.sunColor, rzTransl: { value: 0.7 } });
   const im = new THREE.InstancedMesh(g, mat, list.length);
   const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   list.forEach((p, i) => { const s = p.scale ?? 1; ps.set(p.x, p.y ?? (heightAt ? heightAt(p.x, p.z) : 0), p.z); qq.setFromAxisAngle(up, p.yaw ?? rand() * 6.28); sc.set(s, s, s); im.setMatrixAt(i, m4.compose(ps, qq, sc)); });

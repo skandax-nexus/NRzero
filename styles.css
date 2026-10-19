@@ -243,13 +243,14 @@ html.touch #era-glyph{font-size:18px}
 html.touch #era-name{font-size:15px;letter-spacing:.28em}
 html.touch #era-year{font-size:11px;letter-spacing:.24em}
 html.touch #era-keys{display:none}
-html.touch #objective{right:calc(124px + var(--sr));top:calc(8px + var(--st));max-width:min(380px,40vw);padding:6px 10px}
+html.touch #objective{right:calc(124px + var(--sr));top:calc(8px + var(--st));max-width:min(400px,calc(100vw - 310px - var(--sl) - var(--sr)));padding:6px 10px}
 html.touch .obj-label{font-size:9px}
 html.touch #objective-text{font-size:14px;line-height:1.2}
 html.touch #prompt,html.touch #mission-tag{display:none!important}
-html.touch #toast{top:24%;max-width:62vw;font-size:13px;letter-spacing:.16em;line-height:1.5}
-html.touch #residue-hint{left:calc(16px + var(--sl));top:calc(62px + var(--st));bottom:auto;transform:none;font-size:10px;letter-spacing:.4em}
-html.touch #detect{top:calc(16% + var(--st))}
+html.touch #toast{top:calc(25% + var(--st));width:max-content;max-width:min(560px,62vw);padding:6px 14px;border-radius:4px;background:rgba(6,10,16,.72);font-size:14px;letter-spacing:.12em;line-height:1.45}
+html.touch #residue-hint{left:calc(16px + var(--sl));top:calc(98px + var(--st));bottom:auto;transform:none;font-size:10px;letter-spacing:.4em}
+/* detection meter under the era block (the objective owns the top centre-right on phones) */
+html.touch #detect{left:calc(14px + var(--sl));top:calc(62px + var(--st));transform:none;width:150px;text-align:left;letter-spacing:.3em}
 html.touch #subtitle{bottom:calc(12px + var(--sb));max-width:max(300px,calc(100vw - 360px - var(--sl) - var(--sr)));font-size:17px}
 html.touch #subtitle b{font-size:11px}
 html.touch #dialogue{bottom:calc(10px + var(--sb));width:min(860px,calc(100vw - 24px - var(--sl) - var(--sr)));max-height:calc(100% - 20px - var(--st) - var(--sb));overflow:auto;touch-action:pan-y}
