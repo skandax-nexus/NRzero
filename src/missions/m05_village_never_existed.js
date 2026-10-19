@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import * as RZ from '../world/realism.js';
 import { glowMat, canvasTex, rng, Motes, cableCurve } from '../world/kit.js';
 import { Walker } from '../world/props.js';
-import { settlerLook, registerCast } from '../story/cast.js';
+import { Character } from '../core/character.js';
+import { settlerLook, registerCast, CAST } from '../story/cast.js';
 import { registerTheme } from '../core/audio.js';
 import * as V from '../world/env_m5.js';
 
@@ -20,21 +21,35 @@ registerCast('caretaker', {
   bio: 'Has kept the dam at Reservoir 7 since it was filled. Grows beans on the old terrace. Asks few questions.',
   // 2049 field wear: graphite-olive softshell parka over a technical knit, cargo trousers, work boots; AR earpiece,
   // a ruggedised slate and an AR earpiece are attached in the mission (see dressCaretaker).
-  look: { era: '2049', template: 'arin', female: true, age: 57, height: 1.66, build: 1.02, skin: 0xcf9f82, hair: 0x6a625a, hairStyle: 'short', eyes: 0x4a5a5a,
+  look: { era: '2049', costume: 'caretaker', sex: 'f', template: 'arin', female: true, age: 57, height: 1.66, build: 1.02, skin: 0xcf9f82, hair: 0x6a625a, hairStyle: 'short', eyes: 0x4a5a5a,
     top: 0x3b4441, topKind: 'synthetic', topType: 'jacket', coat: 0x3d4842, coatKind: 'fabric', coatType: 'long', pants: 0x272b30, pantsType: 'cargo', shoes: 'boots', boots: 0x1b1d20,
     glasses: true, wrinkles: 0.55, face: { jaw: 0.1, cheek: 0.2, nose: 0.1, noseWidth: 0, lips: -0.1, brow: 0.1, eyeSize: -0.05, faceLength: 0.15, chin: 0.05 } },
   rimColor: 0x8fd8ff,
   vp: { sex: 'f', pitch: 0.86, rate: 0.92, langs: ['en-GB', 'en-IE', 'en-US'] },
 });
 registerCast('echo', { name: 'ECHO', role: 'Temporal residue', voice: true, vp: { sex: 'f', pitch: 0.8, rate: 0.86, langs: ['en-GB', 'en-US'] } });
-registerCast('echo2049', { name: 'ECHO · 2029', role: 'Temporal residue · Helix survey', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 1.0, langs: ['en-US', 'en-GB'] } });
-registerCast('villager', { name: 'VILLAGER', role: 'The lower village', vp: { sex: 'm', pitch: 0.95, rate: 0.98, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
+registerCast('echo2049', { name: 'ECHO · 2029', role: 'Temporal residue · Helix survey', voice: true, vp: { sex: 'f', pitch: 1.0, rate: 1.0, langs: ['en-US', 'en-GB'] } });
+// the 2029 Helix survey lead, seen only as residue (Helix 2049 lab jacket over a navy mock-neck, headset, wrist slate)
+registerCast('surveyor', { name: 'SURVEY LEAD · 2029', role: 'Helix survey · Site Zero',
+  look: { era: '2049', costume: 'helix_sci_f', sex: 'f', female: true, age: 44, height: 1.63, build: 0.92, skin: 0xf1c6a8, hair: 0x15130f, hairStyle: 'bob', eyes: 0x2a1c12,
+    top: 0x1d2430, topKind: 'synthetic', topType: 'jacket', coat: 0xe8eaec, coatKind: 'fabric', pants: 0x4a4e54, pantsType: 'trousers', shoes: 'shoes', boots: 0xe6e2da },
+  vp: { sex: 'f', pitch: 1.0, rate: 1.02, langs: ['en-US', 'en-GB'] } });
+registerCast('villager', { name: 'VILLAGER', role: 'The lower village',
+  look: { era: 'ancient', costume: 'villager', sex: 'm', female: false, age: 52, height: 1.7, build: 0.92, skin: 0x6b4029, hair: 0x3a3430, hairStyle: 'curly', stubble: 0.6,
+    top: 0xd9c9a0, topKind: 'fabric', topType: 'tunic', sash: 0x2f5a5a, pants: 0xb89a6a, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220 },
+  vp: { sex: 'm', pitch: 0.95, rate: 0.98, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
 // ancient settlement wear: undyed linen tunic, red-ochre wrap, leg wraps and sandals
 registerCast('potter', { name: 'IRU', role: 'Potter · the upper terrace',
-  look: { era: 'ancient', template: 'mirela', female: true, age: 46, height: 1.6, build: 1.0, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', eyes: 0x24160c, top: 0xb4884e, topKind: 'fabric', topType: 'tunic', sash: 0x9b3b24, pants: 0x5a4632, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, wrinkles: 0.35 },
+  look: { era: 'ancient', costume: 'potter', sex: 'f', template: 'mirela', female: true, age: 46, height: 1.6, build: 1.0, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', eyes: 0x24160c, top: 0xb4884e, topKind: 'fabric', topType: 'tunic', sash: 0x9b3b24, pants: 0x5a4632, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, wrinkles: 0.35 },
   rimColor: 0xffb05a, glow: 0x3a2410, bg: 0x140d08, vp: { sex: 'f', pitch: 1.05, rate: 1.0, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
 // every unnamed villager wears the era's clothes (keeps the 3D cast on its settler templates)
-const ancientLook = (r, o = {}) => ({ ...settlerLook(r), era: 'ancient', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', ...o });
+// each one names an anc_* archetype from docs/COSTUMES.md so the costume pass can dress it
+const ANC_M = ['anc_m1', 'anc_m2', 'anc_m3', 'anc_m4'], ANC_F = ['anc_f1', 'anc_f2', 'anc_f3', 'anc_f4'], ANC_AGE = { anc_m1: 32, anc_m2: 64, anc_m3: 22, anc_m4: 40, anc_f1: 25, anc_f2: 50, anc_f3: 35, anc_f4: 68 };
+const ancientLook = (r, o = {}) => {
+  const b = settlerLook(r), kid = !!o.child, female = o.female ?? b.female;
+  const costume = kid ? (female ? 'anc_kid_f' : 'anc_kid_m') : (female ? ANC_F : ANC_M)[Math.floor(r() * 4)];
+  return { ...b, female, sex: female ? 'f' : 'm', age: kid ? (female ? 7 : 9) : ANC_AGE[costume], era: 'ancient', costume, topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', ...o };
+};
 
 // ---------- music: one valley motif (A C E D) carried by each state's instruments ----------
 // thriving: frame drum, plucked strings, breathy flute and the waterwheel's pulse (82 BPM)
@@ -899,6 +914,62 @@ export default {
     const memorial = vis(new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.0, 0.35), [MAT.ruin, MAT.ruin, MAT.ruin, MAT.ruin, new THREE.MeshStandardMaterial({ map: V.memorialTex(), roughness: 0.95 }), MAT.ruin]), ['abandoned'], () => S.diverted);
     memorial.position.set(0.8, VAL.hBase(0.8, -2) + 0.9, -2); memorial.rotation.y = -0.4; memorial.castShadow = true;
     col([0.2, -1, -2.5], [1.4, 2, -1.5], ['abandoned'], () => S.diverted);
+    // ---------- optional investigation: the 2029 Helix survey line (2049, Residue Vision) ----------
+    // three survey stakes; with Residue Vision on, each replays what the survey lead and Brandt said there in 2029
+    const STAKES = [
+      { p: [0.6, TY, -55.2], ry: 0.4, label: 'SZ-0 · LINE N · 14.03.2029', lines: [['echo2049', 'Line north, stake one. The readings climb the closer we get to that terrace.'], ['brandt', 'Then mark it and move. Rook wants the core out before the rain.'], ['echo2049', 'The core of what? Nobody has told us what we are looking for.']] },
+      { p: [-27.2, TY, -12.4], ry: -0.6, label: 'SZ-0 · LINE W · 15.03.2029', lines: [['echo2049', 'There are terraces up here. Walls, channels, a kiln floor. This was a town.'], ['brandt', 'It was a hillside. Write hillside.'], ['echo2049', 'If we flood this, there is nothing left to study.'], ['brandt', 'That is the idea.']] },
+      { p: [-3.2, 0, 1.6], ry: 0.2, label: 'SZ-0 · LINE S · 16.03.2029', cond: () => S.drained, lines: [['echo2049', 'The ring carved over that door. It is the same glyph as the Lab One prototype.'], ['brandt', 'There is no prototype. Helix builds the Chronolith in 2031. From scratch.'], ['echo2049', 'From what we take out of here, you mean.'], ['brandt', 'From scratch. Say it back to me.']] },
+    ];
+    const stakeMat = new THREE.MeshStandardMaterial({ color: 0xd8dcdf, roughness: 0.45, metalness: 0.6 }), tipMat = new THREE.MeshStandardMaterial({ color: 0xff6a1a, roughness: 0.5, emissive: 0x401000 });
+    const stakeTagMat = new THREE.MeshStandardMaterial({ map: V.signTex(['HELIX TEMPORAL RESEARCH', 'SURVEY · SITE 0', 'DO NOT REMOVE'], '#e8eaec', '#14303a', 'stakeTag'), roughness: 0.5, side: THREE.DoubleSide });
+    let echoesHeard = 0;
+    const ghostLead = new Character(CAST.surveyor.look), ghostBrandt = new Character(CAST.brandt.look);
+    for (const g of [ghostLead, ghostBrandt]) { g.setGhost(0x9fe8ff); g.root.position.set(0, -50, 0); resid(g.root, 'flooded'); game.onUpdate(dt => { if (g.root.visible) g.update(dt); }); }
+    ghostLead.pose = 'look';
+    STAKES.forEach((k, i) => {
+      const y = VAL.hBase(k.p[0], k.p[2]);
+      const g = new THREE.Group(); g.position.set(k.p[0], y, k.p[2]); g.rotation.y = k.ry;
+      g.add(V.instances(new THREE.BoxGeometry(0.06, 1.1, 0.06), stakeMat, [{ x: 0, y: 0.55, z: 0 }]), V.instances(new THREE.BoxGeometry(0.07, 0.14, 0.07), tipMat, [{ x: 0, y: 1.12, z: 0 }]));
+      const tg = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.18), stakeTagMat); tg.position.set(0, 0.86, 0.04); g.add(tg);
+      vis(g, ['flooded']); k.y = y;
+      const it = act({ pos: [k.p[0], y + 0.9, k.p[2]], radius: 2.0, states: ['flooded'], prompt: 'Read the survey stake', enabled: () => !k.done && (!k.cond || k.cond()), onUse: safe(async () => {
+        if (k.done || busy || T.current !== 'flooded') return;
+        if (!game.residueOn) { ui.subtitle('kai', `"${k.label}." Helix put this here twenty years ago. There's residue on it — [F].`, 3800); return; }
+        busy = true;
+        try {
+          // stage the echo: the survey lead at the stake, Brandt a step behind her
+          const a = k.ry, fx = Math.sin(a), fz = Math.cos(a);
+          ghostLead.root.position.set(k.p[0] + fx * 1.0, y, k.p[2] + fz * 1.0); ghostLead.root.rotation.y = a + Math.PI;
+          ghostBrandt.root.position.set(k.p[0] + fx * 2.2 + fz * 0.9, VAL.hBase(k.p[0] + fx * 2.2 + fz * 0.9, k.p[2] + fz * 2.2 - fx * 0.9), k.p[2] + fz * 2.2 - fx * 0.9); ghostBrandt.lookTarget = ghostLead.head;
+          refreshWorld();
+          await enter([k.p[0] + fz * 3.6 + fx * 0.6, y + 1.8, k.p[2] - fx * 3.6 + fz * 0.6], [k.p[0] + fx * 1.4, y + 1.3, k.p[2] + fz * 1.4], 1.4, 44);
+          audio.sfxPlay('rewind');
+          await game.talk(k.lines);
+          k.done = true; done(it); echoesHeard++;
+          ui.toast(`SURVEY LINE · ECHO ${echoesHeard}/3`, 2600);
+          if (echoesHeard === 3) {
+            F.m5_surveyEchoes = true;
+            await game.talk([['kai', 'Rook knew. Two years before the Chronolith "existed", Helix was digging it out of a hillside.'], ['niko', 'And your Brandt made them say it back.']]);
+            ui.addEvidence('Survey line SZ, March 2029', 'Residue on three Helix survey stakes: a survey lead recognised the village and the Ring glyph from the "Lab One prototype"; Officer Brandt ordered her to record a bare hillside and to repeat that Helix built the Chronolith "from scratch" in 2031.', 'RESERVOIR 7 · 2029');
+          }
+        } finally { ghostBrandt.lookTarget = null; ghostLead.root.position.set(0, -50, 0); ghostBrandt.root.position.set(0, -50, 0); leave(); busy = false; }
+      }) });
+    });
+    ghostLead.root.position.set(0, -50, 0); ghostBrandt.root.position.set(0, -50, 0);
+    // ---------- optional: Iru's cup (abandoned, after the water quest) ----------
+    let cupFound = false;
+    const cup = new THREE.Mesh(V.jarGeometry(0.6), clay); cup.scale.setScalar(0.42); cup.rotation.set(1.1, 0.4, 0.2); cup.position.set(-22.9, TY + 0.06, 1.2);
+    vis(cup, ['abandoned'], () => S.quest && !cupFound);
+    act({ pos: [-22.9, TY + 0.8, 1.2], radius: 2.0, states: ['abandoned'], prompt: 'Dig in the kiln ruins', enabled: () => S.quest && !cupFound, onUse: safe(async () => {
+      if (cupFound || busy || T.current !== 'abandoned') return; busy = true;
+      try {
+        cupFound = true; F.m5_iruCup = true; refreshWorld(); audio.sfxPlay('pickup');
+        await enter([-20.6, TY + 1.6, 3.0], [-22.9, TY + 0.2, 1.2], 1.2, 38);
+        await game.talk([['kai', 'A cup. Fired hard, never used. There\'s a ring pressed into the base.'], ['niko', 'Iru\'s mark beside it. "For the keeper\'s guest. Whenever that is."'], ['kai', 'Fourteen hundred years. She kept her promise.']]);
+        ui.addEvidence('Iru\'s cup', 'Buried in the abandoned kiln yard: the cup the potter Iru promised Kai after he re-set the leat gates, marked with the Water Ring and the words "for the keeper\'s guest".', 'KILN YARD · c. 400 CE');
+      } finally { leave(); busy = false; }
+    }) });
     // the door, examined in each state
     act({ pos: [DOOR.x + 0.8, 1.2, doorMid], radius: 2.4, states: ['thriving', 'abandoned'], prompt: 'Examine the Keepers\' Door', onUse: () => {
       if (T.current === 'thriving') ui.subtitle('niko', 'No one opens the Keepers\' Door. Not even the keepers. It was sealed before the first fire.', 4200);

@@ -241,8 +241,8 @@ export function registerM6Cast() {
   registerCast('oskar', {
     name: 'OSKAR HENSEL', role: 'Clockmaker · Old Quarter · 2049',
     bio: 'Seventy-eight. Has not left his house in twenty-three years. Keeps a promise to a man with Kai\'s face.',
-    // 2049 workwear: graphite thermal knit, waxed-canvas bench apron with a tool loop, slate technical trousers
-    look: { era: '2049', template: 'ignatz', height: 1.7, build: 0.94, age: 78, skin: 0xe6bea4, hair: 0xe4e0d8, hairStyle: 'grey-swept', eyes: 0x5a6a78, beard: 0xd8d4cc, glasses: true,
+    // 2049 workwear (COSTUMES.md `oskar`): graphite thermal knit, waxed-canvas utility vest with tool loops, slate technical trousers
+    look: { era: '2049', costume: 'oskar', sex: 'm', template: 'ignatz', height: 1.7, build: 0.94, age: 78, skin: 0xe6bea4, hair: 0xe4e0d8, hairStyle: 'grey-swept', eyes: 0x5a6a78, beard: 0xd8d4cc, glasses: true,
       face: { jaw: -0.2, cheek: 0.35, nose: 0.45, noseWidth: 0.1, lips: -0.35, brow: 0.3, eyeSize: -0.15, faceLength: 0.35, chin: 0.1 }, wrinkles: 0.85,
       topType: 'sweater', top: 0x3a3f45, topKind: 'synthetic', vest: 0x4a3a2a, pantsType: 'trousers', pants: 0x2e3338, shoes: 'shoes', boots: 0x1c1a18, belt: 0x23201c, gloves: null },
     rimColor: 0xffc070, glow: 0x2a1a0c, bg: 0x120c08,
@@ -251,8 +251,8 @@ export function registerM6Cast() {
   registerCast('oskar26', {
     name: 'OSKAR HENSEL', role: 'Clockmaker · 2026',
     bio: 'Fifty-five, ink on his cuffs, a daughter at the counter. Already building a clock that must never finish.',
-    // 2026: oatmeal crew-neck jumper, canvas shop apron, dark jeans, leather work shoes
-    look: { era: '2026', template: 'town_m5', height: 1.71, build: 1.0, age: 55, skin: 0xe2b496, hair: 0x5a4a3c, hairStyle: 'swept', eyes: 0x5a6a78, stubble: true, glasses: true,
+    // 2026 (COSTUMES.md `oskar26`): oatmeal crew-neck jumper, brown canvas work vest, dark jeans, leather work shoes
+    look: { era: '2026', costume: 'oskar26', sex: 'm', template: 'town_m5', height: 1.71, build: 1.0, age: 55, skin: 0xe2b496, hair: 0x5a4a3c, hairStyle: 'swept', eyes: 0x5a6a78, stubble: true, glasses: true,
       face: { jaw: -0.1, cheek: 0.3, nose: 0.4, noseWidth: 0.1, lips: -0.25, brow: 0.25, eyeSize: -0.1, faceLength: 0.3, chin: 0.1 }, wrinkles: 0.35,
       topType: 'sweater', top: 0xbcb19c, topKind: 'fabric', vest: 0x5a4a38, pantsType: 'trousers', pants: 0x2e3a4c, shoes: 'shoes', boots: 0x3a2a1c, belt: 0x2a1d14 },
     rimColor: 0xffc070, glow: 0x2a1a0c, bg: 0x120c08,
@@ -262,7 +262,7 @@ export function registerM6Cast() {
     name: 'LOTTE HENSEL', role: 'Age 8 · 2026',
     bio: 'The clockmaker\'s daughter. Does her homework on the shop counter and counts the clocks when she is bored.',
     // 2026 kid: red hoodie, jeans, white trainers
-    look: { era: '2026', template: 'town_kid', female: true, height: 1.27, build: 0.82, age: 8, skin: 0xf2cdb2, hair: 0xb88a4e, hairStyle: 'tied-back', eyes: 0x4a6a8a,
+    look: { era: '2026', costume: 'lotte', sex: 'f', template: 'town_kid', female: true, height: 1.27, build: 0.82, age: 8, skin: 0xf2cdb2, hair: 0xb88a4e, hairStyle: 'tied-back', eyes: 0x4a6a8a,
       face: { jaw: -0.4, cheek: 0.2, nose: -0.5, noseWidth: -0.2, lips: 0.1, brow: -0.2, eyeSize: 0.45, faceLength: -0.4, chin: -0.2 }, freckles: 0.5,
       topType: 'jacket', hood: true, top: 0xb03a44, topKind: 'fabric', pantsType: 'trousers', pants: 0x3a5078, shoes: 'shoes', boots: 0xe6e2da },
     rimColor: 0xffd8a0, glow: 0x2a1a10, bg: 0x140d08,
@@ -275,11 +275,11 @@ export function registerM6Cast() {
   registerCast('neighbor', { name: 'NEIGHBOUR', role: 'Clock quarter · 2049', vp: { sex: 'm', pitch: 0.92, rate: 0.98, langs: ['en-GB', 'en-US'] } });
 }
 // 2049 neighbour: a sealed charcoal rain shell over a dark knit, umbrella (no period costume)
-export const NEIGHBOR_LOOK = { era: '2049', template: 'arin', height: 1.76, build: 1.0, age: 46, skin: 0xc89a7a, hair: 0x2a2420, hairStyle: 'short', eyes: 0x3a3028, stubble: true,
+export const NEIGHBOR_LOOK = { era: '2049', costume: 'neighbor', sex: 'm', template: 'arin', height: 1.76, build: 1.0, age: 46, skin: 0xc89a7a, hair: 0x2a2420, hairStyle: 'short', eyes: 0x3a3028, stubble: true,
   topType: 'jacket', top: 0x262c32, topKind: 'synthetic', coat: 0x2a3038, coatKind: 'synthetic', pantsType: 'trousers', pants: 0x1c2026, shoes: 'boots', boots: 0x141210, umbrella: 0x1e2a36 };
 // Residue echoes of 2026: Kai (7) and Mira (10) in ordinary present-day kids' clothes
-export const KID_KAI = { era: '2026', template: 'wren', height: 1.22, build: 0.82, age: 7, skin: 0xb98463, hair: 0x15100c, hairStyle: 'messy', eyes: 0x3d2a18, topType: 'jacket', hood: true, top: 0x2a4a6a, topKind: 'fabric', pantsType: 'trousers', pants: 0x2f3a4e, shoes: 'shoes', boots: 0x3a2a1a };
-export const KID_MIRA = { era: '2026', template: 'maren', female: true, height: 1.36, build: 0.84, age: 10, skin: 0xd9a585, hair: 0x120d0b, hairStyle: 'bob', eyes: 0x2f4a3a, topType: 'sweater', top: 0x6a2a3a, topKind: 'fabric', pantsType: 'trousers', pants: 0x1f2227, shoes: 'shoes', boots: 0x3a2a1a };
+export const KID_KAI = { era: '2026', costume: 'kid_kai', sex: 'm', template: 'wren', height: 1.22, build: 0.82, age: 7, skin: 0xb98463, hair: 0x15100c, hairStyle: 'messy', eyes: 0x3d2a18, topType: 'jacket', hood: true, top: 0x2a4a6a, topKind: 'fabric', pantsType: 'trousers', pants: 0x2f3a4e, shoes: 'shoes', boots: 0x3a2a1a };
+export const KID_MIRA = { era: '2026', costume: 'kid_mira', sex: 'f', template: 'maren', female: true, height: 1.36, build: 0.84, age: 10, skin: 0xd9a585, hair: 0x120d0b, hairStyle: 'bob', eyes: 0x2f4a3a, topType: 'sweater', top: 0x6a2a3a, topKind: 'fabric', pantsType: 'trousers', pants: 0x1f2227, shoes: 'shoes', boots: 0x3a2a1a };
 
 // ---------------------------------------------------------------------------------------------
 // Music: themes that follow the house's beats. A minor world (motif E-B-A = Kai & Mira).

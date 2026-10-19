@@ -37,7 +37,7 @@ const mobile = !!flag('mobile'), base = flag('base') || 'http://localhost:8765/'
 const only = flag('views') ? String(flag('views')).split(',') : null;
 fs.mkdirSync(out, { recursive: true });
 const w = +W, h = +H;
-const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--autoplay-policy=no-user-gesture-required'] });
 const ctx = await b.newContext({ viewport: { width: Math.round(w / 4), height: Math.round(h / 4) }, screen: { width: w, height: h }, deviceScaleFactor: 1, isMobile: mobile, hasTouch: mobile });
 const p = await ctx.newPage();
 const seen = new Set();

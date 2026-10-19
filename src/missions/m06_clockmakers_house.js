@@ -264,9 +264,9 @@ export default {
     const gate26 = { open: 0, target: 0 };
     const routine = [
       { t: 0, pos: [2.4, 0, -37.4], ry: Math.PI }, { t: 2.6, pos: [2.4, 0, -37.4], ry: Math.PI },
-      { t: 6.0, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2, pose: 'reach' }, { t: 7.6, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2 },
+      { t: 6.0, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2, pose: 'work' }, { t: 7.6, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2 },
       { t: 10.8, pos: [5.3, 0, -34.5], ry: Math.PI / 2 }, { t: 12.6, pos: [5.3, 0, -34.5], ry: Math.PI / 2 },
-      { t: 15.4, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2, pose: 'reach' }, { t: 16.2, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2 },
+      { t: 15.4, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2, pose: 'work' }, { t: 16.2, pos: [-5.8, 0, -35.5], ry: -Math.PI / 2 },
       { t: 19.6, pos: [2.4, 0, -37.4], ry: Math.PI },
     ];
     for (let i = 0; i < routine.length; i++) { const a = routine[i], b = routine[(i + 1) % routine.length]; if (Math.abs(a.pos[0] - b.pos[0]) + Math.abs(a.pos[2] - b.pos[2]) < 0.05) a.hold = true; }
@@ -698,7 +698,7 @@ export default {
     // ---------- the recording ----------
     cine(true); lockMusic('m6-witness');
     pl.place(P.shaft[0] + 1.3, TY, P.shaft[1] + 0.2, -Math.PI / 2);
-    kai.pose = 'reach';
+    kai.pose = 'work';
     await game.shot([P.shaft[0] + 2.6, TY + 1.6, P.shaft[1] + 1.4], [P.shaft[0] + 0.6, TY + 1.0, P.shaft[1]], 1.4, { fov: 36 });
     kai.pose = null; audio.sfxPlay('rewind');
     await game.wait(0.6);
@@ -727,7 +727,7 @@ export default {
     for (let m = 0; m < 8; m++) { W.dialIn['2049'].userData.set(8, m); W.dialOut['2049'].userData.set(8, m); audio.sfxPlay('clock'); if (audio.ctx) audio.tick(audio.ctx.currentTime, 0.2, 1800, audio.sfx); await game.wait(0.55 - m * 0.03); }
     await tween(1.2, u => { W.dialIn['2049'].userData.set(8, 7 + u * 0.92); });
     audio.sfxPlay('heartbeat');
-    oskar.root.position.set(P.shaft[0] + 1.0, TY, P.shaft[1] - 0.9); oskar.lookTarget = W.collars[0].g.position; oskar.pose = 'reach';
+    oskar.root.position.set(P.shaft[0] + 1.0, TY, P.shaft[1] - 0.9); oskar.lookTarget = W.collars[0].g.position; oskar.pose = 'work';
     await game.shot([P.shaft[0] + 2.4, TY + 1.5, P.shaft[1] - 2.2], [P.shaft[0] + 0.6, TY + 1.3, P.shaft[1] - 0.6], 0.8, { fov: 38 });
     await game.say('oskar', F.clockmakerDebt === 'told' ? 'Not today. Not before I see her.' : 'Not today.');
     audio.sfxPlay('metal'); game.shake = 0.18; audio.silence(2.2);
