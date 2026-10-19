@@ -55,6 +55,8 @@ self.addEventListener('fetch', event => {
 });
 
 const keyOf = url => url.origin + url.pathname;   // index.html?m=2 is index.html
+// complete same-origin 200s only: no redirects (Safari refuses them for navigations), no partial (206) bodies
+const cacheable = res => res.status === 200 && res.type === 'basic' && !res.redirected;
 
 async function cacheFirst(req, url) {
   const cache = await caches.open(VERSION);
@@ -62,7 +64,7 @@ async function cacheFirst(req, url) {
   if (hit) return hit;
   try {
     const res = await fetch(req);
-    if (res.ok && res.type === 'basic') cache.put(keyOf(url), res.clone());
+    if (cacheable(res)) cache.put(keyOf(url), res.clone());
     return res;
   } catch (err) {
     return (req.mode === 'navigate' && await cache.match(new URL('index.html', self.registration.scope).href)) || Promise.reject(err);
@@ -73,7 +75,7 @@ async function networkFirst(req, url) {
   const cache = await caches.open(VERSION);
   try {
     const res = await fetch(req);
-    if (res.ok && res.type === 'basic') cache.put(keyOf(url), res.clone());
+    if (cacheable(res)) cache.put(keyOf(url), res.clone());
     return res;
   } catch (err) {
     const hit = await cache.match(keyOf(url)) || (req.mode === 'navigate' && await cache.match(new URL('index.html', self.registration.scope).href));

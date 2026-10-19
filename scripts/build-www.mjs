@@ -35,7 +35,40 @@ for (const f of files) {
   bytes += fs.statSync(dst).size;
 }
 
-// 2. stamp the service worker
+// 2. check the bundle is complete: every module import, import-map target, page link and manifest
+//    icon must resolve to a copied file, or offline play / the store app would break at run time
+const have = new Set(files);
+const missing = [];
+const need = (from, spec) => {
+  if (/^(https?:|data:|blob:|#)/.test(spec)) return;
+  const rel = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec.split(/[?#]/)[0]));
+  if (!have.has(rel)) missing.push(`${from} -> ${spec}`);
+};
+const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const importMap = JSON.parse((html.match(/<script type="importmap">([\s\S]*?)<\/script>/) || [, '{"imports":{}}'])[1]).imports;
+for (const [, target] of Object.entries(importMap)) if (!target.endsWith('/')) need('index.html', target);
+for (const m of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) need('index.html', m[1]);
+for (const icon of JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8')).icons) need('manifest.webmanifest', icon.src);
+for (const f of files.filter(f => f.endsWith('.js') && f !== 'sw.js')) {
+  // comments may show example imports: scan code only
+  const src = fs.readFileSync(path.join(root, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  for (const m of src.matchAll(/(?:\bimport\s*(?:[\w*{}\s,$]+\s*from\s*)?|\bexport\s*(?:\*|\{[^}]*\})\s*from\s*|\bimport\s*\()\s*['"]([^'"]+)['"]/g)) {
+    const spec = m[1];
+    if (spec.startsWith('.')) need(f, spec);
+    else {
+      const key = Object.keys(importMap).find(k => k === spec || (k.endsWith('/') && spec.startsWith(k)));
+      if (!key) missing.push(`${f} -> ${spec} (bare specifier not in the import map)`);
+      else need('index.html', importMap[key] + spec.slice(key.length));
+    }
+  }
+}
+if (missing.length) {
+  fs.rmSync(out, { recursive: true, force: true });
+  console.error('build-www: missing files, www/ not built:\n  ' + missing.join('\n  '));
+  process.exit(1);
+}
+
+// 3. stamp the service worker
 const precache = ['./', ...files.filter(f => !NO_PRECACHE.some(re => re.test(f)))];
 const hash = crypto.createHash('sha256');
 for (const f of files) hash.update(f).update(fs.readFileSync(path.join(root, f)));
@@ -49,7 +82,7 @@ sw = sw.replace(/const VERSION = '[^']*';/, `const VERSION = '${version}';`)
 fs.writeFileSync(swPath, sw);
 console.log(`www/: ${files.length} files, ${(bytes / 1048576).toFixed(2)} MB, ${precache.length} precached, service worker ${version}`);
 
-// 3. native projects (optional): landscape only, no status bar, game-style window
+// 4. native projects (optional): landscape only, no status bar, game-style window
 if (args.includes('--patch-native')) patchNative();
 
 function patchNative() {

@@ -63,6 +63,11 @@ Requirements:
 - Budget: high ≤ 40k triangles total for the head (hero close-ups; only the speaking characters use it); low ≤ 3k (crowds). An optional 'medium' (≤ 10k) for in-game third-person distance is welcome.
 - Hair is NOT part of the head module (see §3). The head must look good bald and with hair.
 
+### Likeness (binding)
+Kai, Mira, the Witness and Sera must resemble the owner's character art in assets/cast/*_ref.png
+(notes in assets/cast/LIKENESS.md). Compare with the lab's ref=1 overlay. Other characters follow the same
+realistic style. "Very ugly" or "unreal" faces fail review regardless of technical quality.
+
 ## 2. Body module — `createBody(params)` (src/human/body*.js)
 
 ```js
@@ -110,7 +115,7 @@ Skeleton and rest pose:
 
 ## 3. Hair module — `createHair(params, head)` (src/human/hair.js)
 Hair cards / strand ribbons with procedurally drawn strand alpha textures and anisotropic
-highlights, projected on `head.scalp`. Styles: messy, short, swept, grey-swept, long, bun, bald, buzz.
+highlights, projected on `head.scalp`. Styles: messy, short, swept, grey-swept, long, bob, tied-back, bun, bald, buzz.
 Also eyebrows, eyelashes, stubble/full beard. Mobile-safe transparency (alphaTest / alpha-to-coverage).
 Budget: high ≤ 12k tris, low ≤ 1.5k.
 

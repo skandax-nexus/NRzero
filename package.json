@@ -8,8 +8,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "npx http-server -p 8765 -c-1 .",
+    "start": "http-server -p 8765 -c-1 .",
     "build:web": "node scripts/build-www.mjs",
+    "serve:www": "npm run build:web && http-server www -p 8766 -c-1",
     "icons": "node tools/make-icons.mjs",
     "cap:add:android": "npm run build:web && cap add android && node scripts/build-www.mjs --patch-native",
     "cap:add:ios": "npm run build:web && cap add ios && node scripts/build-www.mjs --patch-native",
@@ -21,6 +22,7 @@
     "@capacitor/android": "8.5.2",
     "@capacitor/cli": "8.5.2",
     "@capacitor/core": "8.5.2",
-    "@capacitor/ios": "8.5.2"
+    "@capacitor/ios": "8.5.2",
+    "http-server": "14.1.1"
   }
 }

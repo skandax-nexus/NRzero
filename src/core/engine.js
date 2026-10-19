@@ -162,7 +162,8 @@ export class Engine {
     // Adaptive resolution: scales the render resolution between min and 1 to hold 30+ fps.
     const qp = new URLSearchParams(location.search);
     this.adaptiveParam = qp.get('adaptive');   // '1' forces on, '0' forces off
-    this.adaptive = { enabled: false, scale: 1, min: 0.6, samples: [], windowStart: 0, good: 0, cooldown: 0 };
+    // ceiling: a scale that proved too slow right after a raise is not tried again for a while (no see-saw)
+    this.adaptive = { enabled: false, scale: 1, min: 0.6, samples: [], windowStart: 0, good: 0, cooldown: 0, ceiling: 1, ceilingUntil: 0, raisedAt: 0, fails: 0 };
     this._lastFrame = 0; this._sweep = 0; this._listeners = [];
     this.quality = null; this.settings = null;
     this.setQuality('high', { silent: true });
@@ -174,9 +175,12 @@ export class Engine {
   }
 
   // q: 'high' | 'medium' | 'low'. opts.adaptive overrides the tier's adaptive-resolution default.
+  // opts.auto: the tier was picked for this device (Graphics: Auto), so a phone that cannot hold its frame
+  // rate even at the lowest render scale may step down one tier by itself (never back up: no flip-flop).
   setQuality(q, opts = {}) {
     if (!QUALITY_LEVELS.includes(q)) q = 'high';
     const first = this.quality === null, prev = this.quality;
+    this.autoTier = !!opts.auto;
     const s = this.settings = tierSettings(q, this.device);
     this.quality = q;
     const r = this.renderer;
@@ -194,7 +198,7 @@ export class Engine {
     const A = this.adaptive;
     A.enabled = opts.adaptive ?? auto;
     if (!A.enabled) A.scale = 1;
-    A.samples.length = 0; A.good = 0; A.cooldown = 0;
+    A.samples.length = 0; A.good = 0; A.cooldown = 0; A.windowStart = 0; A.slow = 0; A.ceiling = 1; A.ceilingUntil = 0; A.raisedAt = 0; A.fails = 0;
     this._sweep = 0;
     this.resize();
     if (!first && prev !== q) this.refreshMaterials();
@@ -258,17 +262,34 @@ export class Engine {
       this.stats.fps = 1000 / this.stats.frameMs;
     }
     if (!A.enabled) { A.samples.length = 0; return; }
-    if (!A.windowStart) A.windowStart = now;
+    // a long gap (tab hidden, app backgrounded, a breakpoint) starts a fresh window
+    if (!A.windowStart || dt >= 1000) { A.windowStart = now; A.samples.length = 0; return; }
     if (now - A.windowStart < 1000 || A.samples.length < 8) return;
     const s = A.samples.sort((a, b) => a - b), median = s[s.length >> 1];
     A.samples.length = 0; A.windowStart = now;
+    // Auto tier on a phone, already at the lowest scale and still under ~22 fps for 15 s: one tier down.
+    A.slow = A.scale <= A.min + 1e-6 && median > 45 ? (A.slow || 0) + 1 : 0;
+    if (A.slow >= 15 && this.autoTier && this.device.mobile && this.quality !== 'low') {
+      this.setQuality(QUALITY_LEVELS[QUALITY_LEVELS.indexOf(this.quality) + 1], { auto: true });
+      this.stats.autoDowngrades = (this.stats.autoDowngrades || 0) + 1;
+      return;
+    }
     if (A.cooldown > 0) { A.cooldown--; return; }
+    if (A.ceilingUntil && now > A.ceilingUntil) { A.ceiling = 1; A.ceilingUntil = 0; }
     let next = A.scale;
-    if (median > 36) { next = A.scale - (median > 55 ? 0.15 : 0.1); A.good = 0; }        // below ~28 fps
-    else if (median < 20) { if (++A.good >= 2) { next = A.scale + 0.05; A.good = 0; } }  // above ~50 fps, sustained
+    if (median > 36) {                                                                  // below ~28 fps
+      next = A.scale - (median > 55 ? 0.15 : 0.1); A.good = 0;
+      // the last raise is what made it slow: step back to where it was and stay at or below that scale
+      // for 30 s, doubling (up to 4 min) every time the same raise fails again
+      if (A.raisedAt && now - A.raisedAt < 4000) {
+        next = A.scale - 0.05; A.ceiling = next;
+        A.fails = Math.min((A.fails || 0) + 1, 4); A.ceilingUntil = now + 15000 * (2 ** A.fails);
+      }
+    } else if (median < 20) { if (++A.good >= 2) { next = A.scale + 0.05; A.good = 0; } } // above ~50 fps, sustained
     else A.good = 0;
-    next = Math.round(Math.min(1, Math.max(A.min, next)) * 20) / 20;
-    if (next !== A.scale) { A.scale = next; A.cooldown = 1; this.resize(); }
+    next = Math.round(Math.min(1, A.ceiling, Math.max(A.min, next)) * 20) / 20;
+    next = Math.max(A.min, next);
+    if (next !== A.scale) { A.raisedAt = next > A.scale ? now : 0; A.scale = next; A.cooldown = 1; this.resize(); }
   }
 
   render(t) {

@@ -2,7 +2,8 @@
 // URL params:
 //   head=../src/human/head.js  body=../src/human/body.js  hair=../src/human/hair.js
 //   view=portrait|profile|threeq|full|lineup|walk|eyes   preset=kai|mira|witness|niko|rook|tala|sera|iven
-//   detail=high|low   t=<seconds for walk pose>   bg=studio|city|sunset
+//   detail=high|medium|low   t=<seconds for walk pose>   bg=studio|city|sunset
+//   ref=1  show the owner's reference art (assets/cast/<preset>_ref.png) beside the render (kai, mira, witness, sera)
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
@@ -11,14 +12,14 @@ const view = q.get('view') || 'portrait';
 const detail = q.get('detail') || 'high';
 
 export const PRESETS = {
-  kai: { head: { sex: 0, age: 34, skin: 0xb98463, eyeColor: 0x3d2a18, seed: 11, shape: { jaw: 0.35, cheek: 0.2, nose: 0.15, noseWidth: 0, lips: -0.1, brow: 0.35, eyeSize: -0.1, faceLength: 0.1, chin: 0.2 }, marks: { stubble: 0.75, wrinkles: 0.15 } },
-         hair: { style: 'messy', color: 0x15100c, beard: 'stubble' },
+  kai: { ref: 'kai', head: { sex: 0, age: 32, skin: 0xc08a64, eyeColor: 0x2e2216, seed: 11, shape: { jaw: 0.45, cheek: 0.35, nose: 0.2, noseWidth: -0.05, lips: -0.05, brow: 0.45, eyeSize: -0.2, faceLength: 0.15, chin: 0.25 }, marks: { stubble: 0.95, wrinkles: 0.15 } },
+         hair: { style: 'messy', color: 0x0d0a09, beard: 'stubble', beardColor: 0x14100d },
          body: { height: 1.83, sex: 0, build: 1.05, age: 34, skin: 0xb98463, outfit: { top: { type: 'jacket', color: 0x24282e, material: 'leather' }, pants: { type: 'trousers', color: 0x2a2c2f }, shoes: { type: 'boots', color: 0x1b1611 }, gloves: 0x1d1a17, belt: 0x2a1d14, strap: true, wristMark: true } } },
-  mira: { head: { sex: 1, age: 30, skin: 0xd9a585, eyeColor: 0x2f4a3a, seed: 22, shape: { jaw: -0.4, cheek: 0.45, nose: -0.2, noseWidth: -0.3, lips: 0.35, brow: -0.5, eyeSize: 0.25, faceLength: 0, chin: -0.1 }, marks: { freckles: 0.15 } },
-         hair: { style: 'long', color: 0x120d0b },
+  mira: { ref: 'mira', head: { sex: 1, age: 28, skin: 0xe2b394, eyeColor: 0x5a6a72, seed: 22, shape: { jaw: -0.35, cheek: 0.55, nose: -0.1, noseWidth: -0.3, lips: 0.45, brow: -0.3, eyeSize: 0.35, faceLength: 0.05, chin: -0.05 }, marks: { freckles: 0.05 } },
+         hair: { style: 'bob', color: 0x140e0b },
          body: { height: 1.69, sex: 1, build: 0.95, age: 30, skin: 0xd9a585, outfit: { top: { type: 'armored', color: 0x1c2026, material: 'leather' }, pants: { type: 'trousers', color: 0x1f2227 }, shoes: { type: 'boots', color: 0x15120f }, belt: 0x1a1612 } } },
-  witness: { head: { sex: 0, age: 58, skin: 0xa77a5d, eyeColor: 0x3d2a18, seed: 11, shape: { jaw: 0.35, cheek: 0.1, nose: 0.2, lips: -0.25, brow: 0.5, eyeSize: -0.2, faceLength: 0.15, chin: 0.2 }, marks: { scar: true, wrinkles: 0.75 } },
-         hair: { style: 'grey-swept', color: 0x8d8780, beard: 'full', beardColor: 0x6d6862 },
+  witness: { ref: 'witness', head: { sex: 0, age: 58, skin: 0xb3815f, eyeColor: 0x2e2216, seed: 11, shape: { jaw: 0.45, cheek: 0.25, nose: 0.25, noseWidth: -0.05, lips: -0.25, brow: 0.55, eyeSize: -0.25, faceLength: 0.2, chin: 0.25 }, marks: { scar: true, wrinkles: 0.8 } },
+         hair: { style: 'grey-swept', color: 0x9a9690, beard: 'full', beardColor: 0x8a8580 },
          body: { height: 1.81, sex: 0, build: 1.0, age: 58, skin: 0xa77a5d, outfit: { top: { type: 'sweater', color: 0x1e1e1f, material: 'fabric' }, coat: { type: 'long', color: 0x2a2724, material: 'leather' }, pants: { type: 'trousers', color: 0x202020 }, shoes: { type: 'boots', color: 0x141210 }, gloves: 0x111111, wristMark: true } } },
   niko: { head: { sex: 0, age: 19, skin: 0x8c5a3a, eyeColor: 0x2a1a0e, seed: 33, shape: { jaw: -0.1, cheek: 0.3, nose: 0, noseWidth: 0.35, lips: 0.4, brow: 0, eyeSize: 0.1, faceLength: -0.1, chin: 0 }, marks: {} },
          hair: { style: 'short', color: 0x0e0a08 },
@@ -29,8 +30,8 @@ export const PRESETS = {
   tala: { head: { sex: 1, age: 41, skin: 0x7d4f33, eyeColor: 0x24160c, seed: 55, shape: { jaw: 0, cheek: 0.5, nose: 0.1, noseWidth: 0.3, lips: 0.3, brow: -0.2, eyeSize: 0, faceLength: 0.1, chin: 0 }, marks: { wrinkles: 0.3 } },
          hair: { style: 'bun', color: 0x15100b },
          body: { height: 1.64, sex: 1, build: 1.0, age: 41, skin: 0x7d4f33, outfit: { top: { type: 'tunic', color: 0x3f6a6a, material: 'fabric' }, sash: 0xd0a24a, pants: { type: 'wraps', color: 0x5a4632 }, shoes: { type: 'sandals', color: 0x4a3220 }, bracelets: 0xd9b25c } } },
-  sera: { head: { sex: 1, age: 36, skin: 0x8a5b3c, eyeColor: 0x2b1b10, seed: 66, shape: { jaw: 0.2, cheek: 0.3, nose: 0, lips: 0, brow: 0.2, eyeSize: -0.1, faceLength: 0.1, chin: 0.2 }, marks: { scar: true } },
-         hair: { style: 'bun', color: 0x2a1c14 },
+  sera: { ref: 'sera', head: { sex: 1, age: 34, skin: 0xb07a55, eyeColor: 0x6a7a62, seed: 66, shape: { jaw: 0.15, cheek: 0.4, nose: 0, noseWidth: 0, lips: 0.2, brow: 0.25, eyeSize: 0.05, faceLength: 0.1, chin: 0.15 }, marks: { scar: true, wrinkles: 0.1 } },
+         hair: { style: 'tied-back', color: 0x2a1c14 },
          body: { height: 1.72, sex: 1, build: 1.05, age: 36, skin: 0x8a5b3c, outfit: { top: { type: 'tshirt', color: 0x4a4636, material: 'fabric' }, vest: { color: 0x3a3a2c }, pants: { type: 'cargo', color: 0x3a3a30 }, shoes: { type: 'boots', color: 0x2a2018 }, strap: true } } },
   iven: { head: { sex: 0, age: 45, skin: 0xe0b394, eyeColor: 0x3a5a2a, seed: 77, shape: { jaw: 0.1, cheek: 0, nose: 0.2, noseWidth: 0.2, lips: 0, brow: 0, eyeSize: 0, faceLength: 0, chin: -0.1 }, marks: { stubble: 0.5, wrinkles: 0.35, freckles: 0.3 } },
          hair: { style: 'short', color: 0x6a3f22, beard: 'stubble' },
@@ -110,6 +111,7 @@ function pose(a, t) {
   b.forearmL.rotation.x = -0.45; b.forearmR.rotation.x = -0.45;
   b.spine.rotation.y = Math.sin(p) * 0.08;
 }
+if (q.get('ref') !== null && actors.length === 1 && actors[0].P.ref) { cam.setViewOffset(W, H, W / 4, 0, W, H); }
 const T = parseFloat(q.get('t') || '0.35');
 for (const a of actors) { if (view === 'walk') pose(a, T); a.head.setBlink?.(parseFloat(q.get('blink') || '0')); a.head.setMouth?.(parseFloat(q.get('mouth') || '0')); a.head.update?.(0.016); }
 scene.updateMatrixWorld(true);
@@ -117,4 +119,11 @@ renderer.render(scene, cam);
 const info = renderer.info.render;
 window.LAB_INFO = { triangles: info.triangles, calls: info.calls, buildMs: actors.map(a => Math.round(a.ms)) };
 document.getElementById('info').textContent += ` ${view} ${presetName} tris=${info.triangles} calls=${info.calls} build=${window.LAB_INFO.buildMs.join(',')}ms`;
+const refName = q.get('ref') !== null && actors.length === 1 ? (actors[0].P.ref || null) : null;
+if (refName) {
+  const im = new Image(); im.src = '../assets/cast/' + refName + '_ref.png';
+  Object.assign(im.style, { position: 'fixed', right: '0', top: '0', height: '100%', maxWidth: '50%', objectFit: 'cover', borderLeft: '2px solid #333' });
+  document.body.appendChild(im);
+  await new Promise(r => { im.onload = r; im.onerror = r; });
+}
 window.LAB_DONE = true;

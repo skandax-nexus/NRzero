@@ -32,7 +32,8 @@ URL switches for testing (these can be combined):
 
 ### Same Wi-Fi (fastest)
 ```sh
-npm start                        # = npx http-server -p 8765 -c-1 .
+npm install                      # once: http-server and the Capacitor CLI (exact pinned versions)
+npm start                        # = http-server -p 8765 -c-1 .   (without installing: npx http-server@14.1.1 -p 8765 -c-1 .)
 # find the computer's LAN address: ipconfig getifaddr en0 (macOS) / hostname -I (Linux) / ipconfig (Windows)
 # on the phone, open  http://<lan-ip>:8765/
 ```
@@ -44,7 +45,11 @@ which has no element fullscreen, rotate the phone to landscape or use the hosted
 ### Hosted over HTTPS (full PWA)
 ```sh
 npm run build:web                # writes www/ with a stamped, cache-first service worker
+npm run serve:www                # optional: build, then serve www/ at http://localhost:8766/ to smoke-test it
 ```
+The build fails (and leaves no `www/`) when a module import, an import-map target, a file linked from
+`index.html` or a manifest icon is missing, so a broken bundle never reaches a phone. `www/` is a build
+output and is ignored by git. To test the release service worker on localhost, open `http://localhost:8766/?sw=1`.
 Deploy the **contents of `www/`** to any static HTTPS host (GitHub Pages, Netlify, Cloudflare Pages,
 Firebase Hosting, S3 + CloudFront). Then on the phone:
 - Android Chrome: menu → *Install app* (or the install banner).
@@ -82,7 +87,9 @@ Mali-4xx/T/G31/G51/G52/G57, PowerVR, software renderers).
 
 Adaptive resolution measures the median frame time each second. Below about 28 fps it lowers the render
 scale by 0.1–0.15. Above about 50 fps for two seconds it raises it by 0.05. A phone in Low Power Mode
-(30 fps cap) is left alone.
+(30 fps cap) is left alone. If a raise makes the frame rate drop again, the scale steps back and that
+scale is not tried again for 30 s (doubling up to 4 min on repeated failures), so the resolution never
+see-saws. Gaps over a second (app in the background) start a fresh measurement.
 
 For world and character code:
 ```js
@@ -110,8 +117,9 @@ npm run cap:ios                  # every release: rebuild www/, cap sync, open X
 background, no WebView zoom or scroll, and `SystemBars.hidden` (fullscreen). `scripts/build-www.mjs
 --patch-native` (run by the scripts above) sets `android:screenOrientation="sensorLandscape"` on
 `MainActivity`. In `Info.plist` it sets landscape-only orientations, `UIStatusBarHidden`,
-`UIRequiresFullScreen`. It is safe to run repeatedly. Add `android/`, `ios/` and `www/` to version control or
-to `.gitignore` as your team prefers. The native projects hold signing settings, so most teams commit them.
+`UIRequiresFullScreen`. It is safe to run repeatedly. `www/` is regenerated on every build and is
+git-ignored. Commit `android/` and `ios/` once they exist: the native projects hold signing settings and the
+icon assets.
 
 ### Android (Google Play)
 1. **Icons.** In Android Studio: `app/res` → New → *Image Asset* → Launcher Icons (Adaptive). Use

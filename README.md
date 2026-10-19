@@ -6,15 +6,20 @@ asks for: the full Prologue ("The Zero Second") and the opening of Act I.
 
 ## Run it
 
-No build step. Serve the folder with any static server and open it in a desktop
-browser (Chrome, Edge or Firefox with WebGL2):
+No build step. Serve the folder with any static server and open it in a browser with WebGL2
+(desktop Chrome, Edge, Firefox or Safari; Android Chrome; iPhone and iPad Safari):
 
 ```sh
-npx http-server -c-1 .     # or: python3 -m http.server
-# then open http://localhost:8080
+npm install && npm start   # http-server on http://localhost:8765/
+# or, without installing:  npx http-server@14.1.1 -p 8765 -c-1 .   /   python3 -m http.server 8765
 ```
 
 Opening `index.html` directly from disk will not work, because ES modules need HTTP.
+
+**Phones and tablets** are played in landscape with on-screen touch controls; the game also installs as
+an offline PWA and ships to Google Play and the App Store through Capacitor. `npm run build:web` writes the
+release bundle to `www/`. See [docs/MOBILE_RELEASE.md](docs/MOBILE_RELEASE.md) for phone testing, hosting
+and store builds.
 
 ## What's in the slice
 
@@ -38,6 +43,10 @@ The Chapters screen lists the remaining 19 missions of the campaign as the road 
 | 1 2 3 / Q | Temporal state switch (from Mission 3); costs Chronolith stability |
 | J · Esc | Case board · pause |
 
+On touch screens: left thumb moves (push to the rim to sprint), right thumb drags to look, and the
+HAND button interacts. JUMP, CROUCH, the EYE (Residue Vision), the era buttons, CASE BOARD and PAUSE are on
+screen. Tap to advance dialogue.
+
 ## How it is built
 
 Everything is generated in code. There are no downloaded models, textures or audio files.
@@ -53,4 +62,5 @@ Everything is generated in code. There are no downloaded models, textures or aud
   drones with vision cones, checkpoints, an evidence case board and saved chapter progress.
 - **Missions** (`src/missions/`): each is an async script over a small, abortable API.
 
-Graphics quality can be lowered from the pause menu.
+Graphics quality (Auto, High, Medium, Low) is in the pause menu. Auto uses High on desktop and Medium or
+Low with adaptive resolution on phones.

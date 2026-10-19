@@ -138,7 +138,11 @@ $('pause').addEventListener('click', e => {
 });
 $('vol').addEventListener('input', e => game.audio.setVolume(+e.target.value));
 // Graphics: 'auto' picks the tier for this device (desktop: high; phones: medium or low + adaptive resolution).
-function applyGfx(v) { $('gfx').value = v; game.engine.setQuality(v === 'auto' ? game.engine.device.tier : v); }
+function applyGfx(v) {
+  if (![...$('gfx').options].some(o => o.value === v)) v = 'auto';
+  $('gfx').value = v;
+  game.engine.setQuality(v === 'auto' ? game.engine.device.tier : v, { auto: v === 'auto' });
+}
 $('gfx').addEventListener('change', e => { applyGfx(e.target.value); store.set('gfx', e.target.value); });
 $('look-sens').value = game.touch.sensitivity;
 $('look-sens').addEventListener('input', e => game.touch.setSensitivity(+e.target.value));

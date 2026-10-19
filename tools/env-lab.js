@@ -21,7 +21,7 @@ renderer.setPixelRatio(1); renderer.setSize(W, H);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = quality !== 'low'; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('v').appendChild(renderer.domElement);
-RZ.init(renderer, { quality });
+RZ.init(renderer, { quality, comfort: q.get('comfort') !== '0' });
 
 const camera = new THREE.PerspectiveCamera(58, W / H, 0.08, 2500);
 const timings = {};
@@ -130,26 +130,28 @@ function street() {
   const blockR = timed('blockR', () => RZ.cityBlock(right.concat(far), { material: facade }));
   scene.add(blockL.mesh, blockR.mesh);
   scene.add(RZ.skyline({ center: [0, -60], radius: [180, 420], arc: [-1.0, 1.0], count: 70, height: [50, 220], lit: 0.22 }));
-  scene.fog = RZ.heightFog({ color: sky.fogColor.clone().lerp(new THREE.Color(0x2a2430), 0.5).multiplyScalar(1.2), density: 0.022, falloff: 0.04 });
+  const fogC = sky.fogColor.clone().lerp(new THREE.Color(0x2a2430), 0.5).multiplyScalar(1.2);
+  scene.fog = RZ.heightFog({ color: fogC, density: 0.022, falloff: 0.04 });
+  scene.add(RZ.hazeLayer({ center: [0, -60], radius: 150, height: 90, arc: [-0.9, 0.9], color: fogC.clone().multiplyScalar(1.6), opacity: 0.35 }));
   // lights: lamps (real lights near camera, surface lights for the rest), neon
   const mDark = metalDark();
   const lampPos = [];
-  for (let zz = 10; zz > -76; zz -= 15) for (const s of [-1, 1]) lampPos.push(streetLamp(scene, s * 6.5, zz + (s > 0 ? 7 : 0), s, mDark));
+  for (let zz = 10; zz > -76; zz -= 15) for (const s of [-1, 1]) lampPos.push(streetLamp(scene, s * 6.5, zz + (s > 0 ? 7 : 0), s, mDark, s > 0 ? 0xffd2a0 : 0xfff0dc));
   const neon = [['NOODLES', '#ff3a8a', -10.05, 5.2, -4, 0], ['HOTEL', '#4ae0ff', 10.05, 6.5, -14, 1], ['PHARMACY', '#52ff9a', -10.05, 5.0, -27, 0], ['BAR', '#ffb040', 10.05, 5.4, -36, 1], ['24H', '#ff4040', -10.05, 4.8, -48, 0]];
   const neonLights = [];
   for (const [t, c, x, y, zz, right_] of neon) {
     const sg = neonSign(t, c, t.length * 0.55 + 0.6, 0.9); sg.position.set(x + (right_ ? -0.25 : 0.25), y, zz); sg.rotation.y = right_ ? -Math.PI / 2 : Math.PI / 2; scene.add(sg);
-    neonLights.push({ position: [x + (right_ ? -1.2 : 1.2), y, zz], color: new THREE.Color(c), intensity: 14, distance: 10 });
+    neonLights.push({ position: [x + (right_ ? -1.2 : 1.2), y, zz], color: new THREE.Color(c), intensity: 12, distance: 9 });
   }
   const camZ = view === 1 ? 14 : 8;
-  const all = lampPos.map(p => ({ position: p.toArray(), color: 0xffcf96, intensity: 34, distance: 20 })).concat(neonLights);
+  const all = lampPos.map((p, k) => ({ position: p.toArray(), color: k % 2 ? 0xffc890 : 0xffeedd, intensity: 30, distance: 16 })).concat(neonLights);
   all.sort((a, b) => Math.abs(a.position[2] - (camZ - 18)) - Math.abs(b.position[2] - (camZ - 18)));
   const LL = RZ.localLights(all);
   LL.apply(road); LL.apply(walk); LL.apply(curbM); LL.apply(facade);
   for (const lp of all.filter(l => l.distance > 15).slice(0, 4)) { const pl = new THREE.PointLight(lp.color, lp.intensity * 0.7, lp.distance, 2); pl.position.set(...lp.position); scene.add(pl); }
-  const moon = new THREE.DirectionalLight(0x9db0e0, 0.22); moon.position.set(-30, 60, 20); moon.castShadow = quality !== 'low'; moon.shadow.mapSize.set(1024, 1024); Object.assign(moon.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 150 }); scene.add(moon);
-  for (const p of lampPos) { const sh = RZ.lightShaft({ from: [p.x, p.y - 0.05, p.z], to: [p.x, 0.0, p.z], radius: [0.25, 2.6], color: 0xffd2a0, intensity: 0.22, floorY: 0.1 }); scene.add(sh); }
-  // street dressing: bollards, bins, contact shadows
+  const moon = new THREE.DirectionalLight(0x9db0e0, 0.18); moon.position.set(-30, 60, 20); moon.castShadow = quality !== 'low'; moon.shadow.mapSize.set(1024, 1024); Object.assign(moon.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 150 }); scene.add(moon);
+  for (const p of lampPos) scene.add(RZ.lightShaft({ from: [p.x, p.y - 0.05, p.z], to: [p.x, 0.0, p.z], radius: [0.22, 2.2], color: 0xffd2a0, intensity: 0.08, floorY: 0.1 }));
+  // street dressing: bollards, bins, bags, contact shadows, grime decals at the wall bases
   for (let k = 0; k < 6; k++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.9, 10), mDark); b.position.set(-6.5, 0.6, -2 - k * 2.2); b.castShadow = true; scene.add(b); }
   const bin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 1.1), RZ.pbrMaterial('paintedMetalPanel', { mapping: 'object', params: { color: 0x2c4a36, cols: 1, rows: 1, wear: 0.6, grime: 0.8 } }));
   bin.position.set(9.1, 0.81, -20); bin.castShadow = true; scene.add(bin);
@@ -157,6 +159,8 @@ function street() {
   const bags = RZ.rocks({ placements: [{ x: 7.8, y: 0.16, z: -19.6, scale: 0.42, sink: 0.25 }, { x: 8.2, y: 0.16, z: -21, scale: 0.36, sink: 0.25 }, { x: 7.6, y: 0.16, z: -20.6, scale: 0.3, sink: 0.25 }],
     material: new THREE.MeshPhysicalMaterial({ color: 0x08090a, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.15 }), variants: 2, detail: 2 });
   scene.add(bags);
+  const grime = RZ.pbrMaterial('grime', { mapping: 'world', alphaFromMask: true, params: { amount: 0.8, drips: 0.4, blotch: 0.8 } });
+  for (const s of [-1, 1]) { const gm = new THREE.Mesh(new THREE.PlaneGeometry(L, 1.6), grime); gm.position.set(s * 10.29, 0.95, zc); gm.rotation.y = -s * Math.PI / 2; scene.add(gm); }
   // rain
   scene.add(RZ.particles({ kind: 'rain', count: 7000, area: [30, 18, 30] }));
   // reflections: one capture in the street, box-projected to the street volume
@@ -166,32 +170,44 @@ function street() {
   if (view === 1) { camera.position.set(-2.5, 8.5, 14); camera.lookAt(0, 4.5, -30); }
   else if (view === 2) { camera.position.set(-2, 6, -6); camera.lookAt(10.2, 8, -16); }
   else if (view === 3) { camera.position.set(5.5, 6.4, -9.5); camera.lookAt(10.2, 6.4, -12.8); }
+  else if (view === 4) { camera.position.set(-7.5, 1.6, 2); camera.lookAt(-10.3, 1.4, -8); }
   else { camera.position.set(1.4, 1.75, 8); camera.lookAt(-0.3, 2.6, -20); }
-  return { scene, exposure: 1.15, bloom: [0.75, 0.55, 0.82] };
+  return { scene, exposure: 1.15, bloom: [0.7, 0.55, 0.85] };
 }
 
 // ------------------------------------------------------------------------------------------------
 // interior: clean sci-fi lab hall with polished reflective floor (captured + box-projected)
 // ------------------------------------------------------------------------------------------------
 function interior() {
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x020304);
-  timed('sky', () => RZ.skyEnvironment(renderer, scene, { preset: 'interior', color: 0xeaf2ff, wall: 0x3a4048, intensity: 5 }));
-  const W = 12, Hh = 5.2, Lz = 34, z0 = 6;
-  const floorM = timed('tex:floor', () => RZ.pbrMaterial('ceramicTile', { mapping: 'world', params: { color: 0xc9ccce, grout: 0x55585c, count: 2, countY: 4, gloss: 0.9, variation: 0.25, marble: 0.15 }, envMapIntensity: 1.0 }));
-  const wallM = timed('tex:wall', () => RZ.pbrMaterial('paintedMetalPanel', { mapping: 'world', params: { color: 0xd5d9dc, cols: 2, rows: 4, wear: 0.05, grime: 0.12, gloss: 0.7 } }));
-  const darkM = RZ.pbrMaterial('paintedMetalPanel', { mapping: 'world', params: { color: 0x2a2f35, cols: 1, rows: 2, wear: 0.1, grime: 0.2, gloss: 0.6 } });
-  const steel = RZ.pbrMaterial('brushedMetal', { mapping: 'object', params: { color: 0xa8adb2, roughness: 0.28 } });
+  const scene = new THREE.Scene();
+  timed('sky', () => RZ.skyEnvironment(renderer, scene, { preset: 'interior', color: 0xeaf2ff, wall: 0x3a4048, intensity: 4 }));
+  // the night city outside the observation window
+  const night = RZ.skyEnvironment(renderer, null, { preset: 'night-city', apply: false });
+  scene.background = night.background; scene.backgroundIntensity = 0.8;
+  const W = 12, Hh = 5.2, Lz = 34, z0 = 6, zEnd = z0 - Lz;
+  const floorM = timed('tex:floor', () => RZ.pbrMaterial('ceramicTile', { mapping: 'world', params: { color: 0x8e9398, grout: 0x45484c, count: 2, countY: 2, gloss: 0.72, variation: 0.35, marble: 0.08, lippage: 0.12 }, envMapIntensity: 1.0 }));
+  const wallM = timed('tex:wall', () => RZ.pbrMaterial('paintedMetalPanel', { mapping: 'world', params: { color: 0xaab1b8, cols: 2, rows: 4, wear: 0.08, grime: 0.25, gloss: 0.55 } }));
+  const darkM = RZ.pbrMaterial('paintedMetalPanel', { mapping: 'world', params: { color: 0x262a30, cols: 1, rows: 2, wear: 0.12, grime: 0.3, gloss: 0.5 } });
+  const steel = RZ.pbrMaterial('brushedMetal', { mapping: 'object', params: { color: 0xa8adb2, roughness: 0.3 } });
   const rubberM = RZ.pbrMaterial('rubber', { mapping: 'world' });
   const add = (geo, mat, x, y, z, o = {}) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (o.ry) m.rotation.y = o.ry; m.castShadow = o.cast ?? true; m.receiveShadow = true; scene.add(m); return m; };
   add(new THREE.BoxGeometry(W, 0.2, Lz), floorM, 0, -0.1, z0 - Lz / 2);
   add(new THREE.BoxGeometry(W, 0.2, Lz), darkM, 0, Hh + 0.1, z0 - Lz / 2);
-  // walls: left solid panels, right glass partition with lab bays
+  // walls: left solid panels, right glass partition with lab bays, end wall with an observation window
   add(new THREE.BoxGeometry(0.3, Hh, Lz), wallM, -W / 2 - 0.15, Hh / 2, z0 - Lz / 2);
-  add(new THREE.BoxGeometry(W, Hh, 0.3), wallM, 0, Hh / 2, z0 - Lz - 0.15);
   add(new THREE.BoxGeometry(W, Hh, 0.3), wallM, 0, Hh / 2, z0 + 0.15);
+  const wx0 = -4, wx1 = 4, wy0 = 1.0, wy1 = 4.2;
+  add(new THREE.BoxGeometry(W, wy0, 0.3), wallM, 0, wy0 / 2, zEnd - 0.15);
+  add(new THREE.BoxGeometry(W, Hh - wy1, 0.3), wallM, 0, (Hh + wy1) / 2, zEnd - 0.15);
+  add(new THREE.BoxGeometry(wx0 + W / 2, wy1 - wy0, 0.3), wallM, (-W / 2 + wx0) / 2, (wy0 + wy1) / 2, zEnd - 0.15);
+  add(new THREE.BoxGeometry(W / 2 - wx1, wy1 - wy0, 0.3), wallM, (W / 2 + wx1) / 2, (wy0 + wy1) / 2, zEnd - 0.15);
+  for (const x of [-4, 0, 4]) add(new THREE.BoxGeometry(0.08, wy1 - wy0, 0.12), darkM, x, (wy0 + wy1) / 2, zEnd - 0.05);
+  add(new THREE.BoxGeometry(W - 3.8, 0.08, 0.12), darkM, 0, wy0, zEnd - 0.05); add(new THREE.BoxGeometry(W - 3.8, 0.08, 0.12), darkM, 0, wy1, zEnd - 0.05);
+  const winGlass = new THREE.MeshPhysicalMaterial({ color: 0x9fb4c0, roughness: 0.03, metalness: 0, transparent: true, opacity: 0.12, envMapIntensity: 1.2 });
+  add(new THREE.PlaneGeometry(wx1 - wx0, wy1 - wy0), winGlass, 0, (wy0 + wy1) / 2, zEnd - 0.12, { cast: false });
   add(new THREE.BoxGeometry(0.3, 1.0, Lz), darkM, W / 2 + 0.15, 0.5, z0 - Lz / 2);
   add(new THREE.BoxGeometry(0.3, 0.9, Lz), darkM, W / 2 + 0.15, Hh - 0.45, z0 - Lz / 2);
-  const glass = new THREE.MeshPhysicalMaterial({ color: 0x9fb4c0, metalness: 0, roughness: 0.04, transmission: 0, transparent: true, opacity: 0.18, envMapIntensity: 1.4 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0x9fb4c0, metalness: 0, roughness: 0.04, transmission: 0, transparent: true, opacity: 0.16, envMapIntensity: 1.4 });
   add(new THREE.BoxGeometry(0.04, Hh - 1.9, Lz), glass, W / 2 + 0.15, 1.0 + (Hh - 1.9) / 2, z0 - Lz / 2, { cast: false });
   // lab bay behind the glass
   add(new THREE.BoxGeometry(6, 0.2, Lz), floorM, W / 2 + 3.3, -0.1, z0 - Lz / 2);
@@ -199,8 +215,8 @@ function interior() {
   add(new THREE.BoxGeometry(6, 0.2, Lz), darkM, W / 2 + 3.3, Hh + 0.1, z0 - Lz / 2);
   for (let k = 0; k < 4; k++) { add(new THREE.BoxGeometry(1.2, 0.9, 3.2), darkM, W / 2 + 4.5, 0.45, -2 - k * 8); add(new THREE.BoxGeometry(1.1, 0.06, 3.0), steel, W / 2 + 4.5, 0.93, -2 - k * 8); }
   // pillars + floor/ceiling LED reveals + ceiling light lines
-  const ledW = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xeaf2ff, emissiveIntensity: 6 });
-  const ledC = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x38e1ff, emissiveIntensity: 5 });
+  const ledW = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xeaf2ff, emissiveIntensity: 4 });
+  const ledC = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x38e1ff, emissiveIntensity: 3 });
   for (let k = 0; k < 6; k++) {
     const zz = z0 - 3 - k * 6;
     add(new THREE.BoxGeometry(0.7, Hh, 0.7), wallM, -W / 2 + 0.35, Hh / 2, zz);
@@ -209,11 +225,8 @@ function interior() {
     add(new THREE.BoxGeometry(W - 1.6, 0.06, 0.22), ledW, 0, Hh - 0.03, zz + 3, { cast: false });
   }
   add(new THREE.BoxGeometry(0.04, 0.05, Lz), ledC, -W / 2 + 0.03, 0.06, z0 - Lz / 2, { cast: false });
-  add(new THREE.BoxGeometry(W - 0.6, 0.05, 0.04), ledC, 0, 0.06, z0 - Lz + 0.03, { cast: false });
-  // end wall: big observation window onto the night city
-  const winGlass = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.03, metalness: 0, emissive: 0x0b1626, emissiveIntensity: 1 });
-  add(new THREE.BoxGeometry(8, 3.2, 0.05), winGlass, 0, 2.6, z0 - Lz + 0.02, { cast: false });
-  // furniture: central console + bench + benches
+  add(new THREE.BoxGeometry(W - 0.6, 0.05, 0.04), ledC, 0, 0.06, zEnd + 0.03, { cast: false });
+  // furniture: central console + bench
   add(new THREE.BoxGeometry(3.2, 0.95, 1.1), darkM, -1.0, 0.475, -14);
   add(new THREE.BoxGeometry(3.3, 0.05, 1.2), steel, -1.0, 0.97, -14);
   const scr = document.createElement('canvas'); scr.width = 512; scr.height = 256; const g2 = scr.getContext('2d');
@@ -221,7 +234,7 @@ function interior() {
   g2.strokeStyle = '#5fe6ff'; g2.lineWidth = 2; for (let k = 0; k < 6; k++) { g2.beginPath(); for (let x = 0; x < 512; x += 8) g2.lineTo(x, 128 + Math.sin(x * 0.03 + k) * 40 * Math.sin(k + x * 0.002)); g2.stroke(); }
   g2.fillStyle = '#c8f4ff'; g2.font = '600 26px monospace'; g2.fillText('HELIX // CHRONO LAB 03', 20, 36); g2.fillText('FIELD STABILITY  97.2%', 20, 230);
   const st = new THREE.CanvasTexture(scr); st.colorSpace = THREE.SRGBColorSpace;
-  const screen = add(new THREE.PlaneGeometry(1.5, 0.75), new THREE.MeshBasicMaterial({ map: st, color: new THREE.Color(1.6, 1.6, 1.6) }), -1.0, 1.55, -14.2, { cast: false });
+  const screen = add(new THREE.PlaneGeometry(1.5, 0.75), new THREE.MeshBasicMaterial({ map: st, color: new THREE.Color(1.3, 1.3, 1.3) }), -1.0, 1.55, -14.2, { cast: false });
   screen.rotation.x = -0.2;
   add(new THREE.BoxGeometry(0.05, 0.6, 0.05), steel, -1.0, 1.15, -14.25);
   add(new THREE.BoxGeometry(2.4, 0.45, 0.6), rubberM, 3.6, 0.225, -6);
@@ -231,17 +244,18 @@ function interior() {
   // night city through the window
   scene.add(RZ.skyline({ center: [0, -40], radius: [70, 220], arc: [-0.6, 0.6], count: 40, height: [20, 120], lit: 0.3 }));
   // lights: 3 real lights (one shadow caster) + emissive geometry captured into the env probe
-  const key = new THREE.SpotLight(0xf0f6ff, 60, 30, 0.9, 0.6, 2); key.position.set(0, Hh - 0.3, -8); key.target.position.set(0, 0, -13); key.castShadow = quality !== 'low'; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005; scene.add(key, key.target);
-  const p1 = new THREE.PointLight(0xe8f0ff, 14, 14, 2); p1.position.set(0, Hh - 0.5, 0); scene.add(p1);
-  const p2 = new THREE.PointLight(0x38e1ff, 6, 8, 2); p2.position.set(-W / 2 + 1, 1.5, -9); scene.add(p2);
-  scene.add(RZ.particles({ kind: 'dust', count: 260, center: [0, 2.4, -12], area: [10, 4.5, 24], color: 0xd8ecff, size: 0.02, opacity: 0.35 }));
-  const probe = timed('capture', () => RZ.captureEnvironment(renderer, scene, [0, 1.6, -12], { box: { min: [-W / 2, 0, z0 - Lz], max: [W / 2 + 6, Hh, z0] } }));
-  probe.apply(floorM); probe.apply(wallM); probe.apply(darkM); probe.apply(steel); probe.apply(glass, { box: null });
+  const key = new THREE.SpotLight(0xf0f6ff, 40, 30, 0.9, 0.6, 2); key.position.set(0, Hh - 0.3, -8); key.target.position.set(0, 0, -13); key.castShadow = quality !== 'low'; key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0005; scene.add(key, key.target);
+  const p1 = new THREE.PointLight(0xe8f0ff, 10, 14, 2); p1.position.set(0, Hh - 0.5, 0); scene.add(p1);
+  const p2 = new THREE.PointLight(0x38e1ff, 5, 8, 2); p2.position.set(-W / 2 + 1, 1.5, -9); scene.add(p2);
+  scene.add(RZ.particles({ kind: 'dust', count: 260, center: [0, 2.4, -12], area: [10, 4.5, 24], color: 0xd8ecff, size: 0.02, opacity: 0.3 }));
+  const probe = timed('capture', () => RZ.captureEnvironment(renderer, scene, [0, 1.6, -12], { box: { min: [-W / 2, 0, zEnd], max: [W / 2 + 6, Hh, z0] } }));
+  probe.apply(floorM); probe.apply(wallM); probe.apply(darkM); probe.apply(steel); probe.apply(glass, { box: null }); probe.apply(winGlass, { box: null });
   scene.environment = probe.texture;
   camera.fov = 60;
   if (view === 1) { camera.position.set(4.5, 2.4, 3.5); camera.lookAt(-1.5, 1.4, -14); }
+  else if (view === 2) { camera.position.set(-2.5, 1.5, -18); camera.lookAt(0.5, 2.2, zEnd); }
   else { camera.position.set(1.6, 1.7, 3.2); camera.lookAt(-0.6, 1.55, -14); }
-  return { scene, exposure: 1.0, bloom: [0.55, 0.5, 0.88] };
+  return { scene, exposure: 0.9, bloom: [0.5, 0.5, 0.9] };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -255,13 +269,13 @@ function ruins() {
   const ter = timed('terrain', () => RZ.terrain({ size: 90, segments: Math.round(RZ.tier().terrainSeg * 0.6), center: [0, -10], heightFn: hf, rockSlope: 0.5, dirt: 0.55,
     layers: [['grass', { dryness: 0.5 }], ['dirt', { damp: 0.3 }], ['concrete', { color: 0x7a7872, stains: 0.9 }], ['gravel', { color: 0x6a665f }]] }));
   scene.add(ter.mesh);
-  const sun = sky.addSun(scene, { shadow: quality !== 'low', area: 26, center: [0, 0, -8], distance: 70 });
+  sky.addSun(scene, { shadow: quality !== 'low', area: 26, center: [0, 0, -8], distance: 70 });
   scene.fog = RZ.heightFog({ color: sky.fogColor, density: 0.006, falloff: 0.05 });
-  const conc = timed('tex:concrete', () => RZ.pbrMaterial('concrete', { mapping: 'world', params: { color: 0x8a8781, stains: 0.9, formwork: 1 }, overlay: { kind: 'moss', amount: 0.42, ground: 0.6 } }));
+  const conc = timed('tex:concrete', () => RZ.pbrMaterial('concrete', { mapping: 'world', params: { color: 0x87847d, stains: 1, formwork: 1 }, overlay: { kind: 'moss', amount: 0.42, ground: 0.6 } }));
   const add = (geo, mat, x, y, z, ry = 0, rx = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
   // shell: back wall with window holes, side walls, one collapsed
-  add(RZ.brokenWall({ width: 16, height: 7.5, thickness: 0.35, seed: 3, holes: 2, jag: 1.2, drop: 0.35, dropSide: 1 }), conc, 0, -0.2, -18);
-  add(RZ.brokenWall({ width: 14, height: 6.5, thickness: 0.35, seed: 5, holes: 2, jag: 1.0, drop: 0.55, dropSide: 0 }), conc, -8, -0.2, -11, Math.PI / 2);
+  add(RZ.brokenWall({ width: 16, height: 7.5, thickness: 0.35, seed: 3, holes: 2, jag: 1.4, drop: 0.35, dropSide: 1 }), conc, 0, -0.2, -18);
+  add(RZ.brokenWall({ width: 14, height: 6.5, thickness: 0.35, seed: 5, holes: 2, jag: 1.2, drop: 0.55, dropSide: 0 }), conc, -8, -0.2, -11, Math.PI / 2);
   add(RZ.brokenWall({ width: 9, height: 4.2, thickness: 0.35, seed: 8, holes: 0, jag: 1.4, drop: 0.7 }), conc, 7.8, -0.2, -13.5, Math.PI / 2);
   add(RZ.brokenWall({ width: 7, height: 1.6, thickness: 0.3, seed: 11, holes: 0, jag: 0.7 }), conc, -2.5, -0.2, -4.5);
   // fallen roof slab + columns with rebar
@@ -272,37 +286,39 @@ function ruins() {
     add(RZ.rebar({ origin: [0, h - 0.4, 0], spread: [0.4, 0.4], count: 5, length: 0.9, seed: Math.round(h * 10) }), rebarM, x, -0.2, z);
   }
   add(RZ.rebar({ origin: [-1.0, 0.6, 2.2], dir: [0.3, 1, 0.6], spread: [3, 0.1], count: 9, length: 0.7, seed: 4 }), rebarM, 3.5, 0.6, -9.5, 0.4, -1.25, 0.1);
-  // rubble
-  const rubM = RZ.pbrMaterial('concrete', { mapping: 'triplanar', space: 'object', params: { color: 0x7e7b75, formwork: 0, stains: 0.6 }, scale: 0.4, overlay: { kind: 'moss', amount: 0.3 } });
+  // rubble: angular concrete chunks piled under the collapse
   const rub = [], rr = RZ.rng(31);
-  for (let k = 0; k < 70; k++) { const a = rr() * 6.28, d = Math.pow(rr(), 0.6) * 9; const x = Math.cos(a) * d * 1.2, z = -11 + Math.sin(a) * d * 0.7; rub.push({ x, z, scale: 0.15 + rr() * 0.55 * (1 - d / 12), sink: -0.1 }); }
-  scene.add(RZ.rocks({ placements: rub, heightAt: hf, material: rubM, seed: 4 }));
+  for (let k = 0; k < 80; k++) { const a = rr() * 6.28, d = Math.pow(rr(), 0.6) * 9; const x = Math.cos(a) * d * 1.2, z = -11 + Math.sin(a) * d * 0.7; rub.push({ x, z, scale: 0.18 + rr() * 0.7 * (1 - d / 12), sink: 0.05 }); }
+  scene.add(RZ.rocks({ shape: 'chunk', placements: rub, heightAt: hf, seed: 4 }));
   scene.add(RZ.rocks({ placements: [{ x: 9, z: -2, scale: 1.4 }, { x: -11, z: -3, scale: 1.1 }, { x: 12, z: -20, scale: 2.2 }], heightAt: hf, seed: 8 }));
   // vegetation: grass + weeds, a tree growing inside, ivy on the walls
   const grass = timed('grass', () => RZ.instancedGrass({ rect: [-45, -55, 90, 90], heightAt: hf, mask: (x, z) => { const inside = Math.abs(x) < 7.5 && z < -4 && z > -17.5; return Math.max(0, Math.min(1, (nz.fbm2(x * 0.15, z * 0.15, 3) + 0.25) * 2.2)) * (inside ? 0.55 : 1); },
-    radius: 26, density: 6, height: 0.5, color: 0x56682c, tipColor: 0xa9a35e }));
+    radius: 26, height: 0.45, color: 0x56682c, tipColor: 0xa9a35e }));
   scene.add(grass.mesh);
-  scene.add(RZ.forest({ species: 'broadleaf', placements: [{ x: -2.5, z: -12.5, scale: 0.9 }, { x: 16, z: -26, scale: 1.2 }, { x: -18, z: -24, scale: 1.1 }, { x: 22, z: -8, scale: 1.0 }, { x: -24, z: -6, scale: 1.25 }], heightAt: hf, seed: 3 }));
-  scene.add(RZ.forest({ species: 'shrub', placements: Array.from({ length: 14 }, (_, k) => ({ x: (rr() - 0.5) * 30, z: -6 - rr() * 20, scale: 0.6 + rr() * 0.6 })), heightAt: hf, seed: 9 }));
-  scene.add(RZ.ivy({ edges: [[[-7.5, 6.6, -17.8], [2, 6.0, -17.8], [0, 0, 1]], [[-7.85, 5.8, -16], [-7.85, 5.0, -8], [1, 0, 0]], [[-7.5, 2.4, -18.2], [5, 2.2, -18.2], [0, 0, -1]]], length: [1.2, 4.5], density: 3.2, seed: 6 }));
+  scene.add(RZ.forest({ species: 'broadleaf', placements: [{ x: -2.5, z: -12.5, scale: 0.9 }, { x: 16, z: -26, scale: 1.2 }, { x: -18, z: -24, scale: 1.1 }, { x: 22, z: -8, scale: 1.0 }, { x: -24, z: -6, scale: 1.25 }], heightAt: hf, seed: 3, impostors: false }));
+  scene.add(RZ.forest({ species: 'shrub', placements: Array.from({ length: 14 }, () => ({ x: (rr() - 0.5) * 30, z: -6 - rr() * 20, scale: 0.6 + rr() * 0.6 })), heightAt: hf, seed: 9, impostors: false }));
+  scene.add(RZ.ivy({ edges: [[[-7.5, 6.4, -17.8], [2, 5.8, -17.8], [0, 0, 1]], [[-7.85, 5.6, -16], [-7.85, 4.8, -8], [1, 0, 0]]],
+    patches: [{ center: [-5.5, 0, -17.8], normal: [0, 0, 1], width: 3, height: 4.5 }, { center: [4.5, 0, -17.8], normal: [0, 0, 1], width: 2.2, height: 2.6 }, { center: [-7.85, 0, -9], normal: [1, 0, 0], width: 2.5, height: 3.2 }],
+    length: [0.5, 1.8], density: 1.6, seed: 6 }));
   // light shafts through the back wall holes, along the sun
   const sd = sky.sunDirection.clone();
-  for (const [x, y] of [[-3.2, 3.9], [2.6, 4.1]]) { const from = new THREE.Vector3(x, y, -18); const to = from.clone().addScaledVector(sd, -9); to.y = Math.max(to.y, 0); scene.add(RZ.lightShaft({ from: from.toArray(), to: to.toArray(), shape: 'box', size: [1.2, 1.2], spread: [1, 1.4], color: 0xffdcb0, intensity: 0.5, floorY: 0.2 })); }
+  for (const [x, y] of [[-3.2, 3.9], [2.6, 4.1]]) { const from = new THREE.Vector3(x, y, -18); const to = from.clone().addScaledVector(sd, -9); to.y = Math.max(to.y, 0); scene.add(RZ.lightShaft({ from: from.toArray(), to: to.toArray(), shape: 'box', size: [1.2, 1.2], spread: [1, 1.4], color: 0xffdcb0, intensity: 0.35, floorY: 0.2 })); }
   scene.add(RZ.particles({ kind: 'dust', count: 220, center: [0, 2.2, -12], area: [12, 4.4, 10], color: 0xffe6c4, size: 0.025, opacity: 0.5 }));
   scene.add(RZ.mountains({ center: [0, -10], radius: [260, 520], height: 90, seed: 5, grass: 0x4a5236 }));
-  void sun;
+  scene.add(RZ.hazeLayer({ center: [0, -10], radius: 230, height: 50, color: sky.fogColor.clone().multiplyScalar(1.1), opacity: 0.45 }));
   camera.fov = 58;
   if (view === 1) { camera.position.set(-9, 4.5, 10); camera.lookAt(0, 2.2, -12); }
+  else if (view === 2) { camera.position.set(-3.5, hf(-3.5, -9) + 1.6, -9); camera.lookAt(-5, 2.2, -17.8); }
   else { camera.position.set(3.2, hf(3.2, 5) + 1.7, 5); camera.lookAt(-1.5, 2.6, -14); }
-  return { scene, exposure: 1.0, bloom: [0.3, 0.5, 0.95] };
+  return { scene, exposure: 1.0, bloom: [0.25, 0.45, 1.3] };
 }
 
 // ------------------------------------------------------------------------------------------------
-// valley: sunset valley with terrain splatting, river, waterfall, forest, grass, mountains
+// valley: golden-hour valley with terrain splatting, river, waterfall, forest, grass, mountains
 // ------------------------------------------------------------------------------------------------
 function valley() {
   const scene = new THREE.Scene();
-  const sky = timed('sky', () => RZ.skyEnvironment(renderer, scene, { preset: 'sunset', elevation: 4.5, azimuth: 200 }));
+  const sky = timed('sky', () => RZ.skyEnvironment(renderer, scene, { preset: 'golden-hour', elevation: 9, azimuth: view === 1 ? 200 : 250 }));
   const nz = RZ.makeNoise(21);
   const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const riverX = z => 10 * Math.sin(z * 0.016) - 4;
@@ -318,61 +334,54 @@ function valley() {
   };
   const waterLevel = -1.1;
   const ter = timed('terrain', () => RZ.terrain({ size: 420, segments: RZ.tier().terrainSeg, center: [0, -80], heightFn: hf, waterLevel, rockSlope: 0.36, dirt: 0.25,
-    layers: [['grass', { color: 0x4d6a26, dry: 0x8f8448, dryness: 0.35 }], ['dirt', {}], ['rock', { color: 0x7a7266, color2: 0x5a5046 }], ['sand', { color: 0xa89470 }]] }));
+    layers: [['grass', { color: 0x4d6a26, dry: 0x8f8448, dryness: 0.3, bare: 0.4 }], ['dirt', {}], ['rock', { color: 0x7a7266, color2: 0x5a5046 }], ['sand', { color: 0xa89470 }]] }));
   scene.add(ter.mesh);
-  const sun = sky.addSun(scene, { shadow: quality !== 'low', area: 45, center: [8, 0, -10], distance: 120 });
-  scene.fog = RZ.heightFog({ color: sky.horizonColor(new THREE.Vector3(-0.3, 0, -1)).multiplyScalar(0.9), density: 0.0065, falloff: 0.03, base: -2 });
-  const wat = timed('water', () => RZ.water({ rect: [-60, -260, 110, 300], level: waterLevel, heightAt: hf, deep: 0x0a2226, shallow: 0x35574a, flow: [0.0, -0.04] }));
+  sky.addSun(scene, { shadow: quality !== 'low', area: 45, center: [8, 0, -10], distance: 120 });
+  const away = new THREE.Vector3(-sky.sunDirection.x, 0, -sky.sunDirection.z);
+  const fogC = sky.horizonColor(away).lerp(sky.zenith, 0.15);
+  scene.fog = RZ.heightFog({ color: fogC, density: 0.0024, falloff: 0.012, base: -2 });
+  scene.add(RZ.hazeLayer({ center: [0, -80], radius: 300, height: 110, color: fogC.clone().multiplyScalar(1.05), opacity: 0.5 }));
+  const wat = timed('water', () => RZ.water({ rect: [-60, -260, 110, 300], level: waterLevel, heightAt: hf, deep: 0x0a2226, shallow: 0x35574a, flow: [0.0, -0.04], waves: 0.45 }));
   scene.add(wat.mesh);
   const fall = RZ.waterfall({ top: [-37.5, hf(-38, -66) + 0.2, -66], height: hf(-38, -66) - waterLevel + 0.2, width: 5, dir: [1, 0.15], lip: 0.9, ambient: 0x8a7a80 });
   scene.add(fall);
   // forest on the slopes, riverside trees, rocks
   const rr = RZ.rng(77), trees = [], conifers = [], boulders = [];
-  for (let k = 0; k < 900; k++) {
+  for (let k = 0; k < 1400; k++) {
     const x = -200 + rr() * 400, z = -280 + rr() * 300, h = hf(x, z), n = ter.normalAt(x, z);
     if (h < waterLevel + 1.2 || n.y < 0.8) continue;
     const ax = Math.abs(x - riverX(z));
-    const near = Math.hypot(x - 14, z - 22) < 16;
-    if (near) continue;
+    if (Math.hypot(x - 14, z - 22) < 16) continue;
     const dens = nz.fbm2(x * 0.02, z * 0.02, 3) + (ax > 40 ? 0.35 : -0.1);
     if (dens < 0.05) continue;
     (h > 18 || rr() < 0.35 ? conifers : trees).push({ x, z, scale: 0.8 + rr() * 0.6 });
   }
   for (let k = 0; k < 60; k++) { const z = -10 - rr() * 150, x = riverX(z) + (rr() < 0.5 ? -1 : 1) * (7 + rr() * 8); boulders.push({ x, z, scale: 0.6 + rr() * 1.6 }); }
   for (let k = 0; k < 18; k++) boulders.push({ x: -40 + rr() * 10, z: -60 - rr() * 20, scale: 1 + rr() * 2.5 });
-  scene.add(timed('forest', () => RZ.forest({ species: 'broadleaf', placements: trees, heightAt: hf, focus: [14, 22], lodDistance: 70, seed: 2 })));
-  scene.add(timed('conifers', () => RZ.forest({ species: 'conifer', placements: conifers, heightAt: hf, focus: [14, 22], lodDistance: 70, seed: 5 })));
+  const focus = [14, 22];
+  scene.add(timed('forest', () => RZ.forest({ species: 'broadleaf', placements: trees, heightAt: hf, focus, lodDistance: 70, seed: 2, budgetScale: 0.45 })));
+  scene.add(timed('conifers', () => RZ.forest({ species: 'conifer', placements: conifers, heightAt: hf, focus, lodDistance: 70, seed: 5, budgetScale: 0.55 })));
   scene.add(RZ.rocks({ placements: boulders, heightAt: hf, seed: 3, moss: 0.35 }));
   const grass = timed('grass', () => RZ.instancedGrass({ rect: [-210, -290, 420, 420], heightAt: hf, mask: (x, z) => { const h = hf(x, z), n = ter.normalAt(x, z); return (h > waterLevel + 0.6 ? 1 : 0) * Math.max(0, Math.min(1, (n.y - 0.82) * 8)) * Math.min(1, (nz.fbm2(x * 0.05, z * 0.05, 3) + 0.45) * 2); },
-    radius: 30, density: 6, height: 0.55, color: 0x506a24, tipColor: 0xb3a75a }));
+    radius: 30, height: 0.5, color: 0x56742a, tipColor: 0xb8ac5c }));
   scene.add(grass.mesh);
   scene.add(RZ.mountains({ center: [0, -80], radius: [330, 760], height: 230, seed: 8, arc: [-Math.PI, Math.PI], snowLine: 175, rock: 0x524c46, grass: 0x34402a }));
   // reflections of the valley in the river
   if (q.get('hide')) for (const nm of q.get('hide').split(',')) scene.traverse(o => { if (o.name === nm) o.userData.noCapture = true; });
-  if (q.has('dbgcap')) {
-    const rt = new THREE.WebGLCubeRenderTarget(64, { type: THREE.HalfFloatType });
-    const cc = new THREE.CubeCamera(0.05, 1000, rt); cc.position.set(0, 2, -30); cc.updateMatrixWorld(true);
-    scene.traverse(o => { if (o.userData.noCapture) o.visible = false; });
-    cc.update(renderer, scene);
-    const res = [];
-    for (let f = 0; f < 6; f++) { const b = new Uint16Array(64 * 64 * 4); renderer.readRenderTargetPixels(rt, 0, 0, 64, 64, b, f); let nan = 0, inf = 0, mx = 0, first = -1;
-      for (let i = 0; i < b.length; i++) { const v = THREE.DataUtils.fromHalfFloat(b[i]); if (Number.isNaN(v)) { nan++; if (first < 0) first = i; } else if (!Number.isFinite(v)) inf++; else mx = Math.max(mx, v); }
-      res.push({ f, nan, inf, mx: +mx.toFixed(2), first }); }
-    window.DBG = res; console.warn('DBGCAP ' + JSON.stringify(res));
-  }
   const probe = timed('capture', () => RZ.captureEnvironment(renderer, scene, [0, 2, -30], { size: quality === 'high' ? 256 : 128 }));
-  if (!q.has("noprobe")) probe.apply(wat.material);
-  void sun;
+  if (!q.has('noprobe')) probe.apply(wat.material);
   camera.fov = 55;
   const cx = 14, cz = 22;
-  if (view === 1) { camera.position.set(-10, hf(-10, 40) + 14, 40); camera.lookAt(-20, 6, -60); }
-  else if (view >= 5) { camera.fov = 90; camera.position.set(0, 2, -30); const d = [[0, -1, 0.001], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0.001]][view - 5]; camera.lookAt(d[0], 2 + d[1], -30 + d[2]); }
+  if (view === 2) { camera.position.set(-10, hf(-10, 40) + 14, 40); camera.lookAt(-20, 6, -60); }
+  else if (view === 3) { camera.position.set(-22, hf(-22, -48) + 2.2, -48); camera.lookAt(-38, 8, -66); }
   else { camera.position.set(cx, hf(cx, cz) + 1.8, cz); camera.lookAt(-14, hf(cx, cz) - 1.5, -40); }
-  return { scene, exposure: 1.05, bloom: [0.45, 0.6, 0.9] };
+  return { scene, exposure: 1.0, bloom: [0.35, 0.5, 1.1] };
 }
 
 // ------------------------------------------------------------------------------------------------
 const builders = { swatches, sky: skyView, street, interior, ruins, valley };
+// let the page finish loading first: a scene build is long synchronous work and would hold back the load event
+await new Promise(r => setTimeout(r, 30));
 const t0 = performance.now();
 const ctx = await (builders[sceneName] || swatches)();
 const buildMs = Math.round(performance.now() - t0);
@@ -392,13 +401,14 @@ RZ.update(T);
 ctx.update?.(T);
 scene.updateMatrixWorld(true);
 const tc = performance.now();
-renderer.render(scene, camera); // first frame compiles programs; also gives honest draw-call counts incl. shadows
+renderer.render(scene, camera); // first frame compiles programs
 const compileMs = Math.round(performance.now() - tc);
-const info = { ...renderer.info.render };
+const audit = RZ.auditScene(renderer, scene, camera); // honest draw calls / triangles incl. the shadow pass
 composer.render();
 window.LAB_INFO = {
-  scene: sceneName, quality, view, calls: info.calls, triangles: info.triangles, buildMs, compileMs,
+  scene: sceneName, quality, view, calls: audit.calls, triangles: audit.triangles, lights: audit.lights, shadowCasters: audit.shadowCasters, budgetOk: audit.ok, buildMs, compileMs,
   textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length, timings,
 };
-document.getElementById('info').textContent = `${sceneName} ${quality} calls=${info.calls} tris=${info.triangles} build=${buildMs}ms`;
+document.getElementById('info').textContent = `${sceneName} ${quality} calls=${audit.calls} tris=${audit.triangles} lights=${audit.lights} shadows=${audit.shadowCasters} build=${buildMs}ms`;
+window.LAB = { scene, camera, renderer, RZ, THREE, composer };
 window.LAB_DONE = true;
