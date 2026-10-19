@@ -13,49 +13,84 @@ import { clamp, lerp, sstep, smax, interpS, makeSpline } from './head_a_util.js'
 const DEG = Math.PI / 180;
 export const CEN = [0, 40, -5];
 
-// ------------------------------------------------------------------ hull (radial union of ellipsoids)
-function ell(c, r, tilt = 0) {
-  const ct = Math.cos(tilt), st = Math.sin(tilt);
-  return { c, ir: [1 / r[0], 1 / r[1], 1 / r[2]], ct, st, tilt };
-}
-function rayEll(E, o, d) {
-  let ox = o[0] - E.c[0], oy = o[1] - E.c[1], oz = o[2] - E.c[2], dx = d[0], dy = d[1], dz = d[2];
-  if (E.tilt) { // rotate about x
-    const y1 = oy * E.ct - oz * E.st, z1 = oy * E.st + oz * E.ct; oy = y1; oz = z1;
-    const y2 = dy * E.ct - dz * E.st, z2 = dy * E.st + dz * E.ct; dy = y2; dz = z2;
-  }
-  ox *= E.ir[0]; oy *= E.ir[1]; oz *= E.ir[2]; dx *= E.ir[0]; dy *= E.ir[1]; dz *= E.ir[2];
-  const A = dx * dx + dy * dy + dz * dz, B = 2 * (ox * dx + oy * dy + oz * dz), Cc = ox * ox + oy * oy + oz * oz - 1;
-  const disc = B * B - 4 * A * Cc;
-  if (disc < 0) return 0;
-  return Math.max(0, (-B + Math.sqrt(disc)) / (2 * A));
-}
-
+// ------------------------------------------------------------------ hull: lofted cross-sections
+// For each height y the head's horizontal section is a superellipse (half-width A, front / back extent Bf /
+// Bb around a centre z = cz, exponents nf / nb: >2 = boxier), unioned with the round neck. Above the
+// forehead the sections close in an ellipsoidal cap at the crown; below the jaw they close over the neck.
 export function makeHull(F) {
-  const cw = F.craniumW, L = F.craniumL;
-  const ch = F.child;
-  const prims = [
-    [ell([0, 93 + 2 * ch, -14], [cw, 102 + 3 * ch, 96 * L]), 0],
-    [ell([0, 112 + 3 * ch, -26], [cw + 1.5, 82, 80 * L]), 12],
-    [ell([0, 68, -42], [58, 56, 70 * L]), 12],
-    [ell([0, 100, -2], [cw - 9, 92, 96]), 12],
-    [ell([0, 50, 6], [F.zygW - 2, 50 - 4 * ch, 80]), 12],
-    [ell([0, 4 + 3 * ch, 6], [F.gonX + 3, 40 - 4 * ch, 82 - 6 * ch], -18 * DEG), 10],
-    [ell([0, F.mentY + 19, 42], [34 * F.chinW + 4, 20.5, 46], -8 * DEG), 8],
-  ];
+  const m = F.masc, fem = F.fem, ch = F.child;
+  const jw = F.gonX / 49.5, zw = F.zygW / 68.5, cw = F.craniumW / 75;
+  const yMe = F.mentY;
+  const Y = [yMe - 1, yMe + 7, -28, -15, F.gonY + 2, 10, 25, 40, 55, 65, 80, 95, 110, 125];
+  const A = [14 * F.chinW, 29 * F.chinW, 39 * (0.5 * jw + 0.5 * F.chinW), 47.5 * jw, F.gonX + 2.5, 54.5 * (0.6 * jw + 0.4 * zw), 58.5 * (0.4 * jw + 0.6 * zw), 63.5 * zw, 67.2 * zw, F.zygW + 0.6, 70.5 * (0.5 * zw + 0.5 * cw), 73 * cw, 75.4 * cw, 76.4 * cw];
+  const CZ = [-2, -3, -4, -6, -6, -7, -8, -10, -11, -12, -13, -14, -16, -18];
+  const BF = [84, 91, 94, 96.5, 98, 103, 103, 100, 97, 97, 99, 104, 108, 106];
+  const BB = [40, 48, 55, 59, 62, 70, 84, 95, 99, 100, 100, 98, 95, 91];
+  const NF = [2.2, 2.4, 2.6 + 0.2 * F.chinSquare, 2.7, 2.75, 2.6, 2.55, 2.55, 2.6, 2.6, 2.6, 2.5, 2.4, 2.3];
+  const NB = [2.0, 2.2, 2.5, 2.6, 2.75, 2.6, 2.4, 2.3, 2.3, 2.3, 2.3, 2.3, 2.3, 2.25];
+  const sp = (ys) => makeSpline(Y, ys);
+  const fA = sp(A), fCZ = sp(CZ), fBF = sp(BF), fBB = sp(BB), fNF = sp(NF), fNB = sp(NB);
+  const yTop = 125, crown = F.crown, yBot = yMe - 1;
+  const capB = crown - yTop;
   const nr = F.neckR, ncz = -10;
-  const rayNeck = (o, d) => {
-    const ox = o[0] / nr, oz = (o[2] - ncz) / (nr * 1.04), dx = d[0] / nr, dz = d[2] / (nr * 1.04);
-    const A = dx * dx + dz * dz, B = 2 * (ox * dx + oz * dz), Cc = ox * ox + oz * oz - 1;
-    let t = 1e3;
-    if (A > 1e-12) { const disc = B * B - 4 * A * Cc; if (disc >= 0) t = (-B + Math.sqrt(disc)) / (2 * A); }
-    if (d[1] > 1e-6) t = Math.min(t, (60 - o[1]) / d[1]);
-    return Math.max(0, t);
-  };
-  return (o, d) => {
-    let r = rayEll(prims[0][0], o, d);
-    for (let i = 1; i < prims.length; i++) r = smax(r, rayEll(prims[i][0], o, d), prims[i][1]);
-    return smax(r, rayNeck(o, d), 9);
+  const sec = { A: 0, cz: 0, bf: 0, bb: 0, nf: 2, nb: 2 };
+  function section(y) {
+    const yy = clamp(y, yBot, yTop);
+    let A0 = fA(yy), bf = fBF(yy), bb = fBB(yy), nf = fNF(yy), nb = fNB(yy);
+    let cz = fCZ(yy);
+    if (y > yTop) {
+      const u = Math.min(1, (y - yTop) / capB);
+      const f = Math.sqrt(Math.max(0, 1 - u * u));
+      A0 *= f; bf = (bf + cz) * f + (1 - f) * 0; bb = (bb - cz) * f; cz = 0;
+      // keep the cap centred over the cranium: front/back measured from z = 0
+      nf = lerp(nf, 2.05, u); nb = lerp(nb, 2.05, u);
+      sec.A = A0; sec.cz = -2 * (1 - u); sec.bf = bf + 2 * (1 - u); sec.bb = bb - 2 * (1 - u); sec.nf = nf; sec.nb = nb;
+      return sec;
+    }
+    if (y < yBot) {
+      const u = Math.min(1, (yBot - y) / 7);
+      const f = Math.sqrt(Math.max(0, 1 - u * u));
+      A0 *= f; bf = 30 + (bf - 30) * f; bb *= f;
+    }
+    sec.A = A0; sec.cz = cz; sec.bf = bf; sec.bb = bb; sec.nf = nf; sec.nb = nb;
+    return sec;
+  }
+  function rhoSec(S, sx, cz) {
+    if (S.A <= 0.01) return 0;
+    const n = cz >= 0 ? S.nf : S.nb, B = cz >= 0 ? S.bf : S.bb;
+    if (B <= 0.01) return 0;
+    const a = Math.abs(sx) / S.A, b = Math.abs(cz) / B;
+    return Math.pow(Math.pow(a, n) + Math.pow(b, n), -1 / n);
+  }
+  // signed distance-like function along a ray: horizontal radius of p minus the surface radius there
+  function f(o, d, t) {
+    const px = o[0] + t * d[0], py = o[1] + t * d[1], pz = o[2] + t * d[2];
+    const S = section(py);
+    const qz = pz - S.cz;
+    const rp = Math.hypot(px, qz) || 1e-9;
+    const rs = rhoSec(S, px / rp, qz / rp);
+    // neck (round, centre z = ncz), only below the skull base
+    const nz = pz - ncz, rn = Math.hypot(px, nz * 0.96) || 1e-9;
+    const neckOn = 1 - sstep(10, 40, py);
+    const fNeck = neckOn > 0 ? rn - nr * neckOn : 1e9;
+    const fSec = rp - rs;
+    // smooth min of the two "outside distances" = smooth union of the volumes
+    return -smax(-fSec, -fNeck, 9);
+  }
+  return function (o, d) {
+    // bracket then secant/bisection on t
+    let a = 2, b = 260;
+    let fa = f(o, d, a), fb = f(o, d, b);
+    if (fa > 0) return 0;
+    if (fb < 0) return b;
+    let t = 0;
+    for (let it = 0; it < 40; it++) {
+      t = a + (b - a) * clamp(fa / (fa - fb), 0.05, 0.95);
+      const ft = f(o, d, t);
+      if (Math.abs(ft) < 0.005 || b - a < 0.01) break;
+      if (ft > 0) { b = t; fb = ft; } else { a = t; fa = ft; }
+    }
+    return t;
   };
 }
 
@@ -143,6 +178,7 @@ export function makeFace(F) {
     let z = profZ(y);
     const Rc = rcF(y);
     z -= ax * ax / (2 * Rc) + 0.0000018 * ax * ax * ax * ax * (1 + 2 * sstep(20, -30, y));
+    { const e = Math.max(0, ax - 40); z -= 0.12 * e * e; }   // dive under the lofted hull at the sides
     // brow ridge: arc above each orbit + glabella
     const bx = ax - 22, byc = 104.5 + 3.5 * g1((ax - 26) / 14) - 0.004 * bx * bx;
     z += F.browRidge * g1((y - byc) / 5.5) * g1(bx / 20) * (1 - 0.35 * sstep(20, 46, ax));

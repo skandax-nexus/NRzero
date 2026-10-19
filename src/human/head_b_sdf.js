@@ -360,7 +360,7 @@ export function makeField(m) {
   const EA0 = -1.75, EA1 = 2.05, EB0 = -1.35, EB1 = 1.4, ENA = 48, ENB = 40;
   const eyeGrid = { 1: null, '-1': null };
   function buildEyeGrid(side, base) {
-    const R = new Float32Array((ENA + 1) * (ENB + 1)), Wt = new Float32Array(R.length);
+    const R = new Float32Array((ENA + 1) * (ENB + 1)), AD = new Float32Array(R.length);
     const cy = E.y + side * m.asym.eyeDy;
     const fold = m.lidFoldAmt, deep = clamp(m.eyeDepth + 0.4 * m.brow * mal, -1, 1.5);
     const rL = Re + m.lidT;
@@ -375,23 +375,20 @@ export function makeField(m) {
         const k = j * (ENA + 1) + i;
         // direction (left-eye local; mirrored by side)
         const dx = sin(al) * cos(be), dy = sin(be), dz = cos(al) * cos(be);
-        // march from inside the head outward to the base surface
-        let r = 0.0065, f = base(side * (E.x + dx * r), cy + dy * r, E.z + dz * r), prev = r, pf = f;
-        let hit = 0.05;
-        if (f >= 0) hit = r;
-        else {
-          for (let it = 0; it < 40 && r < 0.05; it++) {
-            prev = r; pf = f;
-            r += max(-f * 0.9, 0.0006);
-            f = base(side * (E.x + dx * r), cy + dy * r, E.z + dz * r);
-            if (f >= 0) {
-              let a = prev, b = r;
-              for (let q = 0; q < 5; q++) { const c = (a + b) * 0.5; if (base(side * (E.x + dx * c), cy + dy * c, E.z + dz * c) >= 0) b = c; else a = c; }
-              hit = (a + b) * 0.5; break;
-            }
+        // march outward from near the eyeball centre to the first crossing of the base surface
+        let r = 0.0075, f = base(side * (E.x + dx * r), cy + dy * r, E.z + dz * r);
+        const s0 = f >= 0;
+        let hit = 0.045;
+        for (let it = 0; it < 60 && r < 0.045; it++) {
+          const prev = r;
+          r += max(abs(f) * 0.8, 0.0005);
+          f = base(side * (E.x + dx * r), cy + dy * r, E.z + dz * r);
+          if ((f >= 0) !== s0) {
+            let a = prev, b = r;
+            for (let q = 0; q < 6; q++) { const c = (a + b) * 0.5; if ((base(side * (E.x + dx * c), cy + dy * c, E.z + dz * c) >= 0) === s0) a = c; else b = c; }
+            hit = (a + b) * 0.5; break;
           }
         }
-        void pf;
         const Rf = hit;
         // lid design: upper and lower branches blended smoothly across the fissure line
         const L = lidAt(al);
@@ -419,13 +416,11 @@ export function makeField(m) {
         let Rl = mix(Rd, Ru, smoothstep(-0.1, 0.1, dU - dL));
         // canthal corners: lids merge, then relax onto the base face
         if (dA > 0) Rl = mix(Rl, max(Rf, Rl), smoothstep(0.0, 0.16, dA));
-        // overall blend weight: 1 near the lids, 0 at the grid edge
-        const ea = min((al - EA0) / 0.3, (EA1 - al) / 0.3), eb = min((be - EB0) / 0.3, (EB1 - be) / 0.3);
-        const w = smoothstep(0, 1, min(ea, eb));
-        // far from the fissure follow the base face
-        const far = smoothstep(0.75, 1.1, max(dU, dL, dA * 1.4));
+        // far from the fissure follow the base face (the orbit hollow)
+        const angD = max(dU, dL, dA * 1.3);
+        const far = smoothstep(0.5, 0.78, angD);
         R[k] = mix(Rl, Rf, far);
-        Wt[k] = w;
+        AD[k] = angD;
       }
     }
     // gradient factor of the radial field: 1/sqrt(1 + |grad_angle R|^2 / R^2)
@@ -440,18 +435,15 @@ export function makeField(m) {
       const rr = max(R[k], 0.008);
       Gn[k] = 1 / sqrt(1 + (gA * gA + gB * gB) / (rr * rr));
     }
-    return { R, Wt: Gn };
+    return { R, Gn, AD };
   }
   function eyeSample(G, al, be) {
     let fi = (al - EA0) / (EA1 - EA0) * ENA, fj = (be - EB0) / (EB1 - EB0) * ENB;
     if (fi < 0 || fj < 0 || fi > ENA || fj > ENB) return null;
     fi = min(fi, ENA - 0.0001); fj = min(fj, ENB - 0.0001);
     const i = fi | 0, j = fj | 0, a = fi - i, b = fj - j, k = j * (ENA + 1) + i;
-    const R = G.R, W = G.Wt;
-    return [
-      (R[k] * (1 - a) + R[k + 1] * a) * (1 - b) + (R[k + ENA + 1] * (1 - a) + R[k + ENA + 2] * a) * b,
-      (W[k] * (1 - a) + W[k + 1] * a) * (1 - b) + (W[k + ENA + 1] * (1 - a) + W[k + ENA + 2] * a) * b,
-    ];
+    const bl = (T) => (T[k] * (1 - a) + T[k + 1] * a) * (1 - b) + (T[k + ENA + 1] * (1 - a) + T[k + ENA + 2] * a) * b;
+    return [bl(G.R), bl(G.Gn), bl(G.AD)];
   }
   function eyeSide(d, x, y, z, side) {
     const ex = side * x - E.x, ey = y - (E.y + side * m.asym.eyeDy), ez = z - E.z;
@@ -462,10 +454,11 @@ export function makeField(m) {
     const G = eyeGrid[side];
     const sm = G ? eyeSample(G, al, be) : null;
     if (sm) {
-      // replace the base by the eye relief inside the region W (asymmetric ellipsoid around the eye)
-      const dW = ell(ex - 0.0035, ey - 0.0015, ez - 0.0035, 0.0225, 0.0205, 0.024);
+      // replace the base by the eye relief inside the region W: a cone of directions around the
+      // lids (angular distance < 0.85 rad) out to r = 0.03; the relief equals the base at its edge
+      const dW = max((sm[2] - 0.85) * r, r - 0.03);
       const dE = (r - sm[0]) * sm[1];
-      d = smin(smax(d, -dW, 0.0015), smax(dE, dW, 0.0015), 0.0015);
+      d = smin(smax(d, -dW, 0.0012), smax(dE, dW, 0.0012), 0.0012);
     }
     // palpebral fissure: radial window between the lid margins (= lid margin walls)
     const L = lidAt(al);
@@ -700,6 +693,16 @@ export function makeField(m) {
         // mentolabial sulcus
         const ms = rcap(x, y, z, -0.011, yM - 0.0175 - 0.002 * m.lips, m.chinZ + 0.0035, 0.0028, 0.011, yM - 0.0175 - 0.002 * m.lips, m.chinZ + 0.0035, 0.0028);
         d = smax(d, -ms, 0.006);
+      }
+      // orbit hollows (the socket the lids sit in; the eye relief replaces the centre)
+      if (ax > 0.008 && ax < 0.06 && y > yE - 0.03 && y < yE + 0.032) {
+        for (const sd of [1, -1]) {
+          const ox = sd * x - E.x, oy = y - (E.y + sd * m.asym.eyeDy), oz = z - E.z;
+          if (ox < -0.03) continue;
+          const deepO = clamp(m.eyeDepth + 0.4 * m.brow * mal, -1, 1.5);
+          const hol = ell(ox - 0.0012, oy - 0.0012 - 0.001 * deepO, oz - 0.0005, 0.0185, 0.0148 + 0.0008 * deepO, 0.0185);
+          d = smax(d, -hol, 0.0065 + 0.0015 * max(0, m.lidFoldAmt) + 0.002 * young);
+        }
       }
       // nose and lips
       d = noseMass(d, x, y, z);
