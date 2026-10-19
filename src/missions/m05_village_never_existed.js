@@ -15,15 +15,26 @@ import * as V from '../world/env_m5.js';
 const { sm, lerp, WALL, DOOR, TERRACE_Y: TY } = V;
 
 // ---------- cast added by this mission ----------
-registerCast('ama', {
-  name: 'AMA OSEI', role: 'Caretaker · Reservoir 7 · 2049',
+registerCast('caretaker', {
+  name: 'INGRID HOLT', role: 'Caretaker · Reservoir 7 · 2049',
   bio: 'Has kept the dam at Reservoir 7 since it was filled. Grows beans on the old terrace. Asks few questions.',
-  look: { female: true, height: 1.6, build: 1.05, skin: 0x5e3a26, hair: 0xb8b4ae, hairStyle: 'bun', eyes: 0x24160c, top: 0x5a6a4a, topKind: 'fabric', vest: 0xd9781e, pants: 0x3a3a34, boots: 0x2a2018, glasses: true },
-  vp: { sex: 'f', pitch: 0.86, rate: 0.92, langs: ['en-GB', 'en-ZA', 'en-US'] },
+  // 2049 field wear: graphite-olive softshell parka over a technical knit, cargo trousers, work boots; AR earpiece,
+  // a ruggedised slate and an AR earpiece are attached in the mission (see dressCaretaker).
+  look: { era: '2049', template: 'arin', female: true, age: 57, height: 1.66, build: 1.02, skin: 0xcf9f82, hair: 0x6a625a, hairStyle: 'short', eyes: 0x4a5a5a,
+    top: 0x3b4441, topKind: 'synthetic', topType: 'jacket', coat: 0x3d4842, coatKind: 'fabric', coatType: 'long', pants: 0x272b30, pantsType: 'cargo', shoes: 'boots', boots: 0x1b1d20,
+    glasses: true, wrinkles: 0.55, face: { jaw: 0.1, cheek: 0.2, nose: 0.1, noseWidth: 0, lips: -0.1, brow: 0.1, eyeSize: -0.05, faceLength: 0.15, chin: 0.05 } },
+  rimColor: 0x8fd8ff,
+  vp: { sex: 'f', pitch: 0.86, rate: 0.92, langs: ['en-GB', 'en-IE', 'en-US'] },
 });
-registerCast('echo', { name: 'ECHO', role: 'Temporal residue · c. 400 CE', voice: true, vp: { sex: 'f', pitch: 0.8, rate: 0.86, langs: ['en-GB', 'en-US'] } });
+registerCast('echo', { name: 'ECHO', role: 'Temporal residue', voice: true, vp: { sex: 'f', pitch: 0.8, rate: 0.86, langs: ['en-GB', 'en-US'] } });
+registerCast('echo2049', { name: 'ECHO · 2029', role: 'Temporal residue · Helix survey', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 1.0, langs: ['en-US', 'en-GB'] } });
 registerCast('villager', { name: 'VILLAGER', role: 'The lower village', vp: { sex: 'm', pitch: 0.95, rate: 0.98, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
-registerCast('potter', { name: 'IRU', role: 'Potter · the upper terrace', look: { female: true, height: 1.6, build: 1.0, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', eyes: 0x24160c, top: 0x9b3b24, topKind: 'fabric', sash: 0xd0a24a, pants: 0x5a4632, boots: 0x4a3220, bracelets: 0xc9a050 }, rimColor: 0xffb05a, glow: 0x3a2410, bg: 0x140d08, vp: { sex: 'f', pitch: 1.05, rate: 1.0, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
+// ancient settlement wear: undyed linen tunic, red-ochre wrap, leg wraps and sandals
+registerCast('potter', { name: 'IRU', role: 'Potter · the upper terrace',
+  look: { era: 'ancient', template: 'mirela', female: true, age: 46, height: 1.6, build: 1.0, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', eyes: 0x24160c, top: 0xb4884e, topKind: 'fabric', topType: 'tunic', sash: 0x9b3b24, pants: 0x5a4632, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, wrinkles: 0.35 },
+  rimColor: 0xffb05a, glow: 0x3a2410, bg: 0x140d08, vp: { sex: 'f', pitch: 1.05, rate: 1.0, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
+// every unnamed villager wears the era's clothes (keeps the 3D cast on its settler templates)
+const ancientLook = (r, o = {}) => ({ ...settlerLook(r), era: 'ancient', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', ...o });
 
 // ---------- music: one valley motif (A C E D) carried by each state's instruments ----------
 // thriving: frame drum, plucked strings, breathy flute and the waterwheel's pulse (82 BPM)
@@ -483,7 +494,7 @@ export default {
     const poles = []; for (let k = 0; k < 6; k++) poles.push({ x: 39 + k * 0.5, y: hB(39 + k * 0.5, 50 - k * 18) - 0.3, z: 50 - k * 18 });
     vis(V.instances(new THREE.CylinderGeometry(0.12, 0.16, 9, 6), MAT.timberOld, poles.map(p => ({ ...p, y: p.y + 4.5 }))), ['flooded']);
     for (let k = 0; k < 5; k++) { const a = poles[k], b = poles[k + 1]; vis(cableCurve([[a.x, a.y + 8.6, a.z], [(a.x + b.x) / 2, (a.y + b.y) / 2 + 7.2, (a.z + b.z) / 2], [b.x, b.y + 8.6, b.z]], 0.015), ['flooded']); }
-    // Ama's cottage and garden fence on the west terrace
+    // the caretaker's cottage and garden fence on the west terrace
     const cot = new V.MergeBin();
     cot.add('wall', new THREE.BoxGeometry(5.2, 2.6, 4.2), V.mat4(-27.6, TY + 1.3, 22.4));
     const roofG = new THREE.BoxGeometry(5.8, 0.12, 2.6); cot.add('roof', roofG, V.mat4(-27.6, TY + 2.95, 21.4, 0, 0.28)); cot.add('roof', roofG.clone(), V.mat4(-27.6, TY + 2.95, 23.4, 0, -0.28));
@@ -635,21 +646,28 @@ export default {
     const kai = game.player.char;
     const niko = game.actor('niko', null, -27.5, TY, 31.5, Math.PI);
     const tala = game.actor('tala', null, 7.8, 0, 5.5, Math.PI / 2); vis(tala.root, ['thriving']);
-    const ama = game.actor('ama', null, -23.6, TY, 19.6, Math.PI / 2 + 0.3); vis(ama.root, ['flooded']);
+    const ama = game.actor('caretaker', null, -23.6, TY, 19.6, Math.PI / 2 + 0.3); vis(ama.root, ['flooded']); V.dressCaretaker(ama);
     const potter = game.actor('potter', null, -22.8, TY, -1.6, -Math.PI / 2); vis(potter.root, ['thriving']);
     const walkers = [];
-    const crowd = (lane, look) => { const w = new Walker(game, look || settlerLook(R), lane); w.c.root.position.y = lane.y; vis(w.c.root, ['thriving']); walkers.push(w); return w; };
-    crowd({ x: -4.2, y: 0.02, z0: -12, z1: 18, speed: 0.9 }); crowd({ x: -1.2, y: 0.02, z0: 20, z1: -6, speed: 1.0 }); crowd({ x: 2.6, y: 0.02, z0: -10, z1: 8, speed: 0.8 });
-    crowd({ x: -25.5, y: TY + 0.02, z0: -26, z1: -18, speed: 0.6 }); crowd({ x: -23, y: TY + 0.02, z0: 10, z1: 21, speed: 0.7 });
-    for (const [x, z, ry, y] of [[-1.9, 7.4, 2.6, 0], [0.2, 6.6, -2.2, 0], [-2.2, 4.6, 0.5, 0], [8.4, 4.0, 1.4, 0], [-24.4, -3.0, 2.0, TY], [-6.3, -12.6, 2.6, 0], [-28, 14, 1.2, TY]]) crowd({ x, y: y + 0.02, z0: z, z1: z, idle: true, ry });
-    for (let k = 0; k < 3; k++) crowd({ x: -3 + k * 2.2, y: 0.02, z0: 0, z1: 10, speed: 1.7 }, { ...settlerLook(R), height: 1.08 + R() * 0.16, build: 0.8 });
-    game.onUpdate(dt => { if (T.current === 'thriving') for (const w of walkers) w.update(dt); });
+    const crowd = (lane, look) => { const w = new Walker(game, look || ancientLook(R), lane); w.c.root.position.y = VAL.hBase(lane.x, lane.z0); vis(w.c.root, ['thriving']); walkers.push(w); return w; };
+    // lanes run between the houses (checked against V.HOUSES); everyone stands on the terrain
+    crowd({ x: -4.2, z0: -12, z1: 12, speed: 0.9 }); crowd({ x: 1.0, z0: 20, z1: -6, speed: 1.0 }); crowd({ x: -5.6, z0: -10, z1: 10, speed: 0.8 });
+    crowd({ x: -25.5, z0: -26, z1: -18, speed: 0.6 }); crowd({ x: -23, z0: 10, z1: 21, speed: 0.7 });
+    // by the fire on log seats, at the water steps, the kiln yard, a house door, and a woman weeding the south field
+    const SIT = [[-2.45, 6.55, Math.PI / 2 + 0.25], [-1.55, 7.45, Math.PI - 0.2], [-1.9, 4.75, 0.3]];
+    for (const [x, z, ry] of SIT) crowd({ x, z0: z, z1: z, idle: true, ry }).c.pose = 'sit';
+    const seats = SIT.map(([x, z, ry]) => ({ x: x - Math.sin(ry) * 0.12, y: VAL.hBase(x, z) + 0.2, z: z - Math.cos(ry) * 0.12, ry: ry + Math.PI / 2 }));
+    { const sg = new THREE.CylinderGeometry(0.21, 0.23, 1.1, 9); sg.rotateZ(Math.PI / 2); vis(V.instances(sg, MAT.timber, seats), ['thriving']); }
+    for (const [x, z, ry, pose] of [[8.4, 4.0, 1.4, 'talk'], [-24.4, -3.0, 2.0, 'work'], [-6.3, -12.6, 2.6, 'look'], [-28, 14, 1.2, 'work']]) crowd({ x, z0: z, z1: z, idle: true, ry }).c.pose = pose;
+    crowd({ x: -3.0, z0: -10, z1: 1, speed: 1.7 }, ancientLook(R, { height: 1.12, build: 0.8, child: true }));
+    crowd({ x: 2.0, z0: 0, z1: 9, speed: 1.6 }, ancientLook(R, { height: 1.2, build: 0.8, child: true }));
+    game.onUpdate(dt => { if (T.current !== 'thriving') return; for (const w of walkers) { w.update(dt); const p = w.c.root.position; p.y = VAL.hBase(p.x, p.z); } });
     // the work crew at the head works (thriving)
-    for (const [x, z, ry] of [[B55 + 5.6, -52.6, -1.2], [B55 + 6.2, -50.2, -1.6], [B55 + 5.0, -48.4, -2.2]]) vis(game.ambient(settlerLook(R), x, TY, z, ry).root, ['thriving']);
+    for (const [x, z, ry] of [[B55 + 5.6, -52.6, -1.2], [B55 + 6.2, -50.2, -1.6], [B55 + 5.0, -48.4, -2.2]]) { const c = game.ambient(ancientLook(R, { lod: true }), x, TY, z, ry); c.pose = 'work'; vis(c.root, ['thriving']); }
     // residue echoes (abandoned): the last families leaving with their jars
     const echoes = [];
-    for (let k = 0; k < 3; k++) { const w = new Walker(game, settlerLook(R), { x: -4.5 + k * 0.9, y: 0.02, z0: -12 + k * 2, z1: 32, speed: 0.55 }); w.c.setGhost(0x9fe8ff); resid(w.c.root, 'abandoned'); echoes.push(w); }
-    game.onUpdate(dt => { if (game.residueOn && T.current === 'abandoned') for (const w of echoes) w.update(dt); });
+    for (let k = 0; k < 3; k++) { const w = new Walker(game, ancientLook(R), { x: 0.4 + k * 0.6, z0: -8 + k * 2, z1: 20, speed: 0.55 }); w.c.setGhost(0x9fe8ff); resid(w.c.root, 'abandoned'); echoes.push(w); }
+    game.onUpdate(dt => { if (game.residueOn && T.current === 'abandoned') for (const w of echoes) { w.update(dt); const p = w.c.root.position; p.y = VAL.hBase(p.x, p.z); } });
 
     // ---------- Niko follows Kai across every transition (breadcrumb trail) ----------
     const trail = []; let nIdx = 0, nikoFollow = false;
@@ -795,7 +813,7 @@ export default {
     });
     const setGates = () => GATES.forEach((g, i) => { g.userData.slab.position.y = S.gates[i] ? 0.85 : 0.1; });
     setGates();
-    GATES.forEach((g, i) => act({ pos: [g.position.x + 0.6, TY + 0.9, g.position.z], radius: 2.0, states: ['thriving'], prompt: 'Move the stone gate', enabled: () => questStarted && !S.quest, onUse: safe(async () => {
+    GATES.forEach((g, i) => act({ pos: [g.position.x + 0.6, TY + 0.9, g.position.z], radius: 2.0, states: ['thriving'], prompt: ['Move the north field gate', 'Move the kiln yard gate', 'Move the south field gate'][i], enabled: () => questStarted && !S.quest, onUse: safe(async () => {
       if (!questStarted || S.quest || T.current !== 'thriving') return;
       S.gates[i] = !S.gates[i]; setGates(); refreshWorld(); audio.sfxPlay('door');
       if (S.gates[1]) ui.subtitle('potter', 'The kilns! You are drowning my kilns!', 2600);
@@ -812,7 +830,7 @@ export default {
     }) }));
     act({ pos: [-22.8, TY + 1.4, -1.6], radius: 2.6, states: ['thriving'], prompt: 'Talk to Iru the potter', onUse: () => ui.subtitle('potter', S.quest ? 'The yard is dry for the first time this season. The cup will be ready when you come back. Whenever that is.' : 'The leat floods my yard and the barley dies of thirst. The gates are marked, but nobody reads marks anymore.', 4200) });
     // Tala: the water quest hook (after the first conversation)
-    act({ pos: [7.8, 1.5, 5.5], radius: 2.6, states: ['thriving'], prompt: 'Ask Tala about the fields', enabled: () => S.metTala && !questStarted && !busy && S.toured, onUse: safe(async () => {
+    act({ pos: [7.8, 1.5, 5.5], radius: 2.6, states: ['thriving'], prompt: 'Ask Tala about the fields', enabled: () => S.metTala && !questStarted && !busy && S.toured && !talaAtHead, onUse: safe(async () => {
       if (questStarted || busy) return; busy = true;
       try {
         await enter([5.2, 1.9, 8.2], [7.8, 1.6, 5.5], 1.2, 42);
@@ -826,7 +844,7 @@ export default {
         questStarted = true; ui.toast('OPTIONAL · THE WATER THAT REMEMBERS\nSet the three stone gates on the upper terrace leat', 5000);
       } finally { tala.lookTarget = null; leave(); busy = false; }
     }) });
-    act({ pos: [6.4, 1.3, 1.9], radius: 2.4, states: ['thriving'], prompt: 'Read Tala\'s mural', onUse: safe(async () => {
+    act({ pos: [6.4, 1.3, 1.9], radius: 2.4, states: ['thriving'], prompt: 'Read Tala\'s mural', enabled: () => !talaAtHead, onUse: safe(async () => {
       if (busy) return;
       if (muralRead) { ui.subtitle('kai', 'The first road, the hungry road, the road that stays. Seventeen stars along the top.', 3600); return; }
       busy = true;
@@ -858,16 +876,16 @@ export default {
         ama.lookTarget = kai.head;
         if (amaTalks++ === 0) {
           await game.talk([
-            ['ama', 'Survey people again? You picked a muddy year. Mind the beans.'],
+            ['caretaker', 'Survey people again? You picked a muddy year. Mind the beans.'],
             ['kai', 'Who built the dam?'],
-            ['ama', 'Helix. Twenty thirty-one. They said the valley was empty. Nobody ever lived here, they said.'],
+            ['caretaker', 'Helix. Twenty thirty-one. They said the valley was empty. Nobody ever lived here, they said.'],
             ['niko', 'I lived here.'],
-            ['ama', 'Then you are older than you look, young man.'],
+            ['caretaker', 'Then you are older than you look, young man.'],
           ]);
-          ui.addEvidence('"Nobody ever lived here"', 'Ama Osei, caretaker of Reservoir 7: Helix built the dam in 2031 and declared the valley had never been inhabited.', 'RESERVOIR 7 · 2049');
+          ui.addEvidence('"Nobody ever lived here"', 'Ingrid Holt, caretaker of Reservoir 7: Helix built the dam in 2031 and declared the valley had never been inhabited.', 'RESERVOIR 7 · 2049');
         } else if (S.quest) {
-          await game.talk([['ama', 'The channel is running again. Nobody alive remembers who opened it.'], ['ama', 'And that gravel bar out to the old levee. Straight as a ruler. Rivers do not do that on their own.']]);
-        } else await game.say('ama', 'The spring under the cliff dried up before I came. Beans hate me for it.');
+          await game.talk([['caretaker', 'The channel is running again. Nobody alive remembers who opened it.'], ['caretaker', 'And that gravel bar out to the old levee. Straight as a ruler. Rivers do not do that on their own.']]);
+        } else await game.say('caretaker', 'The spring under the cliff dried up before I came. Beans hate me for it.');
       } finally { ama.lookTarget = null; busy = false; }
     }) });
     // residue echo (abandoned)
@@ -899,11 +917,23 @@ export default {
     // the main beats
     // ======================================================================================
     // --- the river diversion (thriving) ---
-    let talaAtHead = false, levered = 0;
-    const TALA_HEAD = [20.6, -49.2]; const moveTalaToHead = () => { if (talaAtHead) return; talaAtHead = true; tala.root.position.set(TALA_HEAD[0], TY, TALA_HEAD[1]); tala.root.rotation.y = Math.PI * 0.85; };
+    let talaAtHead = false, levered = 0, headTalk = false;
+    const TALA_HEAD = [20.6, -49.2], TALA_STEPS = [7.8, 5.5];
+    // Tala works at the water steps; once Kai heads up to the shelf she is already waiting at the head works
+    // (she only moves while Kai is far from both spots, so nobody sees her teleport)
+    game.onUpdate(() => {
+      if (busy) return;
+      const p = game.player.pos, wantHead = S.toured && !S.diverted && (headTalk || p.z < -30);
+      if (wantHead === talaAtHead) return;
+      if (Math.hypot(p.x - TALA_STEPS[0], p.z - TALA_STEPS[1]) > 18 && Math.hypot(p.x - TALA_HEAD[0], p.z - TALA_HEAD[1]) > 12) {
+        talaAtHead = wantHead;
+        if (wantHead) { tala.root.position.set(TALA_HEAD[0], TY, TALA_HEAD[1]); tala.root.rotation.y = Math.PI * 0.85; } else { tala.root.position.set(TALA_STEPS[0], 0, TALA_STEPS[1]); tala.root.rotation.y = Math.PI / 2; }
+      }
+    });
     act({ pos: [TALA_HEAD[0], TY + 1.5, TALA_HEAD[1]], radius: 2.8, states: ['thriving'], prompt: 'Speak with Tala at the head works', enabled: () => talaAtHead && levered === 0 && !S.diverted, onUse: safe(async () => {
       if (busy || T.current !== 'thriving') return; busy = true;
       try {
+        headTalk = true;
         await enter([TALA_HEAD[0] - 1.6, TY + 2.3, TALA_HEAD[1] + 3.2], [B55, TY + 0.6, -53], 1.4, 48);
         tala.lookTarget = kai.head; placeNiko(TALA_HEAD[0] - 1.4, TALA_HEAD[1] + 1.2, Math.PI);
         await game.talk([
@@ -1139,7 +1169,7 @@ export default {
     // 2 · the Water Ring: the forced tour through the three states
     await new Promise(res => { const it = act({ pos: [-15.3, TY + 1.4, doorMid], radius: 2.6, prompt: 'Touch the Water Ring', onUse: () => { done(it); res(); } }); });
     await enter([-12.2, TY + 2.6, doorMid + 3.6], [-16.2, TY + 1.9, doorMid], 1.2, 44);
-    kai.pose = 'reach'; kai.wristBoost = 12; ringLight.intensity = 8; audio.sfxPlay('switch');
+    kai.pose = 'work'; kai.wristBoost = 12; ringLight.intensity = 8; audio.sfxPlay('switch');
     placeNiko(-14.4, doorMid + 1.6, -Math.PI / 2);
     await game.say('niko', 'Wait—!');
     await T.switchTo('abandoned', { force: true, free: true, dur: 1100 });
@@ -1163,7 +1193,6 @@ export default {
     ui.toast('TEMPORAL STATES OF THIS VALLEY\n1 · c. 1000 BCE      2 · c. 400 CE      3 · 2049      (Q cycles)\nNiko holds on: he follows you through every switch', 7000);
     objective(mainObjective());
     game.checkpoint(-15.6, TY + 0.36, doorMid + 2.4, Math.PI / 2);
-    moveTalaToHead();
     // the main beats resolve through the interactions above; wait for the machine and the comparison
     await until(() => studied);
     await until(() => (compared.thriving || compared.abandoned) || game.time > 1e9);

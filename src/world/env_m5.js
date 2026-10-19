@@ -533,3 +533,36 @@ export function surveyTagTex(security = 'BRANDT') {
 export function placardTex() {
   return signTex(['OUTLET G-2 · MANUAL RELEASE', '1  OPEN BYPASS V1', '2  OPEN BYPASS V2', '3  WAIT: GAUGE BELOW 60', '4  RELEASE MAIN GATE', 'NEVER RELEASE AGAINST PRESSURE'], '#e6e2d8', '#1a1c20', 'placard', { band: '#c8322a', title: 'RESERVOIR 7 · HELIX HYDRO', rust: true });
 }
+
+// ---------------------------------------------------------------------------------------------
+// 2049 field kit for the caretaker (attached to the realistic cast's bones; no edits to the cast itself):
+// a ruggedised slate in the right hand with a live screen, and an AR earpiece with a status LED.
+// ---------------------------------------------------------------------------------------------
+export function dressCaretaker(ch) {
+  const out = [];
+  const hand = ch.arms?.[0]?.hand, head = ch.head;
+  const shell = new THREE.MeshStandardMaterial({ color: 0x23272b, roughness: 0.45, metalness: 0.35 });
+  const screen = new THREE.MeshStandardMaterial({ color: 0x050708, emissive: 0x7fd8ff, emissiveIntensity: 0.9, roughness: 0.2,
+    emissiveMap: canvasTex(128, 192, (g, w, h) => {
+      g.fillStyle = '#000'; g.fillRect(0, 0, w, h); g.fillStyle = '#3a7a9a'; g.fillRect(0, 0, w, 18);
+      g.strokeStyle = '#9fe8ff'; g.lineWidth = 3; g.beginPath(); for (let x = 8; x < w - 8; x += 4) g.lineTo(x, 70 + Math.sin(x * 0.12) * 14 + Math.sin(x * 0.05) * 10); g.stroke();
+      g.fillStyle = '#d8f4ff'; for (let k = 0; k < 6; k++) g.fillRect(10, 110 + k * 13, 40 + (k * 37) % 60, 6);
+    }, 'm5slate') });
+  if (hand) {
+    const slate = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.012, 0.21), shell); slate.add(body);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.18), screen); face.rotation.x = -Math.PI / 2; face.position.y = 0.0065; slate.add(face);
+    slate.position.set(0.0, 0.09, 0.03); slate.rotation.set(0.2, 0, Math.PI / 2);
+    hand.add(slate); out.push(slate);
+  }
+  if (head) {
+    const bud = new THREE.Group();
+    const shellM = new THREE.MeshStandardMaterial({ color: 0x1a1d20, roughness: 0.35, metalness: 0.4 });
+    const pod = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.018, 4, 8), shellM); pod.rotation.x = Math.PI / 2; bud.add(pod);
+    const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.0022, 0.0022, 0.07, 5), shellM); boom.rotation.x = Math.PI / 2 - 0.35; boom.position.set(0, -0.012, 0.035); bud.add(boom);
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.0035, 6, 4), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x5fe6ff, emissiveIntensity: 3 })); led.position.set(-0.009, 0.004, 0); bud.add(led);
+    bud.position.set(-0.078, 0.07, 0.0);
+    head.add(bud); out.push(bud);
+  }
+  return out;
+}

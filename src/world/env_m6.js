@@ -234,25 +234,37 @@ function gearGeometry(R, teeth, thick, hole = 0.2) {
 // ---------------------------------------------------------------------------------------------
 // Cast: the clockmaker, his younger self (2026), his daughter Lotte (2026), and the recording.
 // ---------------------------------------------------------------------------------------------
+// Costumes follow the era of the scene (era field + colours): 2049 = contemporary-futuristic workwear,
+// 2026 = ordinary present-day clothes. Templates are chosen explicitly so no one borrows a principal's face
+// and no period piece (top hat, headscarf, long skirt) appears in the city eras.
 export function registerM6Cast() {
   registerCast('oskar', {
-    name: 'OSKAR HENSEL', role: 'Clockmaker · Old Quarter',
+    name: 'OSKAR HENSEL', role: 'Clockmaker · Old Quarter · 2049',
     bio: 'Seventy-eight. Has not left his house in twenty-three years. Keeps a promise to a man with Kai\'s face.',
-    look: { height: 1.7, build: 0.94, age: 78, skin: 0xe6bea4, hair: 0xe4e0d8, hairStyle: 'short', eyes: 0x5a6a78, beard: 0xd8d4cc, glasses: true, top: 0x6b5a44, topKind: 'fabric', vest: 0x3a2c20, pants: 0x3c3832, boots: 0x2b2119, belt: 0x2a1d14 },
+    // 2049 workwear: graphite thermal knit, waxed-canvas bench apron with a tool loop, slate technical trousers
+    look: { era: '2049', template: 'ignatz', height: 1.7, build: 0.94, age: 78, skin: 0xe6bea4, hair: 0xe4e0d8, hairStyle: 'grey-swept', eyes: 0x5a6a78, beard: 0xd8d4cc, glasses: true,
+      face: { jaw: -0.2, cheek: 0.35, nose: 0.45, noseWidth: 0.1, lips: -0.35, brow: 0.3, eyeSize: -0.15, faceLength: 0.35, chin: 0.1 }, wrinkles: 0.85,
+      topType: 'sweater', top: 0x3a3f45, topKind: 'synthetic', vest: 0x4a3a2a, pantsType: 'trousers', pants: 0x2e3338, shoes: 'shoes', boots: 0x1c1a18, belt: 0x23201c, gloves: null },
     rimColor: 0xffc070, glow: 0x2a1a0c, bg: 0x120c08,
     vp: { sex: 'm', pitch: 0.7, rate: 0.84, langs: ['en-GB', 'en-IE', 'en-US'] },
   });
   registerCast('oskar26', {
     name: 'OSKAR HENSEL', role: 'Clockmaker · 2026',
     bio: 'Fifty-five, ink on his cuffs, a daughter at the counter. Already building a clock that must never finish.',
-    look: { height: 1.71, build: 1.0, age: 55, skin: 0xe2b496, hair: 0x5a4a3c, hairStyle: 'swept', eyes: 0x5a6a78, stubble: true, glasses: true, top: 0xb8b0a0, topKind: 'fabric', vest: 0x4a3626, pants: 0x3a3630, boots: 0x2b2119, belt: 0x2a1d14 },
+    // 2026: oatmeal crew-neck jumper, canvas shop apron, dark jeans, leather work shoes
+    look: { era: '2026', template: 'town_m5', height: 1.71, build: 1.0, age: 55, skin: 0xe2b496, hair: 0x5a4a3c, hairStyle: 'swept', eyes: 0x5a6a78, stubble: true, glasses: true,
+      face: { jaw: -0.1, cheek: 0.3, nose: 0.4, noseWidth: 0.1, lips: -0.25, brow: 0.25, eyeSize: -0.1, faceLength: 0.3, chin: 0.1 }, wrinkles: 0.35,
+      topType: 'sweater', top: 0xbcb19c, topKind: 'fabric', vest: 0x5a4a38, pantsType: 'trousers', pants: 0x2e3a4c, shoes: 'shoes', boots: 0x3a2a1c, belt: 0x2a1d14 },
     rimColor: 0xffc070, glow: 0x2a1a0c, bg: 0x120c08,
     vp: { sex: 'm', pitch: 0.86, rate: 0.95, langs: ['en-GB', 'en-IE', 'en-US'] },
   });
   registerCast('lotte', {
     name: 'LOTTE HENSEL', role: 'Age 8 · 2026',
     bio: 'The clockmaker\'s daughter. Does her homework on the shop counter and counts the clocks when she is bored.',
-    look: { female: true, height: 1.27, build: 0.82, age: 8, skin: 0xf2cdb2, hair: 0xb88a4e, hairStyle: 'long', eyes: 0x4a6a8a, top: 0xa8424e, topKind: 'fabric', pants: 0x2a3550, boots: 0x5a3020 },
+    // 2026 kid: red hoodie, jeans, white trainers
+    look: { era: '2026', template: 'town_kid', female: true, height: 1.27, build: 0.82, age: 8, skin: 0xf2cdb2, hair: 0xb88a4e, hairStyle: 'tied-back', eyes: 0x4a6a8a,
+      face: { jaw: -0.4, cheek: 0.2, nose: -0.5, noseWidth: -0.2, lips: 0.1, brow: -0.2, eyeSize: 0.45, faceLength: -0.4, chin: -0.2 }, freckles: 0.5,
+      topType: 'jacket', hood: true, top: 0xb03a44, topKind: 'fabric', pantsType: 'trousers', pants: 0x3a5078, shoes: 'shoes', boots: 0xe6e2da },
     rimColor: 0xffd8a0, glow: 0x2a1a10, bg: 0x140d08,
     vp: { sex: 'f', pitch: 1.5, rate: 1.04, langs: ['en-GB', 'en-US'] },
   });
@@ -260,10 +272,14 @@ export function registerM6Cast() {
     name: 'RECORDING · 2026', role: 'Reel found inside the escapement', voice: true,
     vp: { sex: 'm', pitch: 0.7, rate: 0.84, langs: ['en-GB', 'en-US'] },
   });
-  registerCast('neighbor', { name: 'NEIGHBOUR', role: 'Clock quarter', vp: { sex: 'f', pitch: 0.95, rate: 1.0, langs: ['en-GB', 'en-US'] } });
+  registerCast('neighbor', { name: 'NEIGHBOUR', role: 'Clock quarter · 2049', vp: { sex: 'm', pitch: 0.92, rate: 0.98, langs: ['en-GB', 'en-US'] } });
 }
-export const KID_KAI = { height: 1.22, build: 0.82, age: 7, skin: 0xb98463, hair: 0x15100c, hairStyle: 'messy', eyes: 0x3d2a18, top: 0x2a4a6a, topKind: 'fabric', pants: 0x2a2c2f, boots: 0x3a2a1a };
-export const KID_MIRA = { female: true, height: 1.36, build: 0.84, age: 10, skin: 0xd9a585, hair: 0x120d0b, hairStyle: 'long', eyes: 0x2f4a3a, top: 0x6a2a3a, topKind: 'fabric', pants: 0x1f2227, boots: 0x3a2a1a };
+// 2049 neighbour: a sealed charcoal rain shell over a dark knit, umbrella (no period costume)
+export const NEIGHBOR_LOOK = { era: '2049', template: 'arin', height: 1.76, build: 1.0, age: 46, skin: 0xc89a7a, hair: 0x2a2420, hairStyle: 'short', eyes: 0x3a3028, stubble: true,
+  topType: 'jacket', top: 0x262c32, topKind: 'synthetic', coat: 0x2a3038, coatKind: 'synthetic', pantsType: 'trousers', pants: 0x1c2026, shoes: 'boots', boots: 0x141210, umbrella: 0x1e2a36 };
+// Residue echoes of 2026: Kai (7) and Mira (10) in ordinary present-day kids' clothes
+export const KID_KAI = { era: '2026', template: 'wren', height: 1.22, build: 0.82, age: 7, skin: 0xb98463, hair: 0x15100c, hairStyle: 'messy', eyes: 0x3d2a18, topType: 'jacket', hood: true, top: 0x2a4a6a, topKind: 'fabric', pantsType: 'trousers', pants: 0x2f3a4e, shoes: 'shoes', boots: 0x3a2a1a };
+export const KID_MIRA = { era: '2026', template: 'maren', female: true, height: 1.36, build: 0.84, age: 10, skin: 0xd9a585, hair: 0x120d0b, hairStyle: 'bob', eyes: 0x2f4a3a, topType: 'sweater', top: 0x6a2a3a, topKind: 'fabric', pantsType: 'trousers', pants: 0x1f2227, shoes: 'shoes', boots: 0x3a2a1a };
 
 // ---------------------------------------------------------------------------------------------
 // Music: themes that follow the house's beats. A minor world (motif E-B-A = Kai & Mira).
@@ -864,6 +880,46 @@ export function buildHouse(game, T, opts = {}) {
   const rec = new THREE.Group(); rec.position.set(P.shaft[0] + 0.55, TY + 0.62, P.shaft[1]); rec.visible = false; groups['2049'].add(rec);
   { const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.24), new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.5, metalness: 0.4 })); rec.add(body); for (const s of [-1, 1]) { const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.02, 20), M.brass); reel.position.set(s * 0.08, 0.07, 0); rec.add(reel); } const lbl = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.08), new THREE.MeshBasicMaterial({ map: textPlate(['K.V. — FOR WHEN THE CHILD RETURNS'], { bg: '#e8dcc0', size: 26, w: 512, h: 96 }) })); lbl.rotation.x = -Math.PI / 2; lbl.position.y = 0.065; lbl.position.z = 0.09; lbl.scale.set(0.9, 0.9, 1); rec.add(lbl); }
   world.recorder = rec;
+
+  // ---------- optional: the lying clock (2026 display case) ----------
+  // five carriage clocks standing on the display case; one of them shows a time that has not happened yet (8:14)
+  {
+    const caseM = new THREE.MeshStandardMaterial({ color: 0xb08a48, metalness: 0.75, roughness: 0.3 });
+    const capM = new THREE.MeshStandardMaterial({ color: 0x6a4a24, metalness: 0.6, roughness: 0.4 });
+    const cf = clockFace({ paper: '#f6efdc', edge: '#e0d2b0', arabic: true });
+    const times = [[3, 0], [2, 52], [11, 40], [8, 14], [3, 0]];
+    world.carriage = times.map((tm, i) => {
+      const g = new THREE.Group(), z = 1.35 + i * 0.95;
+      g.position.set(5.3, 1.21, z); g.rotation.y = -Math.PI / 2 + (i - 2) * 0.06; groups['2026'].add(g);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.2), caseM); body.position.y = 0.17; g.add(body);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.04, 0.24), capM); top.position.y = 0.36; g.add(top);
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.008, 6, 16, Math.PI), capM); handle.position.y = 0.38; g.add(handle);
+      const face = settableClock(0.105, cf, { noBody: true, h: tm[0], m: tm[1], glow: 0.12 }); face.position.set(0, 0.18, 0.102); g.add(face);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.28, 0.01), capM); door.position.set(0, 0.17, -0.105); g.add(door);
+      return { g, face, door, time: tm, pos: [4.7, 1.4, z], cam: [3.55, 1.62, z + 0.45], look: [5.3, 1.42, z] };
+    });
+    // the boy's wristwatch, hidden inside the lying clock
+    const watch = new THREE.Group();
+    const wcase = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 20), new THREE.MeshStandardMaterial({ color: 0xc0c4c8, metalness: 0.8, roughness: 0.3 })); watch.add(wcase);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.006, 0.17), new THREE.MeshStandardMaterial({ color: 0x1e3a5a, roughness: 0.8 })); strap.position.y = -0.004; watch.add(strap);
+    watch.position.set(5.12, 1.6, world.carriage[3].g.position.z); watch.rotation.set(0.5, 0.4, 0); watch.visible = false; groups['2026'].add(watch);
+    world.boyWatch = watch;
+  }
+  // ---------- optional: the date drum on the pivot column + Hensel's locked drawer (2049 workshop) ----------
+  {
+    const blank = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.38), new THREE.MeshStandardMaterial({ map: textPlate(['·  ·  ·  ·'], { bg: '#2a2620', ink: '#c8b890', size: 120 }), emissive: 0xffffff, emissiveMap: textPlate(['·  ·  ·  ·'], { bg: '#2a2620', ink: '#c8b890', size: 120 }), emissiveIntensity: 0.25, roughness: 0.6 }));
+    const yt = textPlate(['2031'], { bg: '#e8dcc0', ink: '#3a1a0a', size: 150 });
+    const year = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.38), new THREE.MeshStandardMaterial({ map: yt, emissive: 0xffffff, emissiveMap: yt, emissiveIntensity: 0.55, roughness: 0.6 }));
+    for (const m of [blank, year]) { m.position.set(P.pivot[0], 2.45, P.pivot[1] + 0.57); groups['2049'].add(m); }
+    year.position.z += 0.004; year.visible = false;
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.5, 0.05), M.brassDark); frame.position.set(P.pivot[0], 2.45, P.pivot[1] + 0.54); groups['2049'].add(frame);
+    world.dateDrum = { blank, year };
+    const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.26, 0.05), M.darkWood); drawer.position.set(-2.55, 0.92, -2.03); groups['2049'].add(drawer);
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.02), M.brass); lock.position.set(0, 0, -0.035); drawer.add(lock);
+    const lockText = textPlate(['20 · ·'], { bg: '#c89a4a', ink: '#2a1a08', size: 120 });
+    const lockFace = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.08), new THREE.MeshBasicMaterial({ map: lockText })); lockFace.position.set(0, 0, -0.047); lockFace.rotation.y = Math.PI; drawer.add(lockFace);
+    world.drawer = drawer;
+  }
 
   // ---------- atmosphere ----------
   const dustW = new Motes(380, [-8, 0.2, -29, 8, 8.5, -1.5], 0xffe2b0, 0.05, 0.12); groups['2049'].add(dustW.mesh); world.updaters.push(dt => dustW.update(dt)); world.dust = dustW;

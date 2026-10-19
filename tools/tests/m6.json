@@ -53,6 +53,35 @@
 "timeout": 60000
 },
 {
+"eval": "__game.player.place(4.3,0,1.35,Math.PI/2); __game.use('first carriage')"
+},
+{
+"wait": 800
+},
+{
+"until": "__game.control && !__game.ui.dlgActive",
+"timeout": 60000
+},
+{
+"eval": "__game.player.place(4.3,0,4.2,Math.PI/2); null"
+},
+{
+"wait": 600
+},
+{
+"shot": "a03b_carriage.png"
+},
+{
+"eval": "__game.use('fourth carriage')"
+},
+{
+"wait": 800
+},
+{
+"until": "__game.flags.m6boyWatch && __game.control && !__game.ui.dlgActive",
+"timeout": 90000
+},
+{
 "eval": "__game.setResidue(true); null"
 },
 {
@@ -95,6 +124,33 @@
 {
 "until": "document.getElementById('objective-text').textContent.includes('Cross')",
 "timeout": 240000
+},
+{
+"until": "__m6.loop.knows('year')",
+"timeout": 60000
+},
+{
+"eval": "__game.autoChoice=1; __game.player.place(-2.55,0.36,-2.7,0); __game.use('locked drawer')"
+},
+{
+"wait": 800
+},
+{
+"until": "__game.flags.m6survey && __game.control && !__game.ui.dlgActive",
+"timeout": 90000
+},
+{
+"eval": "__game.autoChoice=0; __game.player.place(0,0,-21.8,Math.PI); null"
+},
+{
+"until": "__m6.loop.resets>=1 && __game.control",
+"timeout": 60000
+},
+{
+"eval": "({resets:__m6.loop.resets, z:__game.player.pos.z, restart:__m6.loop.restart})"
+},
+{
+"shot": "a04b_after_reset.png"
 },
 {
 "eval": "__game.use('shard')"
@@ -286,6 +342,6 @@
 "shot": "a13_end.png"
 },
 {
-"eval": "({done:__game.flags.m6done, ninth:__game.flags.ninthMinute, debt:__game.flags.clockmakerDebt, watch:__game.flags.keepersWatch, shards:__game.flags.m6shards, resets:__game.flags.m6loopResets, ledger:__game.flags.varenLedger, kids:__game.flags.m6sawKids, know:__game.flags.loopKnowledge, ev:__game.ui.evidence.map(e=>e.title)})"
+"eval": "({done:__game.flags.m6done, ninth:__game.flags.ninthMinute, debt:__game.flags.clockmakerDebt, watch:__game.flags.keepersWatch, shards:__game.flags.m6shards, resets:__game.flags.m6loopResets, ledger:__game.flags.varenLedger, kids:__game.flags.m6sawKids, know:__game.flags.loopKnowledge, boyWatch:__game.flags.m6boyWatch, survey:__game.flags.m6survey, ev:__game.ui.evidence.map(e=>e.title)})"
 }
 ]

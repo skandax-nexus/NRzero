@@ -4,12 +4,12 @@
 // older Kai ("When the child returns, do not let him see the ninth minute."). Optional: The Clockmaker's Debt.
 import * as THREE from 'three';
 import * as RZ from '../world/realism.js';
-import { buildHouse, registerM6Cast, registerM6Themes, P, TY, towerState, KID_KAI, KID_MIRA } from '../world/env_m6.js';
+import { buildHouse, registerM6Cast, registerM6Themes, P, TY, towerState, KID_KAI, KID_MIRA, NEIGHBOR_LOOK } from '../world/env_m6.js';
 import { LocalLoop, loopRoutine } from '../systems/loops.js';
-import { CAST, citizenLook } from '../story/cast.js';
+import { CAST } from '../story/cast.js';
 import { renderPortraits } from '../core/character.js';
 import { Walker } from '../world/props.js';
-import { glowMat, rng } from '../world/kit.js';
+import { glowMat } from '../world/kit.js';
 
 const HOURS = ['III', 'VIII', 'IX', 'XII'];
 const HOUR_VAL = { III: 3, VIII: 8, IX: 9, XII: 0 };
@@ -123,7 +123,7 @@ export default {
     const kidKai = game.actor('kidkai', KID_KAI, -3.95, 0, 4.4, -Math.PI / 2), kidMira = game.actor('kidmira', KID_MIRA, -3.95, 0, 5.15, -Math.PI / 2);
     for (const k of [kidKai, kidMira]) { k.setGhost(0x9fe8ff); k.root.visible = false; }
     kidMira.lookTarget = kidKai.head;
-    const neighbor = new Walker(game, { ...citizenLook(rng(66), { umbrella: true }), female: true, hairStyle: 'bun', height: 1.64 }, { x: -3.95, y: 0.14, z0: 22, z1: 22, idle: true, ry: Math.PI / 2 });
+    const neighbor = new Walker(game, NEIGHBOR_LOOK, { x: -3.95, y: 0.14, z0: 22, z1: 22, idle: true, ry: Math.PI / 2 });
     game.onUpdate(dt => { neighbor.c.root.visible = zone === 'street'; if (zone === 'street') neighbor.update(dt); });
     game.onUpdate(() => {
       const show = game.residueOn && T.current === '2026' && zone === 'shop';
@@ -227,6 +227,32 @@ export default {
       arm.jammed = true; state.wedgeUsed = true; W.wedge.position.set(2.5, 1.62, -1.9); W.wedge.rotation.set(0, 0, 0.5);
       audio.sfxPlay('metal'); loop.frozen = false;
       if (once('jam')) ui.subtitle('kai', 'That should hold the arm. For a while.', 2600);
+    } });
+    // optional: the date drum on the pivot column flips to a year at 0:17; Hensel's drawer on the landing has a year lock.
+    // The loop closes the drawer again at every wrap; what Kai read stays with him.
+    loop.track(W.dateDrum.year, ['visible']); loop.track(W.dateDrum.blank, ['visible']); loop.track(W.drawer, ['position']);
+    loop.at(17, () => { W.dateDrum.year.visible = true; W.dateDrum.blank.visible = false; if (inWorkshop()) audio.sfxPlay('clock'); },
+      { learn: ['year', '0:17  The date drum on the column reads 2031'], when: () => watching() && pl.pos.z > -18 });
+    loop.at(19.4, () => { W.dateDrum.year.visible = false; W.dateDrum.blank.visible = true; });
+    game.onUpdate(() => { if (loop.knows('year') && inWorkshop() && !F.m6survey && once('yearBark')) ui.subtitle('kai', '2031. The year of the Helix surveys. That drawer on the landing has a year lock.', 4200); });
+    const YEARS = ['2026', '2031', '2049', '2196'];
+    game.interact({ pos: [-2.55, 1.05, -2.45], radius: 1.35, once: false, states: ['2049'], enabled: () => state.workOpen && !F.m6survey, prompt: 'Try Hensel\'s locked drawer', onUse: async () => {
+      if (T.current !== '2049' || F.m6survey) return;
+      const i = await game.choice('kai', loop.knows('year') ? 'A brass year lock: 20··. The drum on the column showed…' : 'A brass year lock: 20··. Four wheels, two already set.', [...YEARS, 'Leave it']);
+      if (i >= YEARS.length) return;
+      audio.sfxPlay('clock');
+      if (YEARS[i] !== '2031') { audio.sfxPlay('fail'); ui.subtitle('kai', loop.knows('year') ? 'Not that year.' : 'It won\'t give. Something in this room must know the year.', 2600); return; }
+      cine(true);
+      await game.shot([-1.2, 1.7, -3.2], [-2.55, 0.95, -2.0], 1.0, { fov: 38 });
+      audio.sfxPlay('door'); await tween(0.7, u => { W.drawer.position.z = -2.03 - u * 0.32; });
+      await game.talk([
+        ['kai', '"Helix Temporal Survey, March 2031. Property: Hensel and Son. Anomaly: local recurrence, twenty seconds, stable."'],
+        ['kai', '"Recommendation: preserve. Do not demolish. Do not interview the occupant. Ask Hensel only if the child returns."'],
+        ['kai', 'Signed, E. Rook. And countersigned underneath… K. Varen. In 2031 I was twelve years old.'],
+      ]);
+      F.m6survey = true; audio.sfxPlay('pickup');
+      ui.addEvidence('Helix survey, March 2031', 'Locked in Hensel\'s workshop drawer: a Helix survey of the house, "local recurrence, twenty seconds, stable". Preserve, do not interview the occupant. Signed E. Rook, countersigned K. Varen, when Kai was twelve.', 'THE NINTH MINUTE · EVIDENCE');
+      cine(false);
     } });
     shard(null, [-6.9, 1.6, -8.6], 'Temporal shard: the arm\'s reach', 'A shard of crystallised time on a lathe bed, inside the sweep of the great arm. It hums at twenty-second intervals.');
 
@@ -369,6 +395,14 @@ export default {
         ['lotte', 'You look like the man with the sad coat. Are you his son?'],
         ['kai', '…Something like that.'],
       ]);
+      if (!state.lieQuest && !F.m6boyWatch) {
+        await game.talk([
+          ['lotte', 'Papa says one of the clocks on the glass case is lying.'],
+          ['lotte', 'It tells a time that hasn\'t happened yet. Whoever finds it can keep what\'s inside. I never can.'],
+        ]);
+        state.lieQuest = true;
+        ui.toast('OPTIONAL · THE LYING CLOCK\nFive carriage clocks on the 2026 display case', 5200);
+      }
       kai.lookTarget = null; cine(false);
       if (!lotteTalked) { lotteTalked = true; state.debt++; F.m6debtLotte = true; ui.addEvidence('Lotte, eight years old', '2026: the clockmaker\'s daughter does her homework on the counter. "If it never gets to the end, nobody has to say goodbye." She remembers a man in a sad coat.', 'THE CLOCKMAKER\'S DEBT · 1'); }
     } });
@@ -383,6 +417,38 @@ export default {
       ui.addEvidence('Hensel\'s ledger, June 2026', 'Varen, two children: a boy\'s watch stopped at 8:14 — in 2026, twenty-three years before the Zero Second. The girl paid with a drawing. That evening: "He came again. Same face."', 'HENSEL & SON · 2026');
       if (!game.residueOn) ui.toast('Residue Vision [F] shows what a room remembers', 4200);
     } });
+    // optional: the lying clock (2026). Four carriage clocks tell the truth in their way; one shows 8:14, a minute
+    // that, in 2026, has not happened yet. Inside it: the boy's watch from the ledger.
+    const ORD = ['first', 'second', 'third', 'fourth', 'fifth'];
+    const LIE_BARK = [
+      'Three o\'clock. Same as the sun outside. Honest.',
+      'Eight minutes slow. Late isn\'t lying.',
+      'Stopped at twenty to twelve. It isn\'t lying. It\'s asleep.',
+      null,
+      'Running backwards. A joke clock. Still the truth, just in a mirror.',
+    ];
+    game.onUpdate((dt, t) => { const c = W.carriage[4]; if (T.current === '2026' && zone === 'shop') { const m = 180 - (t * 3) % 720; c.face.userData.set(Math.floor(m / 60), m % 60); } });
+    W.carriage.forEach((c, i) => game.interact({ pos: c.pos, radius: 0.85, once: false, states: ['2026'], enabled: () => (state.lieQuest || F.varenLedger) && !F.m6boyWatch, prompt: `Open the ${ORD[i]} carriage clock`, onUse: async () => {
+      if (T.current !== '2026' || F.m6boyWatch) return;
+      cine(true);
+      await game.shot(c.cam, c.look, 0.9, { fov: 30 });
+      if (i !== 3) {
+        await game.wait(0.6); await game.say('kai', LIE_BARK[i]);
+        cine(false); return;
+      }
+      await game.say('kai', 'Eight-fourteen. In 2026 that minute hasn\'t happened yet. Not for twenty-three years.');
+      audio.sfxPlay('door'); await tween(0.6, u => { c.door.rotation.y = u * 1.8; c.door.position.x = -u * 0.12; });
+      W.boyWatch.visible = true; audio.sfxPlay('anomaly');
+      tween(1.2, u => { W.boyWatch.position.y = 1.5 + u * 0.12; W.boyWatch.rotation.y = 0.4 + u * 1.2; });
+      await game.talk([
+        ['kai', 'And inside… a child\'s watch. Blue strap. A K scratched into the back.'],
+        ['kai', 'Mine. The watch in the ledger. I lost it the summer we came here. It stopped at eight-fourteen before anything had happened.'],
+      ]);
+      if (state.lieQuest) await game.talk([['lotte', 'Papa said a man would come for it one day. He said you\'d know the time.']]);
+      F.m6boyWatch = true; W.boyWatch.visible = false; audio.sfxPlay('pickup');
+      ui.addEvidence('The boy\'s watch, 2026', 'Hidden in the carriage clock that "tells a time that hasn\'t happened yet": Kai\'s childhood watch, stopped at 8:14 in 2026, twenty-three years before the Zero Second.', 'THE LYING CLOCK · 2026');
+      cine(false);
+    } }));
     shard('2196', [-3.2, 0.5, 6.9], 'Temporal shard: the fallen shop', 'In 2196 the shop\'s ceiling has fallen in. A shard of crystallised time rests where the girl used to sit — still warm.');
     game.onUpdate(() => {
       if (zone !== 'shop' || !game.control) return;

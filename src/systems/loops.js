@@ -139,6 +139,8 @@ export class LocalLoop {
     if (g.scene !== this.scene) { this.dispose(); return; }
     const inside = this.inside();
     this.showHud(this.running && inside && this.hudWanted !== false);
+    // with several loops in one scene, the one the player stands in drives loopState (music memory layer)
+    if (this.running && inside && loopState.active !== this && !(loopState.active?.running && loopState.active.inside())) loopState.active = this;
     if (!this.running || this.paused || this._resetting) return;
     if (this.frozen) { this.renderTime(); return; }
     const prev = this.t;

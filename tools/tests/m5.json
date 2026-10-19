@@ -1,0 +1,374 @@
+[
+{
+"until": "window.__game && __game.control && !__game.ui.dlgActive && !__game.cine && __game.interactables.some(i=>i.prompt.includes('Speak with Tala'))",
+"timeout": 900000
+},
+{
+"shot": "a01_valley.png"
+},
+{
+"eval": "({calls:__game.engine.stats.calls, tris:__game.engine.stats.triangles})"
+},
+{
+"eval": "__game.player.place(6.0,0.6,6.2,1.57); __game.use('Speak with Tala'); null"
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"Water Ring\")",
+"timeout": 240000
+},
+{
+"eval": "__game.player.place(-14.9,3.7,-3.8,-1.57); __game.use('Touch the Water Ring'); null"
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && __game.temporal.unlocked && document.getElementById('objective-text').textContent.includes(\"Open the way\")",
+"timeout": 300000
+},
+{
+"shot": "a02_after_tour.png"
+},
+{
+"eval": "__game.player.place(6.0,0.6,6.2,1.57); __game.use('Ask Tala about the fields'); null"
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && __game.interactables.some(i=>i.prompt.includes('north field gate') && i.enabled())",
+"timeout": 240000
+},
+{
+"eval": "__game.player.place(-29.6,3.7,-22,-1.57); __game.use('north field gate'); null"
+},
+{
+"wait": 1500
+},
+{
+"eval": "__game.player.place(-29.6,3.7,0,-1.57); __game.use('kiln yard gate'); null"
+},
+{
+"wait": 1500
+},
+{
+"eval": "__game.player.place(-29.6,3.7,15,-1.57); __game.use('south field gate'); null"
+},
+{
+"wait": 2500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 240000
+},
+{
+"shot": "a03_gates.png"
+},
+{
+"eval": "__game.player.place(4.8,0.6,1.2,1.57); __game.use('Read Tala'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 240000
+},
+{
+"eval": "__game.temporal.stability=1; __game.temporal.switchTo('flooded'); null"
+},
+{
+"wait": 2500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 240000
+},
+{
+"eval": "__game.player.place(5.5,3.7,-49.2,3.14); __game.use('Helix notice'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 240000
+},
+{
+"shot": "a04_notice.png"
+},
+{
+"eval": "__game.player.place(-22.5,3.7,18.5,-1.57); __game.use('caretaker'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 240000
+},
+{
+"eval": "__game.temporal.stability=1; __game.temporal.switchTo('thriving'); null"
+},
+{
+"wait": 2500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 240000
+},
+{
+"eval": "__game.player.place(20.0,3.7,-47.6,3.14); null"
+},
+{
+"wait": 2500
+},
+{
+"until": "__game.interactables.some(i=>i.prompt.includes('head works') && i.enabled())",
+"timeout": 60000
+},
+{
+"eval": "__game.use('head works'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"Lever\")",
+"timeout": 240000
+},
+{
+"shot": "a05_headworks.png"
+},
+{
+"eval": "__game.use('Lever the boulder'); null"
+},
+{
+"wait": 2500
+},
+{
+"eval": "__game.use('Lever the boulder'); null"
+},
+{
+"wait": 2500
+},
+{
+"eval": "__game.use('Lever the boulder'); null"
+},
+{
+"wait": 3000
+},
+{
+"until": "document.getElementById('objective-text').textContent.includes(\"sluice\")",
+"timeout": 60000
+},
+{
+"eval": "__game.use('Close the village sluice'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"later states\")",
+"timeout": 300000
+},
+{
+"shot": "a06_diverted.png"
+},
+{
+"eval": "__game.temporal.stability=1; __game.temporal.switchTo('abandoned'); null"
+},
+{
+"wait": 3000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && __game.ui.evidence.some(e=>e.title.includes('turned the river'))",
+"timeout": 300000
+},
+{
+"eval": "__game.player.place(-10.2,0.6,-4.5,-1.57); null"
+},
+{
+"wait": 3000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"choked drains\")",
+"timeout": 300000
+},
+{
+"shot": "a07_wall.png"
+},
+{
+"eval": "__game.use('Clear the choked drain'); null"
+},
+{
+"wait": 800
+},
+{
+"eval": "__game.use('Clear the choked drain'); null"
+},
+{
+"wait": 800
+},
+{
+"eval": "__game.use('Clear the choked drain'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "document.getElementById('objective-text').textContent.includes(\"roof beams\")",
+"timeout": 30000
+},
+{
+"eval": "__game.use('Take the fallen roof beam'); null"
+},
+{
+"wait": 600
+},
+{
+"eval": "__game.use('Brace the wall'); null"
+},
+{
+"wait": 800
+},
+{
+"eval": "__game.use('Take the fallen roof beam'); null"
+},
+{
+"wait": 600
+},
+{
+"eval": "__game.use('Brace the wall'); null"
+},
+{
+"wait": 800
+},
+{
+"until": "document.getElementById('objective-text').textContent.includes(\"wedges\")",
+"timeout": 30000
+},
+{
+"eval": "__game.use('Drive the wedges'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"pressure gate\")",
+"timeout": 300000
+},
+{
+"shot": "a08_braced.png"
+},
+{
+"eval": "__game.temporal.stability=1; __game.temporal.switchTo('flooded'); null"
+},
+{
+"wait": 3000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && __game.ui.evidence.length > 0",
+"timeout": 300000
+},
+{
+"wait": 4000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 300000
+},
+{
+"wait": 4000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 300000
+},
+{
+"eval": "__game.player.place(25.7,3.4,45.0,1.57); null"
+},
+{
+"wait": 3000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine",
+"timeout": 300000
+},
+{
+"shot": "a09_tower.png"
+},
+{
+"eval": "__game.use('Release the main gate'); null"
+},
+{
+"wait": 2500
+},
+{
+"eval": "__game.use('bypass valve V1'); null"
+},
+{
+"wait": 3500
+},
+{
+"eval": "__game.use('bypass valve V2'); null"
+},
+{
+"wait": 3500
+},
+{
+"eval": "__game.use('Release the main gate'); null"
+},
+{
+"wait": 2000
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"Keepers\")",
+"timeout": 400000
+},
+{
+"shot": "a10_drained.png"
+},
+{
+"eval": "__game.player.place(-12.4,0.6,-6,-1.57); __game.use('Helix hatch'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"tunnel\")",
+"timeout": 300000
+},
+{
+"eval": "__game.player.place(-28.2,-2.7,-6,-1.57); null"
+},
+{
+"wait": 2500
+},
+{
+"shot": "a11_chamber.png"
+},
+{
+"eval": "__game.use('Study the machine'); null"
+},
+{
+"wait": 1500
+},
+{
+"until": "__game.control && !__game.ui.dlgActive && !__game.cine && document.getElementById('objective-text').textContent.includes(\"Compare\")",
+"timeout": 300000
+},
+{
+"eval": "__game.temporal.stability=1; __game.temporal.switchTo('thriving'); null"
+},
+{
+"wait": 5000
+},
+{
+"shot": "a12_core.png"
+},
+{
+"until": "__game.flags.m5complete",
+"timeout": 600000
+},
+{
+"eval": "({flags: Object.keys(__game.flags).filter(k=>k.startsWith('m5')||k.includes('helix')||k.includes('niko')).map(k=>k+'='+JSON.stringify(__game.flags[k])), evidence: __game.ui.evidence.map(e=>e.title)})"
+},
+{
+"shot": "a13_end.png"
+}
+]
