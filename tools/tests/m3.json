@@ -1,0 +1,17 @@
+[{"until":"window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))","timeout":240000},{"shot":"h1.png"},
+ {"eval":"__game.use('Touch')"},{"until":"__game.temporal.unlocked && __game.control","timeout":120000},{"shot":"h2.png"},
+ {"until":"!__game.ui.dlgActive","timeout":30000},{"wait":3000},
+ {"eval":"__game.temporal.switchTo('2026')"},{"wait":4000},{"eval":"__game.player.place(-6.2,0,-6.5,Math.PI); null"},{"wait":1500},{"shot":"h3.png"},
+ {"eval":"__game.use('Run the cable')"},{"wait":3000},
+ {"eval":"__game.temporal.switchTo('2049')"},{"until":"__game.interactables.some(i=>i.prompt.includes('Activate'))","timeout":60000},{"shot":"h4.png"},
+ {"eval":"__game.player.place(-5,0,-7.5,Math.PI); __game.use('Activate')"},{"wait":5000},
+ {"eval":"__game.player.place(0,0,-21,Math.PI); null"},{"wait":5000},{"shot":"h5.png"},
+ {"eval":"__game.temporal.stability=1; __game.temporal.switchTo('2196')"},{"until":"__game.interactables.some(i=>i.prompt.includes('cargo'))","timeout":60000},{"shot":"h6.png"},
+ {"eval":"__game.use('cargo')"},{"until":"__game.player.pos.y>4.8 && __game.control","timeout":60000},
+ {"eval":"__game.player.place(7,5,-35,Math.PI); null"},{"wait":4000},{"shot":"h7.png"},
+ {"eval":"__game.temporal.stability=1; __game.temporal.switchTo('2049')"},{"wait":3000},
+ {"eval":"__game.player.place(0,5,-48,Math.PI); null"},{"wait":1500},{"shot":"h8.png"},
+ {"eval":"({y:__game.player.pos.y, ints:__game.interactables.map(i=>i.prompt)})"},
+ {"eval":"__game.use('control panel')"},{"wait":8000},{"shot":"h9.png"},
+ {"until":"document.getElementById('mission-tag').textContent.includes('4')","timeout":180000},{"wait":6000},{"shot":"h10.png"}
+]

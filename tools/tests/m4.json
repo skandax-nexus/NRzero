@@ -1,0 +1,12 @@
+[{"until":"window.__game && __game.control && __game.actors.niko","timeout":240000},{"shot":"k1.png"},
+ {"eval":"__game.player.place(2,0.6,-3.5,Math.PI); __game.use('Niko')"},{"until":"__game.control && __game.interactables.some(i=>i.prompt.includes('fragment'))","timeout":120000},{"shot":"k2.png"},
+ {"eval":"__game.player.place(-18,0,-23,Math.PI); null"},{"wait":2500},{"shot":"k3.png"},
+ {"eval":"[0,1,2].forEach(()=>__game.use('fragment'))"},{"wait":3000},
+ {"eval":"__game.player.place(0,0,-4.5,Math.PI); __game.use('pedestal')"},{"until":"__game.control && __game.interactables.length===0 || __game.ui.evidence.length>=0 && __game.control && document.getElementById('objective-text').textContent.includes('Descend')","timeout":120000},{"shot":"k4.png"},
+ {"eval":"__game.player.place(0,-4,-28,Math.PI); null"},{"wait":3000},{"shot":"k5.png"},
+ {"until":"__game.interactables.some(i=>i.prompt.includes('murals'))","timeout":60000},
+ {"eval":"__game.use('murals')"},{"wait":1500},{"shot":"k6.png"},
+ {"wait":15000},{"shot":"k7.png"},
+ {"until":"__game.ui.evidence.some(e=>e.title.includes('three thousand'))","timeout":180000},{"shot":"k8.png"},
+ {"eval":"__game.ui.evidence.map(e=>e.title)"}
+]
