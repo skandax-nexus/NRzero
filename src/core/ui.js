@@ -1,4 +1,5 @@
 import { CAST } from '../story/cast.js';
+import { Voice } from './voice.js';
 import { touchText } from './touch.js';
 
 const $ = id => document.getElementById(id);
@@ -8,6 +9,7 @@ export class UI {
   constructor(game) {
     this.game = game; this.portraits = {}; this.evidence = [];
     this.dlgActive = false; this._adv = null; this._choice = null;
+    this.voice = new Voice(game);
     const advance = () => { if (this._adv) this._adv(); };
     addEventListener('keydown', e => {
       if (!this.dlgActive) return;
@@ -106,14 +108,17 @@ export class UI {
     this.dlgActive = true; this.show('dialogue', true);
     this.setSpeaker(id);
     $('dlg-choices').innerHTML = ''; $('dlg-next').style.visibility = 'hidden';
+    const talker = this._talker;
+    const spoken = this.voice.speak(id, text, { onWord: () => { if (talker) talker.talk = 0.35; } });
     await this.typeText(text);
     $('dlg-next').style.visibility = 'visible';
     await new Promise(res => {
       let done = false; const fin = () => { if (!done) { done = true; res(); } };
-      this._adv = fin; if (opts.auto) setTimeout(fin, opts.auto * 1000);
+      this._adv = fin; if (opts.auto) Promise.all([spoken, sleep(opts.auto * 1000)]).then(fin);
       if (this.game.autoplay) setTimeout(fin, 250);
     });
     this._adv = null;
+    this.voice.stop();
     if (!opts.keep) { this.show('dialogue', false); this.dlgActive = false; }
   }
 
@@ -122,6 +127,7 @@ export class UI {
   async choice(id, text, options) {
     this.dlgActive = true; this.show('dialogue', true); this.setSpeaker(id);
     $('dlg-next').style.visibility = 'hidden';
+    this.voice.speak(id, text);
     await this.typeText(text);
     const box = $('dlg-choices'); box.innerHTML = '';
     const btns = options.map((o, i) => { const b = document.createElement('button'); b.innerHTML = `<b>${i + 1}</b>${o}`; box.appendChild(b); return b; });
@@ -142,8 +148,10 @@ export class UI {
     const def = CAST[id] || { name: id };
     const s = $('subtitle'); s.innerHTML = (id ? `<b>${def.name}</b>` : '') + text; this.show('subtitle', true);
     const ch = this.game.actors?.[id]; if (ch) ch.talk = Math.min(ms / 1000, 3);
-    clearTimeout(this._subT); this._subT = setTimeout(() => this.show('subtitle', false), ms);
-    return sleep(ms);
+    const spoken = this.voice.speak(id || ('crowd:' + text.length), text.replace(/^"|"$/g, ''), { onWord: () => { if (ch) ch.talk = 0.35; } });
+    clearTimeout(this._subT);
+    // keep the subtitle up for at least its reading time and until the line has been spoken
+    return Promise.all([sleep(ms), spoken]).then(() => { this._subT = setTimeout(() => this.show('subtitle', false), 250); });
   }
 
   // ---------- case board ----------

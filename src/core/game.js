@@ -166,7 +166,7 @@ export class Game {
   toggleJournal(on) { this.journalOpen = on; this.ui.toggleJournal(on); if (on) { this.paused = true; this.input.unlock(); } else { this.paused = false; this.input.lock(); } }
   pause(on) {
     this.paused = on; this.ui.show('pause', on);
-    if (on) { this.input.unlock(); this.audio.ctx?.suspend(); } else { this.audio.ctx?.resume(); this.input.lock(); }
+    if (on) { this.input.unlock(); this.audio.ctx?.suspend(); this.ui.voice?.pause(); } else { this.audio.ctx?.resume(); this.ui.voice?.resume(); this.input.lock(); }
   }
 
   // ---------- missions ----------

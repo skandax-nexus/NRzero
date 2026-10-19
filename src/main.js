@@ -139,6 +139,7 @@ $('panel-close').addEventListener('click', () => $('panel').classList.add('hidde
 $('pause').addEventListener('click', e => {
   const p = e.target.dataset.p; if (!p) return;
   if (p === 'resume') game.pause(false);
+  if (p === 'voices') { const v = game.ui.voice; v.setEnabled(!v.enabled); $('btn-voices').textContent = 'Voices: ' + (v.enabled ? 'On' : 'Off'); }
   if (p === 'journal') { game.ui.show('pause', false); game.toggleJournal(true); }
   if (p === 'restart') { game.pause(false); game.restoreCheckpoint(); }
   if (p === 'controls') { $('title').classList.remove('hidden'); $('menu').style.visibility = 'hidden'; openPanel('controls'); const close = () => { $('title').classList.add('hidden'); $('menu').style.visibility = ''; $('panel-close').removeEventListener('click', close); }; $('panel-close').addEventListener('click', close); }
@@ -167,6 +168,7 @@ $('journal').addEventListener('click', () => game.toggleJournal(false));
   await new Promise(r => setTimeout(r, 50));
   await game.init();
   game.start();
+  const vb = document.getElementById('btn-voices'); if (vb) { vb.textContent = 'Voices: ' + (game.ui.voice.enabled ? 'On' : 'Off'); if (!game.ui.voice.supported) vb.classList.add('hidden'); }
   game.paused = true; // world loop idle until a mission starts
   $('loading').classList.add('done');
   showTitle();

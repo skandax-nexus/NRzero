@@ -4,7 +4,7 @@
 // onto the field -> normals -> per-vertex tissue labels, curvature and SDF ambient occlusion.
 // Pure JS (no three.js).
 
-import { PART, clamp, smoothstep } from './head_b_sdf.js';
+import { PART, clamp, smoothstep, lidAt } from './head_b_sdf.js';
 import { polygonize, computeNormals, relax, compact } from './head_b_mesh.js';
 
 const { sqrt, abs, max, min } = Math;
@@ -33,7 +33,7 @@ function sizeFn(m, F, detail) {
       const r = sqrt(er2);
       if (r > F.Re - 0.0015 && r < F.Re + 0.0045) {
         const al = Math.atan2(ex, ez), be = Math.atan2(ey, sqrt(ex * ex + ez * ez));
-        const L = F.lidAt(al);
+        const L = lidAt(m, al);
         if (L[2] > -0.08 && L[2] < 1.08 && (abs(be - L[0]) < 0.22 || abs(be - L[1]) < 0.2)) return sMargin;
       }
       return sEye;
