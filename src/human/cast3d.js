@@ -17,7 +17,16 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
   if (cast.loading) return cast.loading;
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  const get = f => new Promise((ok, bad) => loader.load(base + f, ok, undefined, bad));
+  // models load from .glb, or (hosts that serve no binary types, e.g. the web preview) from base64 text beside them
+  const parse = buf => new Promise((ok, bad) => loader.parse(buf, base, ok, bad));
+  const viaText = async f => {
+    const r = await globalThis.fetch(base + f.replace(/\.glb$/, '.b64.txt'));
+    if (!r.ok) throw new Error('no ' + f);
+    const bin = globalThis.atob((await r.text()).trim()), buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return parse(buf.buffer);
+  };
+  const get = f => new Promise((ok, bad) => loader.load(base + f, ok, undefined, bad)).catch(() => viaText(f));
   cast.loading = (async () => {
     try {
       await MeshoptDecoder.ready;
