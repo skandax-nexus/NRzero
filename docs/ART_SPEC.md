@@ -22,7 +22,7 @@ createHead({
   seed: int,
   shape: { jaw, cheek, nose, noseWidth, lips, brow, eyeSize, faceLength, chin }, // each -1..1, 0 = average
   marks: { scar: bool, freckles: 0..1, wrinkles: 0..1, stubble: 0..1 },
-  detail: 'high' | 'low',
+  detail: 'high' | 'medium' | 'low',
 }) => {
   group,                // THREE.Group; origin = head pivot (top of neck); parent it to the head bone
   skinMaterial,         // the face/neck skin material (body should match its tone)
@@ -60,7 +60,7 @@ Requirements:
   normal map (pores, fine creases; wrinkles scale with age), roughness map (oilier T-zone),
   and a subsurface-scattering approximation (wrap lighting / sheen / transmission tint).
 - Mouth open morph shows a dark mouth interior and teeth.
-- Budget: high ≤ 24k triangles total for the head; low ≤ 3k.
+- Budget: high ≤ 40k triangles total for the head (hero close-ups; only the speaking characters use it); low ≤ 3k (crowds). An optional 'medium' (≤ 10k) for in-game third-person distance is welcome.
 - Hair is NOT part of the head module (see §3). The head must look good bald and with hair.
 
 ## 2. Body module — `createBody(params)` (src/human/body*.js)
@@ -125,3 +125,30 @@ light shafts and atmospheric depth. Scene budget on phones: ≤ 250 draw calls, 
 ## 5. Mobile
 Touch controls, landscape play, safe areas, PWA install + offline cache, adaptive quality,
 and a Capacitor scaffold for Android/iOS store builds. See docs/MOBILE_RELEASE.md.
+
+## 6. Physics & movement (no glitches)
+Fixed-timestep simulation (e.g. 120 Hz substeps) with render interpolation; capsule character vs boxes with
+wall sliding (no sticking or jitter in corners), smooth step-up/step-down, stairs, ramps, moving platforms and
+lifts that carry the player, ground snapping, coyote time and jump buffering, no tunnelling at 15-144 fps,
+soft collision with NPCs (you cannot walk through people), safe respawns, camera spring-arm collision that
+never clips into walls and never snaps violently, animation phase matched to ground speed (no foot sliding),
+and smooth turning/acceleration curves.
+
+## 7. Eye comfort & accessibility (long sessions)
+Comfort Mode on by default: no full-screen white flashes or strobing (cap luminance changes, replace flashes
+with soft fades), reduced neon flicker, gentle film grain/chromatic aberration/vignette, camera shake off or low.
+A Settings screen (title and pause) persisted per device: text size (S/M/L/XL), subtitle background,
+brightness/gamma calibration, UI contrast, color-vision modes (deuteranopia/protanopia/tritanopia) where
+era colours always also carry a label/shape, motion (camera shake, head bob), effects intensity, audio
+volumes (master/music/sfx/voice-blips), control sensitivity and invert-Y, left-handed touch layout.
+UI palette: warm off-white text on translucent dark panels (never pure white on black), legible type at
+small sizes (e.g. Atkinson Hyperlegible for HUD/dialogue body), minimum 16 px body text on phones,
+WCAG AA contrast, no thin weights for small text. Optional gentle break reminder after 60 minutes.
+
+## 8. Gameplay feel & depth
+Smooth 60 fps target on desktop and 30+ on phones with no hitches; responsive controls; readable objectives
+with an optional subtle waypoint; hint system that nudges after a delay; mission summary screen (time,
+evidence, choices, secrets); collectibles (temporal shards / memory echoes) that unlock codex entries; NPC
+side quests from the NPC bible (Jun Park's Last Train Home, Iven's Technician's Key, Tala & Niko's water);
+richer stealth (patterns, distractions, hiding spots, alternate routes); more era-switch puzzle beats; tense
+timed sequences (fracture escape); consequences of choices reflected later. Keep the bible's story.
