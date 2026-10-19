@@ -14,7 +14,7 @@ const detail = q.get('detail') || 'high';
 export const PRESETS = {
   kai: { ref: 'kai', head: { sex: 0, age: 32, skin: 0xc08a64, eyeColor: 0x2e2216, seed: 11, shape: { jaw: 0.45, cheek: 0.35, nose: 0.2, noseWidth: -0.05, lips: -0.05, brow: 0.45, eyeSize: -0.2, faceLength: 0.15, chin: 0.25 }, marks: { stubble: 0.95, wrinkles: 0.15 } },
          hair: { style: 'messy', color: 0x0d0a09, beard: 'stubble', beardColor: 0x14100d },
-         body: { height: 1.83, sex: 0, build: 1.05, age: 34, skin: 0xb98463, outfit: { top: { type: 'jacket', color: 0x24282e, material: 'leather' }, pants: { type: 'trousers', color: 0x2a2c2f }, shoes: { type: 'boots', color: 0x1b1611 }, gloves: 0x1d1a17, belt: 0x2a1d14, strap: true, wristMark: true } } },
+         body: { height: 1.83, sex: 0, build: 1.05, age: 32, skin: 0xc08a64, outfit: { top: { type: 'jacket', color: 0x1c1d20, material: 'leather', hood: true }, pants: { type: 'trousers', color: 0x2a2c2f }, shoes: { type: 'boots', color: 0x1b1611 }, gloves: 0x1d1a17, belt: 0x2a1d14, strap: true, wristMark: true } } },
   mira: { ref: 'mira', head: { sex: 1, age: 28, skin: 0xe2b394, eyeColor: 0x5a6a72, seed: 22, shape: { jaw: -0.35, cheek: 0.55, nose: -0.1, noseWidth: -0.3, lips: 0.45, brow: -0.3, eyeSize: 0.35, faceLength: 0.05, chin: -0.05 }, marks: { freckles: 0.05 } },
          hair: { style: 'bob', color: 0x140e0b },
          body: { height: 1.69, sex: 1, build: 0.95, age: 30, skin: 0xd9a585, outfit: { top: { type: 'armored', color: 0x1c2026, material: 'leather' }, pants: { type: 'trousers', color: 0x1f2227 }, shoes: { type: 'boots', color: 0x15120f }, belt: 0x1a1612 } } },
@@ -32,7 +32,7 @@ export const PRESETS = {
          body: { height: 1.64, sex: 1, build: 1.0, age: 41, skin: 0x7d4f33, outfit: { top: { type: 'tunic', color: 0x3f6a6a, material: 'fabric' }, sash: 0xd0a24a, pants: { type: 'wraps', color: 0x5a4632 }, shoes: { type: 'sandals', color: 0x4a3220 }, bracelets: 0xd9b25c } } },
   sera: { ref: 'sera', head: { sex: 1, age: 34, skin: 0xb07a55, eyeColor: 0x6a7a62, seed: 66, shape: { jaw: 0.15, cheek: 0.4, nose: 0, noseWidth: 0, lips: 0.2, brow: 0.25, eyeSize: 0.05, faceLength: 0.1, chin: 0.15 }, marks: { scar: true, wrinkles: 0.1 } },
          hair: { style: 'tied-back', color: 0x2a1c14 },
-         body: { height: 1.72, sex: 1, build: 1.05, age: 36, skin: 0x8a5b3c, outfit: { top: { type: 'tshirt', color: 0x4a4636, material: 'fabric' }, vest: { color: 0x3a3a2c }, pants: { type: 'cargo', color: 0x3a3a30 }, shoes: { type: 'boots', color: 0x2a2018 }, strap: true } } },
+         body: { height: 1.72, sex: 1, build: 1.0, age: 34, skin: 0xb07a55, outfit: { top: { type: 'jacket', color: 0x4a3a28, material: 'fabric', hood: true }, vest: { color: 0x3a3a2c }, pants: { type: 'cargo', color: 0x3a3a30 }, shoes: { type: 'boots', color: 0x2a2018 }, strap: true } } },
   iven: { head: { sex: 0, age: 45, skin: 0xe0b394, eyeColor: 0x3a5a2a, seed: 77, shape: { jaw: 0.1, cheek: 0, nose: 0.2, noseWidth: 0.2, lips: 0, brow: 0, eyeSize: 0, faceLength: 0, chin: -0.1 }, marks: { stubble: 0.5, wrinkles: 0.35, freckles: 0.3 } },
          hair: { style: 'short', color: 0x6a3f22, beard: 'stubble' },
          body: { height: 1.76, sex: 0, build: 1.1, age: 45, skin: 0xe0b394, outfit: { top: { type: 'sweater', color: 0x37404a, material: 'fabric' }, vest: { color: 0xd9781e }, pants: { type: 'cargo', color: 0x2c333b }, shoes: { type: 'boots', color: 0x2a2018 }, gloves: 0x5a4a3a } } },

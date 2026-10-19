@@ -174,6 +174,13 @@ function registerServiceWorker() {
     const nav = window.navigator, local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     if (!('serviceWorker' in nav) || !window.isSecureContext || !/^https?:$/.test(location.protocol)) return;
     if (window.self !== window.top || window.Capacitor || (local && !new URLSearchParams(location.search).has('sw'))) return;
-    nav.serviceWorker.register('sw.js').catch(() => {});
+    // An installed PWA can stay open for days and browsers throttle their own update checks:
+    // look for a new release at launch and whenever the app comes back to the foreground (hourly at most).
+    nav.serviceWorker.register('sw.js').then(reg => {
+      let last = Date.now();
+      const check = () => { if (Date.now() - last > 3600e3) { last = Date.now(); reg.update().catch(() => {}); } };
+      if (reg.active) reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+    }).catch(() => {});
   } catch { /* sandboxed: no service worker */ }
 }

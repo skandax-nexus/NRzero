@@ -75,7 +75,7 @@ createBody({
   height: m, sex: 0..1, build: 0.8..1.25, age: years, skin: 0xRRGGBB, seed: int,
   detail: 'high' | 'low',
   outfit: {
-    top:   { type: 'jacket'|'tshirt'|'sweater'|'tunic'|'uniform'|'armored'|'none', color, material: 'leather'|'fabric'|'synthetic' },
+    top:   { type: 'jacket'|'tshirt'|'sweater'|'tunic'|'uniform'|'armored'|'none', color, material: 'leather'|'fabric'|'synthetic', hood?: bool },
     vest:  { color } | null,         // hi-vis / tactical vest over the top
     coat:  { type: 'long'|'lab', color, material } | null,
     pants: { type: 'trousers'|'cargo'|'wraps', color },

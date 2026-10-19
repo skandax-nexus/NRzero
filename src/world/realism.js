@@ -1305,7 +1305,8 @@ function dirFromAngles(elevDeg, azDeg) {
  * (elevation, azimuth [deg] or sunDir, turbidity, cover, stratus (0..1 continuous deck), cloudScale, cloudHeight, glow,
  * glowIntensity (city light pollution), stars, moon, ground, discMax, fogSun (haze in-scatter strength) ...).
  * Sets scene.background / scene.environment unless apply: false. Returns
- *   { background, envMap, sunDirection, sunColor, sunIntensity, ambient, fogColor, horizonColor(dir), hemi, addSun(), dispose() }
+ *   { background, envMap, sunDirection, sunColor, sunIntensity, ambient, zenith, fogColor (average horizon), hazeColor (aerial-perspective
+ *     fog colour for landscapes), horizonColor(dir), hemi, addSun(), dispose() }
  * Cost: one LUT integration (~10-40 ms CPU) and two cube renders at build time; zero per-frame cost
  * (pass live: true to keep an animated dome instead of the baked cube).
  */
@@ -1363,6 +1364,10 @@ export function skyEnvironment(renderer, scene, opts = {}) {
   const cloudSun = new THREE.Color(cloudT[0], cloudT[1], cloudT[2]).multiplyScalar(sunE * 0.32);
   const cloudAmb = zen.clone().multiplyScalar(0.55).add(ambient.clone().multiplyScalar(0.45)).multiplyScalar(1.1);
   if (cloudCover > 0.7) { const grey = (cloudSun.r + cloudSun.g + cloudSun.b) / 3 * 0.55 + (cloudAmb.r + cloudAmb.g + cloudAmb.b) / 3; cloudAmb.lerp(new THREE.Color(grey, grey, grey * 1.04), 0.6); fogColor.lerp(cloudAmb, 0.6); ambient.lerp(cloudAmb, 0.5); }
+  // aerial perspective over hundreds of meters is unsaturated: mostly blue Rayleigh in-scatter (the sky-irradiance tint)
+  // at about half the horizon brightness, with a little horizon warmth. Use it as the fog colour for landscapes.
+  const lumOf = c => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+  const hazeColor = ambient.clone().multiplyScalar(lumOf(fogColor) * 0.5 / Math.max(lumOf(ambient), 1e-5)).lerp(fogColor, 0.25);
   const moon = P.moon ? dirFromAngles(P.moon.elevation, P.moon.azimuth) : new THREE.Vector3(0, 1, 0);
   const sunR = THREE.MathUtils.degToRad(P.sunSize ?? 0.55);
   // disc radiance is capped: a 1e5 sun only turns the bloom chain's lowest mips into blocky squares
@@ -1403,7 +1408,7 @@ export function skyEnvironment(renderer, scene, opts = {}) {
   shared.fogSun.value.copy(sunColor).multiplyScalar(sunIntensity * scatterK);
   const out = {
     preset: opts.preset || 'day', background: bgRT.texture, envMap, dome: liveDome, uniforms: U, lut: lutTex,
-    sunDirection: sun, sunColor, sunIntensity, ambient, zenith: zen, fogColor, horizonColor, cloudCover,
+    sunDirection: sun, sunColor, sunIntensity, ambient, zenith: zen, fogColor, hazeColor, horizonColor, cloudCover,
     hemi: { sky: ambient.clone(), ground: col(P.ground).multiplyScalar(0.3), intensity: 1 },
     ms: performance.now() - t0,
     /** Add a DirectionalLight matching the sun (and its target). opts: { shadow, area, mapSize, distance, intensity } */
@@ -1439,7 +1444,7 @@ function interiorEnvironment(r, scene, P) {
   const envMap = pm.fromScene(s, 0.02).texture; pm.dispose();
   if (scene && P.apply !== false) { scene.environment = envMap; scene.environmentIntensity = P.envIntensity ?? 1; if (!scene.background) scene.background = col(P.background ?? 0x050608); }
   const black = new THREE.Color(0, 0, 0); shared.fogSun.value.setRGB(0, 0, 0);
-  return { preset: 'interior', background: null, envMap, sunDirection: new THREE.Vector3(0, 1, 0), sunColor: lc, sunIntensity: 0, ambient: lc.clone().multiplyScalar(0.3), fogColor: wc.clone(), horizonColor: () => wc.clone(), hemi: { sky: lc.clone().multiplyScalar(0.4), ground: wc.clone(), intensity: 1 }, addSun: () => null, dispose() { envMap.dispose(); }, zenith: black };
+  return { preset: 'interior', background: null, envMap, sunDirection: new THREE.Vector3(0, 1, 0), sunColor: lc, sunIntensity: 0, ambient: lc.clone().multiplyScalar(0.3), fogColor: wc.clone(), hazeColor: wc.clone(), horizonColor: () => wc.clone(), hemi: { sky: lc.clone().multiplyScalar(0.4), ground: wc.clone(), intensity: 1 }, addSun: () => null, dispose() { envMap.dispose(); }, zenith: black };
 }
 
 /**
@@ -2841,7 +2846,7 @@ export function rocks(o = {}) {
   const group = new THREE.Group(); group.name = 'rocks';
   const nVar = o.variants ?? 3, r = rng(o.seed ?? 9), chunk = o.shape === 'chunk';
   const mat = o.material || pbrMaterial(chunk ? 'concrete' : 'rock', { mapping: 'triplanar', space: 'object', scale: chunk ? 0.5 : 0.35, vertexColors: true,
-    params: chunk ? { color: 0x8a8781, formwork: 0, stains: 0.7 } : {}, overlay: o.moss === false || o.moss === 0 ? undefined : { kind: 'moss', amount: o.moss ?? (chunk ? 0.15 : 0.45) } });
+    params: chunk ? { color: 0x6f6c66, formwork: 0, stains: 1 } : {}, overlay: o.moss === false || o.moss === 0 ? undefined : { kind: 'moss', amount: o.moss ?? (chunk ? 0.15 : 0.45) } });
   const geos = Array.from({ length: nVar }, (_, i) => rockGeometry({ shape: o.shape, seed: (o.seed ?? 9) * 7 + i, size: chunk ? [1, 0.45 + r() * 0.35, 0.7 + r() * 0.3] : [1, 0.55 + r() * 0.4, 0.8 + r() * 0.3], detail: o.detail }));
   const lists = geos.map(() => []);
   (o.placements || []).forEach(p => lists[Math.floor(r() * nVar)].push(p));
@@ -2899,7 +2904,7 @@ export function ivy(o = {}) {
   // climbing patches growing up a wall from the ground: { center: [x, y, z] (base), normal, width, height }
   for (const pt of o.patches || []) {
     const c0 = v3(pt.center), Nn = v3(pt.normal || [0, 0, 1]).normalize(), side = up.clone().cross(Nn).normalize(), Wd = pt.width ?? 2, Hh = pt.height ?? 2.5;
-    const n = Math.round(Wd * Hh * (o.patchDensity ?? 9) * Q.trees);
+    const n = Math.round(Wd * Hh * (o.patchDensity ?? 28) * Q.trees);
     for (let k = 0; k < n; k++) {
       const v = Math.pow(r(), 1.4), half = Wd / 2 * (1 - v * 0.6) * (0.4 + 0.6 * Math.sqrt(r()));
       const p = c0.clone().addScaledVector(side, (r() < 0.5 ? -1 : 1) * half * r()).add(new THREE.Vector3(0, v * Hh, 0));

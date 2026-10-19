@@ -53,7 +53,8 @@ function swatches() {
 // ------------------------------------------------------------------------------------------------
 function skyView() {
   const scene = new THREE.Scene();
-  const sky = timed('sky', () => RZ.skyEnvironment(renderer, scene, { preset: q.get('sky') || 'day' }));
+  const over = {}; for (const k of ['turbidity', 'ms', 'gain', 'elevation', 'azimuth', 'cover', 'glowIntensity']) if (q.has(k)) over[k] = +q.get(k);
+  const sky = timed('sky', () => RZ.skyEnvironment(renderer, scene, { preset: q.get('sky') || 'day', ...over }));
   sky.addSun(scene, { shadow: true, area: 6 });
   const mats = [new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.02 }), new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.4 })];
   mats.forEach((m, i) => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 24), m); s.position.set((i - 1) * 1.3, 1.0, -4); s.castShadow = true; scene.add(s); });
@@ -270,7 +271,7 @@ function ruins() {
     layers: [['grass', { dryness: 0.5 }], ['dirt', { damp: 0.3 }], ['concrete', { color: 0x7a7872, stains: 0.9 }], ['gravel', { color: 0x6a665f }]] }));
   scene.add(ter.mesh);
   sky.addSun(scene, { shadow: quality !== 'low', area: 26, center: [0, 0, -8], distance: 70 });
-  scene.fog = RZ.heightFog({ color: sky.fogColor, density: 0.006, falloff: 0.05 });
+  scene.fog = RZ.heightFog({ color: sky.hazeColor, density: 0.006, falloff: 0.05 });
   const conc = timed('tex:concrete', () => RZ.pbrMaterial('concrete', { mapping: 'world', params: { color: 0x87847d, stains: 1, formwork: 1 }, overlay: { kind: 'moss', amount: 0.42, ground: 0.6 } }));
   const add = (geo, mat, x, y, z, ry = 0, rx = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
   // shell: back wall with window holes, side walls, one collapsed
@@ -305,7 +306,7 @@ function ruins() {
   for (const [x, y] of [[-3.2, 3.9], [2.6, 4.1]]) { const from = new THREE.Vector3(x, y, -18); const to = from.clone().addScaledVector(sd, -9); to.y = Math.max(to.y, 0); scene.add(RZ.lightShaft({ from: from.toArray(), to: to.toArray(), shape: 'box', size: [1.2, 1.2], spread: [1, 1.4], color: 0xffdcb0, intensity: 0.35, floorY: 0.2 })); }
   scene.add(RZ.particles({ kind: 'dust', count: 220, center: [0, 2.2, -12], area: [12, 4.4, 10], color: 0xffe6c4, size: 0.025, opacity: 0.5 }));
   scene.add(RZ.mountains({ center: [0, -10], radius: [260, 520], height: 90, seed: 5, grass: 0x4a5236 }));
-  scene.add(RZ.hazeLayer({ center: [0, -10], radius: 230, height: 50, color: sky.fogColor.clone().multiplyScalar(1.1), opacity: 0.45 }));
+  scene.add(RZ.hazeLayer({ center: [0, -10], radius: 230, height: 50, color: sky.hazeColor.clone().multiplyScalar(1.1), opacity: 0.45 }));
   camera.fov = 58;
   if (view === 1) { camera.position.set(-9, 4.5, 10); camera.lookAt(0, 2.2, -12); }
   else if (view === 2) { camera.position.set(-3.5, hf(-3.5, -9) + 1.6, -9); camera.lookAt(-5, 2.2, -17.8); }
@@ -337,10 +338,9 @@ function valley() {
     layers: [['grass', { color: 0x4d6a26, dry: 0x8f8448, dryness: 0.3, bare: 0.4 }], ['dirt', {}], ['rock', { color: 0x7a7266, color2: 0x5a5046 }], ['sand', { color: 0xa89470 }]] }));
   scene.add(ter.mesh);
   sky.addSun(scene, { shadow: quality !== 'low', area: 45, center: [8, 0, -10], distance: 120 });
-  const away = new THREE.Vector3(-sky.sunDirection.x, 0, -sky.sunDirection.z);
-  const fogC = sky.horizonColor(away).lerp(sky.zenith, 0.15);
-  scene.fog = RZ.heightFog({ color: fogC, density: 0.0024, falloff: 0.012, base: -2 });
-  scene.add(RZ.hazeLayer({ center: [0, -80], radius: 300, height: 110, color: fogC.clone().multiplyScalar(1.05), opacity: 0.5 }));
+  const fogC = sky.hazeColor;
+  scene.fog = RZ.heightFog({ color: fogC, density: 0.0022, falloff: 0.012, base: -2 });
+  scene.add(RZ.hazeLayer({ center: [0, -80], radius: 300, height: 110, color: fogC.clone().multiplyScalar(1.05), opacity: 0.45 }));
   const wat = timed('water', () => RZ.water({ rect: [-60, -260, 110, 300], level: waterLevel, heightAt: hf, deep: 0x0a2226, shallow: 0x35574a, flow: [0.0, -0.04], waves: 0.45 }));
   scene.add(wat.mesh);
   const fall = RZ.waterfall({ top: [-37.5, hf(-38, -66) + 0.2, -66], height: hf(-38, -66) - waterLevel + 0.2, width: 5, dir: [1, 0.15], lip: 0.9, ambient: 0x8a7a80 });
