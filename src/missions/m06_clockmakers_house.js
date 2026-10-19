@@ -18,6 +18,7 @@ export default {
   id: 'm6', act: 'ACT I · THE WORLD THAT REMEMBERS', title: 'The Clockmaker\'s House', sub: 'A workshop that repeats itself',
   async run(game) {
     const { ui, audio } = game, T = game.temporal, F = game.flags, pl = game.player;
+    const dbg = (k) => console.log('M6DBG', k, Math.round((performance.memory?.usedJSHeapSize || 0) / 1e6)); dbg('start');
     registerM6Cast(); registerM6Themes();
     try {
       const need = ['oskar', 'oskar26', 'lotte'].filter(id => !ui.portraits[id] && CAST[id]?.look);
@@ -25,8 +26,8 @@ export default {
     } catch (err) { console.warn('m6 portraits', err); }
 
     const scene = game.newScene({ background: 0x0a0d12, fog: [0x141820, 0.016], exposure: 1.05, bloom: 0.6, bloomThreshold: 0.86, envIntensity: 0.75, killY: -12, residue: true });
-    towerState.set = 0;
-    const W = buildHouse(game, T, { brokenDoor: F.trustedHale === false });
+    towerState.set = 0; dbg('scene');
+    const W = buildHouse(game, T, { brokenDoor: F.trustedHale === false }); dbg('house');
     const G = W.groups;
     game.onUpdate((dt, t) => W.update(dt, t));
 
@@ -39,6 +40,7 @@ export default {
       skies['2196'] = RZ.skyEnvironment(rr, scene, { preset: 'overcast', elevation: 14, apply: false });
       interior = RZ.skyEnvironment(rr, scene, { preset: 'interior', color: 0xffe2c0, wall: 0x3a2e24, window: 0x8aa0c0, apply: false });
     } catch (err) { console.warn('m6 sky', err); }
+    dbg('sky');
 
     // ---------- lights: a constant set, re-rigged per zone and era (no shader recompiles) ----------
     const hemi = new THREE.HemisphereLight(0x6a5a48, 0x1a120c, 0.3); scene.add(hemi);
@@ -116,6 +118,7 @@ export default {
     ], '2049');
     game.onUpdate(() => applyRig(false));
 
+    dbg('eras');
     // ---------- people ----------
     const oskar = game.actor('oskar', null, 0, 0, 6.6, 0); T.only(oskar.root, '2049'); oskar.root.visible = false;
     const oskar26 = game.actor('oskar26', null, 2.4, 0, -37.4, Math.PI); T.only(oskar26.root, '2026');
@@ -131,6 +134,7 @@ export default {
       if (show && !state.seen.kids) { state.seen.kids = true; ui.subtitle('kai', 'Two children at this counter. A boy with a stopped watch… and a girl drawing. That\'s Mira.', 4200); ui.addEvidence('Two children at the counter', 'Residue Vision in the 2026 shop: a boy and a girl at Hensel\'s counter. The boy is holding a watch. The girl is drawing. Kai and Mira, twenty-three years ago.', 'HENSEL & SON · 2026'); F.m6sawKids = true; }
     });
 
+    dbg('people');
     // ---------- helpers ----------
     const near = (x, z, r) => Math.hypot(pl.pos.x - x, pl.pos.z - z) < r;
     const once = (k) => { if (state.seen[k]) return false; state.seen[k] = true; return true; };
@@ -285,6 +289,7 @@ export default {
     // =====================================================================================
     // SCRIPT
     // =====================================================================================
+    dbg('script');
     ui.missionTag('MISSION 6 · THE CLOCKMAKER\'S HOUSE'); ui.show('hud', true);
     T.unlocked = false; T.refreshHud();
     const kai = pl.char;

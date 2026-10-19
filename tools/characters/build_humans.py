@@ -34,7 +34,14 @@ from mathutils import Vector, Matrix, kdtree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mh  # noqa: E402
 import build_characters as BC  # noqa: E402  (tube/shell helpers, clips, export)
-from cast_humans import CAST  # noqa: E402
+import costume  # noqa: E402  (the `wear=[...]` costume pipeline: garments.py catalogue + painters)
+import garments  # noqa: E402
+import importlib  # noqa: E402
+
+# CAST=<name> picks the cast module: cast_<name>.py (e.g. CAST=test -> cast_test.py, CAST=nrzero -> cast_nrzero.py);
+# default: AfterZero's cast_humans.py
+CAST = importlib.import_module("cast_" + os.environ["CAST"] if os.environ.get("CAST") else "cast_humans").CAST
+costume.bind(sys.modules[__name__])
 
 V = Vector
 OURS = {  # MakeHuman bone -> our game bone
@@ -275,14 +282,18 @@ PART_SCALE = dict(face=2.5, scalp=0.9, lidL=1.0, lidR=1.0, mouth=0.5, torso=0.85
 PATCH = 0.22            # side of the cell square (fraction of the atlas)
 CELL_NAMES = ["hair", "shoe", "sole", "colA", "colB", "acc", "trim", "metal", "lash", "skin", "glow", "shirt"]
 PART_CODE = {k: i for i, k in enumerate(list(PART_SCALE) + ["patch"])}
+AUX_RECT = (0.46, 0.15)      # costume pipeline: atlas region for cloth tails, collars, hood rolls, skirts, helmets
+AUX_MODE = [False]           # set per character by build(): True for `wear=[...]` costumes
+AUX_SCALE = dict(footL=0.55, footR=0.55)   # sandals show the feet
 
 
-def _skyline(rects, margin=0.006):
-    """Bottom-left skyline packing of (key, w, h) rectangles (largest first, 90-degree rotation allowed)."""
+def _skyline(rects, margin=0.006, fixed=("aux",)):
+    """Bottom-left skyline packing of (key, w, h) rectangles (largest first, 90-degree rotation allowed except for
+    the `fixed` keys)."""
     sky, out = [(0.0, 1.0, 0.0)], {}
     for k, w, h in sorted(rects, key=lambda r: -max(r[1], r[2]) * min(r[1], r[2]) ** 0.3):
         best = None
-        for rot in (0, 1):
+        for rot in ((0,) if k in fixed else (0, 1)):
             ww, hh = ((h, w) if rot else (w, h))
             ww, hh = ww + margin, hh + margin
             for x in sorted({s[0] for s in sky}):
@@ -307,9 +318,15 @@ def _skyline(rects, margin=0.006):
     return out, max(s[2] for s in sky)
 
 
-@lru_cache(None)
 def layout():
-    """part per body face, per-corner atlas UVs (FUV[face] -> (k,2)), and the cell square origin."""
+    """part per body face, per-corner atlas UVs (FUV[face] -> (k,2)), the cell square origin (and the aux rectangle
+    of the costume pipeline)."""
+    return _layout(AUX_MODE[0])
+
+
+@lru_cache(None)
+def _layout(aux):
+    scale = dict(PART_SCALE, **(AUX_SCALE if aux else {}))
     Vb, UV, F = mh.base()
     body = [i for i, f in enumerate(F) if f[2] == "body"]
     W = dense_weights(len(Vb))
@@ -366,8 +383,8 @@ def layout():
         box[k] = (uv.min(0), uv.max(0))
 
     def attempt(g):
-        rects = [(k, (box[k][1] - box[k][0])[0] * PART_SCALE[k] * g, (box[k][1] - box[k][0])[1] * PART_SCALE[k] * g) for k in parts]
-        return _skyline(rects + [("patch", PATCH, PATCH)])
+        rects = [(k, (box[k][1] - box[k][0])[0] * scale[k] * g, (box[k][1] - box[k][0])[1] * scale[k] * g) for k in parts]
+        return _skyline(rects + [("patch", PATCH, PATCH)] + ([("aux",) + AUX_RECT] if aux else []))
     lo, hi = 0.3, 2.0
     for _ in range(28):
         g = (lo + hi) / 2
@@ -379,7 +396,7 @@ def layout():
     FUV = {}
     for k, fs in parts.items():
         x, y, rot = place[k]
-        s = PART_SCALE[k] * lo
+        s = scale[k] * lo
         b0, b1 = box[k]
         for fi in fs:
             uv = (UV[list(F[fi][1])] - b0) * s
@@ -390,7 +407,11 @@ def layout():
     hv = np.array(sorted({v for fi, k in part.items() if k == "scalp" for v in F[fi][0]}))
     q = P[hv] - eye
     ears = hv[(np.abs(q[:, 0]) > 0.071) & (q[:, 1] > -0.05) & (q[:, 1] < 0.034) & (q[:, 2] < -0.055) & (q[:, 2] > -0.115)]
-    return dict(part=part, FUV=FUV, patch=place["patch"][:2], g=lo, ears=ears)
+    out = dict(part=part, FUV=FUV, patch=place["patch"][:2], g=lo, ears=ears)
+    if aux:
+        x, y, rot = place["aux"]
+        out["aux"] = (x, y) + ((AUX_RECT[1], AUX_RECT[0]) if rot else AUX_RECT)
+    return out
 
 
 def cell_rect(name):
@@ -538,11 +559,21 @@ def hairline(rel, style, male, old):
         hf += 0.012
     temple = hf + (0.004 if male else -0.012)
     sb = -0.012 if male else 0.01
-    if style == "crop":
+    if style in ("crop", "fade", "curls"):
         sb = -0.004
-    nape = {"crop": -0.062, "short": -0.075, "swept": -0.075, "bob": -0.085, "long": -0.09}.get(style, -0.08)
+    if style == "waves":           # thick hair falling onto the brow
+        hf -= 0.012
+        temple -= 0.008
+    if style == "pixie":
+        hf -= 0.006
+    if style in ("undercut", "fade"):
+        sb = 0.004 if style == "undercut" else -0.002
+    nape = {"crop": -0.062, "short": -0.075, "swept": -0.075, "bob": -0.085, "long": -0.09, "waves": -0.088, "curls": -0.07, "puffs": -0.072,
+            "locs": -0.086, "undercut": -0.058, "fade": -0.055, "pixie": -0.078}.get(style, -0.08)
     ks = [0, 28, 48, 66, 78, 88, 100, 114, 132, 152, 180]
     hs = [hf, hf - 0.003, temple, 0.026, sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
+    if style == "pixie":            # side-swept: the fringe dips on one side only
+        return np.interp(th, ks, hs) - 0.008 * np.clip(rel[:, 0] / 0.05, 0, 1) * (np.abs(rel[:, 0]) < 0.06)
     return np.interp(th, ks, hs)
 
 
@@ -613,7 +644,8 @@ def fields(c, B):
     return cov
 
 
-SHELL = {"crop": 0.0015, "short": 0.0065, "swept": 0.009, "bob": 0.008, "long": 0.007, "bun": 0.005, "braid": 0.005, "pony": 0.005}
+SHELL = {"crop": 0.0015, "short": 0.0065, "swept": 0.009, "bob": 0.008, "long": 0.007, "bun": 0.005, "braid": 0.005, "pony": 0.005,
+         "waves": 0.012, "curls": 0.008, "puffs": 0.004, "locs": 0.006, "undercut": 0.009, "fade": 0.0025, "pixie": 0.0075}
 
 
 def hide_field(cov):
@@ -635,6 +667,7 @@ class Layer:
         self.name, self.pos, self.base, self.faces, self.fuv, self.cov = name, pos, base, faces, fuv, cov
         self.mask = np.zeros((len(pos), 3))
         self.W = None
+        self.g = {}          # costume garment params (costume.py)
 
     def edges(self):
         e = {}
@@ -837,12 +870,17 @@ def set_cell_uvs(o, cell, proj="xz", per_face=None):
     me = o.data
     co = np.array([v.co for v in me.vertices])
     li = np.array([l.vertex_index for l in me.loops])
-    ax = {"x": 0, "y": 1, "z": 2}
-    a_, b_ = ax[proj[0]], ax[proj[1]]
     lo, hi = co.min(0), co.max(0)
     span = np.maximum(hi - lo, 1e-6)
-    a = (co[li, a_] - lo[a_]) / span[a_]
-    b = (co[li, b_] - lo[b_]) / span[b_]
+    if proj == "cyl":      # around the object's vertical axis (hats, bands): a = azimuth, b = height
+        cen = (lo + hi) / 2
+        a = (np.arctan2(co[li, 0] - cen[0], -(co[li, 1] - cen[1])) / (2 * math.pi)) % 1.0
+        b = (co[li, 2] - lo[2]) / span[2]
+    else:
+        ax = {"x": 0, "y": 1, "z": 2}
+        a_, b_ = ax[proj[0]], ax[proj[1]]
+        a = (co[li, a_] - lo[a_]) / span[a_]
+        b = (co[li, b_] - lo[b_]) / span[b_]
     uv = cell_uv(cell, a, b)
     if per_face is not None:
         for p in me.polygons:
@@ -973,11 +1011,18 @@ def fabric(c, key, q, seed, L):
 
 def hair_strands(c, rel, style, seed, fine=1.0):
     """0..1 strand value for points relative to the eye centre (lines follow the comb direction of the style)."""
-    if style in ("swept", "bun", "braid", "pony", "bun_hidden"):
+    if style in ("curls", "puffs"):                          # tight coils: a dense cellular texture, no comb direction
+        q = rel * (1 / 0.004)
+        v = 0.55 + 0.25 * np.sin(q[:, 0] * 2.1 + np.sin(q[:, 1] * 1.7 + seed)) * np.sin(q[:, 1] * 2.3 + np.sin(q[:, 2] * 1.9)) \
+            + 0.2 * (hash01(rel, 520 * fine, seed) - 0.5)
+        return np.clip(v, 0, 1)
+    if style in ("swept", "bun", "braid", "pony", "bun_hidden", "waves", "undercut", "pixie", "locs"):
         a = np.arctan2(rel[:, 0], rel[:, 1] + 0.03)          # combed back: lines run front to back
     else:
         a = np.arctan2(rel[:, 0], rel[:, 2] + 0.08)          # from the crown: lines run down from the top
     j = vnoise(rel * np.array([1.0, 1.0, 1.0]), 60, seed) * 2.5
+    if style == "waves":
+        j = j + 1.6 * np.sin(rel[:, 1] * 2 * math.pi / 0.03 + a * 6)
     v = (0.55 + 0.2 * np.sin(a * 70 + j) + 0.15 * np.sin(a * 190 * fine + j * 1.7 + 1.3) + 0.1 * np.sin(a * 470 * fine + j * 2.3 + 0.4))
     return np.clip(v, 0, 1)
 
@@ -1137,14 +1182,20 @@ def paint(c, B, cov, res, path_out):
         hcol = hair_c[None, :] * (k * roots)[:, None]
         sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
         hcol = hcol * sheen[:, None]
-        if style == "crop":       # very short hair: mostly the scalp showing through
+        if style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
             hcol = hcol * 0.75 + col * 0.25 * (0.6 + 0.4 * st[:, None])
+        if style in ("undercut", "fade"):   # shaved sides: the scalp shows through, fading toward the top
+            sh_ = ss(0.075, 0.04, rel[:, 1])[:, None] * (0.55 if style == "undercut" else 0.45)
+            hcol = hcol * (1 - sh_) + col * sh_
         col[under] = hcol[under]
     # ---------------- garments (outermost layer wins) ----------------
-    shirt_c = hexc(c.get("shirtColor", "d8d0c4"))
-    order = [("hood", c.get("colorA")), ("scarf", c.get("accentColor")), ("top", c.get("colorA", "444a55")),
-             ("shaft", shoe_hex(c)), ("inshoe", shoe_hex(c)), ("bottom", c.get("colorB", "2a2a30"))]
+    costume_mode = "_costume" in cov
     taken = np.zeros(len(px), bool)
+    if costume_mode:
+        hgt, glw = costume.paint_body(c, B, cov, pos, fld, part, col, taken, seed)
+    shirt_c = hexc(c.get("shirtColor", "d8d0c4"))
+    order = [] if costume_mode else [("hood", c.get("colorA")), ("scarf", c.get("accentColor")), ("top", c.get("colorA", "444a55")),
+             ("shaft", shoe_hex(c)), ("inshoe", shoe_hex(c)), ("bottom", c.get("colorB", "2a2a30"))]
     for key, chex in order:
         if key not in cov:
             continue
@@ -1173,16 +1224,69 @@ def paint(c, B, cov, res, path_out):
     mask = np.zeros((res, res), bool)
     img[py, px] = np.clip(col, 0, 1)
     mask[py, px] = True
-    paint_cells(c, img, mask, res, seed)
+    paint_cells(c, img, mask, res, seed, cov)
+    out = dict(base=path_out, normal=None, emissive=None)
+    from PIL import Image
+    if costume_mode:
+        himg = np.zeros((res, res))
+        gimg = np.zeros((res, res, 3))
+        spx = np.full((res, res), 0.004)
+        himg[py, px] = hgt
+        gimg[py, px] = glw
+        spx[py, px] = texel_size(B, res)[fid]
+        costume.paint_aux(c, B, img, mask, himg, gimg, spx, res, seed)
+        lvl = costume.glow_cell_level(c)
+        if lvl > 0:
+            u0, v0, cs = cell_rect("glow")
+            x0, x1 = int(round(u0 * res)), int(round((u0 + cs) * res))
+            y0, y1 = int(round((1 - v0 - cs) * res)), int(round((1 - v0) * res))
+            gimg[y0:y1, x0:x1] = hexc(c["glow"]) * lvl
+        # normal map from the painted height (tangent space: +x along u, +y along v up), heights in metres
+        hm = mask.copy()
+        h3, _ = dilate(np.repeat(himg[..., None], 1, 2), hm, 4)
+        hh = h3[..., 0]
+        gy_, gx_ = np.gradient(hh)
+        k = 1.6 / np.maximum(spx, 1e-5)
+        nx, ny = -gx_ * k, gy_ * k
+        nl = np.sqrt(nx * nx + ny * ny + 1)
+        nimg = np.stack([nx / nl, ny / nl, 1 / nl], -1) * 0.5 + 0.5
+        nimg, nm = dilate(nimg, mask.copy(), 8)
+        nimg[~nm] = (0.5, 0.5, 1.0)
+        out["normal"] = path_out.replace(".jpg", "_n.jpg")
+        Image.fromarray((np.clip(nimg, 0, 1) * 255).astype(np.uint8)).save(out["normal"], quality=90)
+        if gimg.max() > 0.01:
+            gimg, gm = dilate(gimg, gimg.max(-1) > 0.004, 3)
+            half = gimg.reshape(res // 2, 2, res // 2, 2, 3).mean((1, 3))
+            out["emissive"] = path_out.replace(".jpg", "_e.jpg")
+            Image.fromarray((np.clip(half, 0, 1) * 255).astype(np.uint8)).save(out["emissive"], quality=92)
     img, mask = dilate(img, mask, 10 if res >= 2048 else 8)
     img[~mask] = img[mask].mean(axis=0)
-    from PIL import Image
     Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(path_out, quality=c.get("jpegQ", 88 if res >= 2048 else 87))
-    return path_out
+    return out
 
 
-def paint_cells(c, img, mask, res, seed):
-    """Material cells: eye disc, hair, leather, sole, fabrics, metal, lashes, skin, glow, shirt."""
+def texel_size(B, res):
+    """Metres per atlas pixel of every body face (for the normal map's slope scale)."""
+    FUV, P, F = layout()["FUV"], B.P, B.F
+    out = np.full(len(F), 0.004)
+    for fi in B.faces:
+        vs = F[fi][0]
+        uv = FUV[fi] * res
+        q = P[list(vs)]
+        a3 = 0.5 * np.linalg.norm(np.cross(q[1] - q[0], q[2] - q[0]))
+        cr = lambda a, b: a[0] * b[1] - a[1] * b[0]
+        au = 0.5 * abs(cr(uv[1] - uv[0], uv[2] - uv[0]))
+        if len(vs) == 4:
+            a3 += 0.5 * np.linalg.norm(np.cross(q[2] - q[0], q[3] - q[0]))
+            au += 0.5 * abs(cr(uv[2] - uv[0], uv[3] - uv[0]))
+        if au > 1e-9:
+            out[fi] = math.sqrt(a3 / au)
+    return out
+
+
+def paint_cells(c, img, mask, res, seed, cov=None):
+    """Material cells: eye disc, hair, leather, sole, fabrics, metal, lashes, skin, glow, shirt (costumes: their own
+    colours, and painted shoe / sole designs)."""
     def grid(name):
         u0, v0, s = cell_rect(name)
         x0, x1 = int(round(u0 * res)), int(round((u0 + s) * res))
@@ -1227,8 +1331,16 @@ def paint_cells(c, img, mask, res, seed):
              "acc": hexc(c.get("accentColor", "8a3a2a")), "trim": hexc(c.get("trimColor", "2a1d16")), "metal": hexc(c.get("metalColor", "b09060")),
              "lash": hexc(c.get("browColor", c.get("hairColor", "2e2119"))) * 0.3 + 0.015, "skin": hexc(c["skin"]),
              "glow": hexc(c.get("glowColor", "ffb050")), "shirt": hexc(c.get("shirtColor", "d8d0c4"))}
+    over = costume.cell_colors(c, cov) if cov is not None and "_costume" in cov else {}
+    for name, v in over.items():
+        if isinstance(v, str):
+            cells[name] = hexc(v)
     for name, cc in cells.items():
         gx, gy, a, b = grid(name)
+        if isinstance(over.get(name), tuple):
+            kind, feet = over[name]
+            put(gx, gy, garments.shoe_cell(feet, a, b, seed) if kind == "design" else garments.sole_cell(feet, a, b, seed))
+            continue
         p3 = np.stack([a, b, np.zeros_like(a)], -1).reshape(-1, 3)
         if name == "hair":
             k = 0.8 + 0.12 * np.sin(a * 60 + 2 * vnoise(p3, 3, seed).reshape(a.shape)) + 0.08 * np.sin(a * 151 + 1.3)
@@ -1318,13 +1430,22 @@ def eye_objects(B, c):
 # ----------------------------------------------------------------------------------------------------------------
 # shoes: hull of the real foot, remeshed, with a sole edge; weighted like the foot skin
 # ----------------------------------------------------------------------------------------------------------------
-def shoe_objects(B, c, cov):
+def shoe_objects(B, c, cov, params=None):
+    """params (costume footwear): sole_h (sole height, m), lip (sole overhang), toe (toe-cap bulge), gloss, sole_gloss."""
+    pr = dict(sole_h=0.014, lip=0.0022, toe=0.0, gloss=0.42, sole_gloss=0.1)
+    pr.update(params or {})
     out = []
     collar = cov["_collar_y"]
     bodyv = set(B.bodyv.tolist())
     for s in "LR":
         sel = np.array([i for i in B.bodyv if (B.vb[i] in (f"foot_{s}", f"toe_{s}") or (B.vb[i] == f"shin_{s}" and B.P[i, 1] < collar + 0.012))])
         pts = B.P[sel] + B.N[sel] * 0.0075
+        if pr["toe"]:     # toe cap / bumper: the front of the foot a little fuller
+            fwd0 = B.Jm["toe_" + s] - B.Jm["ankle_" + s]
+            fwd0[1] = 0
+            fwd0 /= np.linalg.norm(fwd0)
+            t_ = np.clip(((B.P[sel] - B.Jm["ball_" + s]) @ fwd0) / 0.06 + 0.5, 0, 1)
+            pts = pts + B.N[sel] * (pr["toe"] * t_)[:, None]
         bm = bmesh.new()
         for p in to_bl_np(pts):
             bm.verts.new(p)
@@ -1346,27 +1467,31 @@ def shoe_objects(B, c, cov):
         fwd.z = 0
         fwd.normalize()
         ax0 = to_bl(B.Jm["ankle_" + s])
-        band = 0.014
+        band = pr["sole_h"]
+        lip_h = band + 0.002
         for v in bm.verts:
             z = v.co.z - zb
             if z < band:
                 v.co.z = z / band * (zb + band)
-            if v.co.z < 0.016:      # sole lip
+            if v.co.z < lip_h:      # sole lip (chunky soles stand out further, with a squared-off edge)
                 rel = v.co - ax0
                 along = rel.dot(fwd)
                 perp = rel - fwd * along
                 perp.z = 0
+                k_ = 1 - (v.co.z / lip_h) ** (3 if band > 0.02 else 1)
                 if perp.length > 1e-4:
-                    v.co += perp.normalized() * 0.0022 * (1 - v.co.z / 0.016)
+                    v.co += perp.normalized() * pr["lip"] * k_
+                v.co += fwd * pr["lip"] * 0.8 * k_ * (1 if along > 0 else -0.6)
         bm.to_mesh(me)
         bm.free()
         dec = o.modifiers.new("dec", "DECIMATE")
         dec.ratio = min(1.0, 520 / max(1, len(me.polygons) * 2))
         BC.apply_modifiers(o)
         BC.smooth(o)
-        set_cell_uvs(o, "shoe", "yz", per_face=lambda p: "sole" if p.center.z < 0.012 else "shoe")
+        sz = max(0.012, zb + band + 0.0015) if params else 0.012
+        set_cell_uvs(o, "shoe", "yz", per_face=lambda p: "sole" if p.center.z < sz else "shoe")
         zz = np.array([v.co.z for v in o.data.vertices])
-        set_mask(o, np.stack([np.zeros_like(zz), np.where(zz < 0.012, 0.1, 0.42), np.zeros_like(zz)], 1))
+        set_mask(o, np.stack([np.zeros_like(zz), np.where(zz < sz, pr["sole_gloss"], pr["gloss"]), np.zeros_like(zz)], 1))
         ref = np.array([i for i in B.bodyv if B.vb[i] in (f"foot_{s}", f"toe_{s}", f"shin_{s}") and B.P[i, 1] < collar + 0.05])
         WSTORE[o.name] = nearest_weights(obj_world_verts(o), to_bl_np(B.P[ref]), B.W[ref], 4)
         out.append(o)
@@ -1750,43 +1875,7 @@ def extras(c, B, cov, layers):
             piece(tl, "acc", (0, 0, 0), "xz", bone="head")
             out.append(tl)
     if hat not in ("hood", "headscarf"):
-        hp = []
-        if style == "bun":
-            bm = bmesh.new()
-            bmesh.ops.create_uvsphere(bm, u_segments=18, v_segments=12, radius=1.0)
-            for v in bm.verts:
-                v.co = V((v.co.x * 0.04, v.co.y * 0.034, v.co.z * 0.036))
-            o = BC.mesh_obj("bun", bm)
-            o.data.transform(Matrix.Translation(hc + V((0, hry * 0.86 + vol, hrx * 0.5))))
-            hp.append((o, "head"))
-        if style in ("braid", "pony"):
-            if style == "braid":
-                for i in range(6):
-                    r = 0.018 - i * 0.002
-                    bm = bmesh.new()
-                    bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=8, radius=1.0)
-                    for v in bm.verts:
-                        v.co = V((v.co.x * r, v.co.y * r, v.co.z * r * 1.5))
-                    o = BC.mesh_obj("braid", bm)
-                    o.data.transform(Matrix.Translation(hc + V((0, hry * 0.98 + i * 0.008 + vol, -0.03 - i * 0.032))))
-                    hp.append((o, "head" if i < 2 else "neck"))
-            else:
-                pts = [hc + V((0, hry * 0.95, 0.03)), hc + V((0, hry * 1.1 + 0.01, -0.03)), hc + V((0, hry * 1.12 + 0.02, -0.1)), hc + V((0, hry * 1.05 + 0.03, -0.17))]
-                o = BC.tube("pony", pts, [(0.022, 0.02), (0.02, 0.018), (0.016, 0.014), (0.006, 0.005)], seg=12)
-                hp.append((o, "head"))
-        for o, bone in hp:
-            BC.smooth(o)
-            piece(o, "hair", (0, 0, 1), "xz", bone=bone)
-            out.append(o)
-        if style in ("long", "bob"):
-            ref = [head_frame(B), B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["neck", "chest", "clavicle_L", "clavicle_R"])]]
-            if layers.get("top") is not None:
-                ref.append(layers["top"].pos)
-            ref = np.concatenate(ref)
-            if style == "long":
-                out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.105, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.02, narrow=36, rows=15, tip=0.07, seg=34, vol=vol))
-            else:
-                out.append(hair_sheet(B, c, ref, 70, 290, L.eye[1] + 0.105, L.eye[1] - 0.078, clear=0.003, flare=0.012, rows=12, tip=0.012, vol=vol))
+        out += hair_pieces(c, B, cov, layers)
     if "glasses" in accs:
         for e in (L.eyeL, L.eyeR):
             bm = bmesh.new()
@@ -1807,6 +1896,58 @@ def extras(c, B, cov, layers):
         o.matrix_world = Matrix.Identity(4)
         piece(o, "metal", (0, 0.5, 0), "xz", bone="head")
         out.append(o)
+    return out
+
+
+def hair_pieces(c, B, cov, layers):
+    """Hair pieces of the legacy styles: bun, braid, ponytail, long / bob hanging sheets."""
+    out = []
+    L, H = B.L, B.H
+    hcen = to_bl(L.eye)
+    Hp = to_bl_np(head_frame(B))
+    hm = Hp[np.abs(Hp[:, 2] - (hcen.z + 0.03)) < 0.02]
+    hrx = (hm[:, 0].max() - hm[:, 0].min()) / 2
+    hry = (hm[:, 1].max() - hm[:, 1].min()) / 2
+    hc = V(((hm[:, 0].max() + hm[:, 0].min()) / 2, (hm[:, 1].max() + hm[:, 1].min()) / 2, hcen.z + 0.02))
+    style = cov["_style"]
+    vol = SHELL.get(style, 0.0)
+    _ = hrx
+    hp = []
+    if style == "bun":
+        bm = bmesh.new()
+        bmesh.ops.create_uvsphere(bm, u_segments=18, v_segments=12, radius=1.0)
+        for v in bm.verts:
+            v.co = V((v.co.x * 0.04, v.co.y * 0.034, v.co.z * 0.036))
+        o = BC.mesh_obj("bun", bm)
+        o.data.transform(Matrix.Translation(hc + V((0, hry * 0.86 + vol, hrx * 0.5))))
+        hp.append((o, "head"))
+    if style in ("braid", "pony"):
+        if style == "braid":
+            for i in range(6):
+                r = 0.018 - i * 0.002
+                bm = bmesh.new()
+                bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=8, radius=1.0)
+                for v in bm.verts:
+                    v.co = V((v.co.x * r, v.co.y * r, v.co.z * r * 1.5))
+                o = BC.mesh_obj("braid", bm)
+                o.data.transform(Matrix.Translation(hc + V((0, hry * 0.98 + i * 0.008 + vol, -0.03 - i * 0.032))))
+                hp.append((o, "head" if i < 2 else "neck"))
+        else:
+            pts = [hc + V((0, hry * 0.95, 0.03)), hc + V((0, hry * 1.1 + 0.01, -0.03)), hc + V((0, hry * 1.12 + 0.02, -0.1)), hc + V((0, hry * 1.05 + 0.03, -0.17))]
+            o = BC.tube("pony", pts, [(0.022, 0.02), (0.02, 0.018), (0.016, 0.014), (0.006, 0.005)], seg=12)
+            hp.append((o, "head"))
+    for o, bone in hp:
+        BC.smooth(o)
+        piece(o, "hair", (0, 0, 1), "xz", bone=bone)
+        out.append(o)
+    if style in ("long", "bob"):
+        ref = [head_frame(B), B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["neck", "chest", "clavicle_L", "clavicle_R"])]]
+        ref += [Lt.pos for k_, Lt in layers.items() if k_.startswith("top") and Lt is not None]
+        ref = np.concatenate(ref)
+        if style == "long":
+            out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.105, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.02, narrow=36, rows=15, tip=0.07, seg=34, vol=vol))
+        else:
+            out.append(hair_sheet(B, c, ref, 70, 290, L.eye[1] + 0.105, L.eye[1] - 0.078, clear=0.003, flare=0.012, rows=12, tip=0.012, vol=vol))
     return out
 
 
@@ -1930,16 +2071,23 @@ def budget(c):
 
 
 def build(c, tex_dir):
+    costume_mode = "wear" in c
+    AUX_MODE[0] = costume_mode
     B = Body(c)
-    cov = fields(c, B)
+    if costume_mode:
+        costume.aux_reset()
+        cov = costume.fields(c, B)
+    else:
+        cov = fields(c, B)
     style = cov["_style"]
     lay_parts = layout()["part"]
-    res = c.get("res", 2048 if c["id"] == "arin" else 1024)
-    tex = paint(c, B, cov, res, os.path.join(tex_dir, c["id"] + ".jpg"))
+    res = c.get("res", 2048 if c["id"] in ("arin", "kai") else 1024)
+    tex_path = os.path.join(tex_dir, c["id"] + ".jpg")
+    tex = None if costume_mode else paint(c, B, cov, res, tex_path)
     layers = {}
     H = B.H
     # ---- skin (with a 2 cm band under every garment border) ----
-    hide = hide_field(cov)
+    hide = costume.hide_field(cov) if costume_mode else hide_field(cov)
     for key in ("scarf", "hood"):      # ears under a headscarf / hood are tucked away
         if key in cov:
             earv = layout()["ears"]
@@ -1948,35 +2096,36 @@ def build(c, tex_dir):
     hpaint = cov.get("hair", cov.get("_hairpaint"))
     sk = ss(-0.006, 0.0, -hide[skin.base])
     hb = ss(-0.002, 0.004, hpaint[skin.base]) if hpaint is not None else 0
-    ears = np.zeros(len(skin.base))
     skin.mask = np.stack([sk * (1 - hb), np.zeros_like(sk), hb * np.ones_like(sk)], 1)
-    _ = ears
     layers["skin"] = skin
     # ---- garments ----
-    thick = {"coat": 0.012, "robe": 0.012, "jacket": 0.009, "uniform": 0.009, "sweater": 0.008, "vest": 0.007, "shirt": 0.006, "dress": 0.006}.get(c.get("top"), 0.008)
-    if "bottom" in cov:
-        Lb = build_layer(B, "bottom", cov["bottom"])
-        if Lb is not None:
-            taubin(Lb, 4)
-            offset_layer(Lb, B, 0.0055 * (0.35 + 0.65 * ss(0.0, 0.02, Lb.cov)))
-            layers["bottom"] = Lb
-    if "shaft" in cov:
-        Ls = build_layer(B, "shaft", cov["shaft"])
-        if Ls is not None:
-            taubin(Ls, 4)
-            offset_layer(Ls, B, 0.0085 * (0.6 + 0.4 * ss(0.0, 0.015, Ls.cov)))
-            Ls.mask[:, 1] = 0.42
-            layers["shaft"] = Ls
-    if "top" in cov:
-        Lt = build_layer(B, "top", cov["top"])
-        if Lt is not None:
-            loose = {"coat": 10, "robe": 12, "jacket": 8, "uniform": 8, "sweater": 8, "dress": 8}.get(c.get("top"), 6)
-            taubin(Lt, loose)
-            offset_layer(Lt, B, thick * (0.4 + 0.6 * ss(0.0, 0.02, Lt.cov)))
-            amt = {"coat": 1.0, "robe": 1.0, "jacket": 0.85, "uniform": 0.8, "sweater": 0.75, "dress": 0.7}.get(c.get("top"), 0.5)
-            inflate(Lt, B, amt)
-            taubin(Lt, 2)
-            layers["top"] = Lt
+    if costume_mode:
+        layers.update(costume.build_layers(c, B, cov))
+    else:
+        thick = {"coat": 0.012, "robe": 0.012, "jacket": 0.009, "uniform": 0.009, "sweater": 0.008, "vest": 0.007, "shirt": 0.006, "dress": 0.006}.get(c.get("top"), 0.008)
+        if "bottom" in cov:
+            Lb = build_layer(B, "bottom", cov["bottom"])
+            if Lb is not None:
+                taubin(Lb, 4)
+                offset_layer(Lb, B, 0.0055 * (0.35 + 0.65 * ss(0.0, 0.02, Lb.cov)))
+                layers["bottom"] = Lb
+        if "shaft" in cov:
+            Ls = build_layer(B, "shaft", cov["shaft"])
+            if Ls is not None:
+                taubin(Ls, 4)
+                offset_layer(Ls, B, 0.0085 * (0.6 + 0.4 * ss(0.0, 0.015, Ls.cov)))
+                Ls.mask[:, 1] = 0.42
+                layers["shaft"] = Ls
+        if "top" in cov:
+            Lt = build_layer(B, "top", cov["top"])
+            if Lt is not None:
+                loose = {"coat": 10, "robe": 12, "jacket": 8, "uniform": 8, "sweater": 8, "dress": 8}.get(c.get("top"), 6)
+                taubin(Lt, loose)
+                offset_layer(Lt, B, thick * (0.4 + 0.6 * ss(0.0, 0.02, Lt.cov)))
+                amt = {"coat": 1.0, "robe": 1.0, "jacket": 0.85, "uniform": 0.8, "sweater": 0.75, "dress": 0.7}.get(c.get("top"), 0.5)
+                inflate(Lt, B, amt)
+                taubin(Lt, 2)
+                layers["top"] = Lt
     head_faces = [fi for fi in B.faces if lay_parts[fi] in ("face", "scalp")]
     if "hair" in cov and SHELL.get(style, 0) > 0:
         Lh = build_layer(B, "hair", cov["hair"], faces=head_faces)
@@ -1986,10 +2135,12 @@ def build(c, tex_dir):
             shape = 0.55 + 0.45 * ss(-0.02, 0.07, rel[:, 1])
             if style == "swept":
                 shape = shape + 0.7 * g2(((rel[:, 2] - 0.0) / 0.04) ** 2 + ((rel[:, 1] - 0.075) / 0.035) ** 2, 1.0)
+            shape = costume.hair_shape(style, rel, shape)
             taubin(Lh, 3, pin=Lh.cov <= 0.0005)
             seed = (sum(map(ord, c["id"])) % 97) * 0.37
             clumps = hair_strands(c, rel, style, seed, fine=0.6) - 0.5     # combed clumps: relief along the strands
-            offset_layer(Lh, B, 0.0004 + vol * (shape + 0.45 * clumps) * ss(0.0, 0.03, Lh.cov))
+            relief = costume.hair_relief(style, rel, seed)
+            offset_layer(Lh, B, 0.0004 + (vol * (shape + 0.45 * clumps) + relief) * ss(0.0, 0.03, Lh.cov))
             taubin(Lh, 2, pin=Lh.cov <= 0.0005)
             Lh.mask[:, 2] = 1
             layers["hair"] = Lh
@@ -2018,13 +2169,23 @@ def build(c, tex_dir):
                     bump = 0.022 * ss(0.0, 0.07, Lx.cov) * hw + 0.012 * g2(rel[:, 0] ** 2 + ((rel[:, 1] - 0.06) / 1.2) ** 2 + ((rel[:, 2] + 0.12) / 0.8) ** 2, 0.04)
                 offset_layer(Lx, B, off * (0.35 + 0.65 * ss(0.0, 0.02, Lx.cov)) + bump)
                 taubin(Lx, 2)
+                if costume_mode:       # over whatever the costume put on the shoulders
+                    costume.push_out(Lx, B, cov["_OFF"][Lx.base] + 0.004)
+                    Lx.mask[:, 1] = 0.0
                 layers[key] = Lx
     parts = [layer_object(Lr) for Lr in layers.values()]
     parts += eye_objects(B, c)
-    parts += shoe_objects(B, c, cov)
-    ex = extras(c, B, cov, layers)
+    if costume_mode:
+        ex = costume.extras(c, B, cov, layers)
+    else:
+        parts += shoe_objects(B, c, cov)
+        ex = extras(c, B, cov, layers)
     cloth = [o for o in ex if o.name.startswith(("skirt", "apron"))]    # already even quads: kept out of decimation
     parts += [o for o in ex if o not in cloth]
+    if costume_mode:      # aux pieces packed, their uvs mapped, then the atlas painted (it needs the pieces)
+        costume.aux_pack()
+        costume.aux_remap(parts + cloth)
+        tex = paint(c, B, cov, res, tex_path)
     # ---- rig + weights + one material ----
     arm = BC.build_armature(c["id"], B.J)
     for o in parts + cloth:
@@ -2049,11 +2210,12 @@ def build(c, tex_dir):
     mesh = join(parts)
     mesh.name = c["id"] + "_mesh"
     cloth_tris = sum(len(p.vertices) - 2 for o in cloth for p in o.data.polygons)
-    decimate_protected(mesh, B, budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0)
+    decimate_protected(mesh, B, budget(c) - cloth_tris if costume_mode else budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0)
     if cloth:
         mesh = join([mesh] + cloth)
         print("  + cloth", cloth_tris, "tris", flush=True)
     arm["character"] = c["id"]
+    AUX_MODE[0] = False
     return arm, mesh
 
 
@@ -2122,15 +2284,31 @@ def c_id(mesh):
     return mesh.name.replace("_mesh", "")
 
 
-def atlas_material(c, tex_path):
+def atlas_material(c, tex):
+    """One material per character: the atlas (+ a normal map and an emissive map for costumes). glTF export:
+    baseColorTexture, normalTexture, emissiveTexture with emissiveFactor 1 (three.js: map, normalMap, emissiveMap)."""
+    tex = tex if isinstance(tex, dict) else dict(base=tex)
     m = bpy.data.materials.new(c["id"] + "_atlas")
     m.use_nodes = True
     nt = m.node_tree
     bsdf = nt.nodes.get("Principled BSDF")
     im = nt.nodes.new("ShaderNodeTexImage")
-    im.image = bpy.data.images.load(tex_path)
+    im.image = bpy.data.images.load(tex["base"])
     nt.links.new(im.outputs["Color"], bsdf.inputs["Base Color"])
     bsdf.inputs["Roughness"].default_value = 0.82
+    if tex.get("normal"):
+        nm = nt.nodes.new("ShaderNodeTexImage")
+        nm.image = bpy.data.images.load(tex["normal"])
+        nm.image.colorspace_settings.name = "Non-Color"
+        nmap = nt.nodes.new("ShaderNodeNormalMap")
+        nt.links.new(nm.outputs["Color"], nmap.inputs["Color"])
+        nt.links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
+    if tex.get("emissive"):
+        em = nt.nodes.new("ShaderNodeTexImage")
+        em.image = bpy.data.images.load(tex["emissive"])
+        nt.links.new(em.outputs["Color"], bsdf.inputs["Emission Color"])
+        bsdf.inputs["Emission Strength"].default_value = 1.0
+        m["glow"] = c.get("glow", "")
     m["slot"] = "atlas"
     return m
 
