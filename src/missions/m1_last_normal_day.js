@@ -249,7 +249,7 @@ export default {
     scene.add(box(0.3, 0.02, 30, glowMat(0xffd34a, 2.5), 11.1, 0.15, -112));
     // station clock (stopped clock motif)
     const sclock = new THREE.Group(); sclock.position.set(10.5, 4.6, -108); scene.add(sclock);
-    const sface = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 48), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff1d8, emissiveIntensity: 1.2 })); sface.rotation.z = Math.PI / 2; sclock.add(sface);
+    const sface = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 48), new THREE.MeshStandardMaterial({ color: 0xf4efe4, emissive: 0xfff1d8, emissiveIntensity: 0.35 })); sface.rotation.z = Math.PI / 2; sclock.add(sface);
     const sh = []; for (const len of [0.5, 0.7]) { const g = new THREE.Group(); g.position.x = -0.07; g.rotation.y = -Math.PI / 2; const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, len, 0.01), new THREE.MeshStandardMaterial({ color: 0x050505 })); b2.position.y = len / 2; g.add(b2); sclock.add(g); sh.push(g); }
     sh[0].rotation.z = -Math.PI * 2 * (8.25 / 12); sh[1].rotation.z = -Math.PI * 2 * (14 / 60);
     // Helix tower
@@ -259,7 +259,10 @@ export default {
     for (let k = 0; k < 3; k++) { const r = new THREE.Mesh(new THREE.TorusGeometry(4 + k * 1.1, 0.12, 8, 64, Math.PI * 1.6), glowMat(0x5fe6ff, 3.5)); r.rotation.z = k * 1.3; logo.add(r); }
     game.onUpdate(dt => { logo.children.forEach((r, k) => r.rotation.z += dt * (0.2 + k * 0.1) * (k % 2 ? -1 : 1)); });
     const hx = neonSign('HELIX TEMPORAL RESEARCH', '#e8f8ff', 16, 1.6, { font: '600 60px Cinzel, serif' }); hx.position.set(0, 18, -142.8); scene.add(hx);
-    const doors = box(6, 4, 0.2, new THREE.MeshStandardMaterial({ color: 0x0a0f14, emissive: 0x5fe6ff, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.1 }), 0, 0.15, -139.8); scene.add(doors);
+    const lobby = canvasTex(512, 256, (g, w, h) => { const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, '#0a1a24'); grd.addColorStop(0.6, '#1d4a5a'); grd.addColorStop(1, '#0a1218'); g.fillStyle = grd; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(160,240,255,0.7)'; for (let k = 0; k < 6; k++) g.fillRect(30 + k * 80, 18, 50, 5); g.fillStyle = '#05080c'; g.fillRect(180, 150, 150, 60); g.fillStyle = 'rgba(0,0,0,0.85)'; for (let k = 0; k < 4; k++) g.fillRect(w / 4 * k, 0, 6, h); }, 'lobby');
+    const doors = box(6, 4, 0.2, new THREE.MeshStandardMaterial({ color: 0x05080c, emissiveMap: lobby, emissive: 0xffffff, emissiveIntensity: 0.55, metalness: 0.6, roughness: 0.05 }), 0, 0.15, -139.8); scene.add(doors);
+    for (const x of [-3.1, 3.1]) scene.add(box(0.15, 4.3, 0.3, glowMat(0x5fe6ff, 2), x, 0.15, -139.7));
+    scene.add(box(6.35, 0.15, 0.3, glowMat(0x5fe6ff, 2), 0, 4.3, -139.7));
 
     // --- Jun Park ---
     const jun = game.actor('jun', null, 9.4, 0.15, -103, -Math.PI / 2);

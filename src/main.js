@@ -16,7 +16,7 @@ function buildTitleScene() {
   const s = new THREE.Scene(); s.background = new THREE.Color(0x02040a); s.fog = new THREE.FogExp2(0x0a1020, 0.012);
   game.scene = s; game.engine.setScene(s);
   s.environmentIntensity = 0.3;
-  s.add(sky(0x050a18, 0x2a2440, { sun: 0xff9a40, sunDir: [-0.7, 0.15, -1], stars: 0.8 }));
+  s.add(sky(0x050a18, 0x2a4a70, { left: 0xc0602a, sun: 0xff9a40, sunDir: [-0.7, 0.12, -1], stars: 0.8 }));
   s.add(new THREE.HemisphereLight(0x4a5a7a, 0x100808, 0.5));
   const warm = new THREE.DirectionalLight(0xffa860, 2.4); warm.position.set(-30, 10, -40); s.add(warm);
   const cool = new THREE.DirectionalLight(0x7fd0ff, 2.0); cool.position.set(30, 14, -30); s.add(cool);

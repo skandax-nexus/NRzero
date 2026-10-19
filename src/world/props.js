@@ -77,14 +77,17 @@ export class Drone {
     coneGeo.translate(0, -this.range / 2, 0); coneGeo.rotateX(-Math.PI / 2 + 0.35);
     this.coneMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
     this.cone = new THREE.Mesh(coneGeo, this.coneMat); this.cone.position.z = 0.3; g.add(this.cone);
-    this.light = new THREE.SpotLight(0xff4455, 40, this.range * 1.3, this.fov, 0.4, 1.5);
-    this.light.position.set(0, 0, 0.3); g.add(this.light); this.light.target.position.set(0, -Math.tan(0.35) * 6, 6.3); g.add(this.light.target);
+    // a cheap floor pool instead of a real spotlight keeps the light count low
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
+    pool.rotation.x = -Math.PI / 2; this.pool = pool; game.scene.add(pool);
+    this.light = { visible: true, color: new THREE.Color() };
     g.position.copy(this.path[0]); game.scene.add(g);
     this.t = Math.random() * 10;
   }
   update(dt) {
     this.t += dt; const g = this.mesh, p = this.game.player;
     g.position.y = this.path[0].y + Math.sin(this.t * 2) * 0.08;
+    this.pool.position.set(g.position.x + Math.sin(g.rotation.y) * 6, 0.03, g.position.z + Math.cos(g.rotation.y) * 6); this.pool.visible = !this.disabled && g.visible;
     if (this.disabled) { this.cone.visible = false; this.light.visible = false; this.eye.material.emissiveIntensity = 0.3; return 0; }
     // movement
     if (this.wait > 0) { this.wait -= dt; g.rotation.y += Math.sin(this.t * 1.2) * dt * 0.8; }

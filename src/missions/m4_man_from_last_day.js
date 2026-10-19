@@ -121,8 +121,11 @@ export default {
     for (const [x, z] of [[-9, 14], [10, 12], [-30, -24], [24, -26]]) { scene.add(tree(R, x, z, 0.9)); game.collision.addBox(x, 0, z, 0.8, 4, 0.8); }
 
     // the Old Ring (a stone Chronolith) on its platform
-    const plat = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 7, 0.6, 40), stoneMaterial('#9a8a72', [4, 1], 6)); plat.position.set(0, 0.3, -10); plat.receiveShadow = true; plat.castShadow = true; scene.add(plat);
-    game.collision.add([-4.6, 0, -14.6], [4.6, 0.6, -5.4]);
+    const platMat = stoneMaterial('#9a8a72', [4, 1], 6);
+    const plat = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 7, 0.3, 40), platMat); plat.position.set(0, 0.15, -10); plat.receiveShadow = true; scene.add(plat);
+    const plat2 = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 5.2, 0.3, 40), platMat); plat2.position.set(0, 0.45, -10); plat2.receiveShadow = true; plat2.castShadow = true; scene.add(plat2);
+    game.collision.add([-6.2, 0, -15.6], [6.2, 0.3, -4.4]);
+    game.collision.add([-4.6, 0.3, -14.4], [4.6, 0.6, -5.6]);
     const oldRing = chronolith(1.15, { stone: 0x5a4a3a, color: 0xffb060, power: 0.0 }); oldRing.position.set(0, 3.5, -11); scene.add(oldRing);
     game.collision.addBox(0, 0, -11, 6, 7, 1.2);
     game.onUpdate((dt, t) => oldRing.userData.update(t));

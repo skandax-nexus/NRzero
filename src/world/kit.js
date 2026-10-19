@@ -53,7 +53,9 @@ export function facadeTextures(seed, style = 'modern') {
 export function neonTexture(text, color, opts = {}) {
   const key = 'neon' + text + color + (opts.vertical ? 'v' : '');
   const font = opts.font || '700 72px Rajdhani, sans-serif';
-  return canvasTex(opts.vertical ? 128 : 512, opts.vertical ? 512 : 128, (g, w, h) => {
+  let W = opts.vertical ? 128 : 512;
+  if (!opts.vertical) { const m = document.createElement('canvas').getContext('2d'); m.font = font; W = Math.min(2048, Math.max(512, Math.ceil(m.measureText(text).width + 90))); }
+  return canvasTex(W, opts.vertical ? 512 : 128, (g, w, h) => {
     g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
     g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.shadowColor = color; g.shadowBlur = 18; g.fillStyle = color;
@@ -132,11 +134,11 @@ export function concreteMaterial(base = '#6d6e70', repeat = [2, 2], opts = {}) {
 export function sky(top, horizon, opts = {}) {
   const geo = new THREE.SphereGeometry(opts.radius || 600, 32, 16);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uTop: { value: new THREE.Color(top) }, uHor: { value: new THREE.Color(horizon) }, uSun: { value: new THREE.Color(opts.sun || 0x000000) }, uSunDir: { value: new THREE.Vector3(...(opts.sunDir || [0, 0.2, -1])).normalize() }, uStars: { value: opts.stars || 0 }, uTime: { value: 0 } },
+    uniforms: { uTop: { value: new THREE.Color(top) }, uHor: { value: new THREE.Color(horizon) }, uSun: { value: new THREE.Color(opts.sun || 0x000000) }, uSunDir: { value: new THREE.Vector3(...(opts.sunDir || [0, 0.2, -1])).normalize() }, uStars: { value: opts.stars || 0 }, uTime: { value: 0 }, uLeft: { value: new THREE.Color(opts.left ?? horizon) } },
     vertexShader: `varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform vec3 uTop,uHor,uSun,uSunDir; uniform float uStars,uTime; varying vec3 vD;
+    fragmentShader: `uniform vec3 uTop,uHor,uSun,uSunDir,uLeft; uniform float uStars,uTime; varying vec3 vD;
       float h(vec3 p){ return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453); }
-      void main(){ float y=max(vD.y,0.0); vec3 c=mix(uHor,uTop,pow(y,0.55));
+      void main(){ float y=max(vD.y,0.0); vec3 hor=mix(uLeft,uHor,smoothstep(-0.6,0.6,vD.x)); vec3 c=mix(hor,uTop,pow(y,0.55));
         float s=max(dot(vD,uSunDir),0.0); c+=uSun*(pow(s,8.0)*0.6+pow(s,300.0)*4.0);
         vec3 q=floor(vD*420.0); float st=step(0.9975,h(q))*uStars*smoothstep(0.05,0.4,vD.y)*(0.6+0.4*sin(uTime*2.0+h(q)*40.0));
         c+=vec3(st);

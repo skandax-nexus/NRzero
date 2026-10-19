@@ -49,22 +49,23 @@ export default {
     wall(-2, -72, 2, -72, -14, H + 14, steel);
 
     // ---------- lighting ----------
-    scene.add(new THREE.HemisphereLight(0x9fb4c8, 0x101010, 0.18));
+    const hemi = new THREE.HemisphereLight(0x9fb4c8, 0x101010, 0.18); scene.add(hemi);
     const lights = [];
-    const lamp = (x, y, z, c = 0xeaf4ff, i = 26, d = 14) => { const l = new THREE.PointLight(c, i, d, 1.6); l.position.set(x, y, z); scene.add(l); lights.push(l); const panel = box(1.4, 0.04, 0.4, glowMat(c, 3), x, y + 0.3, z, { cast: false }); scene.add(panel); l.userData.panel = panel; return l; };
-    lamp(-4, 3.4, -5); lamp(4, 3.4, -9); lamp(0, 3.4, -20); lamp(0, 3.4, -34); lamp(0, 3.4, -46); lamp(-6, 3.4, -21); lamp(6, 3.4, -23); lamp(-7, 3.4, -38); lamp(5.5, 3.4, -41); lamp(-5, 3.4, -58); lamp(5, 3.4, -62);
+    const lamp = (x, y, z, c = 0xeaf4ff, i = 26, d = 14, real = true) => { const l = real ? new THREE.PointLight(c, i, d, 1.6) : new THREE.Object3D(); l.color = l.color || new THREE.Color(c); l.position.set(x, y, z); scene.add(l); lights.push(l); const panel = box(1.4, 0.04, 0.4, glowMat(c, 3), x, y + 0.3, z, { cast: false }); scene.add(panel); l.userData.panel = panel; return l; };
+    lamp(-4, 3.4, -5, undefined, 26, 16); lamp(4, 3.4, -9, undefined, 26, 14, false); lamp(0, 3.4, -20, undefined, 26, 18); lamp(0, 3.4, -34, undefined, 26, 18); lamp(0, 3.4, -46, undefined, 26, 16, false); lamp(-6, 3.4, -21, undefined, 26, 14, false); lamp(6, 3.4, -23, undefined, 26, 14); lamp(-7, 3.4, -38, undefined, 26, 14); lamp(5.5, 3.4, -41, undefined, 26, 14, false); lamp(-5, 3.4, -58, undefined, 26, 16); lamp(5, 3.4, -62, undefined, 26, 14, false);
     const key = new THREE.SpotLight(0xffffff, 120, 30, 0.7, 0.5, 1.4); key.position.set(0, 3.9, -6); key.target.position.set(0, 0, -8); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); scene.add(key, key.target);
     let emergency = false;
     const setEmergency = (on) => {
       emergency = on;
-      for (const l of lights) { l.color.set(on ? 0xff2030 : 0xeaf4ff); l.intensity = on ? 14 : 26; l.userData.panel.material.emissive.set(on ? 0xff1020 : 0xeaf4ff); }
+      for (const l of lights) { l.color.set(on ? 0xff2030 : 0xeaf4ff); if (l.isLight) l.intensity = on ? 14 : 26; l.userData.panel.material.emissive.set(on ? 0xff1020 : 0xeaf4ff); }
       for (const t of trims) t.material.emissive.set(on ? 0x601010 : 0xffffff);
       key.color.set(on ? 0xff3040 : 0xffffff); key.intensity = on ? 40 : 120;
+      scene.environmentIntensity = on ? 0.06 : 0.5; hemi.intensity = on ? 0.05 : 0.18; scene.fog.color.set(on ? 0x0a0204 : 0x05070a);
     };
-    game.onUpdate((dt, t) => { if (!emergency) return; for (let k = 0; k < lights.length; k++) { const l = lights[k]; const f = (Math.sin(t * 3 + k) * 0.5 + 0.5); l.intensity = 6 + f * 14 * (Math.sin(t * 31 + k * 7) > 0.96 ? 0.2 : 1); } });
+    game.onUpdate((dt, t) => { if (!emergency) return; for (let k = 0; k < lights.length; k++) { const l = lights[k]; if (!l.isLight) continue; const f = (Math.sin(t * 3 + k) * 0.5 + 0.5); l.intensity = 6 + f * 14 * (Math.sin(t * 31 + k * 7) > 0.96 ? 0.2 : 1); } });
     // rotating beacons
     const beacons = [];
-    for (const [x, z] of [[0, -14.3], [0, -49.7], [-1.7, -60], [9.6, -55]]) { const b = new THREE.SpotLight(0xff2030, 0, 16, 0.35, 0.3, 1.2); b.position.set(x, 3.6, z); scene.add(b, b.target); beacons.push(b); const bulb = box(0.2, 0.2, 0.2, glowMat(0xff2030, 0), x, 3.5, z); scene.add(bulb); b.userData.bulb = bulb; }
+    for (const [x, z] of [[0, -14.3], [0, -49.7]]) { const b = new THREE.SpotLight(0xff2030, 0, 16, 0.35, 0.3, 1.2); b.position.set(x, 3.6, z); scene.add(b, b.target); beacons.push(b); const bulb = box(0.2, 0.2, 0.2, glowMat(0xff2030, 0), x, 3.5, z); scene.add(bulb); b.userData.bulb = bulb; }
     game.onUpdate((dt, t) => { for (const b of beacons) { if (!emergency) continue; b.intensity = 50; b.userData.bulb.material.emissiveIntensity = 4; const a = t * 3; b.target.position.set(b.position.x + Math.cos(a) * 5, 0, b.position.z + Math.sin(a) * 5); } });
     const dust = new Motes(500, [-10, 0.2, -70, 10, 3.8, 0], 0xcfe0ff, 0.04, 0.1); scene.add(dust.mesh); game.onUpdate(dt => dust.update(dt));
 
@@ -86,12 +87,12 @@ export default {
     for (let k = 0; k < 3; k++) { const s = box(0.5, 0.8, 0.3, new THREE.MeshStandardMaterial({ color: 0x0a0a0a, emissive: 0xff2030, emissiveIntensity: 1 }), -1.4 + k * 1.4, 1, 1.15); gen.add(s); slots.push(s); }
     const coreGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.4, 24), glowMat(0x5fe6ff, 0)); coreGlow.position.y = 1.5; coreGlow.position.z = -0.2; gen.add(coreGlow);
     // damaged conduit (lure zone)
-    const conduitPos = new THREE.Vector3(7, 0, -58.5);
+    const conduitPos = new THREE.Vector3(7.5, 0, -57.5);
     const conduit = new THREE.Group(); conduit.position.copy(conduitPos); scene.add(conduit);
-    conduit.add(box(0.6, 3.6, 0.6, steel, 2.4, 0, 0));
+    conduit.add(box(0.6, 3.6, 0.6, steel, 2.2, 0, 0));
     const cableMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 });
     for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 8), cableMat); c.position.set(1.0 - k * 0.5, 2.4, 0); c.rotation.z = 0.6 + k * 0.4; conduit.add(c); }
-    const zoneDisc = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.6, 48), new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, opacity: 0.25, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    const zoneDisc = new THREE.Mesh(new THREE.RingGeometry(2.4, 2.6, 48), new THREE.MeshBasicMaterial({ color: 0xffb030, transparent: true, opacity: 0.25, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
     zoneDisc.rotation.x = -Math.PI / 2; zoneDisc.position.set(0, 0.03, 0); conduit.add(zoneDisc);
     const spk = sparks(80, 0xffd080); scene.add(spk); game.onUpdate(dt => spk.userData.update(dt));
     let sparkT = 0; game.onUpdate(dt => { sparkT -= dt; if (sparkT < 0) { sparkT = 1 + Math.random() * 2; spk.userData.burst(new THREE.Vector3(conduitPos.x + 0.8, 2.6, conduitPos.z)); audio.sfxPlay('spark'); } });
@@ -113,7 +114,7 @@ export default {
     const doorL = box(2.5, 4, 0.5, new THREE.MeshPhysicalMaterial({ color: 0x0c0d10, metalness: 0.9, roughness: 0.2, clearcoat: 1 }), -1.25, LY, -95.5), doorR = doorL.clone(); doorR.position.x = 1.25; scene.add(doorL, doorR);
     const doorBox = game.collision.add([-2.5, LY, -95.8], [2.5, LY + 4, -95.2]);
     const doorRing = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.08, 8, 64), glowMat(0x5fe6ff, 2)); doorRing.position.set(0, LY + 2, -95.1); scene.add(doorRing);
-    for (let z = -74; z > -95; z -= 4) { const l = new THREE.PointLight(0x5fe6ff, 8, 7, 1.6); l.position.set(0, LY + 3.6, z); scene.add(l); scene.add(box(0.3, 0.04, 2.5, glowMat(0x5fe6ff, 2.5), 0, LY + 3.95, z, { cast: false })); }
+    for (let z = -74; z > -95; z -= 4) { if (z === -78 || z === -90) { const l = new THREE.PointLight(0x5fe6ff, 14, 12, 1.6); l.position.set(0, LY + 3.6, z); scene.add(l); } scene.add(box(0.3, 0.04, 2.5, glowMat(0x5fe6ff, 2.5), 0, LY + 3.95, z, { cast: false })); }
     const beyond = chronolith(0.9, { power: 0.7 }); beyond.position.set(0, LY + 3, -108); scene.add(beyond); game.onUpdate((dt, t) => beyond.userData.update(t));
     const beyondLight = new THREE.PointLight(0x9fe8ff, 0, 30, 1.2); beyondLight.position.set(0, LY + 2, -100); scene.add(beyondLight);
     // the child's drawing on the floor
@@ -212,7 +213,6 @@ export default {
       const c = new THREE.Group(); c.position.set(x, y, z); scene.add(c);
       c.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.4, 16), steel));
       const core = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.42, 16), glowMat(0x5fe6ff, 4)); c.add(core);
-      const pl = new THREE.PointLight(0x5fe6ff, 4, 4, 1.5); c.add(pl);
       game.onUpdate((dt, t) => { c.rotation.y += dt; c.position.y = y + Math.sin(t * 2) * 0.03; });
       game.interact({ pos: [x, 1, z], radius: 1.8, prompt: 'Take power cell', onUse: () => { scene.remove(c); cells++; audio.sfxPlay('pickup'); cellObj(); } });
     };
@@ -285,13 +285,13 @@ export default {
     let arcOn = 0, rewinds = 0, leverCD = 0;
     game.interact({ pos: [9.3, 1.3, -54], radius: 2, once: false, prompt: 'Pull the breaker', enabled: () => leverCD <= 0 && !W.dead, onUse: () => {
       leverCD = 3; handle.rotation.z = -0.6; audio.sfxPlay('spark'); audio.sfxPlay('boom');
-      arcOn = 2.6; spk.userData.burst(new THREE.Vector3(conduitPos.x, 1.5, conduitPos.z));
+      arcOn = 4; spk.userData.burst(new THREE.Vector3(conduitPos.x, 1.5, conduitPos.z));
     } });
     game.onUpdate((dt, t) => {
       leverCD -= dt; if (leverCD <= 0) handle.rotation.z = 0.6;
       arc.intensity = arcOn > 0 ? 40 + Math.random() * 60 : 0; zoneDisc.material.opacity = arcOn > 0 ? 0.8 : 0.2 + Math.sin(t * 4) * 0.08;
       if (!W.active || W.dead) return;
-      const inZone = W.pos.distanceTo(conduitPos) < 2.2;
+      const inZone = W.pos.distanceTo(conduitPos) < 2.6;
       if (arcOn > 0) {
         arcOn -= dt;
         if (inZone) {
