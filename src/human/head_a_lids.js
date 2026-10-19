@@ -1,135 +1,137 @@
-// head_a eyelids: the palpebral margin, the lid shell draped over the eyeball and the crease / fold /
-// pretarsal roll profiles, in eye-local millimetres (u = lateral, v = up, w = forward from the eyeball
-// centre). The mesher (head_a_sculpt.js) builds ring patches from these functions; the lids wrap the
-// globe so the eye is never a painted-on disc or a bulging ball. All shapes are our own.
-import { clamp, lerp, sstep, interpS } from './head_a_util.js';
+// head_a lids: explicit eyelid model draped over the eyeball. The two slit rows of the grid are the
+// posterior lid margins (resting on the globe); the rows above / below are the lash line, the tarsal
+// plate, the crease, the hooding fold and the lower-lid roll, written as frontal offsets from the margin
+// curves and projected onto spheres around the eye centre, then blended into the sculpted socket.
+import { clamp, lerp, sstep } from './head_a_util.js';
 
-const MM = 0.001;
-const smaxv = (a, b, k) => { const h = clamp(0.5 + 0.5 * (a - b) / k, 0, 1); return b + (a - b) * h + k * h * (1 - h); };
+const DEG = Math.PI / 180;
 
-export function makeEyeLids(F, side) {
-  const E = [side * F.eyeX, F.yEye + F.eyeAsym[side > 0 ? 0 : 1], F.eyeZ];
-  const R = F.eyeR / MM;
-  const fw = F.fissW, fh = F.fissH, lift = F.cantTilt;
-  // margin control points, left-eye local mm, loop CCW in (u,v): LC -> upper -> MC -> lower -> LC
-  const uLC = 13.4 * fw, uMC = -15.4 * fw;
-  const vLC = 0.9 + lift, vMC = -0.6;
-  const up = [[uLC, vLC], [11.4 * fw, 2.55 + 0.62 * lift], [8 * fw, 3.95 * fh + 0.32 * lift], [4 * fw, 4.6 * fh + 0.1 * lift], [-0.5 * fw, 4.78 * fh], [-4.8 * fw, 4.5 * fh], [-8.6 * fw, 3.55 * fh], [-11.8 * fw, 2.15 * fh], [-14.1 * fw, 0.55], [uMC, vMC]];
-  const lo = [[uMC, vMC], [-14.2 * fw, -1.45], [-11.6 * fw, -3.25 * fh], [-7.6 * fw, -4.85 * fh], [-3 * fw, -5.55 * fh], [1.6 * fw, -5.7 * fh], [6 * fw, -5.2 * fh + 0.1 * lift], [9.6 * fw, -3.8 * fh + 0.3 * lift], [12.0 * fw, -1.3 + 0.65 * lift], [uLC, vLC]];
-  const dense = (pts) => {
-    const out = [];
-    for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < 10; k++) {
-      const t = k / 10, p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
-      const t2 = t * t, t3 = t2 * t;
-      out.push([0, 1].map(c => 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * t3)));
+// rows of the upper lid above the posterior margin: [s offset (fraction of crease height, or mm if
+// negative), radial thickness over the globe (mm), blend weight]
+function upperRows(F) {
+  const c = F.crease, h = F.hood;
+  return [
+    [0, 0.16, 1], [0.32, 1.0, 1], [0.14 * c + 0.5, 1.42, 1], [0.33 * c + 0.5, 1.62, 1], [0.55 * c + 0.4, 1.70, 1], [0.78 * c + 0.2, 1.62 + 0.1 * h, 1],
+    [c, 1.30 + 0.25 * h, 1],                       // crease
+    [c + 1.0 + 0.2 * h, 1.85 + 0.85 * h, 1],       // fold
+    [c + 2.5 + 0.4 * h, 2.6 + 1.0 * h, 1],
+    [c + 4.3 + 0.4 * h, 3.4 + 0.6 * h, 0.85],
+    [c + 6.2, 4.0, 0.55],
+    [c + 8.4, 4.2, 0.22],
+    [c + 10.5, 4.2, 0],
+  ];
+}
+function lowerRows(F) {
+  const b = F.bags;
+  return [
+    [0, 0.16, 1], [0.34, 0.95, 1], [1.15, 1.38, 1], [2.3, 1.62, 1], [3.6, 1.78 + 0.1 * b, 1], [5.1, 2.0 + 0.5 * b, 1],
+    [6.9, 2.5 + 1.2 * b, 0.9], [8.9, 3.2 + 1.0 * b, 0.5], [11.0, 3.6, 0],
+  ];
+}
+
+export function makeEyeModel(F, side) {
+  const s = side;
+  const R = F.eyeR;
+  const ia = side > 0 ? 1 : 0;
+  const E = [s * F.E[0], F.E[1] + (side > 0 ? F.eyeAsym[0] : F.eyeAsym[1]), F.E[2]];
+  const fw = F.fissW;
+  const Xin = -15.4 * fw - 0.6 * F.epicanthus, Xout = 12.7 * fw;
+  const Yin = R * Math.sin(F.canthIn * DEG), Yout = Yin + R * Math.sin(F.tilt * DEG) * 0.9;
+  const Yup = R * Math.sin(F.lidUp * DEG), Ylo = R * Math.sin(F.lidLo * DEG);
+  const peakU = 0.43 - 0.04 * F.fem, peakL = 0.57;
+  const aU = Math.log(0.5) / Math.log(peakU), aL = Math.log(0.5) / Math.log(peakL);
+  const canth = (X) => lerp(Yin, Yout, clamp((X - Xin) / (Xout - Xin), 0, 1));
+  const ycA = canth(Xin + peakU * (Xout - Xin)), ycB = canth(Xin + peakL * (Xout - Xin));
+  const HU = Yup - ycA, HL = ycB - Ylo;
+  // margin heights (frontal mm, relative to the eye centre)
+  function marginU(X) {
+    const t = clamp((X - Xin) / (Xout - Xin), 0, 1);
+    let sh = Math.pow(Math.sin(Math.PI * Math.pow(t, aU)), 0.78);
+    // epicanthic fold flattens the medial upper lid
+    sh *= 1 - 0.25 * F.epicanthus * (1 - sstep(0, 0.35, t));
+    return canth(X) + HU * sh;
+  }
+  function marginL(X) {
+    const t = clamp((X - Xin) / (Xout - Xin), 0, 1);
+    const sh = Math.pow(Math.sin(Math.PI * Math.pow(t, aL)), 0.9);
+    return canth(X) - HL * sh;
+  }
+  // frontal (X, Y) + radial offset t -> head-space point
+  function project(X, Y, t, out) {
+    const Rr = R + t;
+    const rho = Math.hypot(X, Y), rc = 0.965 * Rr;
+    let x, y, z;
+    if (rho <= rc) { x = X; y = Y; z = Math.sqrt(Rr * Rr - X * X - Y * Y); } else {
+      const k = rc / rho;
+      x = X; y = Y; z = Rr * Math.sqrt(1 - 0.965 * 0.965) - (rho - rc) * (0.28 + 0.25 * sstep(0, 6, rho - rc)) * (X < 0 ? 1 : 1.25);
+      void k;
     }
-    out.push(pts[pts.length - 1]);
+    out[0] = E[0] + s * x; out[1] = E[1] + y; out[2] = E[2] + z;
     return out;
-  };
-  const upD = dense(up), loD = dense(lo);
-  const loop = upD.concat(loD.slice(1, -1));
-  const cum = [0];
-  for (let i = 1; i <= loop.length; i++) { const a = loop[i - 1], b = loop[i % loop.length]; cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
-  const tot = cum[cum.length - 1];
-  let Lu = 0; for (let i = 1; i < upD.length; i++) Lu += Math.hypot(upD[i][0] - upD[i - 1][0], upD[i][1] - upD[i - 1][1]);
-  const tSplit = Lu / tot;          // param of the medial canthus
-  const at = (tl) => {
-    const L = (((tl % 1) + 1) % 1) * tot;
-    let lo2 = 0, hi = cum.length - 1;
-    while (hi - lo2 > 1) { const m = (lo2 + hi) >> 1; if (cum[m] <= L) lo2 = m; else hi = m; }
-    const f = (L - cum[lo2]) / Math.max(1e-9, cum[hi] - cum[lo2]);
-    const a = loop[lo2 % loop.length], b = loop[hi % loop.length];
-    return [lerp(a[0], b[0], f), lerp(a[1], b[1], f)];
-  };
-  const tabU = upD.slice().reverse(), tabL = loD.slice();
-  const tUx = tabU.map(p => p[0]), tUy = tabU.map(p => p[1]), tLx = tabL.map(p => p[0]), tLy = tabL.map(p => p[1]);
-  const vUp = (u) => interpS(tUx, tUy, clamp(u, uMC, uLC));
-  const vLo = (u) => interpS(tLx, tLy, clamp(u, uMC, uLC));
-  const isUpper = (tl) => { const t = ((tl % 1) + 1) % 1; return t < tSplit; };
-  // 1 on the upper lid, 0 on the lower lid, 0.5 at the canthi (smooth)
-  const wUp = (tl) => {
-    const t = ((tl % 1) + 1) % 1;
-    if (t < tSplit) return 0.5 + 0.5 * sstep(0, 0.04, Math.min(t, tSplit - t));
-    return 0.5 - 0.5 * sstep(0, 0.04, Math.min(t - tSplit, 1 - t));
-  };
-  // lid heights (margin -> crease above, margin -> lid/cheek junction below), mm
-  const hUp = (u) => Math.max(3.6, F.creaseH * (1 - 0.5 * ((u + 0.5) / 15.5) ** 2));
-  const hLo = (u) => Math.max(3.4, (5.6 + 1.6 * F.old) * (1 - 0.45 * ((u - 1.5) / 15) ** 2));
-  const hOf = (tl) => { const m = at(tl); const w = wUp(tl); return lerp(hLo(m[0]), hUp(m[0]), w); };
-
-  // ---- globe and shell (front-view heightfields, eye-local mm)
-  const zGlobe = (u, v) => { const q = R * R - u * u - v * v; return q > 0 ? Math.sqrt(q) : 0; };
-  const zG = (u, v) => zGlobe(u, v) + 1.3 * Math.exp(-(u * u + v * v) / 52); // cornea smeared over the gaze range
-  const aL = 14.6 * fw, aM = 19.3 * fw, bU = 17.5, bD = 16.5, c0 = 14.3, w0 = -2.0;
-  const zEll = (u, v) => {
-    const a = u >= 0 ? aL : aM, b = v >= 0 ? bU : bD;
-    const q = 1 - (u / a) ** 2 - (v / b) ** 2;
-    return q > 0 ? w0 + c0 * Math.sqrt(q) : w0 - 10 * Math.min(1.5, -q);
-  };
-  const shell = (u, v) => smaxv(zG(u, v) + 0.3, zEll(u, v), 1.2);
-
-  // margin at state (blink b, smile s); returns [u, v]
-  function margin(tl, b = 0, s = 0) {
-    const p = at(tl);
-    let [u, v] = p;
-    const uc = clamp(u, uMC, uLC);
-    const vu = vUp(uc), vl = vLo(uc);
-    const close = vl + 0.24 * (vu - vl);
-    const w = wUp(tl);
-    // squint: the lower lid rises (mostly laterally), the upper lid drops a little
-    const sqz = s * (0.9 * sstep(-15, -6, u) * (1 - sstep(10, 13.5, u)));
-    if (w > 0.5) v += ((close - 0.2) - v) * b * (2 * w - 1) - 0.45 * s * (2 * w - 1);
-    else v += (close - v) * 0.1 * b * (1 - 2 * w) + sqz * (1 - 2 * w);
-    return [u, v];
   }
-  // outward (away from the opening) unit normal of the neutral margin in (u,v)
-  function mNormal(tl) {
-    const a = at(tl - 0.003), c = at(tl + 0.003);
-    const tx = c[0] - a[0], ty = c[1] - a[1], l = Math.hypot(tx, ty) || 1;
-    return [ty / l, -tx / l];
-  }
+  const UR = upperRows(F), LR = lowerRows(F);
+  return { E, R, Xin, Xout, Yin, Yout, marginU, marginL, project, UR, LR, side, ia, canth };
+}
 
-  // lid surface depth at a patch point. lam = distance from the margin in lid heights, fb = fraction of
-  // the way to the patch boundary, wU = upper weight, zFace = face relief depth there (eye-local mm)
-  function lidW(u, v, lam, fb, wU, zFace, b = 0, s = 0) {
-    const sh = shell(u, v);
-    // upper lid: pretarsal skin on the globe, crease, overhanging fold, sulcus
-    const Tu = 1.75 + 0.75 * Math.min(lam, 1.4);
-    let zu = sh + Tu;
-    const Wu = Math.max(sstep(0.95, 1.95, lam), sstep(0.7, 0.97, fb));
-    zu = lerp(zu, zFace, Wu);
-    const keepU = 1 - sstep(0.75, 0.97, fb);
-    zu -= (0.55 + 0.45 * F.old) * Math.exp(-(((lam - 1.0) / 0.11) ** 2)) * (1 - 0.65 * b) * keepU;
-    zu += F.hood * Math.exp(-(((lam - 1.26) / 0.24) ** 2)) * (1 - 0.35 * b) * keepU;
-    zu -= F.sulcus * Math.exp(-(((lam - 1.75) / 0.35) ** 2)) * keepU;
-    // lower lid: margin, pretarsal roll, bags, lid-cheek junction
-    const Tl = 1.4 + 0.45 * Math.min(lam, 1.2);
-    let zl = sh + Tl;
-    const Wl = Math.max(sstep(0.5, 1.55, lam), sstep(0.7, 0.97, fb));
-    zl = lerp(zl, zFace, Wl);
-    const keepL = 1 - sstep(0.75, 0.97, fb);
-    zl += (0.35 + 0.4 * s) * Math.exp(-(((lam - 0.3) / 0.19) ** 2)) * keepL * (1 - 0.6 * F.old);
-    zl += F.bags * Math.exp(-(((lam - 0.72) / 0.28) ** 2)) * keepL;
-    zl -= (0.15 + 0.7 * F.old) * Math.exp(-(((lam - 1.05) / 0.22) ** 2)) * keepL;
-    let z = lerp(zl, zu, wU);
-    // never inside the eyeball
-    const zg = zG(u, v);
-    if (zg > 0) z = Math.max(z, zg + 0.55);
-    return z;
-  }
-  const toWorld = (u, v, w) => [E[0] + side * u * MM, E[1] + v * MM, E[2] + w * MM];
-  const toLocal = (p) => [side * (p[0] - E[0]) / MM, (p[1] - E[1]) / MM, (p[2] - E[2]) / MM];
-  // sample points spanning the patch region (world), for the grid hole rectangle
-  function regionPts(zOf) {
-    const pts = [];
-    for (const [u, v] of [[-20.5, -16.5], [20.5, -16.5], [-20.5, 20], [20.5, 20], [0, 21], [0, -17.5], [-21, 2], [21, 2], [10, 20.5], [-10, 20.5], [10, -17], [-10, -17]]) {
-      const x = E[0] + side * u * MM, y = E[1] + v * MM;
-      pts.push([x, y, zOf(x, y)]);
+// Apply the lid model to the grid positions (mm). closure: 0 open .. 1 closed.
+// colX(i) gives the frontal X for zone columns; base positions are blended at the zone edges.
+export function applyLids(F, G, pos, base, EM, closure, extra) {
+  const W = G.W;
+  const s = EM.side, ia = EM.ia;
+  const iIn = G.eyeIn[ia], iOut = G.eyeOut[ia];
+  const thIn = G.colTh[iIn], thOut = G.colTh[iOut];
+  const rEL = G.rEL, rEU = G.rEU;
+  const nU = EM.UR.length, nL = EM.LR.length;
+  const out = [0, 0, 0];
+  const iMin = Math.min(iIn, iOut), iMax = Math.max(iIn, iOut);
+  const span = EM.Xout - EM.Xin;
+  const cl = clamp(closure, 0, 1);
+  const marg = [];
+  for (let i = iMin - 9; i <= iMax + 10; i++) {
+    if (i < 0 || i > G.NU) continue;
+    const th = G.colTh[i];
+    // frontal X along the fissure (lateral positive)
+    const a = (th - thIn) / (thOut - thIn);
+    let X;
+    if (a < 0) X = EM.Xin + a * Math.abs(thOut - thIn) * 1.35;
+    else if (a > 1) X = EM.Xout + (a - 1) * Math.abs(thOut - thIn) * 1.25;
+    else X = EM.Xin + a * span;
+    const inside = a >= 0 && a <= 1;
+    const wc = a < 0 ? 1 - sstep(0.0, 6.5, EM.Xin - X) : a > 1 ? 1 - sstep(0.0, 9, X - EM.Xout) : 1;
+    if (wc <= 0) continue;
+    const taper = inside ? lerp(0.35, 1, sstep(0, 0.14, a) * sstep(1, 0.86, a)) : 0.35;
+    let yU = EM.marginU(X), yL = EM.marginL(X);
+    if (!inside) { const yc = EM.canth(X); yU = yc + 0.08; yL = yc - 0.08; }
+    // closing: upper margin comes down to just above the lower one, lower margin rises a little
+    const yClose = yL + 0.55 + 0.12 * (yU - yL);
+    const yU2 = lerp(yU, yClose, cl), yL2 = yL + 0.45 * cl * (inside ? 1 : 0);
+    const creaseDrop = 2.2 * cl;
+    for (let k = 0; k < nU; k++) {
+      const j = rEU + k; if (j >= G.NV) break;
+      const [so, t0, wr] = EM.UR[k];
+      const w = wr * wc;
+      if (w <= 0) continue;
+      // rows below the crease stretch over the closing lid; fold rows drop a little
+      const c = F.crease;
+      let Y;
+      if (so <= c) { const f = c > 0 ? so / c : 0; Y = lerp(yU2, yU + c - creaseDrop, f); } else Y = yU + so - creaseDrop * Math.max(0, 1 - (so - c) / 7);
+      const t = k <= 1 ? t0 * taper + (1 - taper) * 0.16 : t0;
+      EM.project(X, Y, t, out);
+      const q = (j * W + i) * 3;
+      pos[q] = lerp(base[q], out[0], w); pos[q + 1] = lerp(base[q + 1], out[1], w); pos[q + 2] = lerp(base[q + 2], out[2], w);
+      if (k === 0 && inside && extra) marg.push([out[0], out[1], out[2]]);
     }
-    return pts;
+    for (let k = 0; k < nL; k++) {
+      const j = rEL - k; if (j < 0) break;
+      const [so, t0, wr] = EM.LR[k];
+      const w = wr * wc;
+      if (w <= 0) continue;
+      const Y = yL2 - so * (1 - 0.08 * cl);
+      const t = k <= 1 ? t0 * taper + (1 - taper) * 0.16 : t0;
+      EM.project(X, Y, t, out);
+      const q = (j * W + i) * 3;
+      pos[q] = lerp(base[q], out[0], w); pos[q + 1] = lerp(base[q + 1], out[1], w); pos[q + 2] = lerp(base[q + 2], out[2], w);
+    }
   }
-  return {
-    E, side, R, uLC, uMC, tSplit, at, margin, mNormal, isUpper, wUp, hOf, shell, zG, zGlobe, lidW, toWorld, toLocal, regionPts,
-    caruncle: () => { const u = uMC + 2.2, v = vMC - 0.2; return { p: toWorld(u, v, shell(u, v) - 0.9), r: [1.6 * MM, 1.5 * MM, 1.3 * MM] }; },
-  };
+  return marg;
 }

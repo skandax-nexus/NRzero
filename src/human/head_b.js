@@ -1,73 +1,18 @@
-// AFTERZERO head_b: realistic procedural human head (signed-distance-field sculpt).
-// createHead(params) per docs/ART_SPEC.md section 1. The head is modelled as an anatomical SDF
-// (head_b_sdf.js), polygonised with adaptive dual contouring and relaxed (head_b_geo.js), textured
-// with UV-space baked procedural skin maps (head_b_tex.js) and shaded with a subsurface-style skin
-// material (head_b_mat.js). Eyes, lashes, teeth and tongue are separate generated parts
-// (head_b_parts.js). Geometry, textures and materials are cached by parameters.
-
+// AFTERZERO head_b (WIP rebuild): realistic procedural human head from an anatomical SDF.
 import * as THREE from 'three';
-import { makeModel, clamp } from './head_b_sdf.js';
-import { buildSkin } from './head_b_geo.js';
-import { bakeSkin } from './head_b_tex.js';
-import { makeSkinMaterial, eyeTexture, makeEyeMaterial, makeCorneaMaterial } from './head_b_mat.js';
-import { eyeballGeometry, corneaGeometry, lashGeometry, lashTexture, teethGeometry, tongueGeometry, EYE } from './head_b_parts.js';
+import { makeModel, makeField, landmarks, clamp, SHAPE_KEYS } from './head_b_sdf.js';
+import { buildSkinMesh } from './head_b_geo.js';
 
 const CACHE = new Map();
 
 function normParams(p) {
   const shape = p.shape || {}, marks = p.marks || {};
   const sh = {};
-  for (const k of ['jaw', 'cheek', 'nose', 'noseWidth', 'lips', 'brow', 'eyeSize', 'faceLength', 'chin']) sh[k] = clamp(+shape[k] || 0, -1, 1);
+  for (const k of SHAPE_KEYS) sh[k] = clamp(+shape[k] || 0, -1, 1);
   return {
     sex: clamp(p.sex ?? 0, 0, 1), age: clamp(p.age ?? 30, 8, 80), skin: p.skin ?? 0xc08a64, eyeColor: p.eyeColor ?? 0x3a2a1c, seed: p.seed | 0,
-    shape: sh, marks: { scar: !!marks.scar, freckles: clamp(marks.freckles ?? 0, 0, 1), wrinkles: clamp(marks.wrinkles ?? 0, 0, 1), stubble: clamp(marks.stubble ?? 0, 0, 1) },
-    detail: ['high', 'medium', 'low'].includes(p.detail) ? p.detail : 'high',
-    browColor: p.browColor ?? null,
-  };
-}
-
-function browColorFor(np) {
-  if (np.browColor != null) return np.browColor;
-  // derive a plausible brow colour from skin and age (dark by default, greyer when old)
-  const old = clamp((np.age - 50) / 25, 0, 1);
-  const c = new THREE.Color(0x1a120c).lerp(new THREE.Color(0x7a746c), old * 0.7);
-  return c.getHex();
-}
-
-function buildAssets(np) {
-  const t0 = performance.now();
-  const m = makeModel(np);
-  const det = np.detail;
-  const geo = buildSkin(m, det);
-  const t1 = performance.now();
-  const R = det === 'high' ? 1024 : det === 'medium' ? 512 : 256;
-  const tex = bakeSkin(geo, m, { skin: np.skin, seed: np.seed, freckles: np.marks.freckles, stubble: np.marks.stubble, wrinkles: np.marks.wrinkles, scar: np.marks.scar, browColor: browColorFor(np) }, R);
-  const t2 = performance.now();
-  // skin geometry
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(geo.position, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(geo.normal, 3));
-  g.setAttribute('uv', new THREE.BufferAttribute(geo.uv, 2));
-  g.setAttribute('skinAttr', new THREE.BufferAttribute(geo.attr, 2));
-  g.setIndex(new THREE.BufferAttribute(geo.index, 1));
-  const order = ['blinkA', 'blinkB', 'jaw', 'smile'];
-  g.morphAttributes.position = order.map(k => new THREE.BufferAttribute(geo.morphs[k], 3));
-  g.morphAttributes.normal = order.map(k => new THREE.BufferAttribute(geo.morphNormals[k], 3));
-  g.morphTargetsRelative = true;
-  g.computeBoundingSphere(); g.computeBoundingBox();
-  const skinMat = makeSkinMaterial(tex, { normalScale: det === 'low' ? 0.5 : 0.9, detailNormal: det !== 'low' });
-  // eyes
-  const segU = det === 'high' ? 40 : det === 'medium' ? 20 : 10, segV = det === 'high' ? 24 : det === 'medium' ? 12 : 6;
-  const eyeGeo = eyeballGeometry(m.S, segU, segV);
-  const corneaGeo = det === 'low' ? null : corneaGeometry(m.S, segU, Math.round(segV * 0.7));
-  const eyeTex = eyeTexture(np.eyeColor, np.seed);
-  const lashGeo = det === 'low' ? null : lashGeometry(m);
-  const teeth = det === 'low' ? null : [teethGeometry(m, true, det === 'high' ? 28 : 14), teethGeometry(m, false, det === 'high' ? 28 : 14)];
-  const tongue = det === 'low' ? null : tongueGeometry(m);
-  const t3 = performance.now();
-  return {
-    m, g, skinMat, eyeGeo, corneaGeo, eyeTex, lashGeo, teeth, tongue, stats: geo.stats, texMs: tex.ms,
-    ms: { mesh: t1 - t0, tex: t2 - t1, parts: t3 - t2, total: t3 - t0 }, refs: 0,
+    shape: sh, traits: p.traits || {}, marks: { scar: !!marks.scar, freckles: clamp(marks.freckles ?? 0, 0, 1), wrinkles: clamp(marks.wrinkles ?? 0, 0, 1), stubble: clamp(marks.stubble ?? 0, 0, 1) },
+    detail: ['high', 'medium', 'low'].includes(p.detail) ? p.detail : 'high', _dbg: p._dbg || null,
   };
 }
 
@@ -76,132 +21,79 @@ export function createHead(params = {}) {
   const np = normParams(params);
   const key = JSON.stringify(np);
   let A = CACHE.get(key);
-  const cached = !!A;
-  if (!A) { A = buildAssets(np); CACHE.set(key, A); }
-  A.refs++;
-  const m = A.m, S = m.S, det = np.detail;
+  if (!A) {
+    const m = makeModel(np);
+    const F = makeField(m);
+    const mesh = buildSkinMesh(m, F, np.detail);
+    const g = new THREE.BufferGeometry();
+    const S = m.S;
+    const P = mesh.position.slice(); for (let i = 0; i < P.length; i++) P[i] *= S;
+    g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(mesh.normal, 3));
+    g.setIndex(new THREE.BufferAttribute(mesh.index, 1));
+    const col = new Float32Array(P.length);
+    const sk = new THREE.Color(np.skin);
+    for (let i = 0; i < mesh.part.length; i++) {
+      const pt = mesh.part[i];
+      let c = sk;
+      if (params._clay) c = new THREE.Color(0.6, 0.6, 0.6);
+      if (pt === 1) c = new THREE.Color(0.55, 0.25, 0.22);
+      if (pt === 2) c = new THREE.Color(0.1, 0.02, 0.02);
+      if (pt === 3) c = new THREE.Color(0.15, 0.05, 0.04);
+      if (pt === 6) c = new THREE.Color(0.8, 0.4, 0.4);
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    A = { m, F, g, stats: mesh.stats, ms: performance.now() - t0 };
+    CACHE.set(key, A);
+  }
+  const { m, F } = A;
+  const S = m.S;
   const group = new THREE.Group();
-  group.name = 'head_b';
-  const skin = new THREE.Mesh(A.g, A.skinMat);
-  skin.name = 'skin';
+  const skinMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.55, sheen: 0.2, sheenColor: new THREE.Color(0.5, 0.3, 0.25) });
+  const skin = new THREE.Mesh(A.g, skinMat);
   group.add(skin);
-
-  // ---- eyes (each with its own material so lid occlusion uniforms are per eye)
-  const lidOf = (side) => ({ cMx: m.cMx * S, cMy: m.cMy * S, cLx: m.cLx * S, cLy: m.cLy * S, hU: m.hU * S, hL: m.hL * S, sU: m.sU, sL: m.sL, side });
+  // eyes (temporary)
+  const eyeGeo = new THREE.SphereGeometry(m.Re * S, 32, 24);
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const cx = cv.getContext('2d'); cx.fillStyle = '#e8e2dc'; cx.fillRect(0, 0, 256, 128);
+  const ic = new THREE.Color(np.eyeColor);
+  cx.fillStyle = '#' + ic.getHexString(); cx.fillRect(0, 0, 256, 128 * 0.165);
+  cx.fillStyle = '#050505'; cx.fillRect(0, 0, 256, 128 * 0.07);
+  const et = new THREE.CanvasTexture(cv); et.colorSpace = THREE.SRGBColorSpace;
+  const eyeMat = new THREE.MeshPhysicalMaterial({ map: et, roughness: 0.15, clearcoat: 1 });
   const eyes = [];
   for (const side of [1, -1]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * m.eyeX * S, (m.eyeY + side * m.eyeDy) * S, m.eyeZ * S);
-    group.add(pivot);
-    const em = makeEyeMaterial(A.eyeTex, lidOf(side));
-    const ball = new THREE.Mesh(A.eyeGeo, em);
-    pivot.add(ball);
-    let cornea = null;
-    if (A.corneaGeo) { cornea = new THREE.Mesh(A.corneaGeo, makeCorneaMaterial(lidOf(side))); cornea.renderOrder = 2; pivot.add(cornea); }
-    eyes.push({ side, pivot, ball, cornea, mats: [em, cornea?.material].filter(Boolean), yaw: 0, pitch: 0 });
+    const piv = new THREE.Group();
+    piv.position.set(side * m.eyeX * S, (m.eyeY + side * m.asym.eyeDy) * S, m.eyeZ * S);
+    const ball = new THREE.Mesh(eyeGeo, eyeMat); ball.rotation.x = Math.PI / 2;
+    const holder = new THREE.Group(); holder.add(ball); piv.add(holder);
+    group.add(piv); eyes.push({ piv, holder });
   }
-  // ---- lashes
-  let lashes = null;
-  if (A.lashGeo) {
-    const lm = new THREE.MeshStandardMaterial({ map: lashTexture(), color: 0xffffff, roughness: 0.6, alphaTest: 0.35, side: THREE.DoubleSide, transparent: false });
-    lm.alphaToCoverage = true;
-    lashes = new THREE.Mesh(A.lashGeo, lm);
-    lashes.name = 'lashes';
-    group.add(lashes);
+  if (params._marks) {
+    const mk = [[0, -0.035, 0.085], [0, 0.005, 0.1], [0, 0.045, 0.12], [0.032, 0.085, 0.075], [-0.032, 0.085, 0.075], [0, 0.11, 0.095], [0, 0.195, 0], [0, 0.08, -0.105], [0.075, 0.07, -0.01], [-0.075, 0.07, -0.01]];
+    const mg = new THREE.SphereGeometry(0.0022, 8, 6), mm = new THREE.MeshBasicMaterial({ color: 0xff2020, depthTest: false });
+    for (const q of mk) { const s = new THREE.Mesh(mg, mm); s.position.set(q[0] * S, q[1] * S, q[2] * S); s.renderOrder = 9; group.add(s); }
   }
-  // ---- teeth / tongue (lower parts on a jaw pivot)
-  const jaw = new THREE.Group();
-  const pivY = 0.058 * S, pivZ = 0.004 * S;
-  jaw.position.set(0, pivY, pivZ);
-  group.add(jaw);
-  const jawInner = new THREE.Group(); jawInner.position.set(0, -pivY, -pivZ); jaw.add(jawInner);
-  const mouthParts = [];
-  if (A.teeth) {
-    const tm = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.28, ior: 1.55, specularIntensity: 0.5, sheen: 0.2, sheenColor: new THREE.Color(0.5, 0.5, 0.55) });
-    const up = new THREE.Mesh(A.teeth[0], tm), lo = new THREE.Mesh(A.teeth[1], tm);
-    group.add(up); jawInner.add(lo);
-    const tg = new THREE.Mesh(A.tongue, new THREE.MeshPhysicalMaterial({ color: 0x9a4a46, roughness: 0.42, sheen: 0.4, sheenColor: new THREE.Color(0.6, 0.3, 0.3) }));
-    jawInner.add(tg);
-    mouthParts.push(up, lo, tg);
-    for (const p of mouthParts) p.visible = false;
-  }
-
-  // ---- state
-  const st = { blink: 0, mouth: 0, smile: 0, gaze: null, sacc: [0, 0], saccT: 0.5, autoBlinkT: 3 + Math.random() * 3, blinkAnim: -1 };
-  const infl = skin.morphTargetInfluences;
-  function applyBlink(b) {
-    b = clamp(b, 0, 1);
-    const a = b < 0.5 ? 2 * b : 2 - 2 * b, c = b < 0.5 ? 0 : 2 * b - 1;
-    infl[0] = a; infl[1] = c;
-    if (lashes) { lashes.morphTargetInfluences[0] = a; lashes.morphTargetInfluences[1] = c; }
-    for (const e of eyes) for (const mt of e.mats) mt.userData.uniforms.uBlink.value = b;
-  }
-  function applyMouth(v) {
-    v = clamp(v, 0, 1);
-    infl[2] = v;
-    jaw.rotation.x = 0.26 * v; jaw.position.z = pivZ + 0.0025 * S * v;
-    for (const p of mouthParts) p.visible = v > 0.02;
-  }
-  function applySmile(v) { infl[3] = clamp(v, 0, 1); }
-  const _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
-  function aimEyes() {
-    for (const e of eyes) {
-      let yaw = 0, pitch = 0;
-      if (st.gaze) {
+  const L = landmarks(m, F);
+  const v3 = a => new THREE.Vector3(a[0] * S, a[1] * S, a[2] * S);
+  const lm = {}; for (const k in L) lm[k] = v3(L[k]);
+  group.userData.headStats = { ...A.stats, buildMs: A.ms };
+  const _m = new THREE.Matrix4(), _v = new THREE.Vector3();
+  return {
+    group, skinMaterial: skinMat,
+    setGaze(p) {
+      for (const e of eyes) {
+        if (!p) { e.holder.rotation.set(0, 0, 0); continue; }
         group.updateWorldMatrix(true, false);
         _m.copy(group.matrixWorld).invert();
-        _v.copy(st.gaze).applyMatrix4(_m).sub(e.pivot.position);
-        yaw = Math.atan2(_v.x, _v.z); pitch = Math.atan2(-_v.y, Math.hypot(_v.x, _v.z));
-      }
-      yaw = clamp(yaw + st.sacc[0], -0.6, 0.6); pitch = clamp(pitch + st.sacc[1], -0.42, 0.42);
-      e.yaw = yaw; e.pitch = pitch;
-      _e.set(pitch, yaw, 0, 'YXZ');
-      e.ball.quaternion.setFromEuler(_e);
-      if (e.cornea) e.cornea.quaternion.copy(e.ball.quaternion);
-      const m3 = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(e.ball.quaternion));
-      for (const mt of e.mats) mt.userData.uniforms.uGaze.value.copy(m3);
-    }
-  }
-  aimEyes();
-
-  const v = (a, b, c) => new THREE.Vector3(a * S, b * S, c * S);
-  const landmarks = {
-    eyeL: v(m.eyeX, m.eyeY, m.eyeZ), eyeR: v(-m.eyeX, m.eyeY, m.eyeZ),
-    noseTip: v(0, 0.045, 0.12), mouth: v(0, m.mouthY, 0.1), chin: v(0, -0.035, 0.085), crown: v(0, 0.195, 0),
-    earL: v(m.earX + 0.004, m.earY, m.earZ), earR: v(-m.earX - 0.004, m.earY, m.earZ),
-  };
-  const ms = performance.now() - t0;
-  group.userData.headStats = { tris: A.stats.tris, buildMs: cached ? 0 : A.ms.total, cached, detail: det, ms: A.ms, texMs: A.texMs };
-
-  let disposed = false;
-  return {
-    group,
-    skinMaterial: A.skinMat,
-    setGaze(p) { st.gaze = p ? p.clone() : null; aimEyes(); },
-    setBlink(b) { st.blink = clamp(b, 0, 1); applyBlink(st.blink); },
-    setMouth(x) { st.mouth = clamp(x, 0, 1); applyMouth(st.mouth); },
-    setSmile(x) { st.smile = clamp(x, 0, 1); applySmile(st.smile); },
-    update(dt = 0.016) {
-      // micro saccades
-      st.saccT -= dt;
-      if (st.saccT <= 0) { st.sacc = [(Math.random() - 0.5) * 0.05, (Math.random() - 0.5) * 0.035]; st.saccT = 0.4 + Math.random() * 1.6; aimEyes(); }
-    },
-    scalp: { geometry: A.g, center: v(0, 0.095, -0.01), radius: 0.1 * S },
-    landmarks,
-    buildMs: ms,
-    dispose() {
-      if (disposed) return; disposed = true;
-      for (const e of eyes) for (const mt of e.mats) mt.dispose();
-      if (lashes) lashes.material.dispose();
-      for (const p of mouthParts) p.material.dispose?.();
-      A.refs--;
-      if (A.refs <= 0) {
-        A.g.dispose(); A.skinMat.map?.dispose(); A.skinMat.normalMap?.dispose(); A.skinMat.roughnessMap?.dispose(); A.skinMat.dispose();
-        A.eyeGeo.dispose(); A.corneaGeo?.dispose(); A.lashGeo?.dispose(); A.teeth?.forEach(t => t.dispose()); A.tongue?.dispose();
-        CACHE.delete(key);
+        _v.copy(p).applyMatrix4(_m).sub(e.piv.position);
+        e.holder.rotation.set(Math.atan2(-_v.y, Math.hypot(_v.x, _v.z)), Math.atan2(_v.x, _v.z), 0, 'YXZ');
       }
     },
+    setBlink() {}, setMouth() {}, setSmile() {}, update() {},
+    scalp: { geometry: A.g, center: new THREE.Vector3(0, 0.095 * S, -0.01 * S), radius: 0.1 * S },
+    landmarks: lm,
+    dispose() {},
   };
 }
-
-export { EYE };

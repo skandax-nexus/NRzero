@@ -108,9 +108,18 @@ function openPanel(kind) {
       <span><kbd>Wheel</kbd></span><span>Camera distance</span></div>`;
   } else if (kind === 'chapters') {
     const unlocked = store.get('chapter', 0);
-    body.innerHTML = '<h2>CHAPTERS</h2><div class="chapters">' + MISSIONS.map((m, i) =>
-      `<div class="chap ${i > unlocked ? 'locked' : ''}" data-i="${i}"><div class="n">${i + 1}</div><div><h3>${m.title.toUpperCase()}</h3><p>${m.act} — ${m.sub}</p></div></div>`).join('') +
-      ROADMAP.map(r => `<div class="chap future"><div class="n">${r.n}</div><div><h3>${r.title.toUpperCase()}</h3><p>${r.act} — ${r.text}</p></div></div>`).join('') + '</div>';
+    const rows = [
+      ...MISSIONS.map((m, i) => ({ n: i + 1, act: m.act, title: m.title, text: m.sub, i, locked: i > unlocked })),
+      ...ROADMAP.map(r => ({ n: r.n, act: r.act, title: r.title, text: r.text, future: true })),
+    ];
+    let html = '<h2>CHAPTERS</h2><div class="chapters">', lastAct = '';
+    for (const r of rows) {
+      if (r.act !== lastAct) { html += `<div class="act-head">${r.act}</div>`; lastAct = r.act; }
+      const cls = r.future ? 'chap future' : `chap ${r.locked ? 'locked' : ''}`;
+      const badge = r.future ? '<span class="soon">Coming soon</span>' : r.locked ? '<span class="soon">Locked</span>' : '<span class="soon play">Play</span>';
+      html += `<div class="${cls}"${r.future ? '' : ` data-i="${r.i}"`}><div class="n">${r.n}</div><div class="chap-t"><h3>${r.title.toUpperCase()}</h3><p>${r.text}</p></div>${badge}</div>`;
+    }
+    body.innerHTML = html + '</div>';
     body.querySelectorAll('.chap[data-i]').forEach(el => el.addEventListener('click', () => { const i = +el.dataset.i; if (i <= unlocked) { immersive(); startAt(i); } }));
   }
 }

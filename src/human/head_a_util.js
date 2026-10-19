@@ -173,3 +173,27 @@ export function polyDist2(pts, x, y) {
   }
   return { d: best, t: bt, side };
 }
+
+// natural cubic spline through (xs, ys) (C2, so shading shows no bands at the knots); clamped outside
+export function makeSpline(xs, ys) {
+  const n = xs.length;
+  const y2 = new Float64Array(n), u = new Float64Array(n);
+  for (let i = 1; i < n - 1; i++) {
+    const sig = (xs[i] - xs[i - 1]) / (xs[i + 1] - xs[i - 1]);
+    const p = sig * y2[i - 1] + 2;
+    y2[i] = (sig - 1) / p;
+    const d = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]) - (ys[i] - ys[i - 1]) / (xs[i] - xs[i - 1]);
+    u[i] = (6 * d / (xs[i + 1] - xs[i - 1]) - sig * u[i - 1]) / p;
+  }
+  for (let k = n - 2; k >= 0; k--) y2[k] = y2[k] * y2[k + 1] + u[k];
+  const s0 = (ys[1] - ys[0]) / (xs[1] - xs[0]) - (xs[1] - xs[0]) * (2 * y2[0] + y2[1]) / 6;
+  const s1 = (ys[n - 1] - ys[n - 2]) / (xs[n - 1] - xs[n - 2]) + (xs[n - 1] - xs[n - 2]) * (y2[n - 2] + 2 * y2[n - 1]) / 6;
+  return function (x) {
+    if (x <= xs[0]) return ys[0] + s0 * (x - xs[0]);
+    if (x >= xs[n - 1]) return ys[n - 1] + s1 * (x - xs[n - 1]);
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (xs[m] > x) hi = m; else lo = m; }
+    const h = xs[hi] - xs[lo], a = (xs[hi] - x) / h, b = (x - xs[lo]) / h;
+    return a * ys[lo] + b * ys[hi] + ((a * a * a - a) * y2[lo] + (b * b * b - b) * y2[hi]) * h * h / 6;
+  };
+}

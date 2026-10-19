@@ -1,13 +1,18 @@
-// AFTERZERO head_b: procedural anatomical signed distance field for a human head.
-// Our own construction from anatomical masses: cranium (vault + frontal bone), a lofted
-// face mass (per-height superellipse sections measured from adult proportions), mandible caps
-// (front-view jaw outline + side-view jawline/ramus), zygoma, cheek pads, brow ridge, eye sockets
-// with eyelids carved around the eyeball, nose (dorsum, lobule, alae, columella, nostrils), lips
-// (outline driven volumes, philtrum, slit and mouth cavity), chin, ears and neck; blended with
-// smooth min / max. Units: meters in head-group space (+Y up, face toward +Z, character left = +X).
-// No three.js dependency (unit testable in node).
+// AFTERZERO head_b: anatomical signed distance field of a human head (our own construction).
+// The head is sculpted from anatomical masses blended with smooth-min / smooth-max:
+//   base   : cranium (superellipsoid with occipital and parietal shaping), a face block whose front
+//            is a profile-driven relief (forehead, orbits, maxilla, dental arch, chin) bounded by the
+//            side planes of the face and the sloping submandibular plane, and the neck;
+//   masses : brow ridge + glabella, zygoma + zygomatic arch, malar fat pads, masseter, mandible bar
+//            (jawline + ramus), chin pad and tubercles, jowls (age), nasal bones/dorsum wedge, tip
+//            lobule domes, alae, columella, upper and lower lips (arc-aligned ellipsoids capped by a
+//            Cupid's bow), philtral columns, sternocleidomastoids, thyroid cartilage, ears (relief plate);
+//   carves : orbit hollows, temporal hollows, nasolabial and mentolabial grooves, nostrils, the
+//            palpebral fissures (radial walls around the eyeball = lid margins), mouth slit + cavity.
+// Units: metres in canonical adult-male space (scaled by m.S afterwards). +Y up, face toward +Z,
+// character left = +X. Pure JS (no three.js) so it runs in node for tests and fitting.
 
-const { sqrt, abs, min, max, exp, sin, cos, atan2, PI, pow } = Math;
+const { sqrt, abs, min, max, exp, sin, cos, atan2, PI, pow, hypot } = Math;
 
 export function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 export function smoothstep(a, b, v) { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
@@ -20,19 +25,21 @@ export function mulberry32(a) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
+export function smin(a, b, k) { if (k <= 0) return a < b ? a : b; const h = k - abs(a - b); if (h <= 0) return a < b ? a : b; const t = h / k; return (a < b ? a : b) - t * t * k * 0.25; }
+export function smax(a, b, k) { if (k <= 0) return a > b ? a : b; const h = k - abs(a - b); if (h <= 0) return a > b ? a : b; const t = h / k; return (a > b ? a : b) + t * t * k * 0.25; }
+export function gauss(v, s) { const q = v / s; return q * q > 16 ? 0 : exp(-q * q); }
 
-// ---- primitives -----------------------------------------------------------------------------
+/** approximate ellipsoid distance (iq), exact on the surface, good near it */
 export function ell(x, y, z, rx, ry, rz) {
   const ax = x / rx, ay = y / ry, az = z / rz;
   const k0 = sqrt(ax * ax + ay * ay + az * az);
-  if (k0 < 1e-6) return -min(rx, ry, rz);
+  if (k0 < 1e-9) return -min(rx, ry, rz);
   const bx = ax / rx, by = ay / ry, bz = az / rz;
   const k1 = sqrt(bx * bx + by * by + bz * bz);
   return k0 * (k0 - 1) / k1;
 }
-export function smin(a, b, k) { const h = k - abs(a - b); if (h <= 0) return a < b ? a : b; const t = h / k; return (a < b ? a : b) - t * t * k * 0.25; }
-export function smax(a, b, k) { const h = k - abs(a - b); if (h <= 0) return a > b ? a : b; const t = h / k; return (a > b ? a : b) + t * t * k * 0.25; }
-function rcone(px, py, pz, ax, ay, az, ra, bx, by, bz, rb) {
+/** capsule with linearly varying radius (round cone approximation) */
+export function rcap(px, py, pz, ax, ay, az, ra, bx, by, bz, rb) {
   const bax = bx - ax, bay = by - ay, baz = bz - az;
   const l2 = bax * bax + bay * bay + baz * baz;
   const pax = px - ax, pay = py - ay, paz = pz - az;
@@ -40,22 +47,9 @@ function rcone(px, py, pz, ax, ay, az, ra, bx, by, bz, rb) {
   const dx = pax - bax * t, dy = pay - bay * t, dz = paz - baz * t;
   return sqrt(dx * dx + dy * dy + dz * dz) - (ra + (rb - ra) * t);
 }
-// signed distance to an open 2D polyline (flat array [x0,y0,x1,y1,...]); negative on the left side
-export function polySD(P, px, py) {
-  let best = 1e9, sg = 1;
-  for (let i = 0; i + 3 < P.length; i += 2) {
-    const ax = P[i], ay = P[i + 1], bx = P[i + 2], by = P[i + 3];
-    const ex = bx - ax, ey = by - ay, wx = px - ax, wy = py - ay;
-    const t = clamp((wx * ex + wy * ey) / (ex * ex + ey * ey), 0, 1);
-    const dx = wx - ex * t, dy = wy - ey * t, dd = dx * dx + dy * dy;
-    if (dd < best) { best = dd; sg = (ex * wy - ey * wx) > 0 ? -1 : 1; }
-  }
-  return sqrt(best) * sg;
-}
-export function gauss(v, s) { const q = v / s; return q * q > 16 ? 0 : exp(-q * q); }
 
-// ---- monotone cubic tables ------------------------------------------------------------------
-function spline(pts) {
+// monotone cubic interpolation through points [[x,y],...]
+export function spline(pts) {
   pts = pts.slice().sort((a, b) => a[0] - b[0]);
   const n = pts.length, xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
   const dk = [], mk = new Array(n);
@@ -68,634 +62,818 @@ function spline(pts) {
     if (h > 9) { const t = 3 / sqrt(h); mk[i] = t * a * dk[i]; mk[i + 1] = t * b * dk[i]; }
   }
   return v => {
-    if (v <= xs[0]) return ys[0];
-    if (v >= xs[n - 1]) return ys[n - 1];
+    if (v <= xs[0]) return ys[0] + mk[0] * (v - xs[0]);
+    if (v >= xs[n - 1]) return ys[n - 1] + mk[n - 1] * (v - xs[n - 1]);
     let i = 0; while (xs[i + 1] < v) i++;
     const h = xs[i + 1] - xs[i], t = (v - xs[i]) / h;
     const t2 = t * t, t3 = t2 * t;
     return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * mk[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * mk[i + 1];
   };
 }
-// sampled table over [Y0, Y0 + (TN-1)*DY] with derivative
-const Y0 = -0.06, DY = 0.0005, TN = 420;
-function table(pts) {
-  const f = spline(pts);
-  const out = new Float64Array(TN);
-  for (let j = 0; j < TN; j++) out[j] = f(Y0 + j * DY);
-  return out;
+/** dense lookup table of a 1D function over [a, b] */
+function lut(f, a, b, n) {
+  const T = new Float64Array(n + 1), d = (b - a) / n;
+  for (let i = 0; i <= n; i++) T[i] = f(a + i * d);
+  return { T, a, inv: 1 / d, n };
 }
-function tget(t, fi) { const i = fi | 0; return t[i] + (t[i + 1] - t[i]) * (fi - i); }
-function tder(t, fi) { const i = fi | 0; return (t[i + 1] - t[i]) / DY; }
+function lget(L, v) {
+  let f = (v - L.a) * L.inv;
+  if (f <= 0) return L.T[0];
+  if (f >= L.n) return L.T[L.n];
+  const i = f | 0; f -= i;
+  return L.T[i] + (L.T[i + 1] - L.T[i]) * f;
+}
+// bump on [0,1] peaking at p (0..1), value 0 at the ends
+export function bump01(t, p, sharp = 1) {
+  t = clamp(t, 0, 1);
+  const e = Math.log(0.5) / Math.log(p);
+  const s = sin(PI * pow(t, e));
+  return sharp === 1 ? s : pow(s, sharp);
+}
 
-// ---- model ----------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
+// model: all anatomical dimensions derived from params (sex, age, shape sliders, traits, seed)
+// ---------------------------------------------------------------------------------------------
+export const SHAPE_KEYS = ['jaw', 'cheek', 'nose', 'noseWidth', 'lips', 'brow', 'eyeSize', 'faceLength', 'chin'];
+// extra internal traits (all optional, -1..1 unless noted). Profiles / likeness fits set these.
+export const TRAIT_KEYS = ['lidFold', 'eyeDepth', 'eyeTilt', 'eyeSpacing', 'eyeHeight', 'browHeight', 'noseBridge', 'noseHump', 'noseTip', 'noseLen',
+  'noseDeviate', 'mouthWidth', 'upperLip', 'lowerLip', 'lipProtrude', 'philtrum', 'faceWidth', 'cheekFat', 'jawAngle', 'chinHeight', 'forehead',
+  'foreheadSlope', 'earSize', 'earOut', 'neck', 'jowl', 'temple', 'zygoma', 'midface', 'mouthY', 'cleft'];
+
 export function makeModel(p) {
   const sex = clamp(p.sex ?? 0, 0, 1);
   const age = clamp(p.age ?? 30, 8, 80);
-  const shape = p.shape || {}, marks = p.marks || {};
+  const shape = p.shape || {}, tr = p.traits || {};
   const s = k => clamp(+shape[k] || 0, -1, 1);
-  const rnd = mulberry32((p.seed | 0) * 7919 + 13);
+  const t = k => clamp(+tr[k] || 0, -1.5, 1.5);
+  const rnd = mulberry32(((p.seed | 0) + 101) * 7919 + 13);
   const r2 = () => rnd() * 2 - 1;
   const fem = sex, mal = 1 - sex;
-  const ageY = clamp((age - 8) / 12, 0, 1);
-  const old = clamp((age - 35) / 35, 0, 1);
-  const young = clamp((28 - age) / 12, 0, 1);
+  const grown = clamp((age - 8) / 12, 0, 1); // 0 = child (8), 1 = adult (20+)
+  const child = 1 - grown;
+  const old = clamp((age - 38) / 34, 0, 1);
+  const young = clamp((30 - age) / 12, 0, 1) * grown;
   const m = {
-    sex, age, fem, mal, old, young, child: 1 - ageY,
-    S: mix(1, 0.94, fem) * mix(0.88, 1, ageY),
-    seed: p.seed | 0,
-    jaw: s('jaw'), cheek: s('cheek'), nose: s('nose'), noseWv: s('noseWidth'), lips: s('lips'),
+    sex, age, fem, mal, old, young, child, grown,
+    seed: p.seed | 0, dbg: p._dbg || null,
+    S: mix(1, 0.935, fem) * mix(0.89, 1, grown),
+    jaw: s('jaw'), cheek: s('cheek'), nose: s('nose'), noseW: s('noseWidth'), lips: s('lips'),
     brow: s('brow'), eyeSize: s('eyeSize'), faceLen: s('faceLength'), chin: s('chin'),
-    wrinkles: clamp(marks.wrinkles ?? 0, 0, 1),
-    off: new Set(p._off || []),
-    asym: [r2(), r2(), r2(), r2(), r2(), r2(), r2(), r2()],
   };
-  const J = m.jaw, C = m.chin, CK = m.cheek, FL = m.faceLen;
-  m.fl = 1 + 0.05 * FL - 0.04 * m.child;
-  // jaw strength: male, jaw param; softer for women and children
-  const jw = mix(1, 0.9, fem) * (1 + 0.06 * J) * mix(1, 0.92, m.child);
-  const lowW = mix(1, 0.93, fem) * (1 + 0.03 * J);
-  // ---- mandible ----
-  m.gonX = (0.0515 + 0.0035 * J) * mix(1, 0.92, fem) * mix(1, 0.94, m.child);
-  m.gonY = -0.006 - 0.003 * J + 0.004 * fem;
-  m.gonZ = -0.004;
-  m.mentY = (-0.0475 - 0.002 * C - 0.002 * FL) + 0.003 * fem;
-  m.mentZ = 0.068 + 0.004 * C;
-  m.chinHW = (0.020 + 0.003 * J + 0.0025 * mal) * (1 + 0.04 * C);
-  m.jawRound = mix(0.008, 0.012, fem) - 0.002 * J;
-  // jaw outline in front view (x, y) and jawline/ramus in side view (z, y): polylines, face on the left
-  {
-    const f = spline([[0, m.mentY], [m.chinHW * 0.6, m.mentY + 0.0006], [m.chinHW, m.mentY + 0.0024], [mix(m.chinHW, m.gonX, 0.5), mix(m.mentY, m.gonY, 0.45)],
-      [m.gonX * 0.95, m.gonY - 0.0055], [m.gonX, m.gonY]]);
-    const F = [-0.01, m.mentY];
-    for (let i = 0; i <= 24; i++) { const x = m.gonX * i / 24; F.push(x, f(x)); }
-    F.push(m.gonX + 0.012, m.gonY + 0.014, m.gonX + 0.08, m.gonY + 0.05);
-    m.jawFP = F;
-    const gz = m.gonZ, gy = m.gonY, mz = m.mentZ, my = m.mentY;
-    const g = spline([[gz, gy], [mix(gz, mz, 0.35), mix(gy, my, 0.38)], [mix(gz, mz, 0.7), mix(gy, my, 0.74)], [mz, my], [mz + 0.012, my - 0.0005]]);
-    const Sd = [gz - 0.06, gy + 0.045, gz - 0.025, gy + 0.016, gz - 0.008, gy + 0.003];
-    for (let i = 0; i <= 20; i++) { const zz = gz + (mz + 0.012 - gz) * i / 20; Sd.push(zz, g(zz)); }
-    Sd.push(mz + 0.04, my - 0.001);
-    m.jawSP = Sd;
-  }
-  // eyes
-  m.eyeR = 0.0119;
-  m.eyeX = 0.0322 - 0.0008 * fem - 0.0006 * m.child; m.eyeY = 0.0855; m.eyeZ = 0.0718 + 0.0015 * fem + 0.0006 * m.eyeSize - 0.0012 * mal * (m.brow > 0 ? m.brow : 0);
-  m.lidT = 0.0019 + 0.0002 * old;
-  // almond fissure in the eye's frontal plane (metres, eye-local, left eye; medial = -x)
-  const es = m.eyeSize, bp = Math.max(0, m.brow) * mal;
-  m.cMx = -(0.0158 + 0.0004 * fem) * (1 + 0.025 * es); m.cMy = -0.0004;
-  m.cLx = 0.0119 + 0.0004 * es; m.cLy = 0.0012 + 0.0012 * fem - 0.0008 * old;
-  m.hU = 0.0045 + 0.0004 * fem + 0.0007 * es - 0.0005 * old - 0.0007 * bp;
-  m.hL = 0.0047 + 0.0002 * fem + 0.0004 * es - 0.0004 * bp;
-  m.sU = 0.43; m.sL = 0.6;
-  m.creaseH = 0.0031 + 0.0012 * fem - 0.0006 * old;
-  m.hood = clamp(0.35 + 0.65 * old - 0.15 * fem + 0.35 * m.brow, 0, 1.3);
-  m.bags = clamp(0.15 + 0.85 * old - 0.3 * young, 0, 1);
-  // legacy angular lid parameters (kept for reference / tilt)
-  m.tilt = 0.06 + 0.07 * fem - 0.05 * old;
-  m.browP = clamp(0.6 * mal + 0.15 + 0.35 * m.brow, 0, 1.3);
-  // nose
-  m.noseLen = 1 + 0.06 * m.nose + 0.035 * old - 0.05 * fem - 0.08 * m.child;
-  m.noseProj = 1 + 0.07 * m.nose - 0.06 * fem - 0.1 * m.child;
-  m.noseW = 1 + 0.12 * m.noseWv + 0.04 * mal + 0.04 * old;
-  m.bridge = 1 + 0.3 * m.nose - 0.25 * fem - 0.3 * m.child;
-  // mouth
-  m.mouthHW = (0.0245 - 0.0007 * fem) * (1 + 0.04 * m.lips);
-  m.lipU = (0.0036 + 0.0012 * fem) * (1 + 0.35 * m.lips) * (1 - 0.3 * old);
-  m.lipL = (0.0046 + 0.0012 * fem) * (1 + 0.35 * m.lips) * (1 - 0.25 * old);
-  m.lipUH = (0.0072 + 0.0009 * fem) * (1 + 0.16 * m.lips) * (1 - 0.25 * old);
-  m.lipLH = (0.0092 + 0.0009 * fem) * (1 + 0.16 * m.lips) * (1 - 0.2 * old);
-  m.mouthY = 0.0075;
-  m.cheekP = 1 + 0.35 * CK;
-  m.neckR = mix(0.055, 0.047, fem);
-  m.jowl = old;
-  // ear
-  m.earX = 0.0718; m.earY = 0.0705; m.earZ = -0.0105;
-  m.earS = (1.04 + 0.08 * old - 0.03 * fem);
-  // asymmetry (tiny, seeded)
-  m.eyeDy = 0.0004 * m.asym[0];
-  m.noseDev = 0.0005 * m.asym[1];
-  m.pU = Math.log(0.5) / Math.log(0.43);
-  m.pL = Math.log(0.5) / Math.log(0.57);
-  m.relief = buildRelief(m);
-  buildNose(m);
-  buildLidTables(m);
-  buildEyeRelief(m);
+  for (const k of TRAIT_KEYS) m[k] = t(k);
+  const J = m.jaw, C = m.chin, CK = m.cheek, FL = m.faceLen, B = m.brow;
+  // a few seeded natural variations that every head gets (on top of the sliders)
+  const v = { face: r2() * 0.35, nose: r2() * 0.35, lip: r2() * 0.3, eye: r2() * 0.3, ear: r2() * 0.4, brow: r2() * 0.3, chin: r2() * 0.3 };
+  m.var = v;
+
+  // ---- vertical layout (y) ----
+  const lowerScale = (1 + 0.075 * FL + 0.02 * m.midface) * mix(1, 0.86, child) * mix(1, 0.965, fem);
+  const midScale = (1 + 0.05 * FL + 0.05 * m.midface) * mix(1, 0.88, child) * mix(1, 0.97, fem);
+  m.eyeY = 0.0855 + 0.002 * m.eyeHeight + 0.004 * child;
+  m.browY = m.eyeY + 0.0215 + 0.003 * m.browHeight + 0.0025 * fem - 0.002 * B * mal;
+  m.sellY = m.eyeY + 0.002;
+  m.noseBaseY = m.eyeY - 0.0545 * midScale - 0.003 * m.noseLen; // subnasale
+  m.tipY = m.noseBaseY + 0.0115 + 0.0025 * m.nose - 0.003 * m.noseTip * -1;
+  m.mouthY = m.noseBaseY - (0.0235 + 0.002 * m.philtrum) * lowerScale + 0.002 * m.mouthY;
+  m.chinY = m.mouthY - (0.0505 + 0.004 * m.chinHeight + 0.003 * C) * lowerScale; // menton
+  m.crownY = 0.196 + 0.004 * m.forehead;
+  m.hairY = m.browY + 0.06 + 0.006 * m.forehead;
+
+  // ---- depth (z) and widths ----
+  const deep = m.eyeDepth + 0.35 * B * mal; // deep-set eyes under a heavy brow
+  m.eyeX = (0.0318 + 0.0012 * m.eyeSpacing + 0.0006 * v.eye) * mix(1, 0.97, child);
+  m.eyeZ = 0.0745 - 0.0016 * deep + 0.001 * child;
+  m.Re = 0.0119 * mix(1, 0.97, child);
+  m.glabZ = 0.1005 + 0.0022 * B * mal - 0.0015 * fem + 0.0006 * m.foreheadSlope;
+  m.sellZ = m.eyeZ + 0.0215 + 0.0032 * m.noseBridge + 0.0008 * deep - 0.002 * child;
+  m.tipZ = 0.1195 + 0.0055 * m.nose - 0.004 * child - 0.0015 * fem + 0.0015 * v.nose;
+  m.subZ = 0.1015 - 0.0005 * child;
+  m.alarHW = (0.0172 + 0.0028 * m.noseW + 0.0005 * v.nose) * mix(1, 0.94, fem) * mix(1, 0.86, child);
+  m.mouthHW = (0.0262 + 0.0018 * m.mouthWidth + 0.0006 * m.lips) * mix(1, 0.965, fem) * mix(1, 0.9, child);
+  m.lipZ = 0.1012 + 0.0012 * m.lipProtrude + 0.0006 * m.lips;
+  m.upperH = (0.0082 + 0.0022 * m.lips + 0.0012 * m.upperLip + 0.0014 * fem) * (1 - 0.32 * old) * mix(1, 0.85, child);
+  m.lowerH = (0.0098 + 0.0024 * m.lips + 0.0014 * m.lowerLip + 0.0012 * fem) * (1 - 0.22 * old) * mix(1, 0.85, child);
+  m.chinZ = 0.0935 + 0.0045 * C - 0.002 * fem - 0.004 * child + 0.0008 * v.chin;
+  m.chinW = (0.0155 + 0.003 * J * mal + 0.0015 * C) * mix(1, 0.88, fem);
+  m.gonX = (0.0505 + 0.0045 * J + 0.0012 * m.faceWidth) * mix(1, 0.9, fem) * mix(1, 0.92, child);
+  m.gonY = -0.004 + 0.003 * m.jawAngle - 0.002 * J + 0.004 * fem + 0.004 * child;
+  m.gonZ = -0.004 + 0.002 * J;
+  m.jawRound = mix(0.0085, 0.013, fem) * (1 - 0.25 * J) + 0.006 * child + 0.004 * old;
+  m.zygX = (0.0675 + 0.003 * CK + 0.0025 * m.faceWidth + 0.001 * m.zygoma) * mix(1, 0.97, fem);
+  m.cheekPro = 0.0035 * CK + 0.0015 * m.zygoma + 0.002 * fem;
+  m.cheekFull = 0.6 + 0.25 * m.cheekFat + 0.35 * young + 0.5 * child + 0.2 * fem - 0.35 * old - 0.15 * mal * CK;
+  m.headW = (0.0755 + 0.0015 * m.faceWidth) * mix(1, 0.985, fem);
+  m.neckR = (0.056 + 0.004 * m.neck) * mix(1, 0.84, fem) * mix(1, 0.82, child);
+
+  // eye fissure (angles around the eyeball centre); eyeSize scales it
+  const es = 1 + 0.11 * m.eyeSize + 0.05 * child + 0.03 * fem - 0.06 * old;
+  m.fis = {
+    am: -1.2 * mix(1, 1.03, fem), al: 1.27 * (1 + 0.04 * m.eyeSize),
+    bm: -0.05, bl: 0.02 + 0.07 * m.eyeTilt + 0.04 * fem + 0.02 * v.eye,
+    up: 0.43 * es * (1 - 0.12 * m.lidFold * (m.lidFold > 0 ? 1 : 0)) - 0.05 * old, upPeak: 0.43, lo: 0.41 * es, loPeak: 0.56,
+  };
+  m.lidT = 0.0019;
+  m.lidFoldAmt = m.lidFold; // >0 hooded/monolid, <0 deep crease
+
+  // ---- asymmetry (left = +x, right = -x) ----
+  const as = 0.6 + 0.4 * old;
+  m.asym = {
+    eyeDy: r2() * 0.0008 * as, browDy: r2() * 0.0012 * as, mouthDy: r2() * 0.0006 * as, noseDx: (r2() * 0.0006 + 0.0025 * m.noseDeviate),
+    jawDx: r2() * 0.0012, earDy: r2() * 0.0018, cheekD: r2() * 0.0008, tipDx: r2() * 0.0005 + 0.0015 * m.noseDeviate,
+  };
+  m.nose_ = { hump: 0.0009 * m.noseHump + 0.0004 * mal + 0.0006 * old, bridgeW: 0.0056 + 0.0012 * m.noseW + 0.001 * mal - 0.0008 * child, tipW: (0.0079 + 0.0012 * m.noseW + 0.0006 * m.nose) * mix(1, 0.9, fem), tipUp: m.noseTip };
+  m.earS = (1 + 0.06 * m.earSize + 0.04 * v.ear + 0.08 * old) * mix(1, 0.93, fem) * mix(1, 0.92, child);
+  m.earOutA = 0.33 + 0.12 * m.earOut + 0.05 * v.ear;
+  m.brow_ = { amt: (0.0034 + 0.0024 * B) * mix(1, 0.3, fem) * mix(1, 0.3, child), w: 0.019 };
+  m.fh = { slope: 0.5 * m.foreheadSlope + 0.4 * mal - 0.2 * child };
   return m;
 }
 
-// ---- eyelids ------------------------------------------------------------------------------------
-// Fissure: an almond in the eye's frontal plane (lx, ly), upper margin yU(lx) and lower yL(lx),
-// from the medial canthus (cMx, cMy) to the lateral canthus (cLx, cLy). Tabulated.
-const LN = 256;
-function bump(s, peak) { const e = Math.log(0.5) / Math.log(peak); return sin(PI * pow(clamp(s, 0, 1), e)); }
-function buildLidTables(m) {
-  m.lidU = new Float64Array(LN); m.lidL = new Float64Array(LN);
-  for (let i = 0; i < LN; i++) {
-    const s = i / (LN - 1), base = m.cMy + (m.cLy - m.cMy) * s;
-    m.lidU[i] = base + m.hU * pow(bump(s, m.sU), 0.72);
-    m.lidL[i] = base - m.hL * pow(bump(s, m.sL), 0.82);
-  }
-}
-/** upper / lower margin heights (eye-local metres) at lateral offset lx; closed outside the canthi */
-export function lidAt(m, lx) {
-  const s = (lx - m.cMx) / (m.cLx - m.cMx);
-  if (s <= 0) { const v = m.cMy; return { s, up: v, lo: v }; }
-  if (s >= 1) { const v = m.cLy; return { s, up: v, lo: v }; }
-  const f = s * (LN - 1), i = f | 0, t = f - i;
-  return { s, up: m.lidU[i] + (m.lidU[i + 1] - m.lidU[i]) * t, lo: m.lidL[i] + (m.lidL[i + 1] - m.lidL[i]) * t };
-}
-// legacy-compatible angular view of the lid curves (az around the eye centre)
-export function lidCurves(m, az) {
-  const rr = m.eyeR + m.lidT * 0.5;
-  const L = lidAt(m, rr * sin(az));
-  const t = L.s;
-  return { t, up: Math.asin(clamp(L.up / rr, -1, 1)), lo: Math.asin(clamp(L.lo / rr, -1, 1)), c: 0 };
-}
+// ---------------------------------------------------------------------------------------------
+// field
+// ---------------------------------------------------------------------------------------------
+// part ids returned by field.part(): which tissue a surface point belongs to
+export const PART = { SKIN: 0, LIP: 1, MOUTH: 2, NOSTRIL: 3, EAR: 4, LIDINNER: 5, CARUNCLE: 6, NECKCAP: 7 };
 
-// lid relief offset above the eyeball surface (mm) at projected lid coords (px, py) in mm
-function lidDelta(m, px, py) {
-  const L = lidAt(m, px / 1000);
-  const yU = L.up * 1000, yL = L.lo * 1000, s = L.s;
-  const T = m.lidT * 1000, cH = m.creaseH * 1000;
-  const ym = (yU + yL) * 0.5;
-  const hu = py - yU, hl = yL - py;
-  const sp = (v, k) => (v > 20 * k ? v : k * Math.log(1 + exp(v / k))); // softplus
-  const inner = smoothstep(-0.12, 0.15, s) * smoothstep(1.12, 0.85, s);
-  // upper lid: margin, pretarsal plate, crease, fold (hood) rising to the brow
-  let du = T + 0.08 * max(hu, 0) - 0.55 * gauss(hu - cH, 0.5) * inner * (1 - 0.6 * min(m.hood, 1));
-  du += sp(hu - cH - 0.2, 1.2) * 0.62 + sp(hu - cH - 3.6, 1.0) * 2.6 + m.hood * 1.3 * gauss(hu - cH - 0.7, 1.0) * inner;
-  // lower lid: margin, slight roll, lid-cheek junction, bags, rise to the cheek
-  let dl = T * 0.88 + 0.2 * max(hl, 0) + 0.35 * gauss(hl - 1.5, 0.9) - 0.3 * gauss(hl - 4.2, 1.1) * inner;
-  dl += m.bags * 1.5 * gauss(hl - 5.0, 1.8) * inner + sp(hl - 6.5, 1.2) * 0.55 + sp(hl - 9.0, 1.0) * 2.6;
-  let dd = mix(dl, du, smoothstep(ym - 0.9, ym + 0.9, py));
-  dd += 6.0 * pow(smoothstep(0.04, -0.32, s), 1.2) + 3.6 * smoothstep(0.97, 1.32, s) + 20 * smoothstep(-0.25, -0.6, s) + 20 * smoothstep(1.25, 1.65, s);
-  return dd;
-}
+export function makeField(m) {
+  const fem = m.fem, mal = m.mal, old = m.old, child = m.child, young = m.young;
+  const E = { x: m.eyeX, y: m.eyeY, z: m.eyeZ };
+  const Re = m.Re;
+  const FL = m.faceLen;
 
-// radial lid relief around the eye centre: r_eye(az, el) table (left eye frame)
-const EAZ = 1.75, EEL = 1.45, EST = 0.02, ENA = Math.round(2 * EAZ / EST) + 1, ENE = Math.round(2 * EEL / EST) + 1;
-function buildEyeRelief(m) {
-  const R = m.eyeR;
-  const ex = m.eyeX, ey = m.eyeY, ez = m.eyeZ;
-  // first exit of the face relief along rays from the eye centre (coarse grid, bicubic upsampled)
-  const CS = 0.05, CA = Math.round(2 * EAZ / CS) + 3, CE = Math.round(2 * EEL / CS) + 3;
-  const RF = new Float64Array(CA * CE);
-  for (let j = 0; j < CE; j++) for (let i = 0; i < CA; i++) {
-    const az = -EAZ + (i - 1) * CS, el = -EEL + (j - 1) * CS;
-    const dx = cos(el) * sin(az), dy = sin(el), dz = cos(el) * cos(az);
-    let lo = 0.0, hi = 0.0;
-    // march to the first exit, then bisect
-    for (let t = 0.004; t <= 0.05; t += 0.002) { if (relief(m, abs(ex + dx * t), ey + dy * t, ez + dz * t) > 0) { hi = t; lo = t - 0.002; break; } }
-    if (hi === 0) { RF[j * CA + i] = 0.05; continue; }
-    for (let it = 0; it < 12; it++) { const md = (lo + hi) * 0.5; if (relief(m, abs(ex + dx * md), ey + dy * md, ez + dz * md) < 0) lo = md; else hi = md; }
-    RF[j * CA + i] = (lo + hi) * 0.5;
-  }
-  const WA = new Float64Array(8), WE = new Float64Array(8);
-  const rf = (az, el) => {
-    const fi = (az + EAZ) / CS + 1, fj = (el + EEL) / CS + 1;
-    const i = clamp(fi | 0, 1, CA - 3), j = clamp(fj | 0, 1, CE - 3);
-    crw(clamp(fi - i, 0, 1), WA); crw(clamp(fj - j, 0, 1), WE);
-    let v = 0;
-    for (let b = 0; b < 4; b++) { let s2 = 0; for (let a = 0; a < 4; a++) s2 += WA[a] * RF[(j - 1 + b) * CA + i - 1 + a]; v += WE[b] * s2; }
-    return v;
-  };
-  const T = new Float32Array(ENA * ENE);
-  const pr = (R + 0.002) * 1000;
-  for (let j = 0; j < ENE; j++) for (let i = 0; i < ENA; i++) {
-    const az = -EAZ + i * EST, el = -EEL + j * EST;
-    const px = pr * cos(el) * sin(az), py = pr * sin(el);
-    // outside the orbital opening the lid surface recedes (the face surface takes over)
-    const q = sqrt(((az + 0.02) / 1.48) ** 2 + ((el - 0.03) / 0.95) ** 2);
-    const rl = R + (lidDelta(m, px, py) + 30 * smoothstep(0.9, 1.35, q)) / 1000;
-    T[j * ENA + i] = smin(rf(az, el), rl, 0.007);
-  }
-  m.eyeRel = T;
-}
-const EWA = new Float64Array(8), EWE = new Float64Array(8);
-function eyeRelief(m, r, az, el) {
-  const fi = (az + EAZ) / EST, fj = (el + EEL) / EST;
-  const i = fi | 0, j = fj | 0;
-  crw(fi - i, EWA); crw(fj - j, EWE);
-  const T = m.eyeRel;
-  let v = 0, va = 0, ve = 0;
-  for (let b = 0; b < 4; b++) {
-    const row = (j - 1 + b) * ENA;
-    let s = 0, sd = 0;
-    for (let a = 0; a < 4; a++) { const tv = T[row + i - 1 + a]; s += EWA[a] * tv; sd += EWA[4 + a] * tv; }
-    v += EWE[b] * s; va += EWE[b] * sd; ve += EWE[4 + b] * s;
-  }
-  va /= EST; ve /= EST;
-  const qa = va / (r * cos(el) + 1e-6), qe = ve / (r + 1e-6);
-  return (r - v) / sqrt(1 + qa * qa + qe * qe);
-}
+  // ---- midline base profile P(y): front of the face block at x = 0 (no nose/lips) ----
+  const yE = m.eyeY, yN = m.noseBaseY, yM = m.mouthY, yC = m.chinY;
+  const prof = spline([
+    [m.crownY + 0.02, -0.02],
+    [m.hairY + 0.03, 0.058 - 0.01 * m.fh.slope],
+    [m.hairY + 0.012, 0.0785 - 0.006 * m.fh.slope],
+    [m.hairY - 0.012, 0.0905 - 0.0025 * m.fh.slope],
+    [m.browY + 0.02, m.glabZ - 0.0028 - 0.0012 * m.fh.slope],
+    [m.browY + 0.002, m.glabZ],
+    [m.sellY + 0.006, m.glabZ - 0.0032],
+    [m.sellY - 0.004, m.sellZ - 0.0035],
+    [yE - 0.022, m.sellZ - 0.007],
+    [yN + 0.008, m.subZ - 0.008],
+    [yN, m.subZ - 0.0045],
+    [yN - 0.008, m.lipZ - 0.0025],
+    [yM + 0.006, m.lipZ - 0.0045],
+    [yM, m.lipZ - 0.0065],
+    [yM - 0.007, m.lipZ - 0.0075],
+    [yM - 0.016, m.chinZ - 0.0055 - 0.0012 * m.lips],
+    [yC + 0.017, m.chinZ - 0.0028],
+    [yC + 0.009, m.chinZ - 0.004],
+    [yC + 0.002, m.chinZ - 0.0115],
+    [yC - 0.006, m.chinZ - 0.03],
+  ]);
+  const Y0 = yC - 0.03, Y1 = m.crownY + 0.03;
+  const P = lut(prof, Y0, Y1, 900);
 
-export function sdf(m, X, Y, Z) {
-  const S = m.S;
-  return headField(m, X / S, Y / S, Z / S) * S;
-}
-
-// ---- face relief ------------------------------------------------------------------------------
-// Horizontal anatomical sections of an average adult male face (mm): [height y, [[x, z], ...]] from
-// the midline to the side (nose, lips and eyes are separate features; this is the underlying mass).
-const SECT = [
-  [-62, [[0, 56], [10, 55], [20, 52], [30, 47], [40, 38], [48, 25], [54, 8], [55, 0]]],
-  [-50, [[0, 74], [8, 73], [16, 70], [24, 65], [32, 58], [39, 48], [45, 36], [50, 22], [54, 8], [55, 0]]],
-  [-36, [[0, 87], [8, 86], [16, 82.5], [24, 76], [32, 67], [39, 56], [45, 43], [50, 28], [54, 12], [55, 0]]],
-  [-22, [[0, 90.5], [8, 89.5], [16, 86], [24, 80], [32, 71], [39, 60], [45, 47], [50, 32], [54, 15], [55.5, 0]]],
-  [-8, [[0, 91], [8, 90], [16, 86.5], [24, 81], [32, 73.5], [40, 64], [47, 52], [52, 38], [56, 20], [57.5, 5], [58, 0]]],
-  [5, [[0, 96], [8, 94.5], [16, 90.5], [22, 86], [28, 81], [36, 74], [44, 64], [50, 53], [55, 39], [59, 22], [60.5, 5], [61, 0]]],
-  [16, [[0, 98], [8, 96.5], [16, 92.5], [24, 86], [32, 79], [40, 71], [47, 62], [53, 50], [58, 35], [61, 18], [62, 0]]],
-  [30, [[0, 97], [8, 95.5], [16, 91.5], [26, 84], [36, 76], [45, 67], [52, 56], [58, 43], [62, 28], [65, 12], [65.5, 0]]],
-  [45, [[0, 92], [10, 90.5], [20, 86], [30, 79.5], [40, 72], [48, 64], [55, 53], [61, 40], [65, 25], [67.5, 10], [68, 0]]],
-  [60, [[0, 86], [10, 86.5], [20, 85.5], [30, 81.5], [40, 75.5], [48, 68.5], [55, 58], [61, 45], [66, 30], [69.5, 13], [70.5, 0]]],
-  [72, [[0, 84], [10, 84.5], [20, 84.5], [30, 82], [40, 77], [48, 71], [55, 61], [61, 49], [66, 34], [70, 16], [71.5, 0]]],
-  [85, [[0, 86], [8, 86], [16, 86], [26, 86], [36, 84], [46, 76], [53, 66], [60, 52], [66, 35], [70, 16], [71.5, 0]]],
-  [100, [[0, 91.5], [8, 91], [16, 90], [26, 89], [36, 86], [46, 79], [54, 68], [61, 54], [67, 37], [70.5, 18], [72, 0]]],
-  [110, [[0, 96.5], [12, 95.5], [22, 94.5], [32, 92.5], [42, 87], [50, 79], [57, 67], [63, 52], [68, 35], [71, 15], [72, 0]]],
-  [122, [[0, 95], [15, 93.5], [28, 89.5], [40, 82], [50, 72], [59, 57], [66, 37], [71, 10], [72, 0]]],
-  [135, [[0, 92.5], [15, 91], [30, 86], [42, 77.5], [52, 66], [61, 48], [67, 27], [71.5, 0]]],
-  [150, [[0, 85], [15, 83.5], [30, 78], [42, 69], [52, 56], [60, 40], [67, 20], [70, 0]]],
-  [165, [[0, 72], [15, 70], [30, 64], [42, 55], [52, 43], [59, 28], [62, 10], [63, 0]]],
-];
-const RZA = -0.005;                 // relief axis depth
-const RDT = PI / 180, RNT = 182;    // 1 degree steps, 0..181 deg
-const RY0 = -0.068, RDY = 0.001, RNY = 272;
-
-function buildRelief(m) {
-  const fem = m.fem, J = m.jaw, C = m.chin, CK = m.cheek;
-  const secs = SECT.map(([ymm, pts]) => {
-    const yc = ymm / 1000, y = yc < 0.1 ? 0.1 + (yc - 0.1) * m.fl : yc;
-    // lower face width (jaw) and chin projection
-    const low = smoothstep(0.02, -0.012, yc);
-    const wx = (1 + (0.055 * J - 0.075 * fem - 0.06 * m.child) * low) * (1 - 0.01 * fem);
-    const chinF = (0.0022 * C + 0.0006 * m.mal - 0.001 * fem) * smoothstep(-0.004, -0.024, yc);
-    const browF = (yc > 0.095 && yc < 0.125) ? (0.0012 * (m.browP - 0.6)) * gauss(yc - 0.109, 0.007) : 0;
-    const out = pts.map(([xm, zm]) => {
-      const x = xm / 1000 * wx, z0 = zm / 1000;
-      const front = gauss(x, 0.03);
-      return [x, z0 + chinF * front + browF * gauss(x - 0.025, 0.025)];
-    });
-    return [y, out];
-  });
-  // radius of the base volume (cranium + neck) along a horizontal ray from the relief axis
-  const baseR = (th, y) => {
-    const st = sin(th), ct = cos(th);
-    if (baseVol(m, 0, y, RZA) >= 0) return -0.02;
-    let lo = 0, hi = 0.13;
-    for (let it = 0; it < 18; it++) { const md = (lo + hi) * 0.5; if (baseVol(m, st * md, y, RZA + ct * md) < 0) lo = md; else hi = md; }
-    return lo;
-  };
-  // per section: r(theta) on the grid, linearly extrapolated beyond the last authored point
-  const cols = secs.map(([, pts]) => {
-    const th = pts.map(([x, z]) => atan2(x, z - RZA)), rr = pts.map(([x, z]) => sqrt(x * x + (z - RZA) * (z - RZA)));
-    const tl = th[th.length - 1];
-    const f = spline(th.map((t, i) => [t, rr[i]]));
-    const rl = rr[rr.length - 1], slope = (f(tl) - f(tl - 0.03)) / 0.03;
-    const o = new Float64Array(RNT);
-    for (let k = 0; k < RNT; k++) { const t = k * RDT; o[k] = t <= tl ? f(t) : rl + slope * (t - tl); }
-    return o;
-  });
-  const T = new Float32Array(RNT * RNY);
-  const thL = spline(secs.map(([y, pts]) => { const [x, z] = pts[pts.length - 1]; return [y, atan2(x, z - RZA)]; }));
-  const BR = new Float64Array(RNT * RNY);
-  for (let j = 0; j < RNY; j++) for (let k = 0; k < RNT; k++) BR[j * RNT + k] = baseR(k * RDT, RY0 + j * RDY);
-  for (let k = 0; k < RNT; k++) {
-    const f = spline(secs.map(([y], i) => [y, cols[i][k]]));
-    const th = k * RDT;
-    for (let j = 0; j < RNY; j++) {
-      const y = RY0 + j * RDY;
-      const up = smoothstep(0.03, 0.06, y);
-      const wSide = smoothstep(mix(thL(y) - 0.04, 1.0, up), mix(thL(y) + 0.26, 1.62, up), th), wTop = smoothstep(0.15, 0.175, y);
-      const w = max(wSide, wTop);
-      T[j * RNT + k] = w > 0 ? mix(f(y), BR[j * RNT + k], w) : f(y);
-    }
-  }
-  // sculpt layers: gaussian bumps in (theta, y): [thetaDeg, y, sTheta, sY, amplitude m]
-  const B = [
-    [16, 0.108, 13, 0.006, 0.0012 * (m.browP - 0.6)],                   // brow ridge strength
-    [33, 0.064, 9, 0.009, 0.0011 * m.cheekP],                         // malar eminence
-    [32, 0.038, 11, 0.009, -(0.0004 + 0.0018 * m.old - 0.0008 * m.young - 0.0005 * fem)], // submalar hollow
-    [52, 0.11, 8, 0.014, -(0.0008 + 0.0012 * m.old)],                  // temple hollow
-    [61, 0.004, 9, 0.014, 0.0009 * m.mal + 0.0004 * J],                 // masseter
-    [24, 0.048, 9, 0.009, 0.0007 * fem + 0.0006 * m.young + 0.0004 * CK], // cheek fat pad
-    [40, -0.012, 9, 0.01, 0.0012 * m.old],                              // jowl
-    [62, 0.063, 16, 0.0045, 0.0012],                                     // zygomatic arch
+  // ---- lateral recession of the face front, as even polynomials a x^2 + b x^4 + c x^6 per level ----
+  // targets: recession (m) at x = 0.02, 0.04, 0.06 for key heights
+  const fw = 1 - 0.05 * m.faceWidth - 0.04 * child + 0.03 * fem; // rounder/wider face -> less recession
+  const cf = m.cheekFull;
+  const levels = [
+    [m.hairY + 0.02, 0.0042, 0.017, 0.042],
+    [m.browY + 0.03, 0.0032, 0.0125, 0.032],
+    [m.browY, 0.0022, 0.0085, 0.026],
+    [yE, 0.0035, 0.0125, 0.036],
+    [yE - 0.022, 0.0042, 0.0135, 0.033],
+    [yN + 0.004, 0.0064, 0.0168 - 0.002 * cf, 0.034 - 0.003 * cf],
+    [yM + 0.012, 0.0048, 0.0175 - 0.002 * cf, 0.038 - 0.003 * cf],
+    [yM - 0.004, 0.0046, 0.0185 - 0.0015 * cf, 0.043],
+    [yM - 0.02, 0.0050, 0.0205, 0.049],
+    [yC + 0.012, 0.0062, 0.0245, 0.058],
+    [yC, 0.0085, 0.031, 0.066],
   ];
-  for (const [td, yc, st, sy, A] of B) {
-    if (abs(A) < 1e-6) continue;
-    const tc = td * RDT, stt = st * RDT;
-    for (let j = 0; j < RNY; j++) {
-      const gy = gauss(RY0 + j * RDY - yc, sy); if (gy < 1e-4) continue;
-      for (let k = 0; k < RNT; k++) T[j * RNT + k] += A * gy * gauss(k * RDT - tc, stt);
+  const coefs = levels.map(([y, r1, r2, r3]) => {
+    r1 *= fw; r2 *= fw; r3 *= fw;
+    // solve [x^2 x^4 x^6] [a b c]^T = r for x = .02 .04 .06
+    const X = [0.02, 0.04, 0.06].map(x => [x * x, x ** 4, x ** 6]);
+    const R = [r1, r2, r3];
+    // gaussian elimination 3x3
+    const A = X.map((row, i) => [...row, R[i]]);
+    for (let c = 0; c < 3; c++) {
+      let piv = c; for (let r = c + 1; r < 3; r++) if (abs(A[r][c]) > abs(A[piv][c])) piv = r;
+      [A[c], A[piv]] = [A[piv], A[c]];
+      for (let r = 0; r < 3; r++) if (r !== c) { const f = A[r][c] / A[c][c]; for (let k = c; k < 4; k++) A[r][k] -= f * A[c][k]; }
     }
-  }
-  return T;
-}
-
-// Catmull-Rom weights and derivatives
-function crw(t, o) {
-  const t2 = t * t, t3 = t2 * t;
-  o[0] = -0.5 * t3 + t2 - 0.5 * t; o[1] = 1.5 * t3 - 2.5 * t2 + 1; o[2] = -1.5 * t3 + 2 * t2 + 0.5 * t; o[3] = 0.5 * t3 - 0.5 * t2;
-  o[4] = -1.5 * t2 + 2 * t - 0.5; o[5] = 4.5 * t2 - 5 * t; o[6] = -4.5 * t2 + 4 * t + 0.5; o[7] = 1.5 * t2 - t;
-}
-const WK = new Float64Array(8), WJ = new Float64Array(8);
-function relief(m, ax, y, z) {
-  const dz = z - RZA;
-  const rho = sqrt(ax * ax + dz * dz);
-  const th = atan2(ax, dz);
-  let fk = th / RDT, fj = (y - RY0) / RDY;
-  if (fk > RNT - 2.001) fk = RNT - 2.001;
-  if (fj < 1) fj = 1; else if (fj > RNY - 2.001) fj = RNY - 2.001;
-  const k = fk | 0, j = fj | 0;
-  crw(fk - k, WK); crw(fj - j, WJ);
-  const T = m.relief;
-  let r = 0, rt = 0, ry = 0;
-  for (let b = 0; b < 4; b++) {
-    const row = (j - 1 + b) * RNT;
-    let v = 0, vd = 0;
-    for (let a = 0; a < 4; a++) {
-      let kk = k - 1 + a; if (kk < 0) kk = -kk; // mirror at the midline
-      const tv = T[row + kk];
-      v += WK[a] * tv; vd += WK[4 + a] * tv;
-    }
-    r += WJ[b] * v; rt += WJ[b] * vd; ry += WJ[4 + b] * v;
-  }
-  rt /= RDT; ry /= RDY;
-  const q = rt / (rho + 1e-6);
-  return (rho - r) / sqrt(1 + q * q + ry * ry);
-}
-
-function cranium(ax, y, z) {
-  let d = ell(ax, y - 0.105, z + 0.016, 0.083, 0.09, 0.0905);
-  d = smin(d, ell(ax, y - 0.116, z, 0.0655, 0.079, 0.0945), 0.026);
-  d = smax(d, ax - 0.0755, 0.012);
-  d = smin(d, ell(ax, y - 0.045, z + 0.03, 0.061, 0.042, 0.062), 0.03);   // skull base / mastoid region
-  return d;
-}
-
-function neck(m, x, y, z) {
-  const nr = m.neckR / m.S;
-  return rcone(x, y, z, 0, 0.03, -0.024, nr * 1.0, 0, -0.16, -0.006, nr * 1.02);
-}
-function baseVol(m, ax, y, z) {
-  return smin(cranium(ax, y, z), neck(m, ax, y, z) + 0.016, 0.03);
-}
-
-function baseField(m, x, y, z) {
-  const ax = abs(x);
-  const yf = y < 0.1 ? 0.1 + (y - 0.1) / m.fl : y;   // face-length scaling below the brow (canonical y)
-  let d = relief(m, ax, y, z);
-  // mandible: front-view jaw outline and side-view jawline (only on the face side of the head)
-  if (!m.off.has('jaw') && y < 0.09) {
-    const capF = polySD(m.jawFP, ax, yf);
-    const capS = polySD(m.jawSP, z, yf);
-    let cap = smax(capF, capS, m.jawRound);
-    const th = atan2(ax, z - RZA);
-    cap = min(cap, 0.02) - 0.06 * max(smoothstep(1.62, 1.95, th), smoothstep(0.05, 0.085, yf));
-    d = smax(d, cap, m.jawRound);
-  }
-  // neck: hard union at the back (same surface), smooth under the jaw
-  d = smin(d, neck(m, x, y, z), 0.016);
-  // chin (mental protuberance)
-  if (z > 0.03 && y < 0.02) d = smin(d, ell(x, yf - (m.mentY + 0.016), z - (m.mentZ + 0.002), m.chinHW * 0.95, 0.014, 0.0185), 0.01);
-  return d;
-}
-
-function headField(m, x, y, z) {
-  const ax = abs(x);
-  const yf = y < 0.1 ? 0.1 + (y - 0.1) / m.fl : y;
-  let d = baseField(m, x, y, z);
-  const off = m.off;
-  if (!off.has('eyes') && z > 0.025 && ax < 0.07 && y > 0.045 && y < 0.13) d = eyes(m, d, x, ax, y, z);
-  if (!off.has('nose') && z > 0.06 && ax < 0.04 && yf > 0.015 && yf < 0.11) d = nose(m, d, x, yf, z);
-  if (!off.has('mouth') && z > 0.03 && ax < 0.055 && yf > -0.035 && yf < 0.045) d = mouth(m, d, x, ax, y, yf, z);
-  if (!off.has('ear') && ax > 0.045 && y > 0.015 && y < 0.125 && z < 0.035 && z > -0.065) d = ear(m, d, ax, y, z);
-
-  d = smax(d, -0.095 / m.S - y, 0.004);  // neck cut
-  return d;
-}
-
-// ---------------------------------------------------------------------------------------------
-function eyes(m, d, x, ax, y, z) {
-  const ey = m.eyeY + (x > 0 ? m.eyeDy : -m.eyeDy);
-  const lx = ax - m.eyeX, ly = y - ey, lz = z - m.eyeZ;
-  const R = m.eyeR, T = m.lidT;
-  const r = sqrt(lx * lx + ly * ly + lz * lz);
-  if (r > 0.034) return d;
-  const h = sqrt(lx * lx + lz * lz);
-  const az = atan2(lx, lz), el = atan2(ly, h);
-  // lid relief replaces the face surface around the eye (identical to it outside the socket)
-  // the eye region (lids sinking into the socket) replaces the face surface; identical to it outside the socket
-  const wA = smoothstep(EAZ - 0.05, EAZ - 0.3, abs(az)) * smoothstep(EEL - 0.05, EEL - 0.3, abs(el)) * smoothstep(0.025, 0.02, r) * smoothstep(R - 0.006, R - 0.003, r);
-  if (wA > 0) d = mix(d, eyeRelief(m, r, az, el), wA);
-  // palpebral fissure: almond prism along z, opened down into the eyeball (medial notch to a floor)
-  const L = lidAt(m, lx);
-  let w = max(ly - L.up, L.lo - ly, m.cMx - lx, lx - m.cLx);
-  w = max(w, (R - 0.0025) - r, -0.0022 - lz, r - (R + T + 0.0045));
-  d = smax(d, -w, 0.0007);
-  // caruncle in the medial canthus
-  d = smin(d, ell(lx - (m.cMx + 0.0022), ly - (m.cMy + 0.0001), lz - 0.0011, 0.0019, 0.0022, 0.0028), 0.0012);
-  return d;
-}
-
-// ---------------------------------------------------------------------------------------------
-// Nose: heightfield relief over the face (ridge profile Zr(y), ridge rounding rr(y), side-wall slope sl(y))
-// plus alae volumes, alar creases and nostril cavities. All in canonical mm inside, metres outside.
-const NY0 = 20, NDY = 0.25, NN = 361; // tables over y = 20..110 mm
-function buildNose(m) {
-  const nl = m.noseLen, np = m.noseProj, fem = m.fem;
-  const nas = 95;
-  const zb = (y) => mix(89.5, 100.5, clamp((nas - y) / (nas - 32.8), 0, 1)); // nose base line (face plane under the nose)
-  const scoop = 0.9 * fem + 0.4 * m.child - 0.6 * max(0, m.nose);
-  const prof = [[104, 80], [99, 87.5], [96, 90.2], [92, 91.6], [86, 94.2], [80, 97.9], [72, 102.8], [64, 107.6], [57, 111.8], [52, 114.8], [48.5, 117.3], [46, 118.8],
-    [43.6, 118.9], [41, 117.7], [38.6, 115.3], [36.6, 112.3], [35, 108.6], [33.8, 104.7], [32.8, 101], [31.6, 96], [30, 89], [26, 84]];
-  const P = prof.map(([y, z]) => {
-    const t = clamp((nas - y) / (nas - 32.8), 0, 1.2);
-    const y2 = y > nas ? y : nas - (nas - y) * nl;
-    let z2 = zb(y) + (z - zb(y)) * mix(1, np, smoothstep(0.1, 0.8, t)) * mix(1, m.bridge, 0.35 * (1 - t));
-    z2 -= scoop * gauss(t - 0.45, 0.22);                                     // scooped (concave) dorsum
-    z2 += 0.5 * m.old * gauss(t - 0.42, 0.15) + 0.6 * max(0, m.nose) * gauss(t - 0.4, 0.15); // dorsal hump
-    const up = 1.0 * fem * gauss(t - 0.98, 0.1);                            // slight tip rotation (upturn)
-    return [y2 + up, z2];
+    return [y, A[0][3] / A[0][0], A[1][3] / A[1][1], A[2][3] / A[2][2]];
   });
-  const Zr = spline(P);
-  const nw = m.noseW;
-  const RR = spline([[104, 6], [96, 3.6], [86, 2.6], [72, 2.5], [60, 3.0], [52, 4.0], [47, 5.3 * mix(1, nw, 0.6)], [42, 5.4 * mix(1, nw, 0.6)], [37, 3.6], [33, 2.6], [26, 3]]);
-  const SL = spline([[104, 0.8], [96, 1.15], [86, 1.45], [72, 1.6], [60, 1.6], [52, 1.75], [46, 1.95 / mix(1, nw, 0.5)], [40, 2.05 / mix(1, nw, 0.5)], [35, 2.3], [26, 2.5]]);
-  m.nZ = new Float64Array(NN); m.nR = new Float64Array(NN); m.nS = new Float64Array(NN);
-  for (let i = 0; i < NN; i++) { const y = NY0 + i * NDY; const yy = nas - (nas - y) / nl; m.nZ[i] = Zr(y); m.nR[i] = RR(yy); m.nS[i] = SL(yy); }
-  // feature anchors (mm)
-  const yAt = (y) => nas - (nas - y) * nl, zAt = (y, z) => zb(y) + (z - zb(y)) * mix(1, np, 0.8);
-  m.nAla = [11.6 * nw, yAt(39.6), zAt(39.6, 96.0)];
-  m.nNos = [6.0 * mix(1, nw, 0.7), yAt(36.8), zAt(36.8, 103.6)];
-  m.nTip = [yAt(45), Zr(yAt(45))];
-}
-function ntab(t, Y) { let f = (Y - NY0) / NDY; if (f < 0) f = 0; else if (f > NN - 1.001) f = NN - 1.001; const i = f | 0, u = f - i; return t[i] + (t[i + 1] - t[i]) * u; }
-function ntabD(t, Y) { let f = (Y - NY0) / NDY; if (f < 0) f = 0; else if (f > NN - 1.001) f = NN - 1.001; const i = f | 0; return (t[i + 1] - t[i]) / NDY; }
-export function noseFrame(m) {
-  return { tipY: m.nTip[0] / 1000, tipZ: m.nTip[1] / 1000, baseY: (m.nNos[1] - 3.6) / 1000, alaX: m.nAla[0] / 1000 };
-}
-function nose(m, d, x, y, z) {
-  const X = abs(x - m.noseDev * smoothstep(0.1, 0.05, y)) * 1000, Y = y * 1000, Z = z * 1000;
-  // dorsum / lobule heightfield
-  const zr = ntab(m.nZ, Y), rr = ntab(m.nR, Y), sl = ntab(m.nS, Y);
-  const q = sqrt(X * X + rr * rr);
-  let zn = zr - sl * (q - rr);
-  let gx = -sl * X / q, gy = ntabD(m.nZ, Y) - ntabD(m.nS, Y) * (q - rr) - sl * (rr / q - 1) * ntabD(m.nR, Y);
-  // alae: elliptic wing bulges beside the lobule, merged with a smooth max of heights (alar groove)
-  const [xa, ya, za] = m.nAla;
-  const ey = (Y - ya) / 6.9, ex = (X - xa) / 5.0;
-  const e2 = 1 - ex * ex - ey * ey;
-  if (e2 > -0.6) {
-    const H = 6.4 + 0.6 * m.mal;
-    const sq = e2 > 0 ? sqrt(e2) : 0;
-    const zal = za - 3 + H * (e2 > 0 ? sq : e2 * 0.6);
-    const kq = 1.4;
-    const hd = kq - abs(zn - zal);
-    if (zal > zn - kq) {
-      const ga = e2 > 0 ? -H * ex / (5.0 * sq + 1e-3) : -H * 0.6 * 2 * ex / 5.0, gya = e2 > 0 ? -H * ey / (6.9 * sq + 1e-3) : -H * 0.6 * 2 * ey / 6.9;
-      if (hd > 0) { const t = hd / kq, w = zal > zn ? 0.5 + 0.5 * t : 0.5 - 0.5 * t; zn = max(zn, zal) + t * t * kq * 0.25; gx = mix(gx, ga, w); gy = mix(gy, gya, w); }
-      else { zn = zal; gx = ga; gy = gya; }
+  const ca = lut(spline(coefs.map(c => [c[0], c[1]])), Y0, Y1, 600);
+  const cb = lut(spline(coefs.map(c => [c[0], c[2]])), Y0, Y1, 600);
+  const cc = lut(spline(coefs.map(c => [c[0], c[3]])), Y0, Y1, 600);
+  // side planes of the face block (half width by height)
+  const sideW = lut(spline([
+    [m.crownY + 0.01, 0.0], [m.hairY + 0.035, m.headW - 0.03], [m.hairY + 0.015, m.headW - 0.014], [m.browY, m.headW - 0.006], [yE, m.zygX - 0.002], [yE - 0.025, m.zygX],
+    [yN - 0.01, m.zygX - 0.006], [yM, mix(m.zygX - 0.006, m.gonX + 0.005, 0.6)], [yM - 0.02, m.gonX + 0.002], [yC, m.gonX - 0.004],
+  ]), Y0, Y1, 400);
+
+  function faceFront(ax, y) {
+    const x2 = ax * ax, x4 = x2 * x2;
+    return lget(P, y) - (lget(ca, y) * x2 + lget(cb, y) * x4 + lget(cc, y) * x4 * x2);
+  }
+
+  // submandibular plane through the menton and the gonion: y = yb(z)
+  const mentZ = m.chinZ - 0.014;
+  const slopeB = (m.gonY - (yC + 0.001)) / (m.gonZ - mentZ);
+
+  // ---- cranium: superellipsoid ----
+  const cr = { cx: 0, cy: 0.099 + 0.002 * m.forehead, cz: -0.0115, rx: m.headW + 0.001, ry: m.crownY - 0.099, rz: 0.0955 - 0.002 * fem };
+  function cranium(x, y, z) {
+    const dy = y - cr.cy, dz = z - cr.cz;
+    // flatter sides, fuller back-top (parietal), slightly narrower forehead
+    const back = clamp(-dz / cr.rz, 0, 1);
+    const rx = cr.rx * (1 - 0.06 * clamp(dz / cr.rz, 0, 1) - 0.1 * clamp(-dy / cr.ry, 0, 1) * (1 - back * 0.6));
+    const rz = cr.rz * (1 + 0.035 * clamp(-dy / cr.ry + 0.2, 0, 1) * back);
+    return ell(x, dy, dz, rx, cr.ry, rz);
+  }
+
+  // ---- neck ----
+  const nk = { y0: 0.035, y1: -0.115, z0: -0.016, z1: -0.004, rx: m.neckR * 1.04, rz: m.neckR * 0.93 };
+  function neck(x, y, z) {
+    const t = clamp((nk.y0 - y) / (nk.y0 - nk.y1), 0, 1);
+    const zc = mix(nk.z0, nk.z1, t);
+    const flare = 1 + 0.12 * smoothstep(0.55, 1, t) + 0.05 * smoothstep(0.35, 0, t);
+    const ex = x / (nk.rx * flare), ez = (z - zc) / (nk.rz * flare);
+    const rr = sqrt(ex * ex + ez * ez);
+    const dr = (rr - 1) * nk.rz * flare;
+    const dcap = max(y - (nk.y0 + 0.02), (nk.y1 - 0.01) - y);
+    return max(dr, dcap);
+  }
+
+  // ---- face block ----
+  function faceBlock(x, y, z) {
+    const ax = abs(x);
+    const F = faceFront(ax, y);
+    // gradient of F for distance normalisation
+    const e = 0.0004;
+    const Fx = (faceFront(ax + e, y) - F) / e, Fy = (faceFront(ax, y + e) - faceFront(ax, y - e)) / (2 * e);
+    const dFront = (z - F) / sqrt(1 + Fx * Fx + Fy * Fy);
+    const W = lget(sideW, y);
+    const dSide = ax - W + 0.12 * min(0, z - 0.02); // sides open slightly toward the back
+    const yb = yC + 0.001 + slopeB * (z - mentZ);
+    const dBot = (yb - y) / sqrt(1 + slopeB * slopeB);
+    const dBack = -0.03 - z;
+    let d = smax(dFront, dSide, 0.02);
+    d = smax(d, dBot, m.jawRound * 1.6);
+    d = smax(d, dBack, 0.02);
+    // above the eyes the face block is clipped to a slightly expanded cranium (rounded forehead/top)
+    if (y > yE - 0.035) {
+      const clip = ell(x, y - cr.cy, z - (cr.cz + 0.012), cr.rx - 0.002, cr.ry + 0.001, cr.rz + 0.013) - 0.06 * smoothstep(yE + 0.012, yE - 0.035, y);
+      d = smax(d, clip, 0.016);
     }
+    return d;
   }
-  let dn = (Z - zn) / sqrt(1 + gx * gx + gy * gy);
-  // nostrils carved from below, long axis toward the tip
-  {
-    const [nx0, ny0, nz0] = m.nNos;
-    const lx0 = X - nx0, lz0 = Z - nz0, ly = Y - ny0;
-    const cr = cos(0.5), sr = sin(0.5);
-    const lx = cr * lx0 - sr * lz0, lz = sr * lx0 + cr * lz0;
-    const c = cos(0.3), sn = sin(0.3);
-    const ry = c * ly - sn * lz, rz = sn * ly + c * lz;
-    dn = smax(dn, -ell(lx, ry, rz, 2.2 * mix(1, m.noseW, 0.5), 3.6, 4.6), 0.5);
+
+  // ---- eye region ----
+  const fis = m.fis;
+  const lidCache = { up: null, lo: null };
+  // lid margin elevations as functions of azimuth (precomputed tables)
+  const NA = 256;
+  const upT = new Float64Array(NA + 1), loT = new Float64Array(NA + 1);
+  for (let i = 0; i <= NA; i++) {
+    const tt = i / NA;
+    const base = mix(fis.bm, fis.bl, tt);
+    upT[i] = base + (fis.up - base * 0) * bump01(tt, fis.upPeak, 0.85) * 1;
+    loT[i] = base - fis.lo * bump01(tt, fis.loPeak, 0.9);
   }
-  const k = mix(1.4, 2.8, smoothstep(44, 52, Y));
-  return smin(d, dn / 1000, k / 1000);
+  lidCache.up = upT; lidCache.lo = loT;
+  function lidAt(alpha) { // returns [up, lo, t] elevation of the margins at azimuth alpha (lateral +)
+    const tt = (alpha - fis.am) / (fis.al - fis.am);
+    const f = clamp(tt, 0, 1) * NA, i = min(NA - 1, f | 0), u = f - i;
+    return [upT[i] + (upT[i + 1] - upT[i]) * u, loT[i] + (loT[i + 1] - loT[i]) * u, tt];
+  }
+  m.lidAt = lidAt;
+
+  function eyeLocal(x, y, z, side) { // side +1 left, -1 right
+    const ex = side * x - E.x, ey = y - (E.y + side * m.asym.eyeDy), ez = z - E.z;
+    const h = sqrt(ex * ex + ez * ez);
+    return { ex, ey, ez, r: sqrt(ex * ex + ey * ey + ez * ez), al: atan2(ex, ez), be: atan2(ey, h) };
+  }
+
+  // ---- eye region relief ----
+  // Around each eyeball the skin is described as a radial surface R(alpha, beta) about the eyeball
+  // centre: lid margins (thickness lidT) on the fissure curves, tarsal platform, crease and upper
+  // sulcus, lower-lid pretarsal roll and lid-cheek junction, canthal corners. Away from the lids it
+  // relaxes onto the base face (sampled by marching rays through the base field), so it blends
+  // seamlessly into brow, nose side and cheek. The fissure is then cut with radial walls.
+  const EA0 = -1.75, EA1 = 2.05, EB0 = -1.35, EB1 = 1.4, ENA = 48, ENB = 40;
+  const eyeGrid = { 1: null, '-1': null };
+  function buildEyeGrid(side, base) {
+    const R = new Float32Array((ENA + 1) * (ENB + 1)), Wt = new Float32Array(R.length);
+    const cy = E.y + side * m.asym.eyeDy;
+    const fold = m.lidFoldAmt, deep = clamp(m.eyeDepth + 0.4 * m.brow * mal, -1, 1.5);
+    const rL = Re + m.lidT;
+    const crease = (0.44 + 0.06 * deep - 0.1 * max(0, fold) + 0.03 * child) * (1 - 0.1 * old);
+    const creaseD = (0.00075 + 0.0005 * max(0, deep) + 0.0002 * young) * clamp(1 - fold, 0, 1.3);
+    const sulc = (0.0007 + 0.0012 * max(0, deep) + 0.0006 * old) * clamp(1 - 0.8 * max(0, fold), 0, 1);
+    const hood = 0.0011 * max(0, fold) + 0.0005 * old;
+    for (let j = 0; j <= ENB; j++) {
+      const be = EB0 + (EB1 - EB0) * j / ENB;
+      for (let i = 0; i <= ENA; i++) {
+        const al = EA0 + (EA1 - EA0) * i / ENA;
+        const k = j * (ENA + 1) + i;
+        // direction (left-eye local; mirrored by side)
+        const dx = sin(al) * cos(be), dy = sin(be), dz = cos(al) * cos(be);
+        // march from inside the head outward to the base surface
+        let r = 0.0065, f = base(side * (E.x + dx * r), cy + dy * r, E.z + dz * r), prev = r, pf = f;
+        let hit = 0.05;
+        if (f >= 0) hit = r;
+        else {
+          for (let it = 0; it < 40 && r < 0.05; it++) {
+            prev = r; pf = f;
+            r += max(-f * 0.9, 0.0006);
+            f = base(side * (E.x + dx * r), cy + dy * r, E.z + dz * r);
+            if (f >= 0) {
+              let a = prev, b = r;
+              for (let q = 0; q < 5; q++) { const c = (a + b) * 0.5; if (base(side * (E.x + dx * c), cy + dy * c, E.z + dz * c) >= 0) b = c; else a = c; }
+              hit = (a + b) * 0.5; break;
+            }
+          }
+        }
+        void pf;
+        const Rf = hit;
+        // lid design: upper and lower branches blended smoothly across the fissure line
+        const L = lidAt(al);
+        const dA = al < fis.am ? fis.am - al : al > fis.al ? al - fis.al : 0;
+        const dU = be - L[0], dL = L[1] - be;
+        const inMed = smoothstep(fis.am - 0.05, fis.am + 0.25, al); // no sulcus medial of the canthus
+        let Ru, Rd;
+        {
+          const u = max(0, dU);
+          let rr = rL + 0.0005 * smoothstep(0, 0.3, u) - creaseD * inMed * exp(-(((u - crease) / 0.055) ** 2));
+          const sb = smoothstep(crease, crease + 0.5, u);
+          const bowl = sulc * inMed * bump01(clamp((u - crease) / 0.55, 0, 1), 0.35);
+          rr = mix(rr, max(Rf, rr), sb) - bowl * (1 - sb * 0.6);
+          rr += hood * smoothstep(crease - 0.25, crease + 0.05, u) * (1 - smoothstep(crease + 0.2, crease + 0.6, u));
+          Ru = rr;
+        }
+        {
+          const u = max(0, dL);
+          let rr = rL + 0.0008 * bump01(clamp(u / 0.32, 0, 1), 0.4) + 0.0004 * smoothstep(0.0, 0.25, u);
+          const sb = smoothstep(0.18, 0.7, u);
+          rr = mix(rr, max(Rf, rr - 0.0008), sb);
+          rr -= (0.0003 + 0.0009 * old) * exp(-(((u - 0.6) / 0.12) ** 2)) * inMed; // lid-cheek junction / tear trough
+          Rd = rr;
+        }
+        let Rl = mix(Rd, Ru, smoothstep(-0.1, 0.1, dU - dL));
+        // canthal corners: lids merge, then relax onto the base face
+        if (dA > 0) Rl = mix(Rl, max(Rf, Rl), smoothstep(0.0, 0.16, dA));
+        // overall blend weight: 1 near the lids, 0 at the grid edge
+        const ea = min((al - EA0) / 0.3, (EA1 - al) / 0.3), eb = min((be - EB0) / 0.3, (EB1 - be) / 0.3);
+        const w = smoothstep(0, 1, min(ea, eb));
+        // far from the fissure follow the base face
+        const far = smoothstep(0.75, 1.1, max(dU, dL, dA * 1.4));
+        R[k] = mix(Rl, Rf, far);
+        Wt[k] = w;
+      }
+    }
+    // gradient factor of the radial field: 1/sqrt(1 + |grad_angle R|^2 / R^2)
+    const Gn = new Float32Array(R.length);
+    const da = (EA1 - EA0) / ENA, db = (EB1 - EB0) / ENB;
+    for (let j = 0; j <= ENB; j++) for (let i = 0; i <= ENA; i++) {
+      const k = j * (ENA + 1) + i;
+      const i0 = max(0, i - 1), i1 = min(ENA, i + 1), j0 = max(0, j - 1), j1 = min(ENB, j + 1);
+      const be = EB0 + db * j;
+      const gA = (R[j * (ENA + 1) + i1] - R[j * (ENA + 1) + i0]) / ((i1 - i0) * da * max(0.2, cos(be)));
+      const gB = (R[j1 * (ENA + 1) + i] - R[j0 * (ENA + 1) + i]) / ((j1 - j0) * db);
+      const rr = max(R[k], 0.008);
+      Gn[k] = 1 / sqrt(1 + (gA * gA + gB * gB) / (rr * rr));
+    }
+    return { R, Wt: Gn };
+  }
+  function eyeSample(G, al, be) {
+    let fi = (al - EA0) / (EA1 - EA0) * ENA, fj = (be - EB0) / (EB1 - EB0) * ENB;
+    if (fi < 0 || fj < 0 || fi > ENA || fj > ENB) return null;
+    fi = min(fi, ENA - 0.0001); fj = min(fj, ENB - 0.0001);
+    const i = fi | 0, j = fj | 0, a = fi - i, b = fj - j, k = j * (ENA + 1) + i;
+    const R = G.R, W = G.Wt;
+    return [
+      (R[k] * (1 - a) + R[k + 1] * a) * (1 - b) + (R[k + ENA + 1] * (1 - a) + R[k + ENA + 2] * a) * b,
+      (W[k] * (1 - a) + W[k + 1] * a) * (1 - b) + (W[k + ENA + 1] * (1 - a) + W[k + ENA + 2] * a) * b,
+    ];
+  }
+  function eyeSide(d, x, y, z, side) {
+    const ex = side * x - E.x, ey = y - (E.y + side * m.asym.eyeDy), ez = z - E.z;
+    const r2 = ex * ex + ey * ey + ez * ez;
+    if (r2 > 0.05 * 0.05 || r2 < 1e-10) return d;
+    const r = sqrt(r2);
+    const al = atan2(ex, ez), be = atan2(ey, sqrt(ex * ex + ez * ez));
+    const G = eyeGrid[side];
+    const sm = G ? eyeSample(G, al, be) : null;
+    if (sm) {
+      // replace the base by the eye relief inside the region W (asymmetric ellipsoid around the eye)
+      const dW = ell(ex - 0.0035, ey - 0.0015, ez - 0.0035, 0.0225, 0.0205, 0.024);
+      const dE = (r - sm[0]) * sm[1];
+      d = smin(smax(d, -dW, 0.0015), smax(dE, dW, 0.0015), 0.0015);
+    }
+    // palpebral fissure: radial window between the lid margins (= lid margin walls)
+    const L = lidAt(al);
+    const tt = L[2];
+    let w2;
+    if (tt <= 0 || tt >= 1) w2 = max(fis.am - al, al - fis.al) * r;
+    else w2 = max(be - L[0], L[1] - be) * r;
+    const wc = max(fis.am - al, al - fis.al) * r;
+    w2 = smax(w2, wc, 0.0012);
+    const carve = max(w2, max((Re - 0.0006) - r, r - (Re + 0.012)));
+    d = smax(d, -carve, 0.0005);
+    // caruncle at the medial corner
+    const car = ell(ex + 0.0112, ey + 0.0003, ez - 0.0048, 0.0022, 0.0017, 0.0018);
+    d = smin(d, car, 0.0006);
+    return d;
+  }
+
+  // ---- nose ----
+  const nose = m.nose_;
+  const sell = { y: m.sellY, z: m.sellZ };
+  const supra = { y: m.tipY + 0.0085, z: m.tipZ - 0.0052 };
+  const dorsDy = supra.y - sell.y, dorsDz = supra.z - sell.z;
+  const dorsL = hypot(dorsDy, dorsDz);
+  const dny = dorsDy / dorsL, dnz = dorsDz / dorsL; // along the dorsum (downward-forward)
+  function noseMass(d, x, y, z) {
+    if (y > sell.y + 0.03 || y < m.noseBaseY - 0.012 || z < m.sellZ - 0.03 || abs(x) > 0.035) return d;
+    const xd = x - m.asym.noseDx * smoothstep(sell.y, m.tipY, y);
+    const ax = abs(xd);
+    // dorsum wedge: ridge line from sellion to supratip, with a gentle hump
+    const ty = y - sell.y, tz = z - sell.z;
+    const along = ty * dny + tz * dnz; // distance along the dorsum from sellion
+    const u = clamp(along / dorsL, -0.3, 1.2);
+    const hump = nose.hump * bump01(clamp(u, 0, 1), 0.42) - 0.0004 * nose.tipUp * bump01(clamp(u, 0, 1), 0.8);
+    // perpendicular (in the y-z plane) height above the ridge line (positive = outside)
+    const perp = ty * dnz - tz * dny - hump; // outward normal of the dorsum line = (dnz, -dny)
+    // half-width of the ridge grows down the nose; sidewall slope
+    const bw = mix(nose.bridgeW * 0.62, nose.bridgeW, smoothstep(0, 0.6, u)) + 0.0025 * smoothstep(0.75, 1.1, u);
+    // rounded-V cross-section: parabolic ridge of radius ~bw, sidewalls of slope sw (steeper toward the tip)
+    const sw = mix(1.15, 2.1, smoothstep(0.05, 0.8, u));
+    const rr = bw * 0.9;
+    const wedge = (perp + (sqrt(ax * ax + rr * rr) - rr) * sw) / sqrt(1 + sw * sw);
+    // bound the wedge to a capsule around the dorsum line (closed volume; the face union hides the back)
+    const bound = rcap(xd, y, z, 0, sell.y + 0.006, sell.z - 0.011, 0.012, 0, m.noseBaseY + 0.004, supra.z - 0.016, 0.017);
+    let nd = smax(wedge, bound, 0.004);
+    nd = smax(nd, (m.noseBaseY + 0.004) - y, 0.006);
+    // tip lobule: central mass + paired domes
+    const tipDx = m.asym.tipDx;
+    const tw = nose.tipW;
+    const tipY = m.tipY + 0.0012 * nose.tipUp;
+    const lob = ell(xd - tipDx, y - (tipY + 0.0012), z - (m.tipZ - 0.0075), tw, 0.0078, 0.0076);
+    const domeL = ell(xd - tipDx - 0.0036, y - (tipY + 0.0006), z - (m.tipZ - 0.0042), 0.0044, 0.0046, 0.0042);
+    const domeR = ell(xd - tipDx + 0.0036, y - (tipY + 0.0006), z - (m.tipZ - 0.0042), 0.0044, 0.0046, 0.0042);
+    let tip = smin(lob, smin(domeL, domeR, 0.002), 0.0025);
+    // columella
+    const col = rcap(xd, y, z, 0, m.noseBaseY + 0.0012, m.subZ - 0.0005, 0.0028, tipDx * 0.5, tipY - 0.0035, m.tipZ - 0.0062, 0.0034);
+    tip = smin(tip, col, 0.003);
+    nd = smin(nd, tip, 0.0065);
+    // alae (wings)
+    for (const sd of [1, -1]) {
+      const cx = sd * (m.alarHW - 0.0058), cy = m.noseBaseY + 0.0068, cz = m.subZ - 0.0035;
+      const lx = xd - cx, ly = y - cy, lz = z - cz;
+      // rotate about y so the wing points forward-medially toward the tip
+      const ang = sd * 0.42, ca = cos(ang), sa = sin(ang);
+      const rx = lx * ca - lz * sa, rz = lx * sa + lz * ca;
+      const ala = ell(rx, ly + 0.0008 * (rz / 0.009), rz, 0.0058, 0.0056, 0.0102);
+      nd = smin(nd, ala, 0.0032);
+    }
+    d = smin(d, nd, 0.0035);
+    return d;
+  }
+  function nostrilVol(x, y, z) {
+    if (y > m.noseBaseY + 0.02 || y < m.noseBaseY - 0.01 || abs(x) > 0.025 || z < m.subZ - 0.01) return 1;
+    const xd = x - m.asym.noseDx - m.asym.tipDx * 0.6;
+    let dn = 1;
+    for (const sd of [1, -1]) {
+      const cx = sd * (0.0062 + 0.0012 * m.noseW), cy = m.noseBaseY + 0.0034, cz = m.subZ + 0.0058;
+      const lx = xd - cx, ly = y - cy, lz = z - cz;
+      const ang = -sd * 0.42, ca = cos(ang), sa = sin(ang);
+      const rx = lx * ca - lz * sa, rz = lx * sa + lz * ca;
+      dn = min(dn, ell(rx, ly, rz, 0.0029 + 0.0004 * m.noseW, 0.0034, 0.0058));
+    }
+    return dn;
+  }
+  function nostrils(d, x, y, z) {
+    const dn = nostrilVol(x, y, z);
+    return dn > 0.01 ? d : smax(d, -dn, 0.0009);
+  }
+
+  // ---- mouth: lips as arc-aligned ellipsoids, slit + cavity carve ----
+  const mw = m.mouthHW;
+  const arcC = 16 + 4 * child; // curvature of the lip arc (z = lipZ - arcC x^2)
+  function lipFrame(x, y, z) {
+    const s = x;
+    const v = y - (yM + m.asym.mouthDy * (x / mw) + 0.0012 * (x / mw) * (x / mw) * 0);
+    const w = z - (m.lipZ - arcC * x * x);
+    return [s, v, w];
+  }
+  function bowTop(s) { // height of the upper vermilion border above the stomion
+    const a = abs(s) / mw;
+    const peak = 0.21; // Cupid's bow peaks at ~21% of the half width
+    const hb = m.upperH;
+    const g = a < peak ? mix(0.86, 1.0, smoothstep(0, peak, a)) : mix(1.0, 0.0, pow(smoothstep(peak, 1.04, a), 0.85));
+    return hb * g;
+  }
+  function lips(d, x, y, z) {
+    if (abs(x) > mw + 0.012 || y > yM + 0.03 || y < yM - 0.03 || z < m.lipZ - 0.04) return d;
+    const [s, v, w] = lipFrame(x, y, z);
+    const a = abs(s) / mw;
+    // upper lip
+    const hu = m.upperH;
+    const up = ell(s, v - hu * 0.36, w + 0.0042, mw * 1.02, hu * 0.78, 0.0062);
+    const capU = v - bowTop(s);
+    const upper = smax(up, capU, 0.0012);
+    // philtral columns
+    const pc = 0.0052 * (1 + 0.1 * m.philtrum);
+    const colL = rcap(x, y, z, pc * 0.92, yM + hu * 0.96, m.lipZ - arcC * pc * pc - 0.0012, 0.0011, pc * 0.55, m.noseBaseY - 0.0005, m.subZ - 0.002, 0.0015);
+    const colR = rcap(x, y, z, -pc * 0.92, yM + hu * 0.96, m.lipZ - arcC * pc * pc - 0.0012, 0.0011, -pc * 0.55, m.noseBaseY - 0.0005, m.subZ - 0.002, 0.0015);
+    // lower lip
+    const hl = m.lowerH;
+    const lo = ell(s, v + hl * 0.44, w + 0.0050 + 0.001 * a, mw * 0.93, hl * 0.62, 0.0066);
+    d = smin(d, smin(colL, colR, 0.001), 0.0022);
+    d = smin(d, upper, 0.0016);
+    d = smin(d, lo, 0.0024);
+    return d;
+  }
+  function mouthCarve(d, x, y, z) {
+    if (abs(x) > mw + 0.01 || y > yM + 0.025 || y < yM - 0.025 || z < 0.03) return d;
+    return smax(d, -mouthVol(x, y, z), 0.0006);
+  }
+  function mouthVol(x, y, z) {
+    if (abs(x) > mw + 0.01 || y > yM + 0.025 || y < yM - 0.025 || z < 0.03) return 1;
+    const [s, v, w] = lipFrame(x, y, z);
+    const a = abs(s) / mw;
+    // slit: thin sheet from the lip front to the cavity, tapering to nothing at the corners
+    const half = 0.00075 * clamp((1.0 - a) / 0.12, 0, 1);
+    const sheet = max(abs(v + 0.0002) - half, max(a - 1.0, 0) * mw);
+    const sheetD = max(sheet, -0.016 - w);
+    // cavity behind the teeth line
+    const cav = ell(x, y - (yM - 0.0015), z - (m.lipZ - 0.032), mw * 1.05, 0.0115, 0.0235);
+    return smin(sheetD, cav, 0.003);
+  }
+
+  // ---- ears: relief plate in ear-local coordinates (precomputed 2D grids) ----
+  const ear = buildEar(m);
+
+  // ---- assemble ----
+  const asym = m.asym;
+  const bw = m.brow_;
+  function sdfBase(x, y, z) {
+    // base volumes
+    let d = cranium(x, y, z);
+    const fb = faceBlock(x, y, z);
+    d = smin(d, fb, 0.016);
+    const nkD = neck(x, y, z);
+    // nape smoother at the back, crisper jaw-neck angle in front
+    const kneck = mix(0.006 + 0.008 * fem + 0.01 * old + 0.006 * child, 0.03, smoothstep(0.01, -0.05, z));
+    d = smin(d, nkD, kneck);
+    const ax = abs(x);
+    // neck muscles (sternocleidomastoid) and thyroid cartilage
+    if (y < 0.05 && z > -0.07) {
+      for (const sd of [1, -1]) {
+        const scm = rcap(x, y, z, sd * 0.05, 0.03, -0.042, 0.0085, sd * 0.014, -0.12, 0.03, 0.0085);
+        d = smin(d, scm, 0.014);
+      }
+      if (mal > 0.3 && y < -0.03) {
+        const th = ell(x, y + 0.058 - 0.004 * child, z - (0.039 + 0.0005), 0.0065, 0.0095, 0.0055);
+        d = smin(d, th, 0.012 * mal + 0.004);
+      }
+    }
+    if (z > -0.04) {
+      // forehead / brow ridge and glabella
+      if (y > yE && y < m.browY + 0.03) {
+        for (const sd of [1, -1]) {
+          const ly = y - (m.browY - 0.002 + sd * asym.browDy);
+          const lx = sd * x - 0.025;
+          const br = ell(lx, ly + 0.07 * lx * (lx > 0 ? 1 : 0.3), z - (m.glabZ - 0.0105 - 0.18 * lx * lx * 20), bw.w, 0.0072, 0.0095 + bw.amt);
+          d = smin(d, br, 0.012);
+        }
+        const gl = ell(x, y - (m.browY - 0.002), z - (m.glabZ - 0.0062 + bw.amt * 0.4), 0.0125, 0.0085, 0.006);
+        d = smin(d, gl, 0.01);
+      }
+      // temporal hollows
+      if (ax > 0.045 && y > yE) {
+        const tmp = ell(ax - (m.headW + 0.004), y - (m.browY + 0.008), z - 0.028, 0.009, 0.024, 0.022);
+        d = smax(d, -tmp, 0.012 + 0.006 * young);
+      }
+      // cheeks: zygoma body, arch, malar fat pad, masseter, nasolabial groove, jowls
+      if (y < yE + 0.02 && y > yC - 0.01) {
+        for (const sd of [1, -1]) {
+          const lx = sd * x;
+          if (lx < -0.01) continue;
+          const zp = m.cheekPro + sd * asym.cheekD;
+          const zy = ell(lx - (m.zygX - 0.019), y - (yE - 0.0215), z - (0.0655 + zp), 0.0165, 0.0105, 0.0128);
+          d = smin(d, zy, 0.012);
+          const arch = rcap(lx, y, z, m.zygX - 0.008, yE - 0.021, 0.046, 0.0042, m.zygX - 0.002, yE - 0.024, -0.003, 0.0046);
+          d = smin(d, arch, 0.01);
+          const cf = m.cheekFull;
+          const sag = 0.004 * old;
+          const fat = ell(lx - 0.033, y - (yN + 0.009 - sag), z - (0.0745 + 0.0025 * cf), 0.0175 + 0.002 * cf, 0.0165, 0.009 + 0.002 * cf);
+          d = smin(d, fat, 0.013);
+          const mas = ell(lx - (m.gonX + 0.0015), y - (yM + 0.004), z - 0.017, 0.0055 + 0.0015 * m.jaw * mal, 0.021, 0.0165);
+          d = smin(d, mas, 0.012);
+          // nasolabial groove from the alar crease to beside the mouth corner
+          const nlA = [m.alarHW + 0.0025, m.noseBaseY + 0.0075, m.subZ - 0.0085];
+          const nlB = [mw + 0.0058, yM - 0.0035, m.lipZ - arcC * mw * mw - 0.0068];
+          const nl = rcap(lx, y, z, nlA[0], nlA[1], nlA[2], 0.0012, nlB[0], nlB[1], nlB[2], 0.0016);
+          d = smax(d, -nl, 0.0042 + 0.003 * old);
+          if (old > 0) {
+            const jow = ell(lx - (mw + 0.017), y - (yC + 0.016 - 0.004 * old), z - 0.061, 0.0105, 0.0105, 0.0085);
+            d = smin(d, jow + 0.004 * (1 - old), 0.01);
+          }
+        }
+      }
+      // mandible bar (jawline + ramus) and chin
+      if (y < yM + 0.04 && y > yC - 0.02) {
+        for (const sd of [1, -1]) {
+          const gx = sd * (m.gonX + sd * asym.jawDx);
+          const a = rcap(x, y, z, sd * m.chinW * 0.7, yC + 0.004, mentZ + 0.002, 0.0038, sd * (m.gonX * 0.82), m.gonY - 0.017, 0.032, 0.0042);
+          const b = rcap(x, y, z, sd * (m.gonX * 0.82), m.gonY - 0.017, 0.032, 0.0042, gx, m.gonY + 0.0, m.gonZ, 0.0048);
+          const c = rcap(x, y, z, gx, m.gonY, m.gonZ, 0.0048, sd * (m.gonX + 0.004), m.gonY + 0.045, m.gonZ - 0.006, 0.0042);
+          const jb = smin(smin(a, b, 0.006), c, 0.006);
+          d = smin(d, jb, m.jawRound);
+        }
+        const ch = ell(x, y - (yC + 0.0145 + 0.002 * m.chinHeight), z - (m.chinZ - 0.0105), m.chinW, 0.0128, 0.0105);
+        d = smin(d, ch, 0.008);
+        if (mal > 0.2) {
+          for (const sd of [1, -1]) {
+            const tb = ell(x - sd * m.chinW * 0.55, y - (yC + 0.0075), z - (m.chinZ - 0.0115), 0.0085, 0.0085, 0.0085);
+            d = smin(d, tb, 0.006 * mal);
+          }
+        }
+        // mentolabial sulcus
+        const ms = rcap(x, y, z, -0.011, yM - 0.0175 - 0.002 * m.lips, m.chinZ + 0.0035, 0.0028, 0.011, yM - 0.0175 - 0.002 * m.lips, m.chinZ + 0.0035, 0.0028);
+        d = smax(d, -ms, 0.006);
+      }
+      // nose and lips
+      d = noseMass(d, x, y, z);
+      d = lips(d, x, y, z);
+      d = nostrils(d, x, y, z);
+      d = mouthCarve(d, x, y, z);
+    }
+    // ears
+    if (ax > 0.05 && y > 0.02 && y < 0.13 && z < 0.03 && z > -0.05) d = ear.union(d, x, y, z);
+    return d;
+  }
+  const DBG = m.dbg || {};
+  function sdf(x, y, z) {
+    let d = sdfBase(x, y, z);
+    if (DBG.noeye) return d;
+    if (z > 0.03 && y > yE - 0.05 && y < yE + 0.05 && abs(x) > 0.001 && abs(x) < 0.085) d = eyeSide(d, x, y, z, x >= 0 ? 1 : -1);
+    return d;
+  }
+  eyeGrid[1] = buildEyeGrid(1, sdfBase);
+  eyeGrid[-1] = buildEyeGrid(-1, sdfBase);
+
+  // dominant tissue at a surface point (for UV charts and region masks)
+  function part(x, y, z) {
+    const ax = abs(x);
+    if (ax > 0.05 && y > 0.02 && y < 0.13 && z < 0.03 && z > -0.05) {
+      if (ear.dist(x, y, z) < 0.0015) return PART.EAR;
+    }
+    if (y < nk.y1 + 0.008) return PART.NECKCAP;
+    // mouth interior: on the slit / cavity carve surface
+    if (mouthVol(x, y, z) < 0.0009) return PART.MOUTH;
+    // nostril interiors
+    if (nostrilVol(x, y, z) < 0.0007) return PART.NOSTRIL;
+    // eyes: inner lid (behind margin) / caruncle
+    if (ax > 0.005 && ax < 0.06 && abs(y - yE) < 0.03) {
+      const side = x >= 0 ? 1 : -1;
+      const L = eyeLocal(x, y, z, side);
+      if (L.r < Re + 0.0004) return PART.LIDINNER;
+      const car = ell(L.ex + 0.0112, L.ey + 0.0003, L.ez - 0.0048, 0.0022, 0.0017, 0.0018);
+      if (car < 0.0005) return PART.CARUNCLE;
+    }
+    // vermilion
+    if (abs(x) < mw + 0.002 && abs(y - yM) < 0.016) {
+      const [s, v, w] = lipFrame(x, y, z);
+      if (w > -0.0095 && v < bowTop(s) - 0.0001 && v > -m.lowerH * 1.02) {
+        const a = abs(s) / mw;
+        if (a < 0.98 && v > -m.lowerH * (1 - 0.6 * a * a) - 0.0004 && v < bowTop(s)) return PART.LIP;
+      }
+    }
+    return PART.SKIN;
+  }
+
+  return { sdf, sdfBase, part, lidAt, eyeLocal, faceFront, lipFrame, bowTop, mouthVol, nostrilVol, ear, E, Re, nk, mentZ };
 }
 
 // ---------------------------------------------------------------------------------------------
-export function lipOutline(m, ax) {
-  const hw = m.mouthHW;
-  const t = clamp(ax / hw, 0, 1.2);
-  const ys = m.mouthY + 0.0008 * t * t;
-  const tt = min(t, 1);
-  const bow = 1 - 0.12 * gauss(tt, 0.09) + 0.05 * gauss(tt - 0.23, 0.1);
-  const up = ys + m.lipUH * bow * pow(max(0, 1 - pow(tt, 2.4)), 0.72);
-  const lo = ys - m.lipLH * pow(max(0, 1 - pow(tt, 2.1)), 0.6);
-  return { ys, up, lo, t };
-}
-
-function mouth(m, d, x, ax, y, yf, z) {
-  const L = lipOutline(m, ax);
-  const hw = m.mouthHW;
-  const fz = smoothstep(0.062, 0.085, z);
-  let disp = 0;
-  if (yf > L.up - 0.002 && yf < 0.034) {
-    const v = clamp((yf - L.up) / (0.031 - L.up), 0, 1);
-    const colX = mix(0.0054, 0.0036, v);
-    const col = gauss(ax - colX, 0.0019) * 0.00055 * (1 - v * 0.5);
-    const groove = -gauss(ax, 0.0026) * 0.00035 * (1 - v * 0.3);
-    disp += (col + groove) * smoothstep(0.0, 0.18, v);
-    disp += 0.0009 * gauss(ax, 0.018) * (1 - v) * (1 - v);
-  }
-  if (L.t < 1.15) {
-    const fall = smoothstep(1.1, 0.8, L.t);
-    if (yf >= L.ys) {
-      const h = (yf - L.ys) / max(L.up - L.ys, 1e-4);
-      let prof;
-      if (h <= 1) prof = 0.3 + 0.7 * pow(sin(PI * 0.5 * min(1, (h + 0.05) / 0.72)), 0.7);
-      else prof = max(0, 1 - (h - 1) * 2.6);
-      const roll = 0.0003 * gauss(h - 1.0, 0.08);
-      disp += (m.lipU * prof + roll) * fall * (1 - 0.3 * L.t * L.t);
-    } else {
-      const h = (L.ys - yf) / max(L.ys - L.lo, 1e-4);
-      let prof;
-      if (h <= 1) prof = 0.35 + 0.65 * pow(sin(PI * min(1, h * 0.68 + 0.12)), 0.55);
-      else prof = max(0, 0.75 - (h - 1) * 2.2);
-      disp += m.lipL * prof * fall * (1 - 0.3 * L.t * L.t);
-      disp -= 0.0002 * gauss(ax, 0.003) * gauss(h - 0.5, 0.35) * fall;
-    }
-  }
-  {
-    const sy = L.lo - 0.0075 - 0.001 * m.chin;
-    disp -= 0.0019 * gauss(yf - sy, 0.0048) * gauss(ax / 0.028, 0.8);
-  }
-  {
-    disp -= 0.0010 * gauss(ax - hw - 0.0004, 0.0024) * gauss(yf - L.ys, 0.0038);
-    disp += 0.0007 * gauss(ax - hw - 0.0062, 0.0048) * gauss(yf - L.ys, 0.0075);
-  }
-  {
-    const t = clamp((0.03 - yf) / 0.04, 0, 1);
-    const fx = mix(0.0185 * m.noseW, hw + 0.0068, pow(t, 0.8)) + 0.0018 * t * t;
-    const depth = (0.0006 + 0.0018 * m.old + 0.0006 * m.wrinkles) * smoothstep(0, 0.12, t) * smoothstep(1.05, 0.7, t);
-    disp -= depth * gauss(ax - fx, 0.0026 + 0.001 * m.old);
-    disp += (0.0008 + 0.0016 * m.old) * smoothstep(0, 0.15, t) * smoothstep(1.0, 0.55, t) * gauss(ax - fx - 0.0065, 0.0055);
-  }
-  d -= disp * fz;
-  if (L.t < 1.05) {
-    const gap = 0.00055 + 0.00028 * (1 - L.t);
-    const sheet = abs(yf - L.ys) - gap;
-    const endC = (L.t - 1) * hw;
-    let w = max(sheet, endC);
-    w = max(w, 0.066 - z);
-    d = smax(d, -w, 0.0007);
-  }
-  {
-    const cav = ell(x, yf - (m.mouthY - 0.001), z - 0.074, hw * 0.9, 0.0052, 0.016);
-    d = smax(d, -cav, 0.002);
-  }
-  return d;
-}
-
+// ear: lateral relief plate (helix, scapha, antihelix + crura, triangular fossa, concha, tragus,
+// antitragus, lobule, canal). Built on a 2D grid in ear coordinates (u up along the ear axis,
+// v forward, w lateral), then placed on each side of the head.
 // ---------------------------------------------------------------------------------------------
-export function earFrame(m, ax, y, z) {
+function buildEar(m) {
   const S = m.earS;
-  const px = ax - m.earX, py = y - m.earY, pz = z - m.earZ;
-  const ct = cos(0.26), st = sin(0.26);
-  const v1 = ct * py + st * pz, u1 = -st * py + ct * pz;
-  const cf = cos(0.30), sf = sin(0.30);
-  const w = cf * px - sf * u1, u = sf * px + cf * u1;
-  return { u: u / S, v: v1 / S, w: w / S, S };
+  const H = 0.0625 * S, Wd = 0.033 * S;
+  const NU = 72, NV = 40;
+  const u0 = -H * 0.55, u1 = H * 0.55, v0 = -Wd * 0.75, v1 = Wd * 0.62;
+  const du = (u1 - u0) / NU, dv = (v1 - v0) / NV;
+  const OUT = new Float32Array((NU + 1) * (NV + 1)), HL = new Float32Array(OUT.length), HM = new Float32Array(OUT.length);
+  // outline: superellipse with a narrower lobe, front edge attached
+  const outline = (u, v) => {
+    const un = u / (H * 0.5);
+    const top = un > 0;
+    const halfW = Wd * 0.5 * (top ? pow(max(0, 1 - pow(abs(un), 2.4)), 0.42) : pow(max(0, 1 - pow(abs(un), 2.0)), 0.5) * mix(1, 0.7, smoothstep(0.3, 1, -un)));
+    const vc = -Wd * 0.08 + (top ? -0.08 * Wd * un : 0.06 * Wd * un);
+    const dvv = abs(v - vc) - halfW;
+    const duu = abs(u) - H * 0.5;
+    return max(dvv, duu * 0.6);
+  };
+  const rimR = 0.0034 * S;
+  for (let j = 0; j <= NU; j++) {
+    for (let i = 0; i <= NV; i++) {
+      const u = u0 + j * du, v = v0 + i * dv;
+      const o = outline(u, v);
+      const k = j * (NV + 1) + i;
+      OUT[k] = o;
+      const un = u / (H * 0.5), vn = (v + Wd * 0.08) / (Wd * 0.5);
+      // distance inside the outline
+      const din = -o;
+      // helix rim: raised roll along the outline (not along the attached front edge in the lower half)
+      const frontEdge = vn > 0.35 && un < 0.45;
+      let h = 0.0028 * S; // plate base height
+      const rim = frontEdge ? 0 : exp(-pow((din - rimR) / (rimR * 0.85), 2)) * 0.0042 * S;
+      // scapha groove inside the rim
+      const scapha = frontEdge ? 0 : exp(-pow((din - rimR * 2.5) / (rimR * 0.9), 2)) * -0.0018 * S;
+      // antihelix: ridge roughly parallel to the back rim, splitting into two crura at the top
+      const ahC = -0.28 + 0.12 * un; // centre line (vn) of the antihelix body
+      const ah = exp(-pow((vn - ahC) / 0.16, 2)) * smoothstep(-0.55, -0.1, un) * smoothstep(0.62, 0.3, un) * 0.0034 * S;
+      const crusU = exp(-pow((vn - (0.05 + 0.6 * (un - 0.3))) / 0.13, 2)) * smoothstep(0.2, 0.4, un) * smoothstep(0.85, 0.6, un) * 0.0026 * S;
+      const crusL = exp(-pow((un - 0.32 - 0.25 * (vn + 0.1)) / 0.09, 2)) * smoothstep(-0.25, 0.1, vn) * smoothstep(0.7, 0.4, vn) * 0.0024 * S;
+      // concha: bowl in the front-centre, lower half
+      const cu = (un + 0.08) / 0.34, cv = (vn - 0.2) / 0.34;
+      const conch = -exp(-pow(cu * cu + cv * cv, 1.4) * 1.2) * 0.0072 * S;
+      // canal: deeper pit at the front of the concha
+      const canal = -exp(-((un + 0.12) ** 2 + (vn - 0.42) ** 2) / 0.012) * 0.006 * S;
+      // tragus: small flap in front of the canal
+      const trag = exp(-(((un + 0.12) / 0.12) ** 2 + ((vn - 0.66) / 0.1) ** 2)) * 0.0048 * S;
+      // antitragus
+      const atr = exp(-(((un + 0.42) / 0.09) ** 2 + ((vn - 0.08) / 0.16) ** 2)) * 0.0036 * S;
+      // lobule: smooth, slightly thicker
+      const lobe = smoothstep(-0.5, -0.8, un) * 0.0012 * S;
+      // crus of helix: rim continues into the concha
+      const crusH = exp(-pow((un - 0.18 + 0.2 * (vn - 0.5)) / 0.06, 2)) * smoothstep(0.1, 0.5, vn) * smoothstep(0.85, 0.6, vn) * 0.0026 * S;
+      h += rim + scapha + ah + crusU + crusL + conch + canal + trag + atr + lobe + crusH;
+      // the lower front of the plate goes into the head (concha floor attaches there)
+      HL[k] = h;
+      HM[k] = -0.0012 * S - 0.003 * S * smoothstep(0.2, 0.8, vn);
+    }
+  }
+  const sample = (A, u, v) => {
+    let fj = (u - u0) / du, fi = (v - v0) / dv;
+    fj = clamp(fj, 0, NU - 0.001); fi = clamp(fi, 0, NV - 0.001);
+    const j = fj | 0, i = fi | 0, a = fj - j, b = fi - i;
+    const k = j * (NV + 1) + i;
+    return (A[k] * (1 - b) + A[k + 1] * b) * (1 - a) + (A[k + NV + 1] * (1 - b) + A[k + NV + 2] * b) * a;
+  };
+  // placement
+  const tilt = 0.27; // top tilts back
+  const cyE = 0.0705 + 0.002 * m.child, czE = -0.0095;
+  const outA = m.earOutA;
+  function local(x, y, z, side) {
+    const lx = side * x, ly = y - (cyE + side * m.asym.earDy), lz = z - czE;
+    // ear axis u: up, tilted back; v: forward; w: lateral, rotated outward about u by outA (back edge away from head)
+    const ct = cos(tilt), st = sin(tilt);
+    const u = ly * ct - lz * st;
+    const v0_ = ly * st + lz * ct;
+    const baseX = m.headW - 0.0045 + 0.0005 * (1 - m.grown);
+    const w0 = lx - baseX;
+    const ca = cos(outA), sa = sin(outA);
+    // rotate in the v-w plane: points behind (v<0) are pushed out
+    const v = v0_ * ca + w0 * sa;
+    const w = -v0_ * sa + w0 * ca;
+    return [u, v, w];
+  }
+  function dist(x, y, z) {
+    const side = x >= 0 ? 1 : -1;
+    const [u, v, w] = local(x, y, z, side);
+    if (u < u0 || u > u1 || v < v0 || v > v1) return 1;
+    const o = sample(OUT, u, v);
+    const hl = sample(HL, u, v), hm = sample(HM, u, v);
+    // gradient of HL for distance normalisation
+    const e = 0.0006;
+    const gu = (sample(HL, u + e, v) - sample(HL, u - e, v)) / (2 * e), gv = (sample(HL, u, v + e) - sample(HL, u, v - e)) / (2 * e);
+    const dl = (w - hl) / sqrt(1 + gu * gu + gv * gv);
+    const dm = (hm - w);
+    let d = smax(dl, dm, 0.0015);
+    d = smax(d, o, 0.0022);
+    return d;
+  }
+  function union(d, x, y, z) {
+    const de = dist(x, y, z);
+    if (de > 0.02) return d;
+    return smin(d, de, 0.0032);
+  }
+  return { dist, union, local, H, Wd, cy: cyE, cz: czE };
 }
 
-function ear(m, d, ax, y, z) {
-  const F = earFrame(m, ax, y, z);
-  const u = F.u * 1000, v = F.v * 1000, w = F.w * 1000; // mm
-  if (u * u / 900 + v * v / 1600 > 1.7 || w > 16 || w < -18) return d;
-  const vv = v + 1.5;
-  const au = 15.8 * (vv < -8 ? (1 - 0.3 * pow(min((-8 - vv) / 22, 1), 1.4)) : 1) * (vv > 10 ? (1 - 0.16 * pow((vv - 10) / 22, 2)) : 1);
-  const uc = u + 1.0 + (vv < -8 ? 0.12 * (vv + 8) : 0);
-  const av = 31.5;
-  const e2 = sqrt((uc / au) * (uc / au) + (vv / av) * (vv / av));
-  const rho = (1 - e2) * min(au, av) * 1.05;
-  const lobe = smoothstep(-12, -20, vv);
-  const front = smoothstep(4, 10, uc);
-  let hgt;
-  {
-    const rim = 3.2 * sqrt(max(0, 1 - pow((rho - 2.2) / 2.6, 2)));
-    const scapha = 1.2;
-    const anti = 3.6 * gauss(rho - 9.5, 2.2);
-    const conchaC = sqrt(pow((uc - 3.5) / 7.5, 2) + pow((vv + 5) / 10.5, 2));
-    const concha = -9 * smoothstep(1.1, 0.35, conchaC);
-    hgt = max(rim, scapha + anti) + concha;
-    hgt = mix(hgt, 2.4 + 0.6 * gauss(rho - 4, 3), lobe);
-    hgt = mix(hgt, 1.5 + concha * 0.8, front * (1 - lobe));
-    hgt += 3.4 * gauss(uc - 10.5, 2.4) * gauss(vv + 6, 3.5);
-    hgt += 2.2 * gauss(uc - 2, 2.8) * gauss(vv + 15, 2.6);
-    hgt += 2.0 * gauss(vv - 5.5 + 0.25 * (uc - 4), 1.6) * smoothstep(12, 4, uc) * smoothstep(-2, 3, uc);
-  }
-  const thick = 3.2 + 2.2 * lobe;
-  const wf = hgt + 1.5;
-  const wb = wf - thick - max(0, -hgt) * 0.2;
-  let de = max(-rho, max(w - wf, wb - w));
-  const root = ell(uc - 4, vv + 3, w + 8, 9, 15, 11);
-  de = smin(de, root, 3.0);
-  const dm = de * 0.001 * F.S * 0.75;
-  d = smin(d, dm, 0.0016);
-  {
-    const cv = ell((uc - 7.5) * 0.001, (vv + 6.5) * 0.001, (w + 3) * 0.001, 0.0028, 0.0034, 0.006);
-    d = smax(d, -cv * F.S, 0.0012);
-  }
-  return d;
+/** analytic landmarks in canonical space (before scaling by m.S) */
+export function landmarks(m, F) {
+  const L = {};
+  L.eyeL = [m.eyeX, m.eyeY + m.asym.eyeDy, m.eyeZ];
+  L.eyeR = [-m.eyeX, m.eyeY - m.asym.eyeDy, m.eyeZ];
+  L.noseTip = [m.asym.noseDx + m.asym.tipDx, m.tipY, m.tipZ];
+  L.mouth = [0, m.mouthY, m.lipZ];
+  L.chin = [0, m.chinY + 0.004, m.chinZ - 0.009];
+  L.crown = [0, m.crownY, -0.008];
+  L.earL = [m.headW + 0.006, F.ear.cy + m.asym.earDy, F.ear.cz];
+  L.earR = [-m.headW - 0.006, F.ear.cy - m.asym.earDy, F.ear.cz];
+  return L;
 }
