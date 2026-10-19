@@ -3,6 +3,8 @@ import { Character } from './character.js';
 import { CAST } from '../story/cast.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
+export const STICK_SPRINT = 0.9;   // joystick push (0..1) at which a touch player breaks into a sprint
+const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 export class Player {
   constructor(game) {
@@ -22,22 +24,31 @@ export class Player {
 
   update(dt, allowMove) {
     const g = this.game, inp = g.input;
-    // camera orbit
-    if (inp.locked) { this.camYaw -= inp.mdx * 0.0024; this.camPitch = Math.max(-0.5, Math.min(0.85, this.camPitch + inp.mdy * 0.002)); }
+    // camera orbit: mouse (pointer lock or drag fallback; Input only reports movement then) and touch drag
+    if (inp.mdx || inp.mdy) { this.camYaw -= inp.mdx * 0.0024; this.camPitch = Math.max(-0.5, Math.min(0.85, this.camPitch + inp.mdy * 0.002)); }
+    if (inp.lookYaw || inp.lookPitch) { this.camYaw -= inp.lookYaw; this.camPitch = Math.max(-0.5, Math.min(0.85, this.camPitch + inp.lookPitch)); }
     if (inp.key('ArrowLeft')) this.camYaw += dt * 2; if (inp.key('ArrowRight')) this.camYaw -= dt * 2;
     this.camDist = Math.max(2.2, Math.min(5.5, this.camDist + inp.wheel * 0.3));
 
-    let mx = 0, mz = 0;
+    let mx = 0, mz = 0, analog = 0;
     if (allowMove) {
       if (inp.key('KeyW')) mz += 1; if (inp.key('KeyS')) mz -= 1;
       if (inp.key('KeyA')) mx += 1; if (inp.key('KeyD')) mx -= 1;
+      // touch joystick (keys win when both are used)
+      if (!mx && !mz && inp.stick.mag > 0) { mx = -inp.stick.x; mz = inp.stick.y; analog = inp.stick.mag; }
       if (inp.hit('KeyC') || inp.hit('ControlLeft')) this.crouching = !this.crouching;
     }
-    this.sprinting = allowMove && (inp.key('ShiftLeft') || inp.key('ShiftRight')) && mz > 0;
-    if (this.sprinting) this.crouching = false;
+    const keySprint = allowMove && !analog && (inp.key('ShiftLeft') || inp.key('ShiftRight')) && mz > 0;
+    const stickSprint = allowMove && analog >= STICK_SPRINT && !this.crouching;   // crouched players sneak at full push
+    this.sprinting = keySprint || stickSprint;
+    if (keySprint) this.crouching = false;
     const fwdYaw = this.camYaw + Math.PI;
     const len = Math.hypot(mx, mz);
-    const speed = this.crouching ? 1.7 : this.sprinting ? 5.6 : 3.1;
+    // partial stick deflection walks slower: 30% of walk speed near the dead zone, full walk from ~85%
+    const walkScale = analog && !stickSprint ? 0.3 + 0.7 * smooth(0.12, 0.85, analog) : 1;
+    const speed = (this.crouching ? 1.7 : this.sprinting ? 5.6 : 3.1) * walkScale;
+    // touch: the camera drifts behind a player who runs sideways, unless a finger is steering it
+    if (analog && !inp.lookActive) this.camYaw -= inp.stick.x * Math.min(1, analog) * 0.5 * dt;
     const tv = new THREE.Vector3();
     if (len > 0) {
       const sx = Math.sin(fwdYaw), cz = Math.cos(fwdYaw);

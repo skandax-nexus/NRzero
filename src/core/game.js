@@ -6,6 +6,7 @@ import { UI } from './ui.js';
 import { Collision } from './collision.js';
 import { Temporal } from './temporal.js';
 import { Player } from './player.js';
+import { TouchControls } from './touch.js';
 import { Character, renderPortraits } from './character.js';
 import { CAST } from '../story/cast.js';
 
@@ -20,6 +21,7 @@ export class Game {
     this.collision = new Collision();
     this.temporal = new Temporal(this);
     this.player = new Player(this);
+    this.touch = new TouchControls(this);
     this.actors = {}; this.interactables = []; this.updaters = []; this.camBlockers = [];
     this.control = false; this.paused = false; this.running = false; this.token = 0;
     this.time = 0; this.cine = null; this.residueOn = false; this.residueUnlocked = false; this.residueObjs = [];
@@ -30,6 +32,21 @@ export class Game {
     this.use = (txt) => { const it = this.interactables.find(i => i.prompt.toLowerCase().includes(txt.toLowerCase())); if (it) { this.useInteract(it); return true; } return false; };
     this.overlayOpen = false;
     this.engine.renderer.domElement.addEventListener('click', () => { if (this.running && !this.paused && !this.ui._choice && !this.overlayOpen) this.input.lock(); });
+    // Browsers (iOS above all) only start audio inside a user gesture (touchend / click / key, not touchstart):
+    // create or resume the context on each gesture until it is actually running.
+    const gestures = ['touchend', 'pointerup', 'click', 'keydown'];
+    const unlockAudio = () => {
+      if (this.paused && this.running) return;
+      this.audio.init();
+      if (this.titleUpdate && !this.audio.theme) this.audio.setTheme('title');
+      if (this.audio.ctx?.state === 'running') for (const t of gestures) window.removeEventListener(t, unlockAudio, true);
+    };
+    for (const t of gestures) addEventListener(t, unlockAudio, true);
+    // Leaving the app (home button, call, tab switch) pauses the game and silences it.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { this.autoPause(); this.audio.ctx?.suspend(); }
+      else if (this.audio.ctx && (!this.paused || this.titleUpdate)) this.audio.ctx.resume();
+    });
     document.addEventListener('pointerlockchange', () => {
       if (!this.input.locked && this.running && !this.paused && !this.ui._choice && !this.overlayOpen && this.control) this.pause(true);
     });
@@ -39,7 +56,10 @@ export class Game {
         if (this.journalOpen) { this.toggleJournal(false); return; }
         if (!this.overlayOpen && !this.ui._choice) this.pause(!this.paused);
       }
-      if (e.code === 'KeyJ' && !this.paused && !this.ui.dlgActive && !this.overlayOpen) this.toggleJournal(!this.journalOpen);
+      if (e.code === 'KeyJ') {
+        if (this.journalOpen) this.toggleJournal(false);   // the board pauses the game, so check it first
+        else if (!this.paused && !this.ui.dlgActive && !this.overlayOpen) this.toggleJournal(true);
+      }
     });
   }
 
@@ -117,7 +137,7 @@ export class Game {
   async fail(msg) {
     if (this._failing) return; this._failing = true;
     const prev = this.control; this.control = false;
-    this.audio.sfxPlay('fail'); this.ui.toast(msg || 'TIMELINE COLLAPSED', 2400);
+    this.audio.sfxPlay('fail'); this.ui.toast(msg || 'TIMELINE COLLAPSED', 2400); this.touch.buzz([60, 50, 90]);
     await this.ui.fade(1, 700);
     this.restoreCheckpoint();
     await new Promise(r => setTimeout(r, 400));
@@ -137,6 +157,11 @@ export class Game {
     for (const o of this.residueObjs) o.visible = on && (!o.userData.states || o.userData.states.includes(this.temporal.current));
     if (on) this.audio.sfxPlay('anomaly');
   }
+
+  // Pause when the player is pulled away (app hidden, phone turned to portrait), if pausing is allowed now.
+  autoPause() { if (this.running && !this.paused && !this.titleUpdate && !this.overlayOpen && !this.ui._choice && !this.journalOpen) this.pause(true); }
+  // Quality-tier hook for world / character code: fn(quality, settings) now and on every change.
+  onQuality(fn) { fn(this.engine.quality, this.engine.settings); return this.engine.onQuality(fn); }
 
   toggleJournal(on) { this.journalOpen = on; this.ui.toggleJournal(on); if (on) { this.paused = true; this.input.unlock(); } else { this.paused = false; this.input.lock(); } }
   pause(on) {
@@ -166,6 +191,7 @@ export class Game {
       const dt = Math.min(this.dtCap, raw);
       if (this.titleUpdate) { this.time += dt; this.titleUpdate(dt, this.time); }
       else if (!this.paused) this.step(dt);
+      this.touch.update();
       this.engine.render(this.time);
       this.input.endFrame();
     };
@@ -219,7 +245,7 @@ export class Game {
 
   useInteract(it) {
     if (it.once) this.removeInteract(it);
-    this.ui.prompt(null);
+    this.ui.prompt(null); this.touch.buzz(14);
     it.onUse?.(it);
   }
 }

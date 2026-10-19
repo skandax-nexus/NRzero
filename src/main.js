@@ -4,6 +4,7 @@ import { CAST } from './story/cast.js';
 import { MISSIONS, ROADMAP } from './missions/index.js';
 import { chronolith, sky, facadeTextures, rng, Motes } from './world/kit.js';
 import { Character } from './core/character.js';
+import { enterImmersive, fullscreenAvailable } from './core/touch.js';
 
 const $ = id => document.getElementById(id);
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem('afterzero.' + k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem('afterzero.' + k, JSON.stringify(v)); } catch {} } };
@@ -82,6 +83,16 @@ function openPanel(kind) {
   if (kind === 'dossier') {
     const ids = ['kai', 'mira', 'witness', 'sera', 'rook', 'niko', 'tala', 'iven', 'jun', 'hale'];
     body.innerHTML = '<h2>DOSSIER</h2><div class="dossier">' + ids.map(id => { const c = CAST[id]; return `<div class="dos"><img src="${game.ui.portraits[id] || ''}" alt=""><div><h3>${c.name}</h3><h4>${c.role}</h4><p>${c.bio}</p></div></div>`; }).join('') + '</div>';
+  } else if (kind === 'controls' && game.touch.enabled) {
+    body.innerHTML = `<h2>CONTROLS</h2><div class="controls">
+      <span><b class="tk">LEFT THUMB</b></span><span>Move — the stick appears where your thumb lands. Push to the rim to sprint</span>
+      <span><b class="tk">RIGHT THUMB</b></span><span>Drag anywhere on the right to look around</span>
+      <span><b class="tk">HAND</b></span><span>Interact — appears when something is in reach; keep holding when it shows HOLD</span>
+      <span><b class="tk">JUMP · CROUCH</b></span><span>Jump · crouch / sneak (drones see less of you)</span>
+      <span><b class="tk">EYE</b></span><span>Residue Vision — see temporal echoes (from Mission 2)</span>
+      <span><b class="tk">2026 · 2049 · 2196</b></span><span>Temporal State Switch (from Mission 3) — costs Chronolith stability</span>
+      <span><b class="tk">CASE BOARD · PAUSE</b></span><span>Top-right corner</span>
+      <span><b class="tk">TAP</b></span><span>Advance dialogue; choices are buttons</span></div>`;
   } else if (kind === 'controls') {
     body.innerHTML = `<h2>CONTROLS</h2><div class="controls">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span>
@@ -100,16 +111,19 @@ function openPanel(kind) {
     body.innerHTML = '<h2>CHAPTERS</h2><div class="chapters">' + MISSIONS.map((m, i) =>
       `<div class="chap ${i > unlocked ? 'locked' : ''}" data-i="${i}"><div class="n">${i + 1}</div><div><h3>${m.title.toUpperCase()}</h3><p>${m.act} — ${m.sub}</p></div></div>`).join('') +
       ROADMAP.map(r => `<div class="chap future"><div class="n">${r.n}</div><div><h3>${r.title.toUpperCase()}</h3><p>${r.act} — ${r.text}</p></div></div>`).join('') + '</div>';
-    body.querySelectorAll('.chap[data-i]').forEach(el => el.addEventListener('click', () => { const i = +el.dataset.i; if (i <= unlocked) startAt(i); }));
+    body.querySelectorAll('.chap[data-i]').forEach(el => el.addEventListener('click', () => { const i = +el.dataset.i; if (i <= unlocked) { immersive(); startAt(i); } }));
   }
 }
 
 // ---------- menus ----------
+// Phones: starting play goes fullscreen + landscape (must happen inside the tap itself).
+function immersive() { if (game.touch.enabled) enterImmersive(); }
+
 $('menu').addEventListener('click', e => {
   const act = e.target.dataset.act; if (!act) return;
   game.audio.init(); game.audio.setTheme('title');
-  if (act === 'new') { store.set('evidence', []); startAt(0); }
-  else if (act === 'continue') startAt(store.get('last', 0));
+  if (act === 'new') { immersive(); store.set('evidence', []); startAt(0); }
+  else if (act === 'continue') { immersive(); startAt(store.get('last', 0)); }
   else openPanel(act);
 });
 $('panel-close').addEventListener('click', () => $('panel').classList.add('hidden'));
@@ -120,14 +134,23 @@ $('pause').addEventListener('click', e => {
   if (p === 'restart') { game.pause(false); game.restoreCheckpoint(); }
   if (p === 'controls') { $('title').classList.remove('hidden'); $('menu').style.visibility = 'hidden'; openPanel('controls'); const close = () => { $('title').classList.add('hidden'); $('menu').style.visibility = ''; $('panel-close').removeEventListener('click', close); }; $('panel-close').addEventListener('click', close); }
   if (p === 'quit') { store.set('evidence', game.ui.evidence); game.ui.fade(1, 600).then(showTitle); }
+  if (p === 'fullscreen') enterImmersive();
 });
 $('vol').addEventListener('input', e => game.audio.setVolume(+e.target.value));
-$('gfx').addEventListener('change', e => { game.engine.setQuality(e.target.value); store.set('gfx', e.target.value); });
+// Graphics: 'auto' picks the tier for this device (desktop: high; phones: medium or low + adaptive resolution).
+function applyGfx(v) { $('gfx').value = v; game.engine.setQuality(v === 'auto' ? game.engine.device.tier : v); }
+$('gfx').addEventListener('change', e => { applyGfx(e.target.value); store.set('gfx', e.target.value); });
+$('look-sens').value = game.touch.sensitivity;
+$('look-sens').addEventListener('input', e => game.touch.setSensitivity(+e.target.value));
+$('haptics').checked = game.touch.haptics;
+$('haptics').addEventListener('change', e => game.touch.setHaptics(e.target.checked));
+$('btn-fullscreen').classList.toggle('hidden', !fullscreenAvailable() || window.self !== window.top);
 $('journal').addEventListener('click', () => game.toggleJournal(false));
 
 // ---------- boot ----------
 (async () => {
-  const q = new URLSearchParams(location.search).get('gfx') || store.get('gfx', 'high'); $('gfx').value = q; game.engine.setQuality(q);
+  applyGfx(new URLSearchParams(location.search).get('gfx') || store.get('gfx', 'auto'));
+  registerServiceWorker();
   await new Promise(r => setTimeout(r, 50));
   await game.init();
   game.start();
@@ -137,3 +160,16 @@ $('journal').addEventListener('click', () => game.toggleJournal(false));
   const params = new URLSearchParams(location.search);
   if (params.has('m')) { game.audio.init(); startAt(+params.get('m')); }
 })();
+
+// ---------- offline play (PWA) ----------
+// Only on a real https origin as a top-level page: never inside iframes / sandboxes (artifact previews),
+// native shells (Capacitor serves files itself) or the localhost dev server (stale caches while editing;
+// add ?sw=1 to test it there).
+function registerServiceWorker() {
+  try {
+    const nav = window.navigator, local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    if (!('serviceWorker' in nav) || !window.isSecureContext || !/^https?:$/.test(location.protocol)) return;
+    if (window.self !== window.top || window.Capacitor || (local && !new URLSearchParams(location.search).has('sw'))) return;
+    nav.serviceWorker.register('sw.js').catch(() => {});
+  } catch { /* sandboxed: no service worker */ }
+}

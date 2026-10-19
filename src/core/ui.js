@@ -1,4 +1,5 @@
 import { CAST } from '../story/cast.js';
+import { touchText } from './touch.js';
 
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -20,9 +21,17 @@ export class UI {
       }
       if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') advance();
     });
-    $('dialogue').addEventListener('mousedown', advance);
-    $('viewport').addEventListener('mousedown', () => { if (this.dlgActive && !this._choice) advance(); });
+    // Click or tap anywhere advances dialogue, except on real controls and menus.
+    document.addEventListener('pointerdown', e => {
+      const g = this.game;
+      if (!this.dlgActive || this._choice || g.paused || g.journalOpen || e.button > 0) return;
+      if (e.target.closest?.('button, input, select, label, a, #pause, #journal, #title, #puzzle')) return;
+      advance();
+    });
   }
+
+  // Mission text names keyboard keys; touch players get touch wording.
+  words(text) { return this.game.touch?.enabled ? touchText(text) : text; }
 
   show(id, on = true) { $(id).classList.toggle('hidden', !on); }
 
@@ -34,12 +43,13 @@ export class UI {
   }
   missionTag(t) { $('mission-tag').textContent = t; }
   prompt(text, hold = 0) {
+    this.game.touch?.setPrompt(text, hold);
     if (!text) { this.show('prompt', false); return; }
     $('prompt-text').textContent = text; this.show('prompt', true);
     $('hold-bar').firstElementChild.style.width = (hold * 100) + '%';
   }
   toast(text, ms = 2600) {
-    const t = $('toast'); t.textContent = text; t.classList.add('show');
+    const t = $('toast'); t.textContent = this.words(text); t.classList.add('show');
     clearTimeout(this._toastT); this._toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
   era(name, year, glyph, keys, color) {
@@ -147,7 +157,7 @@ export class UI {
     const g = $('journal-grid');
     g.innerHTML = this.evidence.length ? this.evidence.map((e, i) =>
       `<div class="ev" style="--r:${((i * 37) % 7 - 3) * 0.6}deg"><h4>${e.title}</h4><p>${e.text}</p><small>${e.tag}</small></div>`).join('')
-      : '<div class="ev empty"><p>No evidence yet. Inspect anomalies and use Residue Vision [F] once available.</p></div>';
+      : `<div class="ev empty"><p>${this.words('No evidence yet. Inspect anomalies and use Residue Vision [F] once available.')}</p></div>`;
   }
   toggleJournal(on) {
     if (on) this.renderJournal();
