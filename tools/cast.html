@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cast Lineup</title>
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>html,body{margin:0;background:#11161c;color:#e8e2d8;font:12px sans-serif;overflow:hidden}#v{position:fixed;inset:0}.lb{position:fixed;transform:translate(-50%,0);background:#000a;padding:1px 4px;border-radius:3px;white-space:nowrap}</style>
+</head><body><div id="v"></div>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { loadCast, cast, makePerson } from '../src/human/cast3d.js';
+const q = new URLSearchParams(location.search);
+const W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+document.getElementById('v').appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x1a2028);
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.6;
+const key = new THREE.DirectionalLight(0xffe6cc, 2.6); key.position.set(2, 3, 3); scene.add(key);
+const rim = new THREE.DirectionalLight(0xbfd4ff, 1.4); rim.position.set(-3, 2, -2); scene.add(rim);
+await loadCast();
+const ids = q.get('ids') ? q.get('ids').split(',') : cast.ids;
+const cols = +(q.get('cols') || 11), sp = 0.75, face = q.get('face') !== null;
+const people = ids.map((id, i) => { const p = makePerson(id, { seed: 7 }); const c = i % cols, row = Math.floor(i / cols);
+  p.root.position.set((c - (cols - 1) / 2) * sp, 0, -row * 0.01); p.root.userData.row = row; scene.add(p.root); p.play(q.get('clip') || 'idle', 0); p.update(0.7); return p; });
+const rows = Math.ceil(ids.length / cols);
+const cams = [];
+for (let row = 0; row < rows; row++) {
+  const cam = new THREE.PerspectiveCamera(face ? 16 : 24, W / (H / rows), 0.1, 60);
+  const span = cols * sp, d = face ? span / (2 * Math.tan(THREE.MathUtils.degToRad(8)) * (W / (H / rows))) : span / (2 * Math.tan(THREE.MathUtils.degToRad(12)) * (W / (H / rows))) + 0.5;
+  cam.position.set(0, face ? 1.55 : 0.95, d); cam.lookAt(0, face ? 1.5 : 0.85, 0); cams.push(cam);
+}
+r.setScissorTest(true);
+for (let row = 0; row < rows; row++) {
+  people.forEach(p => { p.root.visible = p.root.userData.row === row; });
+  const y = H - (row + 1) * (H / rows); r.setViewport(0, y, W, H / rows); r.setScissor(0, y, W, H / rows); r.render(scene, cams[row]);
+  people.forEach((p, i) => { if (p.root.userData.row !== row) return; const v = new THREE.Vector3(p.root.position.x, 0.05, 0).project(cams[row]);
+    const d = document.createElement('div'); d.className = 'lb'; d.textContent = ids[i] + ' ' + p.height.toFixed(2); d.style.left = ((v.x + 1) / 2 * W) + 'px'; d.style.top = (row * H / rows + (1 - (v.y + 1) / 2) * H / rows - 16) + 'px'; document.body.appendChild(d); });
+}
+window.LAB_DONE = true;
+</script></body></html>

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { createHead } from '../human/head.js';
 import { createHair } from '../human/hair.js';
 import { createBody } from '../human/body.js';
+import { cast, makePerson, templateBox } from '../human/cast3d.js';
 
 // ---------- shared helpers ----------
 export function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -90,6 +91,29 @@ function humanParams(look) {
   return { head, hair, body, detail };
 }
 
+// ---------- 3D cast allocation: story role -> template (realistic MakeHuman-based people with mocap animation) ----------
+export const ROLE_TEMPLATE = {
+  kai: 'town_m3', mira: 'town_f3', witness: 'town_m1', rook: 'town_m6', sera: 'town_f4', niko: 'sefa', tala: 'town_f2',
+  iven: 'town_m4', jun: 'pell', hale: 'hale', brandt: 'roe', child: 'town_kid',
+};
+const POOLS = {
+  // city people avoid period pieces (top hats, aprons, headscarves) until the era-specific costume build replaces them
+  m: ['town_m2', 'arin', 'wren', 'town_m5'], f: ['odile', 'edda', 'town_f1'], oldM: ['ignatz', 'town_m6'], oldF: ['ilse', 'ondine'],
+  kidM: ['town_kid', 'wren'], kidF: ['town_kid', 'maren'], settleM: ['calder', 'keeper', 'keeper_b'], settleF: ['vossel', 'mirela', 'oriel'],
+};
+function pickTemplate(look) {
+  if (look.template && cast.ids.includes(look.template)) return look.template;
+  if (look.role && ROLE_TEMPLATE[look.role]) return ROLE_TEMPLATE[look.role];
+  const h = hashStr(JSON.stringify([look.skin, look.hair, look.top, look.pants, look.height, look.seed]));
+  const fem = look.sex != null ? look.sex > 0.5 : !!look.female;
+  const kid = look.child || (look.height ?? 1.75) < 1.4;
+  const grey = new THREE.Color(look.hair ?? 0).getHSL({}).l > 0.45;
+  const settler = look.sash != null || look.pantsType === 'wraps' || look.era === 'ancient';
+  const pool = kid ? (fem ? POOLS.kidF : POOLS.kidM) : settler ? (fem ? POOLS.settleF : POOLS.settleM) : grey || (look.age ?? 30) > 58 ? (fem ? POOLS.oldF : POOLS.oldM) : fem ? POOLS.f : POOLS.m;
+  return pool[h % pool.length];
+}
+const proxyBone = () => new THREE.Object3D(); // writes from old mission code land here harmlessly
+
 // ---------- the humanoid ----------
 export class Character {
   constructor(p = {}) {
@@ -109,6 +133,7 @@ export class Character {
   }
 
   build() {
+    if (cast.ready && !this.p.procedural) return this.build3d();
     const P = this.human = humanParams(this.p);
     const body = this.body = createBody(P.body);
     this.root.add(body.root);
@@ -134,6 +159,37 @@ export class Character {
       this.meshes.push(o);
     });
     this.update(0);
+  }
+
+  // Realistic cast: a template person, recoloured for the look, animated by retargeted motion capture.
+  build3d() {
+    const look = this.p, id = pickTemplate(look);
+    const person = this.person = makePerson(id, { seed: hashStr(JSON.stringify(look)) % 100000, clothA: look.coat ?? look.top, clothB: look.pants, skin: look.skin });
+    const box = templateBox(id), natural = box ? box.max.y : 1.75;
+    const scale = look.height ? Math.max(0.9, Math.min(1.1, look.height / natural)) : 1;
+    person.root.scale.setScalar(scale);
+    this.root.add(person.root);
+    const B = person.bones;
+    this.hips = B.hips; this.spine = B.spine; this.chest = B.chest; this.neck = B.neck; this.head = B.head;
+    this.arms = [['R', -1], ['L', 1]].map(([S, side]) => ({ sh: proxyBone(), up: proxyBone(), el: proxyBone(), hand: B['hand_' + S] || proxyBone(), side, bone: { up: B['upperarm_' + S], el: B['forearm_' + S] } }));
+    this.legs = [['R', -1], ['L', 1]].map(([S, side]) => ({ th: proxyBone(), kn: proxyBone(), ft: B['foot_' + S] || proxyBone(), side }));
+    this.eyes = []; this.mats = {};
+    this.template = id; this.scale3d = scale;
+    if (look.wristMark && B.forearm_L && B.hand_L) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.0035, 8, 28), new THREE.MeshStandardMaterial({ color: 0x0b2a33, emissive: 0x2fd8ff, emissiveIntensity: 1.6, roughness: 0.3 }));
+      const hp = B.hand_L.position.clone(); ring.position.copy(hp).multiplyScalar(0.86);
+      ring.lookAt(hp.clone().multiplyScalar(2)); B.forearm_L.add(ring); this.wrist = ring;
+    }
+    if (look.umbrella) this.addUmbrella(look.umbrella);
+    this.root.traverse(o => { if (o.isMesh) { o.castShadow = this.shadows !== false; o.receiveShadow = !look.lod; this.meshes.push(o); } });
+    this.update(0);
+  }
+
+  /** Rebuild in place (keeps this.root), e.g. once the 3D cast has finished loading. */
+  rebuild() {
+    for (const c of [...this.root.children]) this.root.remove(c);
+    this.meshes = []; this.person = null; this.headApi = null; this.wrist = null; this.umbrella = null; this.umbrellaPose = false;
+    this.build();
   }
 
   addCap(color) {
@@ -164,7 +220,7 @@ export class Character {
   addUmbrella(color) {
     const arm = this.arms[1];
     this.umbrellaPose = true;
-    const g = new THREE.Group(); arm.hand.add(g); g.position.set(0, -0.07, 0.015);
+    const g = new THREE.Group(); arm.hand.add(g); g.position.set(0, this.person ? 0.07 : -0.07, 0.015);
     g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.9, 6), makeMaterial('metal', 0x2a2a2e)).translateY(0.36));
     const can = new THREE.Mesh(new THREE.ConeGeometry(0.58, 0.2, 12, 1, true), new THREE.MeshPhysicalMaterial({ color, roughness: 0.3, clearcoat: 0.8, side: THREE.DoubleSide }));
     can.position.y = 0.8; g.add(can);
@@ -188,6 +244,7 @@ export class Character {
     if (this.frozen) return;
     this.t += dt;
     if (this.ghostMat) this.ghostMat.uniforms.uTime.value = this.t;
+    if (this.person) return this.update3d(dt);
     const s = this.body.proportions.s;
     const sp = this.speed, A = Math.min(1, sp / 2.4), run = Math.max(0, Math.min(1, (sp - 3) / 2.5));
     this.phase += dt * (sp > 0.05 ? (4.2 + sp * 1.25) / Math.sqrt(s) : 0);
@@ -238,9 +295,49 @@ export class Character {
   }
 }
 
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), UPV = new THREE.Vector3(0, 1, 0);
+const POSE_CLIPS = new Set(['sit', 'work', 'look', 'nod', 'sad', 'fall', 'talk', 'idle']);
+Character.prototype.update3d = function (dt) {
+  const P = this.person, sp = this.speed;
+  if (sp > 0.05) P.move(sp, this.scale3d || 1, { crouch: this.crouch > 0.5 });
+  else if (this.crouch > 0.5) P.play('crouch', 0.3, 0.02);
+  else if (this.pose && POSE_CLIPS.has(this.pose)) P.play(this.pose, 0.35);
+  else if (this.talk > 0) P.play('talk', 0.35);
+  else P.play('idle', 0.4);
+  if (this.talk > 0) this.talk -= dt;
+  P.update(dt);
+  // head turns toward the look target on top of the animation (world-space yaw, clamped and smoothed)
+  let yaw = 0;
+  if (this.lookTarget && this.head) {
+    const lt = this.lookTarget.isVector3 ? this.lookTarget : this.lookTarget.getWorldPosition ? this.lookTarget.getWorldPosition(_v2) : this.lookTarget.position;
+    this.head.getWorldPosition(_v);
+    const ang = Math.atan2(lt.x - _v.x, lt.z - _v.z) - this.root.rotation.y;
+    yaw = Math.max(-1.0, Math.min(1.0, Math.atan2(Math.sin(ang), Math.cos(ang))));
+  }
+  this.headYaw += (yaw - this.headYaw) * Math.min(1, dt * 5 || 1);
+  if (Math.abs(this.headYaw) > 1e-3) for (const [b, k] of [[this.neck, 0.3], [this.head, 0.7]]) {
+    if (!b || !b.parent) continue;
+    b.getWorldQuaternion(_q); _q2.setFromAxisAngle(UPV, this.headYaw * k); _q.premultiply(_q2);
+    b.parent.getWorldQuaternion(_q2).invert(); b.quaternion.copy(_q2.multiply(_q));
+    b.updateMatrixWorld(true);
+  }
+  if (this.umbrellaPose) { // forearm raised to hold the umbrella over the head
+    const a = this.arms[1].bone;
+    if (a.up && a.el) {
+      const right = _v.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+      for (const [b, ang] of [[a.up, -0.55], [a.el, -1.35]]) {
+        b.getWorldQuaternion(_q); _q2.setFromAxisAngle(right, ang); _q.premultiply(_q2);
+        b.parent.getWorldQuaternion(_q2).invert(); b.quaternion.copy(_q2.multiply(_q)); b.updateMatrixWorld(true);
+      }
+    }
+  }
+  if (this.wrist) this.wrist.material.emissiveIntensity = 1.4 + Math.sin(this.t * 2.2) * 0.6 + (this.wristBoost || 0);
+  if (this.wristBoost) this.wristBoost = Math.max(0, this.wristBoost - dt * 6);
+};
+
 // Studio portraits for the dialogue UI and dossier. Rendered lazily on first use (each property is a getter).
 let portraitRenderer = null;
-function renderOne(def, size) {
+function renderOne(id, def, size) {
   if (!portraitRenderer) {
     portraitRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
     portraitRenderer.toneMapping = THREE.ACESFilmicToneMapping; portraitRenderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -255,14 +352,14 @@ function renderOne(def, size) {
   scene.add(new THREE.HemisphereLight(0x8aa4c0, 0x1a1210, 0.55));
   const backGlow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 32), new THREE.MeshBasicMaterial({ color: def.glow || 0x16324a }));
   backGlow.position.set(0.2, 1.55, -0.7); scene.add(backGlow);
-  const ch = new Character({ ...def.look, umbrella: null, detailHead: 'high', detail: 'medium' });
+  const ch = new Character({ role: id, ...def.look, umbrella: null, detailHead: 'high', detail: 'medium' });
   scene.add(ch.root); ch.root.rotation.y = -0.3; ch.update(0.016);
-  ch.headApi.setBlink(0); ch.headApi.update(0);
+  if (ch.headApi) { ch.headApi.setBlink(0); ch.headApi.update(0); }
   ch.root.updateMatrixWorld(true);
   const hp = new THREE.Vector3(); ch.head.getWorldPosition(hp);
-  const eye = hp.clone().add(new THREE.Vector3(0, 0.07, 0));
+  const eye = hp.clone().add(new THREE.Vector3(0, ch.person ? 0.09 : 0.07, ch.person ? 0.02 : 0));
   cam.position.set(eye.x + 0.3, eye.y + 0.05, eye.z + 0.95); cam.lookAt(eye.x, eye.y - 0.02, eye.z);
-  ch.headApi.setGaze(cam.position); ch.headApi.update(0);
+  if (ch.headApi) { ch.headApi.setGaze(cam.position); ch.headApi.update(0); }
   r.render(scene, cam);
   const url = r.domElement.toDataURL('image/jpeg', 0.9);
   ch.root.traverse(o => { if (o.isMesh && o.material?.dispose && !o.material.map) o.material.dispose(); });
@@ -274,7 +371,7 @@ export function renderPortraits(cast, size = 320) {
     if (!def.look) continue;
     Object.defineProperty(out, id, {
       enumerable: true, configurable: true,
-      get() { if (!(id in done)) { try { done[id] = renderOne(def, size); } catch (e) { console.warn('portrait', id, e); done[id] = ''; } } return done[id]; },
+      get() { if (!(id in done)) { try { done[id] = renderOne(id, def, size); } catch (e) { console.warn('portrait', id, e); done[id] = ''; } } return done[id]; },
       set(v) { done[id] = v; },
     });
   }

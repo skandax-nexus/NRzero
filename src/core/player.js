@@ -9,7 +9,7 @@ const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a
 export class Player {
   constructor(game) {
     this.game = game;
-    this.char = new Character(CAST.kai.look);
+    this.char = new Character({ role: 'kai', ...CAST.kai.look });
     this.pos = this.char.root.position; this.vel = new THREE.Vector3();
     this.yaw = 0; this.camYaw = Math.PI; this.camPitch = 0.18; this.camDist = 3.4; this.grounded = true;
     this.radius = 0.32; this.height = 1.75; this.crouching = false; this.sprinting = false;

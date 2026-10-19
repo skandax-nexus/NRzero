@@ -8,6 +8,7 @@ import { Temporal } from './temporal.js';
 import { Player } from './player.js';
 import { TouchControls } from './touch.js';
 import { Character, renderPortraits } from './character.js';
+import { loadCast, cast } from '../human/cast3d.js';
 import { CAST } from '../story/cast.js';
 
 class Abort extends Error { constructor() { super('mission aborted'); this.abort = true; } }
@@ -64,6 +65,8 @@ export class Game {
   }
 
   async init() {
+    if (!new URLSearchParams(location.search).has('procedural')) await loadCast();
+    if (cast.ready) this.player.char.rebuild();
     this.ui.portraits = renderPortraits(CAST);
   }
 
@@ -87,7 +90,7 @@ export class Game {
   }
 
   actor(id, look, x, y, z, ry = 0) {
-    const c = new Character(look || CAST[id].look);
+    const c = new Character({ role: id, ...(look || CAST[id].look) });
     c.root.position.set(x, y, z); c.root.rotation.y = ry; this.scene.add(c.root);
     this.actors[id] = c; return c;
   }

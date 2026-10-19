@@ -40,7 +40,7 @@ function buildTitleScene() {
   }
   // floating islands (future)
   for (let k = 0; k < 6; k++) { const isl = new THREE.Mesh(new THREE.ConeGeometry(3 + R() * 4, 6, 7), new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.9 })); isl.rotation.x = Math.PI; isl.position.set(20 + R() * 40, 18 + R() * 20, -50 - R() * 40); s.add(isl); }
-  const kai = new Character(CAST.kai.look); kai.root.position.set(0, 0, -3); kai.root.rotation.y = Math.PI; s.add(kai.root);
+  const kai = new Character({ role: 'kai', ...CAST.kai.look }); kai.root.position.set(0, 0, -3); kai.root.rotation.y = Math.PI; s.add(kai.root);
   const motes = new Motes(400, [-20, 0, -40, 20, 20, 5], 0xffd9a0, 0.12, 0.4); s.add(motes.mesh);
   const cam = game.engine.camera; cam.fov = 50; cam.updateProjectionMatrix();
   game.titleUpdate = (dt, t) => {
