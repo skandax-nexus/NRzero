@@ -1,7 +1,7 @@
 // Human Lab: renders head/body/hair modules under fixed, realistic lighting for review and judging.
 // URL params:
 //   head=../src/human/head.js  body=../src/human/body.js  hair=../src/human/hair.js
-//   view=portrait|profile|threeq|full|lineup|walk|eyes   preset=kai|mira|witness|niko|rook|tala|sera|iven
+//   view=portrait|profile|threeq|full|lineup|walk|eyes   preset=kai|mira|witness|sera|niko|tala|rook|iven|jun|hale|brandt|child  names=<comma list for lineup>
 //   detail=high|medium|low   t=<seconds for walk pose>   bg=studio|city|sunset
 //   ref=1  show the owner's reference art (assets/cast/<preset>_ref.png) beside the render (kai, mira, witness, sera)
 import * as THREE from 'three';
@@ -36,6 +36,18 @@ export const PRESETS = {
   iven: { head: { sex: 0, age: 45, skin: 0xe0b394, eyeColor: 0x3a5a2a, seed: 77, shape: { jaw: 0.1, cheek: 0, nose: 0.2, noseWidth: 0.2, lips: 0, brow: 0, eyeSize: 0, faceLength: 0, chin: -0.1 }, marks: { stubble: 0.5, wrinkles: 0.35, freckles: 0.3 } },
          hair: { style: 'short', color: 0x6a3f22, beard: 'stubble' },
          body: { height: 1.76, sex: 0, build: 1.1, age: 45, skin: 0xe0b394, outfit: { top: { type: 'sweater', color: 0x37404a, material: 'fabric' }, vest: { color: 0xd9781e }, pants: { type: 'cargo', color: 0x2c333b }, shoes: { type: 'boots', color: 0x2a2018 }, gloves: 0x5a4a3a } } },
+  jun: { head: { sex: 0, age: 42, skin: 0xe2bf9c, eyeColor: 0x1a1410, seed: 88, shape: { jaw: -0.1, cheek: 0.5, nose: -0.3, noseWidth: 0.2, lips: -0.1, brow: -0.2, eyeSize: -0.35, faceLength: -0.2, chin: -0.2 }, marks: { wrinkles: 0.3, stubble: 0.15 } },
+         hair: { style: 'short', color: 0x0b0b0d },
+         body: { height: 1.72, sex: 0, build: 0.95, age: 42, skin: 0xe2bf9c, outfit: { top: { type: 'uniform', color: 0x1d2a44, material: 'fabric' }, vest: { color: 0xd4c21a }, pants: { type: 'trousers', color: 0x1d2a44 }, shoes: { type: 'shoes', color: 0x111111 } } } },
+  hale: { head: { sex: 0, age: 48, skin: 0xc98f74, eyeColor: 0x4a5a6a, seed: 99, shape: { jaw: 0.7, cheek: -0.1, nose: 0.35, noseWidth: 0.35, lips: -0.3, brow: 0.5, eyeSize: -0.3, faceLength: 0.05, chin: 0.4 }, marks: { wrinkles: 0.5, stubble: 0.3 } },
+         hair: { style: 'buzz', color: 0x4a4038 },
+         body: { height: 1.86, sex: 0, build: 1.2, age: 48, skin: 0xc98f74, outfit: { top: { type: 'uniform', color: 0x1c2533, material: 'fabric' }, vest: { color: 0x111820 }, pants: { type: 'cargo', color: 0x1c2533 }, shoes: { type: 'boots', color: 0x0f0f10 }, gloves: 0x101010, belt: 0x111111 } } },
+  brandt: { head: { sex: 0, age: 37, skin: 0xebc4a6, eyeColor: 0x4a6a8a, seed: 111, shape: { jaw: 0.1, cheek: 0.1, nose: 0.3, noseWidth: -0.35, lips: -0.45, brow: 0.1, eyeSize: -0.05, faceLength: 0.45, chin: 0.3 }, marks: { stubble: 0.45 } },
+         hair: { style: 'swept', color: 0x9a7448, beard: 'stubble', beardColor: 0x8a6440 },
+         body: { height: 1.8, sex: 0, build: 1.08, age: 37, skin: 0xebc4a6, outfit: { top: { type: 'uniform', color: 0x1c2533, material: 'fabric' }, vest: { color: 0x111820 }, pants: { type: 'cargo', color: 0x1c2533 }, shoes: { type: 'boots', color: 0x0f0f10 }, gloves: 0x101010 } } },
+  child: { head: { sex: 0.3, age: 8, skin: 0xe8c0a0, eyeColor: 0x4a3420, seed: 122, shape: { jaw: -0.5, cheek: 0.3, nose: -0.5, noseWidth: 0, lips: 0.1, brow: -0.5, eyeSize: 0.4, faceLength: -0.4, chin: -0.3 }, marks: { freckles: 0.4 } },
+         hair: { style: 'short', color: 0x3a2418 },
+         body: { height: 1.24, sex: 0.3, build: 0.9, age: 8, skin: 0xe8c0a0, outfit: { top: { type: 'jacket', color: 0xd8a020, material: 'synthetic', hood: true }, pants: { type: 'trousers', color: 0x2a3a5a }, shoes: { type: 'boots', color: 0xc02020 } } } },
 };
 
 async function tryImport(p) { if (!p) return null; try { return await import(p); } catch (e) { console.error('import failed', p, e); document.getElementById('info').textContent += ' [import failed: ' + p + '] '; return null; } }
@@ -85,9 +97,9 @@ const presetName = q.get('preset') || 'kai';
 const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 50);
 const actors = [];
 if (view === 'lineup') {
-  const names = ['kai', 'mira', 'witness', 'niko', 'rook', 'tala', 'sera', 'iven'];
+  const names = q.get('names') ? q.get('names').split(',') : ['kai', 'mira', 'witness', 'sera', 'niko', 'tala', 'rook', 'iven', 'jun', 'hale', 'brandt', 'child'];
   names.forEach((n, i) => { const a = build(n); a.root.position.x = (i - (names.length - 1) / 2) * 0.62; a.root.rotation.y = 0.15; scene.add(a.root); actors.push(a); });
-  cam.fov = 26; cam.position.set(0, 1.25, 8.6); cam.lookAt(0, 0.95, 0);
+  cam.fov = 26; const span = names.length * 0.62 + 0.6; const dist = Math.max(8.6, span / (2 * Math.tan(THREE.MathUtils.degToRad(13)) * (W / H)) + 1); cam.position.set(0, 1.25, dist); cam.lookAt(0, 0.95, 0);
 } else {
   const a = build(presetName); scene.add(a.root); actors.push(a);
   const hp = new THREE.Vector3();
