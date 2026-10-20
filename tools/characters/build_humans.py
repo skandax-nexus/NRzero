@@ -1178,6 +1178,32 @@ def paint(c, B, cov, res, path_out):
         a = np.clip(stub * reg * (0.3 + 0.4 * dots), 0, 0.62)
         tint(a * 0.5, [0.86, 0.86, 0.9])
         over(a * 0.4, hair_c * 0.8)
+        # ---- beard (0..1, needs stubble): dense short hair over the same region, strands running down the jaw ----
+        brd = c.get("beard", 0.0)
+        if brd:
+            bc_ = hexc(c.get("beardColor", c.get("hairColor", "2e2119")))
+            edge = ss(-0.001, 0.007, top_b - pos[:, 1]) * ss(my - 0.115, my - 0.085, pos[:, 1])
+            strands = vnoise(pos * np.array([3.0, 0.6, 3.0]), 900, seed + 2.3)
+            fine = hash01(pos, 3800, seed + 1.1)
+            ab = np.clip(brd * reg * edge * (0.62 + 0.3 * strands + 0.12 * (fine - 0.5)), 0, 0.93)
+            over(ab, bc_ * 0.95)
+            tint(ab * np.abs(strands - 0.5) * 0.8, [0.8, 0.8, 0.8])
+    # ---- freckles (0..1): small warm dots over the nose bridge and cheeks ----
+    frk = c.get("freckles", 0.0)
+    if frk:
+        zone = g2(((rel - np.array([0, -0.032, 0.02])) ** 2 * np.array([0.45, 1.6, 0.3])).sum(1), 0.026) * front * isface
+        fd = (hash01(pos, 520, seed + 7) > 0.8).astype(float) * (0.5 + 0.5 * hash01(pos, 260, seed + 3))
+        tint(frk * zone * fd * 0.5, [0.78, 0.64, 0.56])
+    # ---- scars: [((x0, y0), (x1, y1)), ...] in metres from the mid-eye point (x to the character's left, y up) ----
+    for (x0, y0), (x1, y1) in c.get("scars", []):
+        sx_, sy_ = x1 - x0, y1 - y0
+        L2 = sx_ * sx_ + sy_ * sy_
+        tt_ = np.clip(((rel[:, 0] - x0) * sx_ + (rel[:, 1] - y0) * sy_) / L2, 0, 1)
+        dd_ = np.hypot(rel[:, 0] - (x0 + tt_ * sx_), rel[:, 1] - (y0 + tt_ * sy_))
+        taper = np.sin(np.pi * np.clip(tt_, 0.02, 0.98)) ** 0.5
+        onf = ss(-0.04, -0.02, rel[:, 2]) * isface
+        tint(0.45 * g2((dd_ / (0.0034 * taper + 1e-4)) ** 2, 1.0) * onf, [0.86, 0.66, 0.62])      # healed rim, a touch darker
+        tint(0.55 * g2((dd_ / (0.0013 * taper + 1e-4)) ** 2, 1.0) * onf, [1.18, 1.0, 0.98])       # pale scar line
     # ---- scalp, hairline feathering ----
     style = cov["_style"]
     hcov = fld(cov["hair"]) if "hair" in cov else (fld(cov["_hairpaint"]) if "_hairpaint" in cov else None)
@@ -1267,7 +1293,11 @@ def paint(c, B, cov, res, path_out):
         nimg, nm = dilate(nimg, mask.copy(), 8)
         nimg[~nm] = (0.5, 0.5, 1.0)
         out["normal"] = path_out.replace(".jpg", "_n.jpg")
-        Image.fromarray((np.clip(nimg, 0, 1) * 255).astype(np.uint8)).save(out["normal"], quality=90)
+        nd = int(c.get("normalDiv", 1))       # crowds: a half-resolution normal map (file size; detail reads at crowd distance)
+        if nd > 1:
+            nimg = nimg.reshape(res // nd, nd, res // nd, nd, 3).mean((1, 3))
+            nimg = (nimg - 0.5) / np.maximum(np.linalg.norm(nimg - 0.5, axis=-1, keepdims=True) * 2, 1e-6) * 0.5 + 0.5
+        Image.fromarray((np.clip(nimg, 0, 1) * 255).astype(np.uint8)).save(out["normal"], quality=c.get("normalQ", 90))
         if gimg.max() > 0.01:
             gimg, gm = dilate(gimg, gimg.max(-1) > 0.004, 3)
             half = gimg.reshape(res // 2, 2, res // 2, 2, 3).mean((1, 3))

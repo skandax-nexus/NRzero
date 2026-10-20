@@ -707,7 +707,7 @@ export default {
       ['recording', 'He will ask what I asked you to build. Tell him the truth. A clock that cannot finish.'],
       ['recording', 'You kept your end. I am sorry about Lotte. I am sorry about all of it.'],
     ]);
-    await game.shot([P.shaft[0] + 3.2, TY + 1.7, P.shaft[1] - 0.6], [P.shaft[0] + 1.2, TY + 1.6, P.shaft[1] + 0.2], 2.2, { fov: 30 });
+    await game.shot([P.shaft[0] + 0.75, TY + 1.62, P.shaft[1] + 2.0], [P.shaft[0] + 1.2, TY + 1.5, P.shaft[1] + 0.3], 2.2, { fov: 34 });
     await game.say('recording', 'And Oskar — when the child returns, do not let him see the ninth minute.');
     audio.silence(1.6); await game.wait(1.6);
     oskar.root.position.set(5.7, TY, -34.3); oskar.root.rotation.y = -Math.PI / 2; oskar.lookTarget = kai.head; kai.lookTarget = oskar.head;

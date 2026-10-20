@@ -551,7 +551,26 @@
 "timeout": 900000
 },
 {
-"eval": "__game.player.place(-28.2,-2.7,-6,-1.57); null"
+"eval": "__game.player.place(-12.6,0.6,-6,-1.57); null"
+},
+{
+"wait": 800
+},
+{
+"down": "KeyW"
+},
+{
+"until": "__game.player.pos.x < -27.5",
+"timeout": 240000
+},
+{
+"up": "KeyW"
+},
+{
+"eval": "({walkedTo:[__game.player.pos.x.toFixed(1),__game.player.pos.y.toFixed(1),__game.player.pos.z.toFixed(1)]})"
+},
+{
+"eval": "if (__game.player.pos.x > -27) __game.player.place(-28.2,-2.7,-6,-1.57); null"
 },
 {
 "wait": 2500

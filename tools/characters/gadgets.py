@@ -63,7 +63,12 @@ ERA = {  # allowed eras for technology (default: 2049 and 2196)
 }
 
 
+UNWRITTEN = {"chronolith_cuff_thin"}   # Orren (the Unwritten Second, outside time): only the pale echo of a Chronolith ring
+
+
 def era_ok(typ, era):
+    if era == "unwritten":
+        return typ in UNWRITTEN
     if typ in PERIOD:
         return era == "ancient"
     if era == "ancient":
@@ -1077,6 +1082,11 @@ def g_ar_glasses(g):
             pts.append(M @ V((sx, sy, 0)))
         if not rimless:
             g.part(tube(pts + [pts[0]], 0.0013, n=4, caps=False), col, 0.6, smooth=True)
+        if o.get("plain"):
+            if o.get("clip") and sd == "R":   # repaired glasses: a clip-on magnifier lens over the right eye
+                g.part(cyl(lh * 0.42, 0.003, n=10, bev=0.0008, M=local(M, 0, 0.002, 0.005)), "2a2620", 0.4, smooth="auto")
+                g.part(cyl(lh * 0.34, 0.0015, n=10, M=local(M, 0, 0.002, 0.0075)), GLASS, 0.95, smooth="auto")
+            continue
         top = [M @ V((lw / 2 * f, lh / 2 + 0.0004, 0.0008)) for f in (-0.75, -0.25, 0.25, 0.75)]
         g.light(tube(top, 0.0008, n=4), seg=0.0, smooth=True)
     eL, eR = K.eye["L"], K.eye["R"]
@@ -1088,6 +1098,14 @@ def g_ar_glasses(g):
         arm_from_ear(g, sd, tip, col, w=0.0035)
     g.glow_hex = (o.get("glow") or g.glow_hex).lstrip("#")
     g.idle = float(o.get("idle", 0.45))
+
+
+@gadget("glasses", "head")
+def g_glasses(g):
+    """Plain glasses (any modern era): the AR glasses frame without the HUD light; clip=True adds a clip-on magnifier."""
+    g.o = dict(g.o, plain=True)
+    g_ar_glasses(g)
+    g.idle = 0.0
 
 
 @gadget("ar_half_visor", "head")
@@ -2250,6 +2268,7 @@ def g_rope(g):
     K, o = g.K, g.o
     k = K.k
     p_hi, p_lo = ensure_diag(K, opt_side(o, "L"))
+    p_lo = p_lo + V((0, 0, 0.13 * k))           # a coil ends at the opposite waist, not the hip
     col = o.get("color", "8a7a60")
     for j, lift in enumerate((0.012, 0.024)):
         P, N = torso_loop(K, p_hi + V((0, 0, 0.006 * j)), p_lo + V((0.01 * j, 0, -0.01 * j)), n=26 if K.lod else 20, lift=lift)

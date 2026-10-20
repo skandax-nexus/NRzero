@@ -151,7 +151,7 @@ export default {
     let sunDir = new THREE.Vector3(0.3, 0.6, 0.3);
     game.onUpdate(() => { const p = game.cine ? game.engine.camera.position : game.player.pos; sun.target.position.set(p.x, 0, p.z); sun.position.copy(sun.target.position).addScaledVector(sunDir, 110); });
     const STYLE = {
-      thriving: { exposure: 1.0, fog: 0.0052, fogMul: 1.0, sunMul: 1.0, hemi: 0.3, env: 1.0 },
+      thriving: { exposure: 1.0, fog: 0.0042, fogMul: 1.0, sunMul: 1.0, hemi: 0.3, env: 1.0 },
       abandoned: { exposure: 1.08, fog: 0.0075, fogMul: 1.0, sunMul: 1.25, hemi: 0.42, env: 1.0 },
       flooded: { exposure: 0.96, fog: 0.0058, fogMul: 1.02, sunMul: 1.0, hemi: 0.3, env: 1.0 },
     };
@@ -193,7 +193,7 @@ export default {
     await tick();
     scene.add(RZ.mountains({ center: [0, -30], radius: [320, 760], height: 190, seed: 8, rock: 0x5e564c, grass: 0x3c4a2c, snowLine: 170 }));
     await tick();
-    scene.add(RZ.hazeLayer({ center: [0, -30], radius: 280, height: 90, color: 0xc0c4c4, opacity: 0.4 }));
+    scene.add(RZ.hazeLayer({ center: [0, -30], radius: 280, height: 90, color: 0xc0c4c4, opacity: 0.3 }));
 
     // terrain + features under the player / NPCs
     const terrainH = (x, z) => (T.current === 'abandoned' && !S.diverted) ? VAL.hEroded(x, z) : VAL.hBase(x, z);
@@ -587,6 +587,8 @@ export default {
       const inValley = x > -33 && x < 36 && z > -70 && z < 52;
       if (inValley || h < 3.6) continue;
       if (z > 54 && x > 0 && x < 45) continue;
+      // keep the opening crane shot's corridor clear (camera from (46, 72) to (24, 44), 18-34 m up)
+      { const t = Math.max(0, Math.min(1, ((x - 46) * -22 + (z - 72) * -28) / (22 * 22 + 28 * 28))); if (Math.hypot(x - (46 - 22 * t), z - (72 - 28 * t)) < 11) continue; }
       const d = nz.fbm2(x * 0.02, z * 0.02, 3) + 0.25;
       if (d < 0.1) continue;
       (h > 30 || rr() < 0.4 ? hillConifers : hillTrees).push({ x, z, scale: 0.8 + rr() * 0.6 });
@@ -1043,11 +1045,13 @@ export default {
     // are behind the camera — so a player who arrives at the shelf directly, e.g. after a switch, is never stuck)
     const camFwd = new THREE.Vector3();
     const unseen = (x, z) => { const c = game.engine.camera.position; game.engine.camera.getWorldDirection(camFwd); const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz) || 1; return (dx * camFwd.x + dz * camFwd.z) / d < 0.2; };
-    game.onUpdate(() => {
+    let talaWait = 0;
+    game.onUpdate((dt) => {
       if (busy) return;
       const p = game.player.pos, wantHead = S.toured && !S.diverted && (headTalk || p.z < -30);
-      if (wantHead === talaAtHead) return;
-      if (T.current !== 'thriving' || (Math.hypot(p.x - TALA_STEPS[0], p.z - TALA_STEPS[1]) > 18 && Math.hypot(p.x - TALA_HEAD[0], p.z - TALA_HEAD[1]) > 12) || (unseen(...TALA_STEPS) && unseen(...TALA_HEAD))) {
+      if (wantHead === talaAtHead) { talaWait = 0; return; }
+      talaWait += dt;
+      if (talaWait > 3 || T.current !== 'thriving' || (Math.hypot(p.x - TALA_STEPS[0], p.z - TALA_STEPS[1]) > 18 && Math.hypot(p.x - TALA_HEAD[0], p.z - TALA_HEAD[1]) > 12) || (unseen(...TALA_STEPS) && unseen(...TALA_HEAD))) {
         talaAtHead = wantHead;
         if (wantHead) { tala.root.position.set(TALA_HEAD[0], TY, TALA_HEAD[1]); tala.root.rotation.y = Math.PI * 0.85; } else { tala.root.position.set(TALA_STEPS[0], 0, TALA_STEPS[1]); tala.root.rotation.y = Math.PI / 2; }
       }

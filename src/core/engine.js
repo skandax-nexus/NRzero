@@ -220,7 +220,7 @@ export const GRADES = {
   // 2196 devastated future: slightly bleached, green-grey shadows, dusty warm highlights, harder contrast
   ruin2196: { lift: [-0.012, -0.006, -0.008], gamma: [1, 1, 1], gain: [1.02, 1.04, 1.0], saturation: 0.98, contrast: 1.18, pivot: 0.3, shoulder: 0.5, shadows: [0.94, 1.05, 1.02], highlights: [1.05, 1.01, 0.92] },
   // ancient valley at sunset: golden highlights, cooler blue shadows for depth, richer foliage
-  ancient: { lift: [-0.012, -0.012, -0.006], gamma: [1, 1, 1], gain: [1.05, 1.02, 0.98], saturation: 1.15, contrast: 1.14, pivot: 0.42, shoulder: 0.5, shadows: [0.95, 1.0, 1.08], highlights: [1.04, 1.0, 0.94] },
+  ancient: { lift: [-0.012, -0.011, -0.004], gamma: [1, 1, 1], gain: [1.02, 1.01, 1.01], saturation: 1.02, contrast: 1.16, pivot: 0.42, shoulder: 0.5, shadows: [0.94, 1.0, 1.1], highlights: [1.02, 1.0, 0.975] },
 };
 const GRADE_KEYS = ['lift', 'gamma', 'gain', 'shadows', 'highlights'];
 

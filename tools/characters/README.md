@@ -55,3 +55,23 @@ with a hooded poncho, an ancient settler) and, with `TEST_ALL=1`, a coverage set
 The generator's `anims.glb` is procedural: never copy it over `assets/models/anims.glb` (motion capture). To view a
 build, copy the real `assets/models/anims.glb` next to it and open `tools/cast.html?base=<url of OUT>/&ids=...`
 (`&rot=180` back view, `&clip=walk&t=0.35`, `&clip=bind`).
+
+## Gadgets (`gear=[...]`, `gadgets.py`)
+
+A costume spec lists hard-surface gadgets in `gear` (a name, `(name, {options})`, or `period:<name>` for ancient
+props); `gadgets.era_ok` refuses tech in the settlement and period props anywhere else. Each gadget is bevelled
+geometry placed by rays on the dressed body (outermost layer), coloured from flat palette swatches in the atlas aux
+region, and weighted 100 % to one bone (straps and cords copy the cloth weights under them). Wrist bands fit the
+limb at both edges and never straddle a sleeve hem (under a loose sleeve they sit on the skin and peek out).
+
+glTF output the runtime uses (`src/human/cast3d.js` → `person.gadgets`, `setGadget(type, level)`, `showProp(type, on)`):
+- `gx_<type>`: the emissive part, its own skinned node; node extras `gadget`, `slot: 'glow'`, `idle` (rest level),
+  `segs`, `seg_mode`, `bone`; material `<id>_glow_<hex>` (extras `slot: 'glow'`, `glow: <hex>`, one per colour);
+  vertex attribute `_gseg` = segment index (chronolith glyphs 0..6, echo vents 0..1, shard / vial index).
+- `gp_<type>`: hand props (staff, spear, umbrella, phone, scanner, jar ...), extras `gadget`, `prop: 'hand'`.
+- The armature root carries `gadgets`: JSON [{type, bone, glow, idle, segs, seg_mode, prop, node, color, baked}].
+- Budgets under 11 000 triangles (crowds, children) bake glow into the atlas emissive at its idle level: no gx_ nodes.
+
+The build log prints each gadget's triangle cost. Viewer close-ups: `tools/cast.html?base=...&ids=kai&cols=1&focus=head&d=0.5`
+(`focus=<bone>` aims at a bone, `fy` lifts the aim, `glow=<level>` lights every gadget). `GADGET_DEBUG=1` prints the
+forearm radius profile used to find sleeve hems.
