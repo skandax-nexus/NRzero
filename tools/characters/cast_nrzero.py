@@ -89,7 +89,7 @@ CAST = [
          skin="a77a5d", lip="8a5a4c", eyes="3a2a1c", hair="swept", hairColor="a8a49c", stubble=1.0, beard=0.85, beardColor="9a968e", browThick=0.75,
          scars=[((0.022, 0.045), (0.05, 0.002))],
          glow="ff6a4a", glowLevel=0.5, wearLevel=0.6,
-         wear=[("mock_neck", "1c1c1e"), ("longshell", "2a2724", dict(det_add=["wear"], c2="4a3a2c")), ("chest_harness", "2a2a2c"),
+         wear=[("mock_neck", "1c1c1e"), ("longshell", "2a2724", dict(det_add=["wear"], c2="4a3a2c")),   # his patched harness is under the sealed coat
                ("tech_trousers", "202020"), ("tech_boots", "141210", dict(sole="4a4844")), ("gloves", "111111")],
          gear=[("chronolith_band", dict(cracked=True, glow="ff6a4a")), ("ar_monocle", dict(cracked=True)), ("echo_emitter", dict(scorched=True, glow="ff6a4a")),
                "recorder_spool"]),
@@ -99,7 +99,7 @@ CAST = [
          details={"head/head-oval": 0.3, "chin/chin-prominent-decr|incr": 0.25, "eyebrows/eyebrows-angle-down|up": -0.2, **sym(cheek_bones=0.4)},
          skin="8a5b3c", lip="7a4a3c", eyes="5d6e58", hair="pony", hairColor="2a1f19", blush=0.12, scars=[((0.035, 0.06), (0.045, -0.055))],
          glow="b6ff8a", wearLevel=0.85,
-         wear=[("field_jacket_worn", "4a3a28", dict(c2="6a5a44")), ("scav_plate", "3a3a2c"), ("pauldron", "4a4a3a", dict(side="L")),
+         wear=[("field_jacket_worn", "4a3a28", dict(c2="6a5a44")), ("scav_plate", "3a3a2c", dict(c3="26303c", c4="7a7448")), ("pauldron", "4a4a3a", dict(side="L")),
                ("sling_strap", "2a2620", dict(side="R")), ("cargo_trousers", "3a3a30", dict(det_add=["wear"])), ("knee_pads", "1e1e1c"),
                ("forearm_wraps", "8a7a60"), ("combat_boots", "2a2018")],
          gear=[("respirator", dict(worn="neck")), ("goggles", dict(worn="neck")), "wrist_scanner_scav", ("radio_chest_rig", dict(rig=False)),
@@ -170,7 +170,7 @@ CAST = [
     dict(id="child", group="Principals", era="2049", role="The Child in the Station (Rain City)", years=8, metres=1.27,
          macro=KID(False, weight=0.4, **EU), details={"head/head-round": 0.3, "eyes/l-eye-scale-decr|incr": 0.2, "eyes/r-eye-scale-decr|incr": 0.2},
          skin="f0c8a8", lip="c27a72", eyes="5a3a22", hair="bob", hairColor="5a3a24", freckles=0.7, glow="ffe6b0", glowLevel=0.4, tris=9000,
-         wear=[("longshell", "e8b923", dict(det=["zip:placket", "reflective:arms", "hem_band"], tail=dict(end=0.33, flare=0.2, split=0.02, vent=0.0))),
+         wear=[("techshell", "e8b923", dict(det=["zip:placket", "reflective:arms", "hem_cord"], hem=-0.1)),
                ("hood_down", None), ("cargo_joggers", "6a6e74"), ("rain_boots", "b0262c")],
          gear=[("kid_locator_band", dict(glow="ffd34a"))]),
     # ---- Dr. Anja Vale (2196): cut-down lab coat as a hooded field coat, padded instrument vest ----
@@ -499,6 +499,8 @@ for _c in CAST:
     _c["details"] = {k: max(-0.4, min(0.4, v * 0.8)) for k, v in _c.get("details", {}).items()}
     if _c["id"].startswith(CROWD_PREFIX) or _c["years"] < 14:
         _c.setdefault("tris", 9000)
+        _c.setdefault("normalDiv", 2)      # crowd / child atlases: half-resolution normal map, a lighter JPEG
+        _c.setdefault("jpegQ", 84)
     if not _c.get("gear"):
         _c.pop("gear", None)
 

@@ -79,6 +79,7 @@ export function init(renderer, opts = {}) {
   if (opts.quality) setQuality(opts.quality === 'auto' ? autoQuality(renderer) : opts.quality);
   if (opts.comfort !== undefined) setComfort(opts.comfort);
   installFogChunks();
+  installLightingChunks();
   return { quality: qualityName, comfort: shared.comfort.value > 0.5 };
 }
 function gl() { if (!R) throw new Error('realism.js: call init(renderer) before building'); return R; }
@@ -1336,6 +1337,7 @@ export function skyEnvironment(renderer, scene, opts = {}) {
   if (renderer) R = renderer;
   installFogChunks();
   const r = gl();
+  installLightingChunks();
   const P = { ...SKY_PRESETS[opts.preset || 'day'], ...opts };
   if (P.interior) return interiorEnvironment(r, scene, P);
   const t0 = performance.now();
@@ -1474,29 +1476,49 @@ function interiorEnvironment(r, scene, P) {
  *   const probe = captureEnvironment(renderer, scene, [0, 1.8, -20], { size: 128, box: { min: [-8, -0.1, -60], max: [8, 30, 20] } });
  *   probe.apply(streetMaterial);   // envMap + box-projected (parallax-corrected) reflections
  * Objects with userData.noCapture = true are hidden during the capture. Size defaults to the quality tier (64-256).
+ * Optional:
+ *   hide(o) -> bool       also hide these objects (e.g. characters, rain) for the capture
+ *   scale                 radiance multiplier baked into the probe (default 1)
+ *   normalize             { luminance, strength = 0.5, min = 0.25, max = 6 }: measures the probe's mean luminance and
+ *                         scales it by (luminance / mean) ^ strength, so a probe can stand in for an environment a scene
+ *                         was lit with (0 = physical, 1 = same mean as the reference). probe.luminance / probe.scale.
+ *   shadows: false        reuse the current shadow maps instead of re-rendering them for each cube face
+ *   measure: true         only measure probe.luminance (no normalization)
  */
 export function captureEnvironment(renderer, scene, position, opts = {}) {
   if (renderer) R = renderer;
   const r = gl();
+  installLightingChunks();
   const size = opts.size || Q.capture;
   const rt = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false });
   const cam = new THREE.CubeCamera(opts.near ?? 0.05, opts.far ?? 1000, rt);
   cam.position.copy(v3(position)); cam.updateMatrixWorld(true);
   const hidden = [];
-  scene.traverse(o => { if (o.userData.noCapture && o.visible) { o.visible = false; hidden.push(o); } });
-  const prevTM = r.toneMapping, prevBg = scene.background;
+  scene.traverse(o => { if (o.visible && (o.userData.noCapture || (opts.hide && opts.hide(o)))) { o.visible = false; hidden.push(o); } });
+  const prevTM = r.toneMapping, prevBg = scene.background, prevAuto = r.shadowMap.autoUpdate;
   if (prevBg && prevBg.userData && prevBg.userData.rzNoDisc) scene.background = prevBg.userData.rzNoDisc;
-  cam.update(r, scene);
-  hidden.forEach(o => { o.visible = true; });
-  scene.background = prevBg; r.toneMapping = prevTM;
+  if (opts.shadows === false) r.shadowMap.autoUpdate = false;
+  try { cam.update(r, scene); } finally {
+    hidden.forEach(o => { o.visible = true; });
+    scene.background = prevBg; r.toneMapping = prevTM; r.shadowMap.autoUpdate = prevAuto;
+  }
   // Sanitize before prefiltering: one NaN / inf texel (a degenerate fragment, a 0.05-roughness sun glint that
   // overflows half float) would otherwise smear across every PMREM mip and turn the whole probe black.
-  const clean = sanitizeCube(r, rt, opts.clamp ?? 32);
+  let scale = opts.scale ?? 1, luminance = null;
+  if (opts.normalize || opts.measure) {
+    luminance = cubeLuminance(r, rt, opts.clamp ?? 32);
+    const N = opts.normalize;
+    if (N && N.luminance > 0) {
+      const k = Math.pow(N.luminance / Math.max(luminance, 1e-5), N.strength ?? 0.5);
+      scale *= Math.min(N.max ?? 6, Math.max(N.min ?? 0.25, k));
+    }
+  }
+  const clean = sanitizeCube(r, rt, opts.clamp ?? 32, scale);
   const pm = new THREE.PMREMGenerator(r);
   const env = pm.fromCubemap(clean.texture).texture;
   pm.dispose(); rt.dispose(); clean.dispose();
   const probe = {
-    texture: env, position: v3(position), box: opts.box || null,
+    texture: env, position: v3(position), box: opts.box || null, luminance, scale,
     /** Use this capture on a material; with a box, reflections are parallax-corrected to that volume. */
     apply(mat, o = {}) {
       mat.envMap = env; if (o.intensity !== undefined) mat.envMapIntensity = o.intensity;
@@ -1508,18 +1530,18 @@ export function captureEnvironment(renderer, scene, position, opts = {}) {
   return probe;
 }
 
-// Copy a captured cube into a fresh cube target with NaN / inf / negative texels removed and radiance clamped.
+// Copy a captured cube into a fresh cube target with NaN / inf / negative texels removed, radiance clamped and scaled.
 let sanitizeState = null;
-function sanitizeCube(r, srcRT, maxRadiance) {
+function sanitizeCube(r, srcRT, maxRadiance, scale = 1) {
   if (!sanitizeState) {
     const mat = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: null }, uMax: { value: 64 } },
+      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 } },
       vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform samplerCube tSrc; uniform float uMax; varying vec3 vDir;
+      fragmentShader: `uniform samplerCube tSrc; uniform float uMax, uScale; varying vec3 vDir;
         void main(){ vec3 c = textureCube(tSrc, normalize(vDir)).rgb;
           bvec3 bad = bvec3(isnan(c.r) || isinf(c.r), isnan(c.g) || isinf(c.g), isnan(c.b) || isinf(c.b));
           c = mix(c, vec3(0.0), bad);
-          c = clamp(c, 0.0, uMax); gl_FragColor = vec4(c, 1.0); }`,
+          c = clamp(c, 0.0, uMax) * uScale; gl_FragColor = vec4(c, 1.0); }`,
       side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false,
     });
     const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat); box.frustumCulled = false;
@@ -1528,10 +1550,46 @@ function sanitizeCube(r, srcRT, maxRadiance) {
   }
   const size = srcRT.width;
   const out = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false });
-  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance;
+  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale;
   new THREE.CubeCamera(0.1, 10, out).update(r, sanitizeState.sc);
   sanitizeState.mat.uniforms.tSrc.value = null;
   return out;
+}
+
+// Mean luminance of a cube map over the sphere (solid-angle weighted): the cube is resampled into a 32 x 16
+// lat-long RGBA8 target with log2-encoded luminance and read back once (portable: no float read-back needed).
+let lumState = null;
+function cubeLuminance(r, cubeRT, maxRadiance = 32) {
+  if (!lumState) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { tSrc: { value: null }, uMax: { value: 32 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `uniform samplerCube tSrc; uniform float uMax; varying vec2 vUv;
+        void main(){ float ph = vUv.x * 6.2831853, th = (vUv.y - 0.5) * 3.1415927; vec3 d = vec3(cos(th) * sin(ph), sin(th), cos(th) * cos(ph));
+          vec3 c = textureCube(tSrc, d).rgb; c = clamp(mix(c, vec3(0.0), bvec3(isnan(c.r), isnan(c.g), isnan(c.b))), 0.0, uMax);
+          float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+          gl_FragColor = vec4(clamp(log2(max(l, 1e-6)) / 32.0 + 0.75, 0.0, 1.0), clamp(l / uMax, 0.0, 1.0), 0.0, 1.0); }`,
+      depthTest: false, depthWrite: false, toneMapped: false,
+    });
+    const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); q.frustumCulled = false;
+    const sc = new THREE.Scene(); sc.add(q);
+    lumState = { mat, sc, cam: new THREE.Camera(), rt: new THREE.WebGLRenderTarget(32, 16, { type: THREE.UnsignedByteType, depthBuffer: false }), px: new Uint8Array(32 * 16 * 4) };
+  }
+  const L = lumState, prev = r.getRenderTarget();
+  L.mat.uniforms.tSrc.value = cubeRT.texture; L.mat.uniforms.uMax.value = maxRadiance;
+  r.setRenderTarget(L.rt); r.render(L.sc, L.cam); r.readRenderTargetPixels(L.rt, 0, 0, 32, 16, L.px); r.setRenderTarget(prev);
+  L.mat.uniforms.tSrc.value = null;
+  let sum = 0, wsum = 0;
+  for (let j = 0; j < 16; j++) {
+    const w = Math.cos(((j + 0.5) / 16 - 0.5) * Math.PI);
+    for (let i = 0; i < 32; i++) {
+      const o = (j * 32 + i) * 4, lin = L.px[o + 1] / 255 * maxRadiance;
+      // bright texels: the linear channel is exact enough; dark ones: the log channel keeps precision
+      const l = lin > maxRadiance * 0.02 ? lin : Math.pow(2, (L.px[o] / 255 - 0.75) * 32);
+      sum += l * w; wsum += w;
+    }
+  }
+  return sum / wsum;
 }
 
 // Parallax-corrected cube-map reflections: reflection rays are intersected with an axis-aligned proxy box.
@@ -1639,10 +1697,11 @@ function installFogChunks() {
 	#ifdef FOG_EXP2
 		float fogFactor;
 		if ( fogFar < 0.0 ) {
-			float rzK = - fogFar; vec3 rzD = vFogWorld - cameraPosition; float rzDy = rzD.y;
-			float rzI = fogNear * exp( - rzK * cameraPosition.y ) * length( rzD );
-			rzI *= abs( rzK * rzDy ) > 1e-4 ? ( 1.0 - exp( - rzK * rzDy ) ) / ( rzK * rzDy ) : 1.0;
-			fogFactor = 1.0 - exp( - rzI );
+			// height fog: fogFar = -falloff (linear extinction) or -(1000 + falloff) (FogExp2 curve, see HeightFog)
+			float rzK = - fogFar; bool rzSq = rzK > 500.0; if ( rzSq ) rzK -= 1000.0;
+			vec3 rzD = vFogWorld - cameraPosition; float rzDy = rzD.y; float rzL = length( rzD );
+			float rzH = exp( - rzK * cameraPosition.y ) * ( abs( rzK * rzDy ) > 1e-4 ? ( 1.0 - exp( - rzK * rzDy ) ) / ( rzK * rzDy ) : 1.0 );
+			fogFactor = 1.0 - exp( - fogNear * rzH * ( rzSq ? rzL * rzL : rzL ) );
 		} else {
 			fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
 		}
@@ -1653,23 +1712,54 @@ function installFogChunks() {
 #endif`;
 }
 
+// Horizon specular occlusion (Filament / Jimenez 2016): a reflection vector that a normal map bends below the geometric
+// surface cannot see the environment, so the image-based specular fades out there. Without it, normal-mapped and
+// grazing surfaces (floors, walls of a dark interior, cobbles) pick up env highlights from under their own surface and
+// read as shiny plastic. A few ALU per lit pixel, installed into three's shared chunk (every MeshStandard / Physical).
+let lightingInstalled = false;
+export function installLightingChunks() {
+  if (lightingInstalled) return; lightingInstalled = true;
+  const C = THREE.ShaderChunk, find = 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
+  if (!C.lights_fragment_maps.includes(find)) return;
+  C.lights_fragment_maps = C.lights_fragment_maps.replace(find, `{
+			vec3 rzRv = reflect( - geometryViewDir, geometryNormal );
+			float rzHz = clamp( 1.0 + 1.2 * dot( rzRv, nonPerturbedNormal ), 0.0, 1.0 );
+			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz );
+		}`);
+}
+
 /**
  * Exponential height fog (denser near the ground, thinning with altitude): scene.fog = new HeightFog(color, density, falloff, base).
  * density = extinction per meter at y = base; falloff = 1/m (0.05 = halves every ~14 m).
  * Implemented in three's fog chunks, so every built-in and fog-enabled ShaderMaterial gets it. Requires init()/skyEnvironment().
  */
+// opts.exp2: true keeps the FogExp2 distance curve (1 - exp(-(density * d)^2)) at the base height and only thins it with
+// altitude, so a scene authored with FogExp2 keeps its near-field look (characters do not get hazier) while towers,
+// hills and ceilings rise out of the haze. The engine uses it to upgrade missions' FogExp2 in place.
 export class HeightFog extends THREE.FogExp2 {
-  constructor(color, density = 0.02, falloff = 0.08, base = 0) {
-    super(color, density); this.isFog = true; this.falloff = falloff; this.base = base; installFogChunks();
+  constructor(color, density = 0.02, falloff = 0.08, base = 0, opts = {}) {
+    super(color, density); this.isFog = true; this.isHeightFog = true; this.falloff = falloff; this.base = base; this.exp2 = !!opts.exp2; installFogChunks();
   }
-  get near() { return this.density * Math.exp(this.falloff * this.base); }
+  // three uploads only near / far for fog.isFog: near carries the density (and the base height), far the falloff + mode
+  get near() { return (this.exp2 ? this.density * this.density : this.density) * Math.exp(this.falloff * this.base); }
   set near(v) { /* derived */ }
-  get far() { return -Math.max(1e-4, this.falloff); }
+  get far() { return -(Math.max(1e-4, this.falloff) + (this.exp2 ? 1000 : 0)); }
   set far(v) { /* derived */ }
-  clone() { return new HeightFog(this.color, this.density, this.falloff, this.base); }
+  clone() { return new HeightFog(this.color, this.density, this.falloff, this.base, { exp2: this.exp2 }); }
 }
-/** Convenience: heightFog({ color, density, falloff, base }) -> HeightFog. */
-export function heightFog({ color = 0x8090a0, density = 0.02, falloff = 0.08, base = 0 } = {}) { return new HeightFog(col(color), density, falloff, base); }
+/** Convenience: heightFog({ color, density, falloff, base, exp2 }) -> HeightFog. */
+export function heightFog({ color = 0x8090a0, density = 0.02, falloff = 0.08, base = 0, exp2 = false } = {}) { return new HeightFog(col(color), density, falloff, base, { exp2 }); }
+/**
+ * Upgrade a stock THREE.FogExp2 to height fog with the same colour (the same Color object, so code that animates
+ * fog.color keeps working), the same density and the same near-field curve: heightFogFrom(scene.fog, { falloff: 0.05 }).
+ * Returns the input unchanged when it is not a plain FogExp2.
+ */
+export function heightFogFrom(fog, { falloff = 0.05, base = 0 } = {}) {
+  if (!fog || !fog.isFogExp2 || fog.isHeightFog) return fog;
+  const h = new HeightFog(fog.color, fog.density, falloff, base, { exp2: true });
+  h.color = fog.color; h.name = fog.name;
+  return h;
+}
 
 
 // =====================================================================================

@@ -268,12 +268,19 @@ def f_over(g, B, LM, cov):
     if shape in ("vest", "cuirass"):
         neck_y = neck_line(B, 0.0 if shape == "vest" else 0.01, 0.12 if shape == "vest" else 0.05, LM)
         hem = LM["hip"] + g.get("hem", -0.04) * k
-        f = B.tw * np.minimum(neck_y - y, y - hem) + B.legs * (y - hem)
+        top_lim = neck_y - y
+        if shape == "vest":    # the trapezius rises above the neck-base line: shoulder straps 7-11 cm out from the centre
+            ax_ = np.abs(P[:, 0])
+            strap_ = np.minimum(np.minimum(ax_ - 0.064 * k, 0.118 * k - ax_), LM["nb"] + 0.075 * k - y) - B.hw * 0.3
+            top_lim = np.maximum(top_lim, strap_)
+        f = B.tw * np.minimum(top_lim, y - hem) + B.legs * (y - hem)
         for s in "LR":
             sa = vc["arm" + s][0]
             f = f + B.aw[s] * ((-0.035 if shape == "vest" else -0.02) - sa)
-        if shape == "vest":    # armholes cut a little deeper into the side
-            f = np.minimum(f, (np.abs(np.abs(th) - 90) * 0.0175 * r - 0.03) + ss(LM["sh"] - 0.13, LM["sh"] - 0.17, y))
+        if shape == "vest":    # armholes cut a little deeper into the side; the shoulder straps run over the top of the shoulder
+            side_cut = np.abs(np.abs(th) - 90) * 0.0175 * r - 0.03
+            straps = (0.112 * k - np.abs(P[:, 0])) * ss(LM["sh"] - 0.17, LM["sh"] - 0.11, y)
+            f = np.minimum(f, np.maximum(side_cut, straps) + ss(LM["sh"] - 0.13, LM["sh"] - 0.17, y))
         return f
     if shape == "carrier":
         fr = np.radians(62 - np.abs(th)) * r
