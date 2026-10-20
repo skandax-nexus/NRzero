@@ -128,3 +128,8 @@ scene.add(k.build()); k.collide(game);                     // or use k.colliders
 - Debug / A/B: `?infra=off` builds the kit exactly as before the upgrade; `?infra=nofacade,nomasonry,nolamp,nobatch`
   switches single parts off; `game.engine.setInfraLegacy(true|false)` flips a running scene; `engine.stats.batches`,
   `engine.stats.batched` report the merge.
+- Phone cost (docs/RENDERING.md, stage 4 "Cost"): batching halves a street's draw calls on every tier, but a view
+  filled with facade buildings costs ~12-20 % more GPU time on the phone tiers than flat-printed boxes did (the
+  windows are drawn per pixel). Give far skyline towers a material with only the `facadeTextures` emissive map (no
+  `map`): they build in `far` mode (glass curtain walls, no shops, few protrusions, low detail). Budget ~250 calls /
+  700k triangles on `?gfx=low`.

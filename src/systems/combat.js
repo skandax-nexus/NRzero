@@ -343,7 +343,7 @@ export class Combat {
       const target = allow ? this.pickTarget() : null;
       this.aim.classList.toggle('on', allow && (firing || alerted > 0));
       this.aim.classList.toggle('lock', !!target);
-      this.modeEl.textContent = W.hold > 0.45 ? (W.cells >= 2 ? 'DISPLACE ▸ release' : 'NEED 2 CELLS') : alerted ? 'R / CLICK · STUN — HOLD · DISPLACE' : '';
+      this.modeEl.textContent = W.hold > 0.45 ? (W.cells >= 2 ? 'DISPLACE ▸ release' : 'NEED 2 CELLS') : alerted ? (g.touch?.enabled ? 'FIRE · STUN — HOLD · DISPLACE' : 'R / CLICK · STUN — HOLD · DISPLACE') : '';
       if (!firing && W.hold > 0) { const charged = W.hold > 0.45; W.hold = 0; this.fire(charged ? 'displace' : 'stun', target); }
     }
     // hud

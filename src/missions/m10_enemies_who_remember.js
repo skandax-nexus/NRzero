@@ -363,7 +363,7 @@ export default {
     await game.talk([['sera', 'Seventeen. You awake?'], ['kai', 'Who\'s there?']]);
     const seraHead = () => { const h = sera.head ? sera.head.getWorldPosition(V()) : V(0.75, 1.25, 7.4); h.y = Math.max(0.7, Math.min(1.5, h.y + 0.06)); return h; };
     let sh = seraHead();
-    await game.shot([-0.3, sh.y, 7.2], [sh.x, sh.y, sh.z], 1.8, { fov: 30 });
+    await game.shot([-0.55, sh.y + 0.05, 7.15], [sh.x, sh.y + 0.04, sh.z], 1.8, { fov: 32 });
     await game.talk([
       ['sera', 'Sera Voss. Cell four. I run the people the Continuum hasn\'t caught yet. Mostly.'],
       ['sera', 'They dragged you in shouting a name. Mira.'],
@@ -372,12 +372,12 @@ export default {
     audio.silence(1.2); await game.wait(1.0);
     await game.talk([['sera', '...Say that again.'], ['kai', 'Kai Varen. Why?']]);
     sh = seraHead();
-    await game.shot([-0.15, sh.y, 7.3], [sh.x, sh.y, sh.z], 1.2, { fov: 24 });
+    await game.shot([-0.35, sh.y + 0.04, 7.3], [sh.x, sh.y + 0.04, sh.z], 1.2, { fov: 26 });
     audio.sfxPlay('heartbeat');
     await game.say('sera', 'In my time, your face is on every memorial.');
     await game.shot([0.35, sh.y, 7.5], [-0.75, sh.y - 0.05, 7.4], 1.0, { fov: 26 });
     await game.say('kai', 'For saving the world?');
-    await game.shot([-0.15, sh.y, 7.3], [sh.x, sh.y, sh.z], 1.0, { fov: 22 });
+    await game.shot([-0.35, sh.y + 0.04, 7.3], [sh.x, sh.y + 0.04, sh.z], 1.0, { fov: 22 });
     audio.silence(1.4); await game.wait(1.1);
     await game.say('sera', 'For ending it.');
     await game.wait(0.8);
@@ -500,7 +500,7 @@ export default {
       await game.talk([['kai', 'Okafor, T. Cell seven, manual hold.'], ...(S.seraFree ? [['sera', 'Teo. My scout. Eleven days.']] : [])]);
       if (S.seraFree) objective('Optional: release cell 7 at the guard post · then the armoury (north-east)');
     } });
-    game.interact({ pos: [P.roster[0] + 0.6, 1.3, P.roster[2] - 1.4], radius: 1.7, prompt: 'Release cell 7 (manual)', states: ['2196'], enabled: () => !S.teoFree, onUse: async () => {
+    game.interact({ pos: [P.roster[0] + 0.6, 1.3, P.roster[2] - 1.4], radius: 1.7, prompt: 'Release cell 7 (manual)', states: ['2196'], enabled: () => !S.teoFree && S.seraFree, onUse: async () => {
       S.teoFree = true; setBars(TEO_CELL, false); W.screens.roster.material.map = TEX.roster(true); W.screens.roster.material.needsUpdate = true; audio.sfxPlay('door');
       await game.wait(0.5); teo.pose = null; await walkTo(teo, [15.4, 0, 3.0], 2.4);
       walkTo(teo, [12, 0, -6.2], 3.0).then(() => { teo.crouch = 1; });
@@ -819,7 +819,7 @@ export default {
     const skFrom = V(150, 8, 10), skTo = V(124.4, -0.6, 0); W.skiff.position.copy(skFrom);
     { let u = 0; game.onUpdate(dt => { if (u >= 1) return; u = Math.min(1, u + dt / 6); const k = 1 - Math.pow(1 - u, 3); W.skiff.position.lerpVectors(skFrom, skTo, k); W.skiff.position.y += Math.sin(game.time * 1.3) * 0.08; }); }
     await game.shot([112.6, 2.4, 4.6], [150, 14, -12], 3.4, { fov: 50 });
-    await game.shot([118.8, 1.7, 2.6], [116.4, 1.5, 0.2], 2.0, { fov: 38 });
+    await game.shot([114.7, 1.62, -2.6], [117.2, 1.5, 0.4], 2.0, { fov: 40 });
     sera.lookTarget = kai.head || null; kai.lookTarget = sera.head || null;
     await game.talk([
       ['sera', 'That trick. The afterimage.'],
