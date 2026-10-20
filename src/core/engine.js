@@ -873,7 +873,7 @@ export class Engine {
   // ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts (or engine.lightOff + applyLighting()):
   //   env      the scene's own image-based light: an EnvProbe captured at the camera ~8 frames after setScene
   //            (characters, rain and particles hidden), scaled to the mean brightness of the studio light the scene
-  //            was authored with (so authored exposure and envIntensity still hold) with 20 % of it spread evenly as
+  //            was authored with (so authored exposure and envIntensity still hold) with 15 % of it spread evenly as
   //            bounce light, re-captured when the place changes (era switch, blackout: fog / background / visible
   //            lights) and, on high / medium, when the camera has moved 25 / 40 m. A re-capture renders one cube face
   //            per frame. Missions that set scene.environment themselves are left alone.
@@ -1028,7 +1028,7 @@ export class Engine {
     const L = this._light;
     L.probe.start(this.scene, this.camera.position, {
       hide: o => !!(o.userData.character || o.userData.rzRain || o.isPoints || o.isLineSegments || o.isSprite),
-      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: 0.15 },
+      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: this.scene.userData.envFill ?? this.settings.light.envFill ?? 0.15 },
       // emissive panels stay bright in reflections without blowing wet floors out; tinted eras keep their hue in the
       // key / hemisphere lights and fog, so the probe adds less of it (an orange sunset would turn green grass brown,
       // a red alarm strip would paint a whole lab red); a rainy street keeps its full neon colour

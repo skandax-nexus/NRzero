@@ -555,6 +555,8 @@ def build_layers(c, B, cov):
             BH.inflate(L, B, g["inflate"])
             BH.taubin(L, 2)
         shape_layer(L, B, g, LM, cov)
+        if g.get("cat") in ("top", "over"):
+            smooth_shoulder_weights(L, B)
         need = below + 0.0014
         if g.get("cat") == "top" and (g.get("tail") or g.get("poncho")):   # the hem loop a tail grows from stands clear
             hem = ss(0.035, 0.0, L.cov) * (L.pos[:, 1] < LM["ch"] + 0.04) * ((B.aw["L"] + B.aw["R"])[L.base] < 0.3)
@@ -565,6 +567,8 @@ def build_layers(c, B, cov):
                       * ((B.aw["L"] + B.aw["R"])[L.base] < 0.3))
             need = need + 0.007 * crease
         push_out(L, B, need)
+        if g.get("cat") == "top" and c["macro"].get("gender", 1.0) < 0.5:
+            bridge_bust(L, B, 0.03 if g.get("role") == "outer" else 0.018)
         d = ((L.pos - B.P[L.base]) * B.N[L.base]).sum(1)
         OFF[L.base] = np.maximum(OFF[L.base], d * ss(-0.004, 0.012, L.cov))
         L.mask[:, 1] = g.get("gloss", 0.0)
@@ -579,6 +583,51 @@ def build_layers(c, B, cov):
         if L.g.get("rim", 0) > 0:
             add_rims(L, B, L.g["rim"])
     return layers
+
+
+def bridge_bust(L, B, reach):
+    """Cloth spans the bust instead of following it: the front height field (z) of the chest is replaced by its
+    smoothed local maximum (never lower), so the base body's nipples no longer show through jackets and tunics."""
+    ch_y = B.Jm["chest"][1]
+    P = L.pos
+    bust = ((P[:, 2] - B._vc["zc"][L.base]) > 0.02) & (P[:, 1] > ch_y - 0.12) & (P[:, 1] < ch_y + 0.1) \
+        & ((B.aw["L"] + B.aw["R"])[L.base] < 0.15)
+    idx = np.nonzero(bust)[0]
+    if len(idx) < 10:
+        return
+    Q = P[idx]
+    dxy = np.hypot(Q[:, None, 0] - Q[None, :, 0], Q[:, None, 1] - Q[None, :, 1])
+    zmax = np.where(dxy < reach, Q[None, :, 2], -9).max(1)
+    wgt = np.clip(1 - dxy / (reach * 1.2), 0, 1)
+    zs = (wgt * zmax[None, :]).sum(1) / np.maximum(wgt.sum(1), 1e-9)
+    # fade at the region's border so the lift blends into the rest of the garment
+    edge = np.minimum(np.minimum(Q[:, 1] - (ch_y - 0.12), (ch_y + 0.1) - Q[:, 1]) / 0.04, 1.0).clip(0, 1)
+    L.pos[idx, 2] = Q[:, 2] + np.maximum(zs - Q[:, 2], 0) * edge
+
+
+def smooth_shoulder_weights(L, B, iters=int(os.environ.get("SHW", "8"))):
+    """Blend the torso / upper-arm weights of a garment over a wider band around the shoulder: the body's sharp
+    transition, carried 1-2 cm out by the cloth, folded the lowered arm's shoulder into a square pad."""
+    if iters <= 0:
+        return
+    aw = (B.aw["L"] + B.aw["R"])[L.base]
+    y = L.pos[:, 1]
+    band = (aw > 0.01) & (aw < 0.99) & (y > B.Jm["shoulder_L"][1] - 0.12)
+    if not band.any():
+        return
+    ii, jj = [], []
+    for (i, j) in L.edges():
+        ii += [i, j]
+        jj += [j, i]
+    ii, jj = np.array(ii), np.array(jj)
+    cnt = np.maximum(np.bincount(ii, minlength=len(L.pos)), 1).astype(float)[:, None]
+    W = L.W.astype(float).copy()
+    for _ in range(iters):
+        acc = np.zeros_like(W)
+        np.add.at(acc, ii, W[jj])
+        W[band] = 0.5 * W[band] + 0.5 * (acc / cnt)[band]
+    W /= np.maximum(W.sum(1, keepdims=True), 1e-9)
+    L.W = W.astype(L.W.dtype)
 
 
 def push_out(L, B, need):
@@ -665,7 +714,7 @@ def ease_limbs(L, B, ease, kind):
         tgt = Rw[si, ai] * (0.94 if kind == "arm" else 0.97) + ease * (0.5 if kind == "arm" else 1.0)
         # fade near the joint with the torso and at the cuff / hem
         t = s2 / max(cum[2], 1e-3)
-        fade = ss(0.02, 0.12, t) * ss(1.02, 0.9, t) * np.clip((w[m] - 0.3) / 0.4, 0, 1)
+        fade = ss(0.1, 0.3, t) * ss(1.02, 0.9, t) * np.clip((w[m] - 0.3) / 0.4, 0, 1)    # (from 0.02: sleeves ballooned into shoulder pads)
         newr = r2 + np.maximum(tgt - r2, 0) * fade
         ax = np.zeros_like(P)
         for a, b in zip(pts[:-1], pts[1:]):
@@ -716,7 +765,10 @@ def add_rims(L, B, depth):
             i, j = f[a], f[(a + 1) % k]
             key = (min(i, j), max(i, j))
             if e.get(key) == 1:
-                side[key] = (i, j, f[(a + 2) % k], np.asarray(fu[a]), np.asarray(fu[(a + 1) % k]))
+                # the rim samples the atlas a little inside its face (the border texels are shared with the layer
+                # under it: rims read as a dark, ragged fringe on vests and plates)
+                uc = np.mean(np.asarray(fu, float), 0)
+                side[key] = (i, j, f[(a + 2) % k], np.asarray(fu[a]) * 0.55 + uc * 0.45, np.asarray(fu[(a + 1) % k]) * 0.55 + uc * 0.45)
     nv0 = len(L.pos)
     newid = {}
     add_p, add_i = [], []
@@ -1001,6 +1053,21 @@ def extend_tail(L, B, g, LM, cov, layers):
                        split_back=bool(tl.get("vent"))).reshape(rows, M, -1)
     blend = ss(0.0, 0.07, top_z - grid[..., 1])[..., None]
     Wt = Wl[None] * (1 - blend) + Wsk * blend
+    Wt /= np.maximum(Wt.sum(-1, keepdims=True), 1e-9)
+    # the upper tail must follow the leg at least as much as the trousers under it (their weights are the body's):
+    # where it followed the hips more, a striding thigh pushed the trousers through the coat below the hem loop
+    gp = grid.reshape(-1, 3)
+    bv = np.asarray(B.bodyv)
+    near = np.empty(len(gp), int)
+    for c0 in range(0, len(gp), 256):
+        d2 = ((gp[c0:c0 + 256, None, :] - B.P[bv][None, :, :]) ** 2).sum(-1)
+        near[c0:c0 + 256] = bv[np.argmin(d2, 1)]
+    Wb = B.W[near].reshape(rows, M, -1).astype(float)
+    legb = [BH.BI[b] for b in ("thigh_L", "thigh_R", "shin_L", "shin_R")]
+    th_b, th_t = Wb[..., legb].sum(-1), Wt[..., legb].sum(-1)
+    depth_ = top_z - grid[..., 1]
+    alpha = np.clip((th_b - th_t) / np.maximum(th_b, 1e-3), 0, 1) * ss(0.2, 0.1, depth_)
+    Wt = Wt * (1 - alpha[..., None]) + Wb * alpha[..., None]
     Wt /= np.maximum(Wt.sum(-1, keepdims=True), 1e-9)
     # aux uv: u = arc along the loop (column), v = down the tail
     du = np.linalg.norm(np.diff(np.r_[P0, P0[:1]], axis=0), axis=1)
@@ -1406,7 +1473,7 @@ def skirt_piece(c, B, g, LM, layers):
     pts = np.concatenate(pts)
     rows = 9
     ys = [top_y - length * i / (rows - 1) for i in range(rows)]
-    pad = [0.004 + 0.006 * i / (rows - 1) for i in range(rows)]
+    pad = [(0.009 if over_top else 0.004) + (0.016 if over_top else 0.006) * i / (rows - 1) for i in range(rows)]
     n = 56
     grid = ring_grid(B, pts, ys, pad, n)
     # monotonic radius + flare + pleats
@@ -2162,7 +2229,9 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         hard = g.get("fab") in ("ceramic", "polymer", "metal") or g.get("shape") in ("plates", "pauldron", "gorget")
         # hard pieces stand off the suit with a real rim: their paint ends just inside the piece (a soft garment bleeds
         # 3 mm past its border instead, so its own border texels never show what lies under it)
-        m = (f > (0.0015 if hard else -0.003)) & ~taken
+        # (hard pieces: a 1.5 mm bleed; ending the paint inside the piece left its own border faces sampling the suit
+        # under it - a jagged black fringe round every plate. The plate's standing rim hides the thin halo on the suit)
+        m = (f > (-0.0015 if hard else -0.003)) & ~taken
         col_k = (g.get("collar") or {}).get("kind")
         if key.startswith("top") and col_k in ("stand", "funnel", "mandarin", "gorget", "rib", "turtle"):   # under the collar
             m |= (f > -0.012) & ~taken & (pos[:, 1] > B.Jm["chest"][1]) & (arm_f < 0.5)

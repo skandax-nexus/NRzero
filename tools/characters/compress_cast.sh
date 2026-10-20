@@ -4,6 +4,6 @@
 set -e
 TMP=$(mktemp -d)
 npx --yes @gltf-transform/cli webp "$1" "$TMP/w.glb" --quality ${WEBPQ:-74}
-npx --yes @gltf-transform/cli meshopt "$TMP/w.glb" "$2"
+npx --yes @gltf-transform/cli meshopt "$TMP/w.glb" "$2" --quantize-generic 8   # _MASK (skin / gloss / hair) at 8 bits
 rm -rf "$TMP"
 ls -la "$2"

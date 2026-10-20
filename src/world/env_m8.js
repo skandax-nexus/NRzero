@@ -45,7 +45,7 @@ export function registerM8Cast() {
   registerCast('yara', {
     name: 'DR. YARA LIND', role: 'Containment physicist · Helix · missing since 08:14',
     bio: 'Kai Varen\'s project partner in a version of Helix he never worked at. Her badge last opened the containment antechamber at 08:12. Nobody has seen her since the Zero Second.',
-    look: { era: '2049', costume: 'helix_sci_f', sex: 'f', female: true, age: 35, height: 1.68, build: 0.94, skin: 0xc68e6a, hair: 0x2a1c14, hairStyle: 'tied-back', eyes: 0x3a5a4a,
+    look: { era: '2049', costume: 'helix_sci_f', sex: 1, female: true, age: 35, height: 1.68, build: 0.94, skin: 0xc68e6a, hair: 0x2a1c14, hairStyle: 'tied-back', eyes: 0x3a5a4a,
       face: { jaw: -0.1, cheek: 0.35, nose: -0.05, noseWidth: 0.1, lips: 0.2, brow: 0.15, eyeSize: 0.15, faceLength: 0.15, chin: -0.05 },
       topType: 'jacket', top: 0x1d2430, topKind: 'synthetic', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x4a4e54, shoes: 'shoes', boots: 0xe6e2da, freckles: 0.15 },
     rimColor: 0xffc890, glow: 0x2a2010, bg: 0x101014,
@@ -65,15 +65,15 @@ export function registerM8Cast() {
 }
 // 2049 Helix crowd (COSTUMES.md helix_sci_m / helix_sci_f / helix_sec_1 / technician), built at LOD
 export const STAFF = [
-  { era: '2049', costume: 'helix_sci_m', sex: 'm', age: 41, height: 1.78, build: 1.0, skin: 0xd9a585, hair: 0x2a1c14, hairStyle: 'short', topType: 'sweater', top: 0x6a6e74, topKind: 'fabric', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x23262b, shoes: 'shoes', boots: 0xd8dce0, glasses: true, lod: true },
-  { era: '2049', costume: 'helix_sci_f', sex: 'f', female: true, age: 29, height: 1.64, build: 0.92, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'bun', topType: 'jacket', top: 0x1d2430, topKind: 'synthetic', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x4a4e54, shoes: 'shoes', boots: 0xe6e2da, lod: true },
-  { era: '2049', costume: 'helix_sci_m', sex: 'm', age: 56, height: 1.74, build: 1.08, skin: 0xf1c6a8, hair: 0xb8b4ae, hairStyle: 'swept', topType: 'sweater', top: 0x2f3542, topKind: 'fabric', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x2a2e36, shoes: 'shoes', boots: 0x14151a, lod: true },
+  { era: '2049', costume: 'helix_sci_m', sex: 0, age: 41, height: 1.78, build: 1.0, skin: 0xd9a585, hair: 0x2a1c14, hairStyle: 'short', topType: 'sweater', top: 0x6a6e74, topKind: 'fabric', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x23262b, shoes: 'shoes', boots: 0xd8dce0, glasses: true, lod: true },
+  { era: '2049', costume: 'helix_sci_f', sex: 1, female: true, age: 29, height: 1.64, build: 0.92, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'bun', topType: 'jacket', top: 0x1d2430, topKind: 'synthetic', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x4a4e54, shoes: 'shoes', boots: 0xe6e2da, lod: true },
+  { era: '2049', costume: 'helix_sci_m', sex: 0, age: 56, height: 1.74, build: 1.08, skin: 0xf1c6a8, hair: 0xb8b4ae, hairStyle: 'swept', topType: 'sweater', top: 0x2f3542, topKind: 'fabric', coat: 0xe8eaec, coatKind: 'fabric', pantsType: 'trousers', pants: 0x2a2e36, shoes: 'shoes', boots: 0x14151a, lod: true },
 ];
-export const GUARD = { era: '2049', costume: 'helix_sec_1', sex: 'm', age: 33, height: 1.82, build: 1.08, skin: 0xb98463, hair: 0x111111, hairStyle: 'buzz', topType: 'uniform', top: 0x1c2533, topKind: 'fabric', vest: 0x111820, pantsType: 'cargo', pants: 0x1c2533, shoes: 'boots', boots: 0x0f0f10, gloves: 0x101010, cap: 0x111820, lod: true };
-export const GUARD_F = { era: '2049', costume: 'helix_sec_2', sex: 'f', female: true, age: 30, height: 1.7, build: 1.0, skin: 0xe8b996, hair: 0x5a3a22, hairStyle: 'tied-back', topType: 'uniform', top: 0x1c2533, topKind: 'fabric', vest: 0x111820, pantsType: 'cargo', pants: 0x1c2533, shoes: 'boots', boots: 0x0f0f10, gloves: 0x101010, lod: true };
+export const GUARD = { era: '2049', costume: 'helix_sec_1', sex: 0, age: 33, height: 1.82, build: 1.08, skin: 0xb98463, hair: 0x111111, hairStyle: 'buzz', topType: 'uniform', top: 0x1c2533, topKind: 'fabric', vest: 0x111820, pantsType: 'cargo', pants: 0x1c2533, shoes: 'boots', boots: 0x0f0f10, gloves: 0x101010, cap: 0x111820, lod: true };
+export const GUARD_F = { era: '2049', costume: 'helix_sec_2', sex: 1, female: true, age: 30, height: 1.7, build: 1.0, skin: 0xe8b996, hair: 0x5a3a22, hairStyle: 'tied-back', topType: 'uniform', top: 0x1c2533, topKind: 'fabric', vest: 0x111820, pantsType: 'cargo', pants: 0x1c2533, shoes: 'boots', boots: 0x0f0f10, gloves: 0x101010, lod: true };
 export const TECHS = [
-  { era: '2049', costume: 'technician', sex: 'f', female: true, age: 38, height: 1.66, build: 1.0, skin: 0xa16d4c, hair: 0x15100b, hairStyle: 'tied-back', topType: 'jacket', top: 0x37404a, topKind: 'synthetic', vest: 0xd9781e, pantsType: 'cargo', pants: 0x2c333b, shoes: 'boots', boots: 0x2a2018, gloves: 0x3a3028, lod: true },
-  { era: '2049', costume: 'technician', sex: 'm', age: 27, height: 1.8, build: 0.96, skin: 0xe0b394, hair: 0x8a6a4a, hairStyle: 'messy', topType: 'jacket', top: 0x2e3338, topKind: 'synthetic', vest: 0xd9781e, pantsType: 'cargo', pants: 0x23262b, shoes: 'boots', boots: 0x1b1d20, cap: 0x2a3440, lod: true },
+  { era: '2049', costume: 'technician', sex: 1, female: true, age: 38, height: 1.66, build: 1.0, skin: 0xa16d4c, hair: 0x15100b, hairStyle: 'tied-back', topType: 'jacket', top: 0x37404a, topKind: 'synthetic', vest: 0xd9781e, pantsType: 'cargo', pants: 0x2c333b, shoes: 'boots', boots: 0x2a2018, gloves: 0x3a3028, lod: true },
+  { era: '2049', costume: 'technician', sex: 0, age: 27, height: 1.8, build: 0.96, skin: 0xe0b394, hair: 0x8a6a4a, hairStyle: 'messy', topType: 'jacket', top: 0x2e3338, topKind: 'synthetic', vest: 0xd9781e, pantsType: 'cargo', pants: 0x23262b, shoes: 'boots', boots: 0x1b1d20, cap: 0x2a3440, lod: true },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -246,7 +246,8 @@ export function buildHelix(game, scene, opts = {}) {
   for (const [x, z] of planters) { B.box(M.podium, x - 1.2, 0.12, z - 1.2, x + 1.2, 0.72, z + 1.2); blockBox(x - 1.2, 0, z - 1.2, x + 1.2, 0.72, z + 1.2); B.box(M.rubber, x - 1.05, 0.72, z - 1.05, x + 1.05, 0.74, z + 1.05); }
   if (!low) {
     try {
-      const trees = planters.map(([x, z], i) => { const t = RZ.tree({ kind: 'broadleaf', height: 5.5, seed: 30 + i }); const m = t.mesh || t.group || t; m.position.set(x, 0.72, z); scene.add(m); return m; });
+      const bark = pm('bark', {}, { mapping: 'triplanar', space: 'object' }), leaf = RZ.foliageMaterial('broadleaf');
+      const trees = planters.map(([x, z], i) => { const t = RZ.tree({ species: 'broadleaf', height: 5.5, seed: 30 + i }); const g = new THREE.Group(); g.add(new THREE.Mesh(t.trunk, bark), new THREE.Mesh(t.leaves, leaf)); g.children.forEach(c => { c.castShadow = true; }); g.position.set(x, 0.72, z); scene.add(g); return g; });
       W.trees = trees;
     } catch (e) { console.warn('m8 trees', e); }
   }
@@ -405,7 +406,7 @@ export function buildHelix(game, scene, opts = {}) {
   W.screens.server.position.set(S[0] + 1.1, Y0 + 1.35, S[2] + 0.2); W.screens.server.rotation.y = -0.5; scene.add(W.screens.server);
   B.box(M.darkSteel, S[0] + 0.85, Y0, S[2], S[0] + 1.35, Y0 + 1.05, S[2] + 0.4);
   const Bd = P.board; B.box(M.wallDark, Bd[0] - 2.6, Y0 + 0.9, -27.86, Bd[0] + 2.6, Y0 + 2.8, -27.76);
-  W.boardCards = []; for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.5), new THREE.MeshBasicMaterial({ color: 0x223038, toneMapped: false })); m.position.set(Bd[0] - 2.0 + i * 0.8, Y0 + 1.85 + (i % 2 ? -0.18 : 0.18), -27.72); m.rotation.y = Math.PI; scene.add(m); W.boardCards.push(m); }
+  W.boardCards = []; for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.5), new THREE.MeshBasicMaterial({ color: 0x223038, toneMapped: false })); m.position.set(Bd[0] - 2.0 + i * 0.8, Y0 + 1.85 + (i % 2 ? -0.18 : 0.18), -27.72); scene.add(m); W.boardCards.push(m); }
   // RECORDS (x -12..-2, z -28..-42)
   wall(-12, -42, -2, -42, H, M.wall, [], Y0);
   for (let k = 0; k < 4; k++) { const z = -30.2 - k * 2.4; B.box(M.steel, -11.6, Y0, z - 0.3, -6.4, Y0 + 2.4, z + 0.3); blockBox(-11.6, 0, z - 0.3, -6.4, 2.4, z + 0.3); for (let j = 0; j < 12; j++) B.box(j % 3 ? white : M.wallDark, -11.4 + j * 0.42, Y0 + 0.2 + (j % 3) * 0.75, z - 0.24, -11.1 + j * 0.42, Y0 + 0.62 + (j % 3) * 0.75, z + 0.24); }
@@ -445,11 +446,37 @@ export function buildHelix(game, scene, opts = {}) {
   drwOld.rotation.x = -Math.PI / 2; drwOld.rotation.z = 0.3; drwOld.position.set(9.6, Y0 + 0.03, -27.2); scene.add(drwOld); W.ghosts.drawing = drwOld;
   B.box(fabric, 3.0, Y0, -32.6, 5.4, Y0 + 0.45, -31.8); B.box(fabric, 3.0, Y0 + 0.45, -32.8, 5.4, Y0 + 0.9, -32.55); blockBox(3.0, 0, -32.8, 5.4, 0.9, -31.8);
   src(7, H - 0.3, -29, 0xfff0d8, 10, 9); lightPanel(7, H + 0.1, -29, 2.4, 0.4);
+  // office furniture: task chairs, shelving with binders, plants, a wall screen (both offices)
+  const chair = (x, z, ry) => {
+    B.boxc(M.rubber, x, Y0 + 0.47, z, 0.5, 0.08, 0.48, ry); B.boxc(M.rubber, x - Math.sin(ry) * 0.24, Y0 + 0.82, z - Math.cos(ry) * 0.24, 0.48, 0.6, 0.07, ry);
+    B.cyl(M.steel, x, Y0 + 0.25, z, 0.03, 0.42, 8); B.cyl(M.darkSteel, x, Y0 + 0.04, z, 0.3, 0.05, 10);
+  };
+  const shelf = (x0, z0, x1, ry, seed) => {
+    const rr = rng(seed), len = Math.abs(x1 - x0);
+    B.boxc(M.wood, (x0 + x1) / 2, Y0 + 1.0, z0, len, 2.0, 0.36, ry); blockBox(Math.min(x0, x1), 0, z0 - 0.2, Math.max(x0, x1), 2.0, z0 + 0.2);
+    for (let row = 0; row < 4; row++) for (let i = 0; i < len / 0.1 - 2; i++) {
+      if (rr() < 0.25) continue; const h = 0.26 + rr() * 0.08, x = Math.min(x0, x1) + 0.1 + i * 0.1;
+      B.boxc(rr() < 0.5 ? white : rr() < 0.5 ? M.wallDark : fabric, x, Y0 + 0.16 + row * 0.48 + h / 2, z0 + (ry ? -0.03 : 0.03), 0.08, h, 0.26, 0);
+    }
+  };
+  const plant = (x, z) => { B.cyl(M.podium, x, Y0 + 0.25, z, 0.2, 0.5, 12, [0, 0, 0], 0.16); for (let k = 0; k < 7; k++) B.geo(stemMat, new THREE.IcosahedronGeometry(0.16, 0), [x + Math.sin(k * 2.4) * 0.14, Y0 + 0.65 + (k % 3) * 0.14, z + Math.cos(k * 2.4) * 0.14], [k, k * 0.7, 0], [1, 1.5, 0.6]); };
+  chair(10.3, -21.5, -Math.PI / 2); chair(10.3, -29.5, -Math.PI / 2); chair(7.4, -21.9, Math.PI / 2);
+  shelf(3.0, -16.35, 5.8, 0, 81); shelf(6.4, -32.6, 11.6, 0, 82);
+  plant(11.4, -24.2); plant(3.0, -25.6); plant(11.4, -32.3);
+  B.box(black, 11.84, Y0 + 1.25, -22.4, 11.9, Y0 + 2.05, -20.6); // Yara's wall screen
+
   // MAINTENANCE (x 2..12.5, z -33..-46)
   wall(2, -46, 12.5, -46, H, M.wall, [], Y0); wall(12.5, -33, 12.5, -46, H, M.wallDark, [[-38, -36]], Y0);
   for (let k = 0; k < 5; k++) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 10.4, 10), M.steel); p.rotation.z = Math.PI / 2; p.position.set(7.2, Y0 + 3.0 - k * 0.24, -45.6 + k * 0.05); scene.add(p); }
   const Bk = P.breakers; B.box(M.wallDark, 12.2, Y0 + 0.6, Bk[2] - 1.4, 12.38, Y0 + 2.4, Bk[2] + 1.4);
   W.breakerLeds = []; for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.14), new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff4d5e, emissiveIntensity: 2 })); m.position.set(12.16, Y0 + 2.0, Bk[2] - 0.9 + i * 0.6); scene.add(m); W.breakerLeds.push(m); B.box(M.steel, 12.1, Y0 + 1.2, Bk[2] - 1.0 + i * 0.6, 12.2, Y0 + 1.6, Bk[2] - 0.8 + i * 0.6); }
+  const bkLab = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshBasicMaterial({ map: screenTex('breakers', 512, 106, (g) => {
+    g.textAlign = 'center';
+    [['A', 'SEC-LOG 1'], ['B', 'SECURITY BUS'], ['C', 'LAB B DOORS'], ['D', 'CONTAINMENT']].forEach(([k, t], i) => { const x = 64 + i * 128; g.fillStyle = i === 3 ? '#5fe6ff' : '#ffb070'; g.font = `700 40px ${FONT}`; g.fillText(k, x, 44); g.font = `600 17px ${FONT}`; g.fillStyle = '#d8e6f0'; g.fillText(t, x, 74); });
+    g.fillStyle = '#ff8a7a'; g.font = `600 13px ${FONT}`; g.fillText('ALL BUSES → CHAMBER 1 · 08:09 19.10 · VAREN, K.', 256, 98);
+  }, '#141a20'), toneMapped: false }));
+  bkLab.position.set(12.18, Y0 + 0.85, Bk[2]); bkLab.rotation.y = -Math.PI / 2; scene.add(bkLab);
+  src(11.0, 2.7, Bk[2], 0xffd8a0, 9, 6);
   B.box(M.darkSteel, 3.0, Y0, -45.6, 6.0, Y0 + 2.6, -44.4); blockBox(3.0, 0, -45.6, 6.0, 2.6, -44.4); // cooling unit
   B.box(M.wood, 8.6, Y0 + 0.8, -35.0, 11.0, Y0 + 0.86, -33.8); blockBox(8.6, 0, -35.0, 11.0, 0.9, -33.8); // workbench
   src(7, H - 0.3, -40, 0xffd8a0, 12, 10); lightPanel(5, H + 0.1, -38, 0.3, 2.0, amberGlow); lightPanel(9.5, H + 0.1, -41, 0.3, 2.0, amberGlow);
@@ -490,8 +517,8 @@ export function buildHelix(game, scene, opts = {}) {
   W.doors.ante = { box: blockBox(-2, 0, -50.35, 2, 2.6, -50.0), open: 0, target: 0, upd: (u) => { adl.position.x = -1.0 - u * 1.9; adr.position.x = 1.0 + u * 1.9; } };
   const AC = P.anteConsole; B.box(M.darkSteel, AC[0] - 2.2, Y0, AC[2] - 0.45, AC[0] + 2.2, Y0 + 0.95, AC[2] + 0.45); blockBox(AC[0] - 2.2, 0, AC[2] - 0.45, AC[0] + 2.2, 1.0, AC[2] + 0.45);
   W.screens.ante = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), new THREE.MeshBasicMaterial({ map: TEX.ante('idle'), toneMapped: false })); W.screens.ante.position.set(AC[0], Y0 + 1.35, AC[2] + 0.3); W.screens.ante.rotation.x = -0.35; scene.add(W.screens.ante);
-  W.screens.version = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), new THREE.MeshBasicMaterial({ map: TEX.version(), toneMapped: false, transparent: true, opacity: 0 })); W.screens.version.position.set(0, 3.25, -50.3); W.screens.version.rotation.y = Math.PI; scene.add(W.screens.version);
-  B.box(black, -1.7, 2.4, -50.24, 1.7, 4.1, -50.16);
+  W.screens.version = new THREE.Mesh(new THREE.PlaneGeometry(2.9, 1.45), new THREE.MeshBasicMaterial({ map: TEX.version(), toneMapped: false, transparent: true, opacity: 0 })); W.screens.version.position.set(0, 3.05, -50.42); W.screens.version.rotation.y = Math.PI; scene.add(W.screens.version);
+  B.box(black, -1.55, 2.25, -50.36, 1.55, 3.85, -50.26);
   src(0, 3.9, -55, 0xd0e4ff, 16, 12); lightPanel(-4, 4.28, -55, 2.4, 0.4); lightPanel(4, 4.28, -55, 2.4, 0.4);
   // badge readers (Yara's trail)
   for (const k of ['readerSec', 'readerMaint', 'readerAnte']) { const p = P[k]; const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.1), new THREE.MeshStandardMaterial({ color: 0x0c0d10, emissive: 0x38c8c0, emissiveIntensity: 1.2 })); m.position.set(p[0] + (p[0] < 0 ? -0.1 : 0.1), p[1] + 0.12, p[2]); scene.add(m); W[k] = m; }
@@ -505,7 +532,12 @@ export function buildHelix(game, scene, opts = {}) {
     const a0 = i / segN * 360, a1 = (i + 1) / segN * 360, am = (a0 + a1) / 2;
     if (alcoveGap(am)) continue;
     const [x, z] = polarC(am, CH.r + 0.2), len = 2 * Math.PI * (CH.r + 0.2) / segN + 0.05;
-    B.boxc(M.chamber, x, CHY + CHH / 2, z, len, CHH, 0.4, -am * Math.PI / 180);
+    const winSeg = (am > 194 && am < 238) || (am > 122 && am < 166);   // the antechamber's observation windows look in here
+    if (winSeg) {
+      B.boxc(M.chamber, x, CHY + 0.5, z, len, 1.0, 0.4, -am * Math.PI / 180);
+      B.boxc(M.chamber, x, CHY + 2.6 + (CHH - 2.6) / 2, z, len, CHH - 2.6, 0.4, -am * Math.PI / 180);
+      B.boxc(glass, x, CHY + 1.8, z, len, 1.6, 0.06, -am * Math.PI / 180);
+    } else B.boxc(M.chamber, x, CHY + CHH / 2, z, len, CHH, 0.4, -am * Math.PI / 180);
     blockBox(x - 0.55, 0, z - 0.55, x + 0.55, CHH, z + 0.55);
     if (i % 3 === 0) { const [lx, lz] = polarC(am, CH.r - 0.02); B.boxc(cyanGlow, lx, CHY + 0.25, lz, 0.9, 0.04, 0.04, -am * Math.PI / 180); }
   }

@@ -1725,7 +1725,7 @@ export function installLightingChunks() {
   C.lights_fragment_maps = C.lights_fragment_maps.replace(find, `{
 			vec3 rzRv = reflect( - geometryViewDir, geometryNormal );
 			float rzHz = clamp( 1.0 + 1.2 * dot( rzRv, nonPerturbedNormal ), 0.0, 1.0 );
-			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz * rzEnvS.x );
+			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz * mix( rzEnvS.x, 1.0, rzEnvS.z * smoothstep( 0.4, 0.9, material.roughness ) ) );
 		}`);
   installWetChunks();
 }
@@ -3557,8 +3557,10 @@ const ENV_S = { x: 1, y: 0.1, z: 0, w: 0 };         // x: image-based specular m
  * Global multiplier on the image-based specular of every MeshStandard / MeshPhysical material (default 1). The engine
  * lowers it when a dark place's probe was brightened to the studio level the scene was authored for: diffuse ambient
  * keeps the authored brightness, reflections stay close to physical (no milky mirror floors at night).
+ * rough (0..1, optional, default 0): how much rough materials (roughness 0.4 -> 0.9) are exempt from the multiplier:
+ * their image-based specular reads as soft ambient sheen (cloth, skin, plaster), so it keeps the authored level.
  */
-export function setEnvSpecular(k = 1) { ENV_S.x = Math.max(0, k); return ENV_S.x; }
+export function setEnvSpecular(k = 1, rough) { ENV_S.x = Math.max(0, k); if (rough !== undefined) ENV_S.z = Math.max(0, Math.min(1, rough)); return ENV_S.x; }
 /**
  * Global wet-weather state: setWetness({ amount: 0..1, puddles: 0..1, detail: 0..1, ground: y, height: m, scale: 1/m,
  * coverage: 0..1 (fraction of flat ground under water, default ~0.3), mirror: puddle roughness (default 0.1: point lights stretch into streaks instead of hot dots), time: s }).

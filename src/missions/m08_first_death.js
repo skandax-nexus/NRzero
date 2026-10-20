@@ -87,7 +87,7 @@ export default {
     const rigLights = () => {
       const p = game.cine ? game.engine.camera.position : pl.pos;
       const z = zone || 'out';
-      const list = W.lightSrc.filter(s => s.zone === z || (z === 'in' && s.zone === 'out' && p.z > -3)).map(s => ({ ...s, dd: (s.p[0] - p.x) ** 2 + (s.p[1] - p.y) ** 2 + (s.p[2] - p.z) ** 2 })).sort((a, b) => a.dd - b.dd);
+      const list = W.lightSrc.filter(s => s.zone === z || (z === 'in' && s.zone === 'out' && p.z > -3) || (z === 'in' && s.zone === 'chamber' && p.z < -50.5) || (z === 'chamber' && s.zone === 'in' && p.z > -63)).map(s => ({ ...s, dd: (s.p[0] - p.x) ** 2 + (s.p[1] - p.y) ** 2 + (s.p[2] - p.z) ** 2 })).sort((a, b) => a.dd - b.dd);
       const k = list[0];
       if (k) { key.position.set(...k.p); key.target.position.set(k.p[0], 0, k.p[2] - 0.5); key.color.set(emergency ? 0xff6a5a : k.c); key.intensity = k.i * 3.2; key.distance = k.d * 1.6; }
       pts.forEach((l, i) => { const s = list[i + 1]; if (!s) { l.intensity = 0; return; } l.position.set(...s.p); l.color.set(emergency && s.zone !== 'out' ? 0xff7a6a : s.c); l.intensity = s.i; l.distance = s.d; });
@@ -143,6 +143,7 @@ export default {
     // ---------- state + helpers ----------
     const S = { diffs: new Set(), segs: new Set(), cards: new Set(), shards: 0, seen: {}, hits: 0, clamps: 0, board: [], ended: false };
     window.__m8 = { S, W, echo, yara, iven, people };
+    W.boardCards.forEach((m, i) => { m.material.map = canvasTex(256, 180, (g, w, h) => { g.fillStyle = '#0a1218'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(95,230,255,0.35)'; g.lineWidth = 3; g.setLineDash([10, 8]); g.strokeRect(6, 6, w - 12, h - 12); g.fillStyle = 'rgba(95,230,255,0.6)'; g.font = `700 34px ${FONT}`; g.fillText('08:?? · ' + (i + 1), 22, 100); }, 'm8cardEmpty' + i); m.material.color.set(0xffffff); m.material.needsUpdate = true; });
     const near = (x, z, r) => Math.hypot(pl.pos.x - x, pl.pos.z - z) < r;
     const once = (k) => { if (S.seen[k]) return false; S.seen[k] = true; return true; };
     const cine = (on) => { game.control = !on; ui.letterbox(on); if (!on) game.releaseCam(); };
@@ -218,7 +219,10 @@ export default {
       if (!game.control || S.dronesOff || drones[0].disabled) { if (!drones[0].disabled) ui.detection(0); return; }
       let a = 0; for (const d of drones) a = Math.max(a, d.update(dt));
       ui.detection(a);
-      if (a >= 1) { resetDrones(); game.fail('DETECTED BY A SECURITY DRONE'); }
+      if (a >= 1) {
+        resetDrones(); game.fail('DETECTED BY A SECURITY DRONE'); S.spotted = (S.spotted || 0) + 1;
+        if (S.spotted === 2 && !S.override) setTimeout(() => { if (game.token === tok) ui.subtitle('kai', S.ivenCalled ? 'Iven. Maintenance leads carry drone overrides — get him out of Lab B.' : 'Someone was knocking in Lab B. Maintenance crews carry drone overrides.', 4200); }, 2600);
+      }
     });
 
     // ---------- the cameras: residue LEDs + re-sync ----------
@@ -310,7 +314,7 @@ export default {
     // THE SERVICE ROUTE (if Hale isn't here): the loading yard keypad remembers the last hand
     // =====================================================================================================
     game.onUpdate(() => { if (game.residueOn && near(16.6, -8.6, 3.2) && !S.codeSeen) { S.codeSeen = true; ui.subtitle('kai', 'Four keys still warm in the residue. 0, 8, 1, 4. In that order.', 3600); } });
-    game.interact({ pos: [16.0, 1.2, -8.6], radius: 1.6, prompt: 'Enter a code on the service keypad', once: false, enabled: () => !S.serviceOpen, onUse: async () => {
+    game.interact({ pos: [17.1, 1.2, -8.6], radius: 1.6, prompt: 'Enter a code on the service keypad', once: false, enabled: () => !S.serviceOpen, onUse: async () => {
       if (!S.codeSeen) { ui.toast(ui.words('ACCESS CODE REQUIRED\nResidue Vision (F) shows what the last hand did here'), 3400); audio.sfxPlay('fail'); return; }
       const i = await choose('kai', 'The service keypad. Four digits.', ['0 8 1 4', '1 4 0 8', '8 0 4 1', 'Step back']);
       if (i === 3) return;
@@ -350,6 +354,7 @@ export default {
     // =====================================================================================================
     // THE TECHNICIAN'S KEY (optional): Iven Marr's team behind the jammed Lab B door
     // =====================================================================================================
+    game.onUpdate(() => { if (!S.labOpen && !S.seen.knock && game.control && near(0, -46, 3.2)) { S.seen.knock = true; audio.sfxPlay('metal'); ui.subtitle(null, '(knocking, muffled, from behind the Lab B blast door)', 3200); } });
     game.interact({ pos: [-1.6, 1.2, -46], radius: 1.6, prompt: 'Press the Lab B intercom', once: false, enabled: () => !S.labOpen, onUse: async () => {
       if (S.ivenCalled) { ui.subtitle('iven', 'The red wheel in Records, south wall. Put your back into it.', 3200); return; }
       S.ivenCalled = true; audio.sfxPlay('blip');
@@ -405,7 +410,7 @@ export default {
     game.interact({ pos: [P.breakers[0] - 0.9, 1.2, P.breakers[2]], radius: 1.8, prompt: 'Open the breaker panel', once: false, enabled: () => S.serverDark, onUse: async () => {
       if (S.power) { ui.subtitle('kai', 'A and B on the security bus. D still feeds the chamber. Leave it.', 3000); return; }
       cine(true);
-      await game.shot([P.breakers[0] - 1.6, 1.8, P.breakers[2] + 1.0], [12.2, 1.6, P.breakers[2]], 0.9, { fov: 40 });
+      await game.shot([P.breakers[0] - 1.9, 1.6, P.breakers[2] + 0.6], [12.2, 1.3, P.breakers[2] - 0.1], 0.9, { fov: 46 });
       if (once('breakerIntro')) await game.talk([['kai', '"D · CONTAINMENT. All buses to Chamber One. Set 08:09, 19.10. VAREN, K."'], ['kai', 'He gave the chamber everything. Security, the labs, the log.']]);
       for (;;) {
         const i = await choose('kai', 'Breaker panel · Level 1', ['A · SEC-LOG 1 — reset', 'B · Security bus', 'C · Lab B doors', 'D · Containment — all buses', 'Close the panel']);
@@ -477,6 +482,7 @@ export default {
         place(echo.kai, 0.3, -40.5, Math.PI); place(echo.yara, -0.5, -39.5, Math.PI); place(echo.fig, 0.2, -49.2, 0);
         F.m8figureSeen = true;
         const a = walkTo(echo.kai, [0.3, Y0, -45.4], 3.2), b = walkTo(echo.yara, [-0.5, Y0, -44.6], 3.4); await a; await b;
+        await game.shot([1.1, 1.75, -43.6], [0.2, 1.55, -49.2], 1.0, { fov: 44 });   // over his shoulder, toward the door
         await game.talk([['kai17', 'Who\'s there?'], ['figure', 'Ten minutes. It is always ten minutes.']]);
         await tween(1.2, u => { if (echo.fig) echo.fig.root.position.y = Y0 - u * 0.02; }); if (echo.fig) echo.fig.root.visible = false; audio.sfxPlay('rewind');
         await game.talk([['yaraecho', 'Kai? There\'s no one there.']]);
@@ -506,11 +512,12 @@ export default {
       const seg = SEGS[k], c = camOf(seg.cam);
       S.playing = true; cine(true); lockMusic('m8-echo', 0.8); audio.sfxPlay('rewind'); shiftPulse = 0.5;
       game.engine.fx.uTint.value.set(0.82, 1.0, 1.08);
+      kai.root.visible = false;   // the camera saw the echoes, not Kai
       ui.toast(`${seg.cam} · ${c.name}\nSEGMENT RECOVERED · TIMESTAMP LOST`, 2600);
       if (seg.cam === 'C6') await game.shot([P.window[0] + 0.6, 2.1, -59.6], [0, 1.2, -67.5], 1.2, { fov: 52 });
       else await game.shot(c.pos.map((v, i) => v + (i === 1 ? -0.3 : 0)), [c.at[0], 1.2, c.at[2]], 1.2, { fov: 60 });
       try { await SEG_PLAY[k](); } catch (err) { if (err && err.abort) throw err; console.warn('m8 seg', k, err); }
-      hideEchoes();
+      hideEchoes(); kai.root.visible = true;
       game.engine.fx.uTint.value.set(1, 1, 1);
       S.segs.add(k); musicState.segs = S.segs.size; F.m8segments = S.segs.size;
       ev(`Log segment ${seg.cam}: ${seg.title}`, segText(k), 'SEC-LOG 1 · ' + S.segs.size + '/6');
@@ -762,7 +769,8 @@ export default {
       S.boardUse = false;
       await game.waitFor(() => S.boardUse);
       cine(true);
-      await game.shot([P.board[0] + 0.4, 1.8, P.board[2] + 2.4], [P.board[0], 1.9, P.board[2]], 1.0, { fov: 44 });
+      pl.place(P.board[0] + 1.3, Y0, P.board[2] + 1.3, Math.PI * 0.85);
+      await game.shot([P.board[0] + 1.9, 1.85, P.board[2] + 2.9], [P.board[0] - 0.2, 1.9, P.board[2]], 1.0, { fov: 46 });
       if (once('boardIntro')) await game.say('kai', 'Six segments. No timestamps. Her badge times, and what they say. In order.');
       let quit = false;
       while (S.board.length < 6) {
@@ -910,6 +918,7 @@ export default {
     hint(() => S.escaping && clampDone.size < 3, 30, () => ui.subtitle('yara', 'The alcoves are safe — the sweep can\'t reach into them. Move between passes.', 3200));
     await game.waitFor(() => clampDone.size >= 3 && game.control);
     S.escaping = false; W.beams.forEach(b => { b.visible = false; });
+    S.obj = null; ui.objective('');
     emergency = 0; lightT = 0;
 
     // ---------- the field opens; a choice ----------
@@ -957,10 +966,10 @@ export default {
     S.ended = true; S.inChamber = false;
     pl.place(0, Y0, -55.4, 0);
     if (F.m8yara === 'saved') { yara.frozen = false; yara.pose = null; yara.root.position.set(-1.2, Y0, -56.2); yara.root.rotation.y = 0; }
-    await game.shot([0.6, 1.6, -58.8], [0, 2.6, -50.4], 1.6, { fov: 50 });
+    await game.shot([0.6, 1.6, -58.8], [0, 2.5, -50.4], 1.6, { fov: 50 });
     audio.sfxPlay('anomaly');
     await tween(2.4, u => { W.screens.version.material.opacity = u; });
-    await game.shot([0.3, 1.9, -54.0], [0, 3.2, -50.3], 2.4, { fov: 40 });
+    await game.shot([0.3, 1.8, -54.6], [0, 3.0, -50.4], 2.4, { fov: 42 });
     await game.talk([
       ['helixai', 'Timeline audit complete.'],
       ['helixai', 'Current timeline: VERSION 17.'],
@@ -993,7 +1002,7 @@ export default {
     else await game.talk([['kai', 'Yara. Held in a second nobody else remembers. Like every version before this one.']]);
     ev('VERSION 17', 'The Helix timeline audit: "Current timeline: VERSION 17. Previous versions: 16. Surviving records: none." Niko\'s "You are the seventeenth" was a count of versions, not visits.', 'HELIX · TIMELINE AUDIT');
     audio.sfxPlay('motif');
-    await game.shot([0, 4.0, -58.5], [0, 2.8, -50.3], 3.4, { fov: 54 });
+    await game.shot([0, 3.6, -58.5], [0, 2.6, -50.4], 3.4, { fov: 54 });
     await ui.fade(1, 2400);
     const mins = Math.round((game.time - tStart) / 60);
     await ui.chapterCard('MISSION 8 COMPLETE', 'The First Death', `Current timeline: VERSION 17 · Log 6/6 · Shards ${S.shards}/5${mins ? ' · ' + mins + ' min' : ''}`, 3600);

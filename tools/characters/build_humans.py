@@ -832,9 +832,12 @@ def inflate(L, B, amount):
             continue
         ang = math.atan2(dz / max(rz, 1e-3), dx / max(rx, 1e-3))
         target = math.hypot(math.cos(ang) * rx, math.sin(ang) * rz) * 1.04 + 0.006
-        nr = r + (max(r, target) - r) * amount
+        # fade out over the top 8 cm under the shoulder line: the torso ellipse at that height reaches past the
+        # sloping shoulder and squared it off into a pad
+        am = amount * min(max((y1 - p[1]) / 0.08, 0.0), 1.0)
+        nr = r + (max(r, target) - r) * am
         if r > target:
-            nr = nr * (1 - 0.5 * amount) + target * 0.5 * amount
+            nr = nr * (1 - 0.5 * am) + target * 0.5 * am
         L.pos[i, 0] = cx + dx / r * nr
         L.pos[i, 2] = cz + dz / r * nr
     # smooth the displacement over the surface: per-vertex targets follow the anatomy under the cloth, and the
@@ -871,7 +874,8 @@ def mesh_from(name, verts, faces, uvs=None):
 
 
 def set_mask(o, m):
-    m = np.broadcast_to(np.asarray(m, float), (len(o.data.vertices), 3))
+    # in [0, 1]: the shipped cast quantizes this attribute to 8 bits (gltf-transform skips one outside [-1, 1])
+    m = np.clip(np.broadcast_to(np.asarray(m, float), (len(o.data.vertices), 3)), 0.0, 1.0)
     a = o.data.attributes.get("_mask") or o.data.attributes.new("_mask", "FLOAT_VECTOR", "POINT")
     a.data.foreach_set("vector", np.ascontiguousarray(m, dtype=np.float32).ravel())
 
@@ -2475,6 +2479,30 @@ def split_uv_seams(mesh):
     return len(seams)
 
 
+def protect_uv_seams(mesh):
+    """Atlas island borders get full weight in the 'feat' group: the collapse keeps them (a collapse across a border
+    leaves a triangle that samples two islands - skin smeared across a coat)."""
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    uvl = bm.loops.layers.uv.active
+    vs = set()
+    if uvl is not None:
+        for ed in bm.edges:
+            if len(ed.link_faces) != 2:
+                continue
+            f0, f1 = ed.link_faces
+            for v in ed.verts:
+                a = next(l[uvl].uv for l in f0.loops if l.vert == v)
+                b = next(l[uvl].uv for l in f1.loops if l.vert == v)
+                if (a - b).length > 1e-5:
+                    vs.add(v.index)
+    bm.free()
+    vg = mesh.vertex_groups["feat"]
+    for i in vs:
+        vg.add([i], 1.0, "REPLACE")
+    return len(vs)
+
+
 def join_uv_seams(mesh):
     """Weld the vertices split by split_uv_seams (they never moved) so the shading stays smooth across the seam."""
     bm = bmesh.new()
@@ -2507,7 +2535,9 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
         if (p - hc).length < 0.2 and p.z > B.J["neck"].z - 0.02:
             return "head"
         return "body"
-    nseam = 0 if os.environ.get("NOSEAM") else split_uv_seams(mesh)
+    nseam = 0      # (cutting the seams open pinned them and the collapse folded the cloth between them: holes)
+    if feat is not None and not os.environ.get("NOSEAM"):
+        protect_uv_seams(mesh)
     bpy.context.view_layer.objects.active = mesh
     bpy.ops.object.mode_set(mode="EDIT")
 
@@ -2526,17 +2556,17 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     target = max(target - kept, 2000)          # protected cloth tails are not decimated
     total = sum(n.values())
     if total > target:
-        face_min = 0.3 if face_keep < 1.0 else 0.4      # crowds / children are seen from further away
+        face_min = 0.27 if face_keep < 1.0 else (0.4 if target >= 8000 else 0.34)    # crowds / children are seen from further away
         head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
-        hand_k = 0.45 if target >= 8000 else 0.35     # fingers stay fingers (they are seen in every gesture)
+        hand_k = 0.36 if target >= 8000 else (0.3 if face_keep >= 1.0 else 0.25)     # fingers stay fingers (they are seen in every gesture)
         for _ in range(24):      # the body (and its garments) must not drop below ~30 %: spikes and chords appear
             body_k = (target - n["face"] * face_keep - n["head"] * head_k - n["hand"] * hand_k) / max(n["body"], 1)
             if body_k >= 0.3:
                 break
             head_k = max(0.2, head_k * 0.88)
             face_keep = max(face_min, face_keep * 0.94)
-        body_k = max(body_k, 0.12)
-        hand_k = max(hand_k, body_k)
+        body_k = max(body_k, 0.42)     # below this the collapse folds and smears the cloth (holes, stretched texels)
+        hand_k = min(hand_k, 0.5)
         for which, ratio in (("body", body_k), ("hand", hand_k), ("head", head_k), ("face", face_keep)):
             if ratio >= 0.999:
                 continue
@@ -2547,10 +2577,10 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
         tot2 = sum(n2.values())
         if tot2 > target * 1.01:   # land on the budget: the body takes the overshoot
             select_class(mesh, cls, "body")
-            bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)), **vgk)
+            bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.85, 1.0)), **vgk)
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
-    if nseam:
+    if nseam and not os.environ.get("NOJOIN"):
         join_uv_seams(mesh)
     nfix = fix_uv_stretch(mesh)
     if mesh.data.uv_layers:     # a collapse can push a corner a hair outside the atlas: 0..1 keeps texcoords quantizable

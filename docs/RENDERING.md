@@ -381,3 +381,87 @@ New realism.js exports (all additive; existing signatures unchanged): `EnvProbe`
 gained the `exp2` option and `heightFogFrom()` upgrades a FogExp2; `captureEnvironment` gained `hide`, `scale`,
 `normalize`, `shadows: false`, `measure`. kit.js `Rain` meshes are tagged `userData.rzRain` + `noCapture`.
 game.js: `game.shot()` passes `rig: opts.rig` to `engine.focus` (one additive argument).
+
+Later additions (all opt-in or pure quality): props.js `lampPost()` sets `userData.contactShadow`, and the engine's
+contact shadows now also pick up any object carrying `userData.contactShadow = true | radius | { radius, strength,
+scale }` (same single instanced draw; missions can tag big props). `contactShadows().track()` entries accept `scale`
+(multiplies the tier strength). `setWetness({ mirror })` sets puddle roughness (default 0.1: at 0.05 a point light
+reflected in a puddle was a hot blocky dot that bloom turned into a square; at 0.1 it stretches into a vertical streak
+like on real wet asphalt). `setEnvSpecular(k, rough)` can exempt rough materials from the night specular cap (default 0,
+measured +2 % on m1b, so it stays off). `scene.userData.envFill` / tier `light.envFill` overrides the 15 % bounce fill.
+
+### Before / after (stage 2)
+
+Captured with `refviews.mjs --ab=light`: the same frame of every view, once with the stage-2 lighting and once with
+`?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts` (the post-processing of stage 1 is on in both).
+
+```
+# side by side (before | after): <scratch>/render/light/{r5 (m1 high, medium), r4 (m1 low, m4), r3 (m2, m3)}/<tier>/sbs/<view>.png
+# contact sheets:                <scratch>/render/light/r3/<tier>/grid_sbs.png, r4/high/grid_m4.png, r4/<tier>/grid_sbs.png
+bash tools/render/runall.sh <out> "m1 high 1280 720 --ab=light;m1 low 844 390 --mobile --ab=light;..."
+```
+
+| view | draw calls high, after (before) | medium | low | lights point / spot / dir | mean brightness after vs before, high / medium / low |
+|---|---|---|---|---|---|
+| m1a_establishing | 491 (490) | 487 (486) | 425 (424) | 7/0/1 | -5% / -6% / -13% |
+| m1b_street_people | 393 (392) | 398 (397) | 333 (332) | 7/0/1 | -17% / -20% / -22% |
+| m1c_dialogue_hale | 253 (252) | 254 (253) | 149 (148) | 7/2/1 | -2% / -5% / -15% |
+| m2a_establishing | 307 (305) | 303 (301) | 258 (257) | 10/3/0 | -12% / -8% / -12% |
+| m2b_interior_people | 145 (144) | 145 (144) | 102 (101) | 10/3/0 | -5% / +4% / +7% |
+| m2c_dialogue_iven | 75 (74) | 67 (66) | 25 (24) | 10/5/0 | +34% / +51% / +51% |
+| m3a_establishing_2049 | 82 (81) | 76 (75) | 62 (61) | 19/0/0 | +2% / +1% / +3% |
+| m3b_dialogue_iven_2049 | 49 (48) | 54 (53) | 40 (39) | 19/2/0 | +15% / +11% / +16% |
+| m3c_future_2196 | 203 (201) | 197 (195) | 87 (86) | 1/2/0 | -20% / -19% / -17% |
+| m4a_establishing | 486 (485) | 492 (491) | 277 (276) | 8/0/1 | -16% / -15% / -13% |
+| m4b_village_people | 406 (405) | 422 (421) | 203 (202) | 8/0/1 | -13% / -13% / -13% |
+| m4c_dialogue_niko | 397 (396) | 394 (393) | 164 (163) | 8/2/1 | -12% / -10% / -11% |
+
+Draw calls: +1 everywhere (the contact-shadow instanced mesh), +1 per light shaft (m2 and m3 2196, high / medium).
+The dialogue rig adds lights, not draws (the close-up light counts above include it: 2 spots on high / medium, 1 on low).
+
+What changed on screen:
+- **Rain City (m1)**: the street and pavements are wet: puddles mirror the neon, shop light and street lamps as
+  vertical streaks (high / medium), raindrop rings in them and water running down walls and glass (high); shoulders,
+  hair and umbrellas get a wet sheen (all tiers). The grey studio sheen that lit the pavement from nowhere is gone,
+  which is most of the -17 to -22 % on m1b: the pavement is now dark wet stone lit by the shopfronts and lamps, the
+  characters keep their brightness (the walker measured -7 %). Lamp posts and walkers are grounded by contact shadows.
+- **Dialogue (m1c, m2c, m3b, m4c)**: the key + rim rig puts light on the speaker's face and a rim on hair and shoulders;
+  m2c (formerly nearly black) is +34-51 %. The rig's range stops ~0.75 m behind the subject, so the wall behind Iven
+  no longer turns red (an earlier version did; fixed before these captures).
+- **Helix 2026 (m2)**: the scene probe replaces the studio, so the dark office reads as a dark office (no grey
+  reflections on the floor); the reception gets a soft light cone under its key spot.
+- **2196 (m3c)**: darker and moodier (-20 %), moonlight cone through the roof, crates and walls no longer flat-lit.
+- **Ancient valley (m4)**: the cliffs and the mountain rise out of the haze instead of greying out (height fog), the
+  sunset colour is kept without tinting the grass brown (probe desaturated to 0.45), stable sun shadows. The -13 %
+  is the haze veil gone, not darker characters.
+
+### Cost (stage 2)
+
+Wall-clock frame times on the shared container swung by ±30 % (load average 16-18 on 4 cores during these runs,
+other workflows rendering at the same time), which hides any difference under ~10 %. The stage-2 cost was therefore
+measured as the **CPU time of the browser's GPU process per frame** (the SwiftShader rasterizer's work; it is much
+less sensitive to contention), A/B/A/B in one page, same frame, `tools/render/cpuab.mjs`:
+
+```
+node tools/render/cpuab.mjs m1 m1b_street_people low 844 390 --mobile 6 2 - noenv+nofog+nowet+nocontact+norig+noshadow+noshafts
+```
+
+| view, tier, size | stage-2 on: median (min-max) ms | stage-2 off | difference |
+|---|---|---|---|
+| m1b, low, 844×390 (rain: wet gloss on) | 1987 (1817-1993) | 1900 (1837-2000) | +4.6 % median, -1 % min: within noise |
+| m1b, low, 1688×780 (4× the pixels, fragment-bound) | 6195 (6015-6440) | 6215 (5675-6260) | -0.3 % median |
+| m1b, medium, 844×390 (+ puddles) | 2330 (2090-2390) | 2210 (2145-2540) | +5 % median, -3 % min: within noise |
+| m1b, high, 1280×720 (+ ripples, streaks) | 6825 (6425-6955) | 6580 (6335-6850) | +3.7 % median, +1.4 % min |
+| m4b, low, 844×390 (dry: fog + spec occlusion only) | 1935 (1860-2200) | 2065 (1915-2235) | -6 % median: within noise |
+
+So the per-frame cost of stage 2 is below what this container can resolve (≈ 5 %) on every tier, including the low tier
+at 4× pixel count, where a fragment-shader cost would show most. By construction on low: the wet branch is ~15 ALU on
+lit pixels when raining (puddles, ripples and streaks are skipped by uniform branches), the height fog replaces one exp
+with two, the horizon occlusion is ~6 ALU on normal-mapped materials, the contact shadows are one draw of a few quads,
+the rig is one shadowless spot light during close-ups only, and there are no shafts.
+
+One-time costs: the scene probe is captured ~8 frames after a scene starts (and again when the place changes), one cube
+face per frame, i.e. six frames each re-draw the scene once more into a 64² (low) / 128² (medium) / 256² (high) face.
+`engine.stats.probeMs` on SwiftShader: 0.2-4 s total on low, 0.6-4 s on medium, 0.1-7 s on high (m1 and m4, the
+heaviest scenes, at the top); on a phone GPU that is six frames with one extra small-target scene draw each, under the
+mission intro. High / medium re-capture after the camera has moved 25 / 40 m; low never re-captures on movement.

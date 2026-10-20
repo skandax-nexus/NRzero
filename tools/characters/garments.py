@@ -153,7 +153,7 @@ GARMENTS = {
                       det=["wear", "fray", "stitch_edges"], poncho=dict(front=None, back=0.17, side=0.19, open=0.32), hood_auto="hood_up", wear=0.6),
     "continuum_suit": T(neck=(0.04, 0.03), collar=STAND(0.045, 0.0, -0.003, "gorget"), hem=-0.06, cuff=None, thick=0.0035, loose=3, inflate=0.35, fab="satin", gloss=0.32,
                         det=["suit_lines"], plates=True, c2="e6e8ea", c3="d9a441"),
-    "tunic": T(neck=(0.012, 0.035), collar=None, hem=-0.035, sleeve="short", thick=0.006, loose=10, inflate=0.85, fab="linen", gloss=0.0,
+    "tunic": T(neck=(0.012, 0.035), collar=None, hem=-0.035, sleeve="short", thick=0.006, loose=18, inflate=0.85, fab="linen", gloss=0.0,
                tail=dict(end=0.27, flare=0.2, split=0.0, vent=0.0, slits=0.11), det=["border", "dye", "neck_roll"]),
     # ---------------- inner tops ----------------
     "mock_neck": I(neck=(0.045, 0.035), collar=STAND(0.028, 0.0, -0.002, "rib"), det=["rib_cuffs"]),
@@ -786,8 +786,9 @@ def paint(g, X, seed):
         elif name == "molle":
             rows = ((y - J["spine"][1]) / 0.025)
             fr = rows - np.floor(rows)
-            web = (fr < 0.45).astype(float) * (np.abs(X.x) < 0.12) * (y < J["chest"][1] + 0.02)
-            gap = (np.abs(((X.x + 1) / 0.038) % 1 - 0.5) < 0.08)
+            # soft-edged rows (a hard 0/1 step aliases at atlas density: the normal map read as crumpled rubber)
+            web = ss(0.0, 0.1, fr) * ss(0.5, 0.4, fr) * (np.abs(X.x) < 0.12) * (y < J["chest"][1] + 0.02)
+            gap = ss(0.1, 0.06, np.abs(((X.x + 1) / 0.038) % 1 - 0.5))
             m = web * (1 - gap)
             shade(m, 0.88)
             h = h + 0.0006 * m
