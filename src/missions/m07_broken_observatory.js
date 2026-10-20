@@ -97,6 +97,13 @@ export default {
     scene.add(dusk.group); T.only(dusk.group, '2196');
     game.onUpdate((dt, t) => { night.update(dt, t, game.engine.camera); dusk.update(dt, t, game.engine.camera); });
 
+    // valley haze: a sheet over the valley floor and a band around the spur (aerial perspective)
+    const hazes = [];
+    try {
+      hazes.push(RZ.hazeLayer({ kind: 'sheet', center: [0, 10], size: [620, 620], y: -26, opacity: 0.9, nearFade: 45 }));
+      hazes.push(RZ.hazeLayer({ center: [0, 10], radius: 250, height: 120, y: -70, opacity: 0.6 }));
+      for (const h of hazes) scene.add(h);
+    } catch (err) { console.warn('m7 haze', err); }
     const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.castShadow = Q !== 'low';
     sun.shadow.mapSize.set(Q === 'high' ? 2048 : 1024, Q === 'high' ? 2048 : 1024); Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 200 });
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04; scene.add(sun, sun.target);
@@ -118,6 +125,7 @@ export default {
         RZ.shared.sunDir.value.copy(k.sunDir); RZ.shared.sunColor.value.copy(k.sunColor); RZ.shared.fogSun.value.copy(k.fogSun);
         sun.color.copy(y.sunCol ? new THREE.Color(y.sunCol) : s.sunColor); hemi.color.copy(s.hemi.sky); hemi.groundColor.copy(s.hemi.ground);
         scene.fog.color.copy(s.hazeColor);
+        for (const h of hazes) h.material.uniforms.uCol.value.copy(s.hazeColor).multiplyScalar(e === '2049' ? 0.8 : 1.0);
       }
       sun.intensity = inHall ? 0 : y.sun; hemi.intensity = inHall ? 0.38 : y.hemi; lightDir = y.dir; scene.fog.density = inHall ? 0.006 : y.fog;
       renderer.toneMappingExposure = y.exposure;
@@ -239,7 +247,7 @@ export default {
     let sunLooks = 0, poleLooks = 0, armLooks = 0;
     const sunGate = new Instrument(game, {
       name: 'THE SUN GATE', yaw: W.sunGate.yaw, pitch: W.sunGate.pitch, eyeNode: W.sunGate.pitch, eyeOffset: [0, 0, 0],
-      bearings: B8([0, 30, 62, 90, 120, 180, 270]), alts: A8([0, 6, 15, 30, 45]), bearing: 120, alt: 30, tolerance: 3,
+      bearings: B8([0, 30, 62, 90, 120]), alts: A8([0, 6, 15, 30, 45]), bearing: 120, alt: 30, tolerance: 3,
       target: () => (T.current === 'past' ? { ...SUN, name: 'the sun' } : null),
       describe: (inst, t) => {
         sunLooks++;
@@ -251,7 +259,7 @@ export default {
     });
     const poleSight = new Instrument(game, {
       name: 'THE POLE SIGHT', yaw: W.poleSight.yaw, pitch: W.poleSight.pitch, eyeNode: W.poleSight.pitch, eyeOffset: [0, 0.25, 0], frameDist: 0.8, frameSide: 2.2, frameUp: 0.6,
-      bearings: B8([0, 45, 90, 180, 270, 315]), alts: A8([10, 25, 38.2, 52, 70]), bearing: 315, alt: 52, tolerance: 3,
+      bearings: B8([0, 45, 90, 270, 315]), alts: A8([10, 25, 38.2, 52, 70]), bearing: 315, alt: 52, tolerance: 3,
       target: () => (T.current === '2049' ? { ...POLE, name: 'Polaris' } : null),
       describe: (inst, t) => {
         poleLooks++;
@@ -264,7 +272,7 @@ export default {
     });
     const armillary = new Instrument(game, {
       name: 'THE WANDERING RING', yaw: W.armillary.yaw, pitch: W.armillary.pitch, eyeNode: W.armillary.core, eyeOffset: [0, 0.05, 0],
-      bearings: B8([90, 180, 250, 272, 292, 330]), alts: A8([5, 14, 25, 40]), bearing: 180, alt: 40, tolerance: 3,
+      bearings: B8([90, 180, 250, 272, 292]), alts: A8([5, 14, 25, 40]), bearing: 180, alt: 40, tolerance: 3,
       target: () => (T.current === '2196' ? { ...VENUS, name: 'the evening star' } : null),
       describe: (inst, t) => {
         armLooks++;

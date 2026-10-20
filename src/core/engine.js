@@ -1026,8 +1026,9 @@ export class Engine {
       hide: o => !!(o.userData.character || o.userData.rzRain || o.isPoints || o.isLineSegments || o.isSprite),
       normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: 0.15 },
       // emissive panels stay bright in reflections without blowing wet floors out; tinted eras keep their hue in the
-      // key / hemisphere lights and fog, so the probe adds less of it (an orange sunset would turn green grass brown)
-      clamp: this.scene.userData.envClamp ?? 8, saturation: this.scene.userData.envSaturation ?? ({ ancient: 0.45, ruin2196: 0.55, helix2026: 0.8 }[gradeForScene(this.scene)] ?? 1),
+      // key / hemisphere lights and fog, so the probe adds less of it (an orange sunset would turn green grass brown,
+      // a red alarm strip would paint a whole lab red); a rainy street keeps its full neon colour
+      clamp: this.scene.userData.envClamp ?? 8, saturation: this.scene.userData.envSaturation ?? ({ ancient: 0.45, ruin2196: 0.55, helix2026: 0.7 }[gradeForScene(this.scene)] ?? (L.wetTarget > 0 ? 1 : 0.7)),
     });
     L.lastCap = t;
   }

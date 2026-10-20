@@ -699,7 +699,7 @@ export default {
     cine(true); lockMusic('m6-witness');
     pl.place(P.shaft[0] + 1.25, TY, P.shaft[1] + 0.35, -Math.PI / 2);
     kai.pose = 'work';
-    await game.shot([P.shaft[0] + 2.3, TY + 1.55, P.shaft[1] + 2.1], [P.shaft[0] + 0.45, TY + 0.8, P.shaft[1] - 0.1], 1.4, { fov: 40 });
+    await game.shot([P.shaft[0] + 3.4, TY + 2.0, P.shaft[1] + 2.9], [P.shaft[0] + 0.5, TY + 0.9, P.shaft[1] - 0.2], 1.4, { fov: 44 });
     kai.pose = null; audio.sfxPlay('rewind');
     await game.wait(0.6);
     await game.talk([
@@ -710,8 +710,8 @@ export default {
     await game.shot([P.shaft[0] + 0.75, TY + 1.62, P.shaft[1] + 2.0], [P.shaft[0] + 1.2, TY + 1.5, P.shaft[1] + 0.3], 2.2, { fov: 34 });
     await game.say('recording', 'And Oskar — when the child returns, do not let him see the ninth minute.');
     audio.silence(1.6); await game.wait(1.6);
-    oskar.root.position.set(5.7, TY, -34.3); oskar.root.rotation.y = -Math.PI / 2; oskar.lookTarget = kai.head; kai.lookTarget = oskar.head;
-    await game.shot([2.6, TY + 1.6, -36.4], [5.6, TY + 1.6, -34.3], 1.4, { fov: 40 });
+    oskar.root.position.set(P.shaft[0] + 2.6, TY, P.shaft[1] - 1.2); oskar.root.rotation.y = -0.72; oskar.lookTarget = kai.head; kai.lookTarget = oskar.head;
+    await game.shot([P.shaft[0] + 4.3, TY + 1.65, P.shaft[1] + 1.7], [P.shaft[0] + 1.9, TY + 1.45, P.shaft[1] - 0.4], 1.4, { fov: 42 });
     await game.talk([
       ['kai', 'That\'s my voice.'],
       ['oskar', 'He had your face. Thirty years more of it. He wore a long coat in July.'],

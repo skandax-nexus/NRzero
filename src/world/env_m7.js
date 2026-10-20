@@ -236,7 +236,7 @@ export function buildObservatory(game, T, scene) {
   const M = {
     pave: pbr('cutStone', { params: { color: 0xc4b392, joint: 0x8a7c66, rows: 4, weathering: 0.35 }, scale: 1.6 }),
     ground: pbr('gravel', { params: { color: 0x8a7e6a } }),
-    past: { stone: pbr('cutStone', { params: { color: 0xd2bf9a, joint: 0x9a8a70, weathering: 0.2, rows: 5 } }), plaster: pbr('plaster', { params: { color: 0xe0cfa8, under: 0xb8a07a, damage: 0.12, dirt: 0.25 } }) },
+    past: { stone: pbr('cutStone', { params: { color: 0xd2bf9a, joint: 0x9a8a70, weathering: 0.2, rows: 5 } }), plaster: pbr('plaster', { params: { color: 0xe0cfa8, under: 0xc8b088, damage: 0.0, dirt: 0.12 } }) },
     '2049': { stone: pbr('cutStone', { params: { color: 0xa89c86, joint: 0x6e665a, weathering: 0.75, rows: 5 } }), plaster: pbr('plaster', { params: { color: 0xa69a84, under: 0x7a7060, damage: 0.65, dirt: 0.6 } }) },
     '2196': { stone: pbr('cutStone', { params: { color: 0x8e8a78, joint: 0x5a564a, weathering: 0.9, rows: 5 }, overlay: { kind: 'moss', amount: 0.55, ground: 0.6 } }), plaster: pbr('plaster', { params: { color: 0x8a8474, under: 0x5e5a50, damage: 0.85, dirt: 0.8 }, overlay: { kind: 'moss', amount: 0.5, ground: 0.6 } }) },
     wood: pbr('wood', { params: { color: 0x6a4a2c, planks: 6, weathered: 0.4 } }),
@@ -266,7 +266,7 @@ export function buildObservatory(game, T, scene) {
   // ---------- terrain: the spur, the valley, the mountains ----------
   const plateau = (x, z) => { const dx = Math.max(0, Math.abs(x) - 27), dz = Math.max(0, -38 - z, z - 88); return Math.hypot(dx, dz); };
   const nz = RZ.makeNoise(707);
-  const hfun = (x, z) => { const d = plateau(x, z); const n = nz.fbm2(x * 0.012, z * 0.012, 4) * 9; return d <= 0 ? -0.05 : -Math.min(72, Math.pow(d, 1.22) * 1.15) + n * Math.min(1, d / 20); };
+  const hfun = (x, z) => { const d = plateau(x, z); const n = nz.fbm2(x * 0.012, z * 0.012, 4) * 9; return d <= 0 ? -0.05 : -Math.min(46, Math.pow(d, 1.2) * 1.1) + n * Math.min(1, d / 20) * 1.6; };
   const ter = RZ.terrain({ size: 520, center: [0, 10], segments: Q === 'low' ? 96 : 140, heightFn: hfun, waterLevel: -200, rockSlope: 0.45,
     layers: [['grass', { color: 0x5a6a30, dry: 0x8f8448, dryness: 0.45, bare: 0.6 }], ['dirt', { color: 0x6a5238 }], ['rock', { color: 0x8a7c66, color2: 0x675a49 }], ['sand', { color: 0x9c8a6a }]] });
   ter.mesh.receiveShadow = true; groups.all.add(ter.mesh);

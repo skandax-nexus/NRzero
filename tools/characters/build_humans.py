@@ -899,6 +899,11 @@ def layer_object(L, B=None):
     if hem.any():
         a = o.data.attributes.new("_hem", "FLOAT", "POINT")
         a.data.foreach_set("value", hem)
+    if B is not None:         # hands (bare or gloved): the collapse turns fingers into claws, so they decimate last
+        hw = np.clip((B.W[:, BI["hand_L"]] + B.W[:, BI["hand_R"]])[L.base] * 1.5, 0, 1).astype(np.float32)
+        if hw.any():
+            a = o.data.attributes.new("_hand", "FLOAT", "POINT")
+            a.data.foreach_set("value", hw)
     WSTORE[o.name] = L.W
     return o
 
@@ -2425,6 +2430,10 @@ def feature_group(mesh, tex_path):
     wv = np.zeros(len(me.vertices), np.float32)
     np.maximum.at(wv, lv[a], w)
     np.maximum.at(wv, lv[b], w)
+    if me.attributes.get("_hand"):
+        hand = np.zeros(len(me.vertices), np.float32)
+        me.attributes["_hand"].data.foreach_get("value", hand)
+        wv = np.maximum(wv, 0.85 * hand)
     vg = mesh.vertex_groups.new(name="feat")
     for v in np.nonzero(wv > 0.01)[0]:
         vg.add([int(v)], float(wv[v]), "REPLACE")
@@ -2493,7 +2502,7 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
         uvd.foreach_set("uv", np.clip(uv, 0.0, 1.0))
     if nfix:
         print("  uv seam faces repaired:", nfix, flush=True)
-    for an in ("_keep", "_hem"):
+    for an in ("_keep", "_hem", "_hand"):
         if mesh.data.attributes.get(an):
             mesh.data.attributes.remove(mesh.data.attributes[an])
     if feat is not None:
