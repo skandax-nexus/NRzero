@@ -19,16 +19,14 @@ export default {
   async run(game) {
     const { ui, audio } = game, T = game.temporal, F = game.flags, pl = game.player;
     registerM6Cast(); registerM6Themes();
-    if (!/m6np/.test(location.search)) try { // DBGTMP
+    try {
       const need = ['oskar', 'oskar26', 'lotte'].filter(id => !ui.portraits[id] && CAST[id]?.look);
       if (need.length) Object.assign(ui.portraits, renderPortraits(Object.fromEntries(need.map(id => [id, CAST[id]]))));
     } catch (err) { console.warn('m6 portraits', err); }
 
     const scene = game.newScene({ background: 0x0a0d12, fog: [0x141820, 0.016], exposure: 1.05, bloom: 0.6, bloomThreshold: 0.86, envIntensity: 0.75, killY: -12, residue: true });
     towerState.set = 0;
-    console.log('M6DBG', 'pre-build', Math.round(performance.now()));
     const W = buildHouse(game, T, { brokenDoor: F.trustedHale === false });
-    console.log('M6DBG', 'built', Math.round(performance.now()));
     const G = W.groups;
     game.onUpdate((dt, t) => W.update(dt, t));
 
@@ -41,7 +39,6 @@ export default {
       skies['2196'] = RZ.skyEnvironment(rr, scene, { preset: 'overcast', elevation: 14, apply: false });
       interior = RZ.skyEnvironment(rr, scene, { preset: 'interior', color: 0xffe2c0, wall: 0x3a2e24, window: 0x8aa0c0, apply: false });
     } catch (err) { console.warn('m6 sky', err); }
-    console.log('M6DBG', 'skies', Math.round(performance.now()));
 
     // ---------- lights: a constant set, re-rigged per zone and era (no shader recompiles) ----------
     const hemi = new THREE.HemisphereLight(0x6a5a48, 0x1a120c, 0.3); scene.add(hemi);
@@ -120,7 +117,6 @@ export default {
     game.onUpdate(() => applyRig(false));
 
     // ---------- people ----------
-    console.log('M6DBG', 'people', Math.round(performance.now()));
     const oskar = game.actor('oskar', null, 0, 0, 6.6, 0); T.only(oskar.root, '2049'); oskar.root.visible = false;
     const oskar26 = game.actor('oskar26', null, 2.4, 0, -37.4, Math.PI); T.only(oskar26.root, '2026');
     const lotte = game.actor('lotte', null, -4.05, 0, 3.0, -Math.PI / 2); T.only(lotte.root, '2026');
@@ -289,7 +285,6 @@ export default {
     // =====================================================================================
     // SCRIPT
     // =====================================================================================
-    console.log('M6DBG', 'script', Math.round(performance.now()));
     ui.missionTag('MISSION 6 · THE CLOCKMAKER\'S HOUSE'); ui.show('hud', true);
     T.unlocked = false; T.refreshHud();
     const kai = pl.char;
