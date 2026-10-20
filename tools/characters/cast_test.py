@@ -65,6 +65,8 @@ COVERAGE = [
          wear=[("knit_sweater", "8a8d92"), ("car_coat", "2f4a3a"), ("chinos", "1d2430"), ("ankle_boots", "1c1a18")]),
     dict(id="v_c26f", era="2026", macro=mix(M, age=0.55, african=0.0, caucasian=0.4, asian=0.6), skin="c8916c", hair="crop", hairColor="141010",
          wear=[("denim_shirt", "5a6e8a"), ("labcoat26", "f0eee8"), ("chinos", "4a4e54"), ("sneakers", "e6e2da")]),
+    dict(id="v_c26g", era="2026", macro=mix(M, age=0.5, weight=0.55, african=0.3, caucasian=0.7, asian=0.0), skin="b07a58", hair="short", hairColor="2a1f19",
+         stubble=0.7, wear=[("tshirt", "6a6e74"), ("utility_jacket", "4a5038"), ("work_trousers", "3a3328"), ("leather_work_shoes", "2a1e14")]),
     dict(id="v_kid", era="2049", macro=mix(KID, african=1.0, caucasian=0.0, asian=0.0), skin="8c5a3a", hair="puffs", hairColor="141010", glow="ffe6b0", glowLevel=0.35,
          wear=[("padded_jacket", "6abfa8"), ("leggings", "2a2a44"), ("rain_boots", "e8b923")]),
     dict(id="v_kid2", era="2049", macro=mix(KID, gender=0.8, african=0.0, caucasian=0.3, asian=0.7), skin="a16d4c", hair="short", hairColor="141010", glow="38c8c0", glowLevel=0.35,

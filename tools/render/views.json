@@ -2,22 +2,22 @@
   "_doc": "Reference views for rendering work (docs/RENDERING.md). m = the ?m= index (0-based). p = camera, l = look-at, place = Kai [x,y,z,yaw], era = temporal state, pre/post = JS run before the settle frames / after pausing. Never change a view once baselined: add a new one instead.",
   "m1": { "m": 0, "ready": "window.__game && __game.control && __game.actors.hale", "views": [
     { "name": "m1a_establishing", "place": [0.5, 0.15, 14, 3.14159], "p": [2.5, 7.5, 23], "l": [0, 6, -40], "fov": 58 },
-    { "name": "m1b_street_people", "place": [-6.4, 0.15, -9.8, 3.14159], "p": [-4.2, 1.75, -6.5], "l": [-9.2, 1.3, -16], "fov": 52 },
-    { "name": "m1c_dialogue_hale", "place": [1.15, 0.15, -78.6, 2.69], "pre": "__game.actors.hale.root.rotation.y=-0.448", "post": "__game.actors.hale.root.rotation.y=-0.448", "p": [0.55, 1.75, -77.55], "l": [2.4, 1.6, -81.2], "fov": 38 }
+    { "name": "m1b_street_people", "place": [-7.4, 0.15, -11, 3.14159], "p": [-4.2, 1.75, -6.5], "l": [-9.2, 1.3, -16], "fov": 52 },
+    { "name": "m1c_dialogue_hale", "place": [0.66, 0.15, -78.85, 2.5], "pre": "__game.actors.hale.root.rotation.y=-0.448", "post": "__game.actors.hale.root.rotation.y=-0.448", "p": [0.55, 1.75, -77.55], "l": [2.4, 1.6, -81.2], "fov": 38 }
   ] },
   "m2": { "m": 1, "ready": "window.__game && __game.control && __game.actors.iven", "views": [
     { "name": "m2a_establishing", "place": [0, 0, -4, 3.14159], "p": [0, 2.4, -2.5], "l": [0, 1.5, -20], "fov": 58 },
     { "name": "m2b_interior_people", "place": [4.2, 0, -40.5, 2.356], "p": [2.8, 1.8, -37.2], "l": [7, 1.2, -44], "fov": 60 },
-    { "name": "m2c_dialogue_iven", "place": [5.6, 0, -43.0, 1.87], "pre": "__game.actors.iven.root.rotation.y=-1.87", "post": "__game.actors.iven.root.rotation.y=-1.87", "p": [4.75, 1.72, -42.35], "l": [7.2, 1.55, -43.5], "fov": 38 }
+    { "name": "m2c_dialogue_iven", "place": [5.45, 0, -43.32, 1.67], "pre": "__game.actors.iven.crouch=0;__game.actors.iven.lookTarget=__game.player.char.head;__game.actors.iven.root.rotation.y=-1.87", "post": "__game.actors.iven.root.rotation.y=-1.87", "p": [4.75, 1.72, -42.35], "l": [7.2, 1.55, -43.5], "fov": 38, "frames": 30 }
   ] },
   "m3": { "m": 2, "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))", "views": [
     { "name": "m3a_establishing_2049", "era": "2049", "place": [0, 0, 8, 3.14159], "p": [0, 6, 10.5], "l": [0, 3.4, -2], "fov": 52 },
-    { "name": "m3b_dialogue_iven_2049", "era": "2049", "place": [1.9, 0, 5.7, 2.386], "pre": "__game.actors.iven.root.rotation.y=-0.755", "post": "__game.actors.iven.root.rotation.y=-0.755", "p": [1.2, 1.75, 6.5], "l": [3.5, 1.55, 4], "fov": 38 },
+    { "name": "m3b_dialogue_iven_2049", "era": "2049", "place": [1.61, 0, 5.43, 2.22], "pre": "__game.actors.iven.root.rotation.y=-0.755", "post": "__game.actors.iven.root.rotation.y=-0.755", "p": [1.2, 1.75, 6.5], "l": [3.5, 1.55, 4], "fov": 38 },
     { "name": "m3c_future_2196", "era": "2196", "place": [0.5, 0, -19, 3.14159], "p": [1.2, 1.9, -16.5], "l": [2.5, 2.2, -34], "fov": 58 }
   ] },
   "m4": { "m": 3, "ready": "window.__game && __game.control && __game.actors.niko", "views": [
-    { "name": "m4a_establishing", "place": [0, 0, 20, 3.14159], "p": [1, 6.5, 30], "l": [0, 2.5, -10], "fov": 58 },
+    { "name": "m4a_establishing", "place": [0, 0, 20, 3.14159], "p": [2, 7.5, 24], "l": [0, 2.5, -10], "fov": 58 },
     { "name": "m4b_village_people", "place": [6, 0, 8.5, 2.41], "p": [4.5, 1.7, 11], "l": [10.2, 1.2, 4], "fov": 52 },
-    { "name": "m4c_dialogue_niko", "place": [1.6, 0.6, -3.9, 2.77], "pre": "__game.actors.niko.root.rotation.y=-0.373", "post": "__game.actors.niko.root.rotation.y=-0.373", "p": [1.05, 2.0, -2.95], "l": [2.5, 2.1, -6.2], "fov": 38 }
+    { "name": "m4c_dialogue_niko", "place": [1.14, 0.6, -4.1, 2.57], "pre": "__game.actors.niko.root.rotation.y=-0.373", "post": "__game.actors.niko.root.rotation.y=-0.373", "p": [1.05, 2.0, -2.95], "l": [2.5, 2.1, -6.2], "fov": 38 }
   ] }
 }

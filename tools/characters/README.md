@@ -25,3 +25,33 @@ clips on every rig, because all rigs share bone names and rest orientations. It 
 using skin, coat and trouser palettes.
 
 To add a character, add an entry to `CAST`, rebuild, and (for a named role) add its name pattern to `NAMED` in `humans.js`.
+
+## AFTERZERO costume pipeline (`wear=[...]`)
+
+`build_humans.py` (MakeHuman bodies) builds a character with the costume pipeline whenever its spec has a `wear` list:
+
+- `garments.py`: the garment catalogue of docs/COSTUMES.md (every top, over layer, bottom, limb piece, glove, footwear,
+  skirt and head piece, plus the hair styles `waves curls puffs locs undercut fade pixie`) and the garment painters
+  (panel seams, taped seams, quilting, piping, reflective strips, MOLLE, wear and grime for 2196, linen weave for the
+  ancient era). Painters return colour, height (baked to a normal map) and glow (baked to an emissive map).
+- `costume.py`: coverage fields -> garment layers cut from the body mesh with snapped borders (outer items cut what
+  they hide back to a 2.5 cm band, so nothing is see-through), cloth tails for long hems (coats, lab coats, tunics,
+  ponchos, cloaks: lofted from the hem loop, skirt-weighted, lined, with vents / splits / slits), rims, stand / funnel
+  collars sewn onto the garment, the hood-down pillow, hoods up, ribbons (harness straps, belts, sashes), buckles,
+  pouches, knee pads, chunky soles, gloves, caps, helmets and hair pieces. Tails, collars, hoods and straps are painted
+  in the atlas "aux" region from their own 3D positions, so they match the body layers.
+- One material per character: `baseColorTexture`, `normalTexture` and, when anything glows, `emissiveTexture` with
+  `emissiveFactor` 1 (three.js shows it as `emissiveMap`). The glow colour is in the material's `extras.glow`.
+
+Pick the cast module with `CAST=<name>` (`cast_<name>.py`; default `cast_humans`, AfterZero's cast):
+
+    cd tools/characters
+    CAST=test MH_DATA=/path/to/makehuman/data ONLY=t_kai,t_coat ../../../tools/venv/bin/python build_humans.py OUT
+    CAST=test TEST_ALL=1 MH_DATA=... venv/bin/python build_humans.py OUT      # + one outfit per garment type
+    npx --yes @gltf-transform/cli meshopt OUT/cast.glb OUT/cast.min.glb
+
+`cast_test.py` holds four sample costumes (a 2049 techwear man, a 2049 woman in a long sealed coat, a 2196 survivor
+with a hooded poncho, an ancient settler) and, with `TEST_ALL=1`, a coverage set that wears every garment type.
+The generator's `anims.glb` is procedural: never copy it over `assets/models/anims.glb` (motion capture). To view a
+build, copy the real `assets/models/anims.glb` next to it and open `tools/cast.html?base=<url of OUT>/&ids=...`
+(`&rot=180` back view, `&clip=walk&t=0.35`, `&clip=bind`).

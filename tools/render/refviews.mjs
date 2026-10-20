@@ -3,6 +3,7 @@
 //
 //   node tools/render/refviews.mjs <mission m1..m4> <gfx high|medium|low> <out dir> [W=1280] [H=720] [--mobile]
 //        [--base=http://localhost:8765/] [--views=name,name] [--noshot] [--ready-timeout=ms] [--emit-steps=dir]
+//        [--channel=chromium|chromium-headless-shell] [--resume]
 //
 // Loading runs at quarter size (SwiftShader is fill-rate bound, so the mission intro plays much faster), then the
 // viewport is set to WxH before any view is taken. Writes <out>/<view>.png and <out>/<mission>_<gfx>[_mobile].json.
@@ -37,7 +38,10 @@ const mobile = !!flag('mobile'), base = flag('base') || 'http://localhost:8765/'
 const only = flag('views') ? String(flag('views')).split(',') : null;
 fs.mkdirSync(out, { recursive: true });
 const w = +W, h = +H;
-const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--autoplay-policy=no-user-gesture-required'] });
+// channel 'chromium' = the full build in new-headless mode. The default headless_shell (old headless) queues
+// ~30-70 MB/s of IPC in the browser and renderer processes whenever the page's main thread is blocked (every
+// multi-second SwiftShader frame), which gets the renderer OOM-killed in the shared container; new headless does not.
+const b = await chromium.launch({ channel: flag('channel') || 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-audio-output'] });
 const ctx = await b.newContext({ viewport: { width: Math.round(w / 4), height: Math.round(h / 4) }, screen: { width: w, height: h }, deviceScaleFactor: 1, isMobile: mobile, hasTouch: mobile });
 const p = await ctx.newPage();
 const seen = new Set();

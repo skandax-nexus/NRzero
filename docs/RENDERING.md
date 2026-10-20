@@ -53,10 +53,21 @@ same frame. Missions are addressed by the 0-based `?m=` index (m1 = 0 … m4 = 3
 How a view is taken (`tools/render/refhelper.js`, evaluated in the page): the mission loads at quarter size until its
 ready condition (SwiftShader is fill-rate bound, so the intro plays much faster), the viewport is set to the capture
 size, then the helper **takes over the frame loop**: the game is paused and the engine's per-frame render is held,
-the camera is fixed through `game.cine`, the world is stepped 6 × 1/30 s around it, time stops, and the frame is
-drawn and read back from the canvas (HUD / dialogue DOM hidden). `REF.measure` then times 4 full frames and 2
-scene-pass-only frames, each fenced with `readPixels` and preceded by a yield to the event loop, and records
-`renderer.info` counts (calls / triangles include shadow maps and post), light, material and program counts.
+the camera is fixed through `game.cine`, the world is simulated (not drawn) 6 × 1/30 s around it (a view may ask for
+more settle frames with `frames`), time stops, and the frame is drawn and read back from the canvas (HUD / dialogue
+DOM hidden). `REF.measure` then times 3 full frames and 1 scene-pass-only frame, each fenced with `readPixels` and
+preceded by a yield to the event loop, and records `renderer.info` counts (calls / triangles include shadow maps and
+post), light, material and program counts.
+
+**Browser choice (important for every headless capture tool).** refviews.mjs launches Playwright's full Chromium in
+new-headless mode (`channel: 'chromium'`). The default `chromium_headless_shell` (old headless, which
+`tools/shoot.mjs` and `tools/drive.mjs` use) leaks: whenever the page's main thread is blocked, as it is for every
+multi-second SwiftShader frame, its browser and renderer processes grow by 30-70 MB/s (measured with a plain
+30 s busy-wait in the game page: +1.1 GB browser, +0.6 GB renderer; the same test under new headless: +0 MB), until
+the shared memory cgroup OOM-kills the renderer. This is what crashed the first audit runs on m1 / m2 at
+1280×720. New headless also starts the game with a ~600 MB smaller renderer. The helper additionally keeps
+full-size draws to the minimum (settle frames are simulated, not drawn) and the launcher passes
+`--mute-audio --disable-audio-output`.
 
 Commands (from the repo root; the static server must be up on :8765, one browser at a time):
 
@@ -67,7 +78,7 @@ node tools/render/refviews.mjs m1 low    <out>/low_mobile  844 390 --mobile
 #   options: --views=m1a_establishing,m1c_dialogue_hale  --resume (skip views already in the json)  --noshot
 #            --base=http://localhost:8765/  --ready-timeout=ms
 # all twelve views, both tiers, with retries when the shared container OOM-kills a renderer:
-bash <scratch>/render/audit/runall.sh "m1 high 1280 720;m2 high 1280 720;m3 high 1280 720;m4 high 1280 720;m1 low 844 390 --mobile;m2 low 844 390 --mobile;m3 low 844 390 --mobile;m4 low 844 390 --mobile"
+bash tools/render/runall.sh <out root> "m1 high 1280 720;m2 high 1280 720;m3 high 1280 720;m4 high 1280 720;m1 low 844 390 --mobile;m2 low 844 390 --mobile;m3 low 844 390 --mobile;m4 low 844 390 --mobile"
 # markdown table of the measurements, optionally with deltas against the audit baseline
 node tools/render/report.mjs <out>/high <scratch>/render/audit/high
 # the same views through tools/drive.mjs (writes refviews_m1.json … m4.json steps files)
@@ -78,11 +89,12 @@ node tools/drive.mjs "http://localhost:8765/index.html?m=0&dtcap=0.25&gfx=high&a
 `<scratch>` is `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad`; the stage-0
 images and numbers are in `<scratch>/render/audit/{high,low_mobile}/`, and later stages write
 `<scratch>/render/<stage>/{high,low_mobile}/` so images can be compared side by side with the same file names.
-The drive.mjs route loads at full size, so it needs generous timeouts but yields the same frames.
+The drive.mjs route loads at full size and runs in old headless (see the browser note below), so it needs generous
+timeouts and may be OOM-killed on m1 / m2 at 1280×720; it yields the same frames, but refviews.mjs is the reference.
 
 Measuring notes: the container renders with CPU SwiftShader shared with other agents' test browsers (load average
 4–12 on 4 cores during the audit), so absolute frame times are only good for *relative* comparisons of the same view
-on the same run conditions; use the minimum of the 4 samples (`frame min ms`), re-run both before and after in the
+on the same run conditions; use the minimum of the 3 samples (`frame min ms`), re-run both before and after in the
 same session when a change is close to the noise, and judge phone cost primarily by calls, triangles, passes, render
 target sizes and texture taps per pixel. A renderer that is OOM-killed (the memory cgroup is shared) is retried by
 `runall.sh`; `--resume` keeps the views already measured.
@@ -90,3 +102,89 @@ target sizes and texture taps per pixel. A renderer that is OOM-killed (the memo
 ## 3. Baseline (stage 0)
 
 (Filled from `<scratch>/render/audit/` below.)
+<!-- BASELINE TABLE -->
+
+## 4. Gaps against a modern realistic game
+
+Judged from the twelve stage-0 images (`<scratch>/render/audit/{high,low_mobile}/*.png`) next to what a current
+console / high-end mobile third-person game shows for the same kinds of shot. Each gap names where it is visible
+and the lever we own that fixes it for the finished missions without editing them.
+
+### 4.1 Image quality
+| # | Gap | Where it shows | Lever (file) |
+|---|---|---|---|
+| G1 | **No anti-aliasing on any tier.** Canvas MSAA is wasted because the scene renders into the composer's non-multisampled targets: stair-stepped building edges, kerb lines, lamp poles, rain streaks and hair/shoulder silhouettes crawl in motion. | every view; worst on m1a (window grid, kerbs), m2a (tile grout moiré), m1c/m2c silhouettes | engine.js: MSAA on the scene target (high), FXAA fused into the Cinema pass (medium), nothing on low (dpr 1 phones) |
+| G2 | **Washed / muddy colour.** ACES Filmic on top of dark albedo crushes the night scenes into a grey-brown haze with a low black point; saturated neon clips to white-yellow cores; m2 is a uniform red wash; the m4 sunset is orange everywhere with no blue in the shadows. No per-era grade apart from a flat `uTint` multiply. | m1a/m1b (milky fog, flat greys), m2a (all red), m4a/m4b | engine.js: per-era grade fused into the Cinema pass (lift/gamma/gain, saturation, white balance, shadow tint, soft black point); evaluate AgX / Neutral tone mapping for the neon; high may add a 3D LUT |
+| G3 | **Grain and chromatic aberration fight detail.** A constant 0.06 grain and always-on CA on high soften textures and make SwiftShader frames look noisier than the content. | all high views | engine.js: scale grain with luminance, CA only at the frame edge |
+
+### 4.2 Lighting, shadows and occlusion
+| # | Gap | Where it shows | Lever |
+|---|---|---|---|
+| G4 | **No ambient occlusion or contact shadows.** Walls meet floors, people meet pavements and props meet the ground with no darkening: everything floats. Crowd walkers neither cast nor receive; `low` has no shadows at all, so phones show no grounding whatsoever. | m1b (walkers, shopfront base), m2b (pipes, wall-floor joins), m4b (houses on the ground), all low views | engine.js: GTAO at half resolution on high; props.js / kit.js: soft contact-shadow decals (one quad, depth-write off) under walkers, characters' feet and props on medium/low; baked AO in kit materials |
+| G5 | **Wrong image-based light.** Every scene reflects three's grey RoomEnvironment studio: wet asphalt reflects a white box instead of the neon street, metal reads as grey plastic, the lab and the valley share one reflection. | m1a/m1b street (no neon on the wet road except the additive puddle quads), m3 chronolith metal, m4 stone | engine.js: per-scene procedural environment (realism.skyEnvironment / an interior preset) built from the scene's sky/fog/hemi colours when a mission set none; optional one-time cube capture for the m1 street |
+| G6 | **Flat, single-source lighting.** Interiors are lit by unshadowed point lights with no falloff shaping or bounce: walls are evenly lit planes, ceilings black, no light pools; the m1 lamps light the ground only through puddle sprites. | m2a/m2b (flat grey walls), m3a, m1b (shopfront wall), m4a (houses without sky fill / bounce) | engine.js: env + AO do most of it; kit.js lampPost/light helpers: shaped pools, emissive fixtures that actually read as light sources; height fog in-scatter around lights |
+| G7 | **Dialogue / character lighting.** Close-ups use whatever gameplay light happens to be there: faces are under-exposed or lit from behind, no key / fill / rim, no catch-lights, no subject separation from the background. | m1c (Hale's face lit flat from the front, Kai a black silhouette), m2c (both characters nearly black), m3b, m4c | engine.js + a small hook in game.shot / talk: a camera-relative dialogue rig (key + rim, unshadowed, only while a close shot is active), depth-of-field on high |
+
+### 4.3 Materials
+| # | Gap | Where it shows | Lever |
+|---|---|---|---|
+| G8 | **Plastic / cardboard materials.** Canvas-drawn albedo only: no normal maps, no roughness variation (except asphalt), no AO maps, no edge wear; tiles are perfect squares with uniform gloss, concrete and stone are flat prints. | m2a/m2b floors and walls, m3 chamber, m4 stone, m1 pavement | kit.js: `tileMaterial`, `stoneMaterial`, `concreteMaterial`, `asphaltMaterial` gain normal + roughness + AO from realism.textureSet (same signatures, tier-sized textures); specular anti-aliasing |
+| G9 | **Wet street does not read as wet.** No rain ripples, no streaks of reflected neon, puddles are additive sprites that float above the ground and ignore the camera angle. | m1a, m1b | kit.js asphaltMaterial: realism.rainRipples + env reflections (G5); puddleGlow kept but softened |
+
+### 4.4 Depth and atmosphere
+| # | Gap | Where it shows | Lever |
+|---|---|---|---|
+| G10 | **Uniform exponential fog** with one colour: no height falloff, no light in-scatter, no aerial perspective, so distance reads as grey-out instead of depth; skies are flat two-colour gradients with no clouds. | m1a (the street end dissolves into milk), m4a (no haze layers between hills), m3c | engine.js setScene: swap FogExp2 for realism's HeightFog with the same colour/density (opt-out per scene); kit.js `sky`: cloud layer and horizon glow; lamp light cones on high/medium |
+| G11 | **Rain is thin 1 px lines** of one brightness; nothing hits the ground. | m1a, m1b | kit.js Rain: camera-facing streak quads lit by nearby neon, ground splashes on high |
+
+### 4.5 Buildings, maps and infrastructure
+| # | Gap | Where it shows | Lever |
+|---|---|---|---|
+| G12 | **Boxy buildings.** m1 towers are single `BoxGeometry` blocks with a stretched 256×512 facade print: no mullions, window reveals, ledges, cornices, setbacks, balconies, roofs or ground-floor structure; the window grid repeats visibly; the skyline is flat cards. m2/m3 interiors are box rooms; m4 houses are a box + cone. | m1a (both street walls), m1c background, m2a/m2b, m4a | kit.js: `facadeTextures` → higher-resolution facade with frames, sills and lit-interior variation (normal + roughness companions); `box()` recognises facade materials and adds relief / rooftop dressing as merged geometry (one extra draw per building at most); realism.cityBlock for new missions |
+| G13 | **Missing street infrastructure.** No kerb stones or gutters, drains, manholes, bollards, railings, traffic lights, crossings, street furniture, overhead wiring, signage poles, rooftop plant (AC units, water tanks, antennas beyond one red stick), transit details (rails, sleepers, platform edges, catenary masts are a few boxes). | m1a/m1b/m1c, m2 corridor (no conduits / signage / doors), m3a (chamber plant), m4b (no fences, carts, wells) | props.js / kit.js: a street-furniture set (lamp post rebuild, bollard, railing, drain, kerb strip, traffic light, cable runs, rooftop units, transit shelter, signage pole) built as instanced / merged meshes; existing `lampPost` upgraded in place. Placing new furniture in missions 1-4 needs the missions workflow (one call each); see Plan 5 |
+| G14 | **Vegetation is primitive.** m4 trees are dodecahedron blobs on cylinders defined inside the mission; no grass, shrubs or ground cover; the 2196 overgrowth of m3 is a few tinted boxes / tubes. | m4a, m4b, m3c | realism.js tree / forest / instancedGrass / ivy exist for new missions; for m4 / m3 the missions workflow must swap the call (we cannot edit missions) |
+
+### 4.6 Characters (other workflows own the models)
+| # | Gap | Where it shows | Owner |
+|---|---|---|---|
+| G15 | Crowd and hero characters read as low-poly CG figures in the gameplay shots: clothing seams/tearing artefacts at the shoulders (Hale's jacket), hard hair silhouettes, no skin specular response to the environment. Rendering helps (env light, AO, rim light, AA) but the meshes belong to src/human + character.js. | m1c, m2c, m4c | costume / human workflows; rendering provides G5/G7 |
+
+### 4.7 Performance (phones)
+| # | Gap | Measured | Lever |
+|---|---|---|---|
+| G16 | **m1 exceeds the phone budget**: ~480 draw calls / 450k triangles on the establishing view at high (budget ≤ 250 calls); each building, sign and lamp is its own draw, the 13+ umbrella walkers are full characters. | see table (section 3) | kit.js / props.js: merge static meshes per material after a scene is built (opt-in helper, used by the engine only on medium/low where it is invisible), instanced lamps / signs, crowd LOD distances per tier |
+| G17 | **Many unshadowed point lights** (7–14 per scene, all forward-shaded per pixel on every material). | lights column | engine tier hints: clamp the per-scene light count on low (fade the weakest into emissive + env) |
+
+## 5. Plan
+
+Rules for every stage: (1) re-capture all twelve reference views at `high` 1280×720 and `low --mobile` 844×390 into
+`<scratch>/render/<stage>/` and compare side by side with the audit images; (2) `low` and `medium` may not get
+slower: a new pass is tier-gated (high = full quality, medium = a cheap version, low = only what can be fused into
+an existing pass), and the stage reports calls / triangles / frame min against the audit with
+`node tools/render/report.mjs <stage dir> <audit dir>`; (3) kit.js / props.js / realism.js keep every export and
+parameter, new behaviour is opt-in or a pure quality improvement, files are checked with `node --check` + eslint
+after each edit because other workflows load them live; (4) nothing is downloaded: textures and meshes are
+generated by code, offline bakes come from Blender Cycles running in this container.
+
+| Stage | Content | Tiers | Fixes |
+|---|---|---|---|
+| **1. Image foundation** (engine.js, vendor/addons) | MSAA ×4 on the scene render target on high (WebGL2 multisampled target, resolved before bloom); FXAA fused into the Cinema pass on medium; per-era colour grade fused into the Cinema pass (lift / gamma / gain, saturation, white balance, shadow tint, soft toe) driven by a `grade` preset per scene (defaults derived from the scene's fog / background so missions 1-4 need no change); grain scaled by luminance, CA only near the frame edge; tone-mapping review (ACES vs AgX / Neutral) on the neon views. | high: MSAA; medium: FXAA (+5 taps in the existing pass); low: grade only (ALU in the existing pass) | G1, G2, G3 |
+| **2. Light and occlusion** (engine.js, realism.js, props.js) | Per-scene IBL: when a mission did not set `scene.environment`, the engine builds one from the scene (night city / interior / sunset presets of realism.skyEnvironment, or a one-time cube capture at the player start) instead of RoomEnvironment; GTAO (vendored GTAOPass, half resolution, blended before bloom) on high; contact-shadow decals under Walkers, actors and big props on medium / low (and high where GTAO misses off-screen casters); shadow-map bias / normal-bias pass to remove acne and peter-panning; HeightFog swap in setScene with the same colour and density. | high: env + GTAO + soft shadows; medium: env + decals; low: env (zero per-frame cost) + decals | G4, G5, G6, G10 |
+| **3. Materials** (kit.js, realism.js) | `tileMaterial`, `stoneMaterial`, `concreteMaterial`, `asphaltMaterial` return the same material kinds with normal / roughness / AO maps from realism.textureSet (GPU baked once, cached, 256 / 512 / 1024 by tier); asphalt gets rain ripples, puddle masks and darker wet albedo; `facadeTextures` draws 2× resolution facades with frames, sills, blinds and interior variation and returns normal / roughness companions; `glowMat` fixtures get a soft emissive falloff; `chronolith`, `trainCar`, `lampPost`, `Drone` get real metal / glass / rubber breakup. Optional Cycles bakes (AO / curvature) for the chronolith and the train car under `assets/baked/`. | all tiers (texture size by tier); interior-mapped windows high / medium only | G8, G9, G12 (look) |
+| **4. Buildings and street infrastructure** (kit.js, props.js) | `box()` recognises a facade material and adds merged relief (window reveals, floor ledges, cornice, roof parapet, rooftop units, water tanks, antennas) for that building: one extra draw at most, skipped on low beyond 60 m; a street-furniture set (`kerb`, `drain`, `bollard`, `railing`, `trafficLight`, `signPole`, `cableRun`, `transitShelter`, `rooftopUnits`) as instanced / merged builders for new missions; `lampPost` rebuilt in place (pole base, arm, luminaire with a lit lens and an optional light cone). Missions 1-4 keep their layout; the missions workflow is offered one-line calls to dress their streets. Static-mesh merging (`mergeStatic(scene)`) after a scene is built cuts m1 below 250 calls on phones. | geometry everywhere, merging on medium / low, light cones high / medium | G12, G13, G16 |
+| **5. Characters and cinematics** (engine.js, game.js hook) | `engine.cinematic({ subject, focus, rig })` called from `game.shot` (and when a `talk` starts with a close camera): a camera-relative key + rim light pair (unshadowed, 2 lights on high / medium, 1 rim on low) that fades in only during close shots; depth of field (vendored BokehPass at half resolution) on high only, focused on the speaker's head; subtle eye catch-light via the env. | high: rig + DOF; medium: rig; low: rim | G7, G15 (lighting side) |
+| **6. Atmosphere and weather** (kit.js) | `sky()` adds cloud layers and a horizon glow (same signature); Rain becomes lit camera-facing streaks with ground splashes on high; Motes softer; volumetric-looking cones for lamps and the chronolith (additive cones, no ray marching). | streak count / splashes by tier | G10, G11 |
+| **7. Vegetation and eras** (realism.js, requests) | realism.tree / forest / instancedGrass / ivy tuned for the m4 valley and the 2196 overgrowth; the missions workflow is asked to swap m4's local `tree()` and m3's 2196 dressing to these builders (we cannot edit missions). | instance counts by tier | G14 |
+| **8. Performance pass** | Re-measure every view, cut what does not pay for itself; crowd LOD distances and light clamps per tier; verify ≤ 250 calls / ≤ 700k triangles / ≤ 6 lights / ≤ 1 shadow caster on medium and low; document final numbers here. | — | G16, G17 |
+
+Stage order is by impact per phone millisecond: stages 1-3 change every frame of every mission without touching
+mission code; 4-7 add content; 8 closes the budget. Each stage ends with its before / after table appended below.
+
+### Offline rendering in the cloud container
+
+The owner asked for "the software in the cloud for rendering". In this container that is: headless Chromium with
+SwiftShader driven by `tools/render/refviews.mjs` for repeatable reference frames and measurements (this document),
+Blender with Cycles (`/home/user/tools/venv/bin/python`, `import bpy`) for offline bakes of static hero props (AO /
+lightmaps into `assets/baked/`, referenced only by kit.js / props.js) and ffmpeg for turning captured frame
+sequences into review videos. The game itself still renders in real time on the player's device; nothing in the
+runtime depends on a server.

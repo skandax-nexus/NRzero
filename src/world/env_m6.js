@@ -416,6 +416,7 @@ export function buildHouse(game, T, opts = {}) {
   };
   for (const k of ['iron', 'steel', 'rust', 'concrete']) M[k].envMapIntensity = 0.8;
 
+  console.log('M6DBG', 419, Math.round(performance.now()));
   // =====================================================================================
   // STREET (old clock quarter, rain) — shared by all eras, tinted per era by the lighting rig
   // =====================================================================================
@@ -497,6 +498,7 @@ export function buildHouse(game, T, opts = {}) {
   }
   world.dialOut = dialOut;
 
+  console.log('M6DBG', 500, Math.round(performance.now()));
   // =====================================================================================
   // SHOP  x[-7.2, 7.2]  z[-0.8, 8.0]  ceiling 3.8
   // =====================================================================================
@@ -551,6 +553,7 @@ export function buildHouse(game, T, opts = {}) {
   ledger.position.set(-5.15, 1.08, 3.7); ledger.rotation.y = Math.PI / 2 + 0.15; S('2026', ledger);
   for (let k = 0; k < 6; k++) props['2049'].boxc(M.brassDark, -5.15 + (R() - 0.5) * 0.6, 1.1, 2 + R() * 3, 0.12 + R() * 0.12, 0.04, 0.12 + R() * 0.1, R() * 3);
 
+  console.log('M6DBG', 554, Math.round(performance.now()));
   // =====================================================================================
   // WORKSHOP  x[-8.2, 8.2]  z[-29.2, -1.2]  ceiling 9.2 — locked to 2049 (the loop pins it)
   // =====================================================================================
@@ -656,6 +659,7 @@ export function buildHouse(game, T, opts = {}) {
   world.workDoor = wdoor; world.workDoorCol = col(null, [-0.85, 0, -1.2], [0.85, 2.45, -0.8]);
   for (let k = 0; k < 5; k++) props['2196'].boxc(M.rubble, -0.6 + R() * 1.2, 0.3 + k * 0.35, -0.6 - R() * 0.4, 0.8, 0.5, 0.5, R() * 3);
 
+  console.log('M6DBG', 659, Math.round(performance.now()));
   // =====================================================================================
   // STUDY  x[-7, 6.2]  z[-41, -29.6]  ceiling 4.6 ; garden beyond (z < -41)
   // =====================================================================================
@@ -763,6 +767,7 @@ export function buildHouse(game, T, opts = {}) {
     } catch (err) { console.warn('m6 ivy', err); }
   }
 
+  console.log('M6DBG', 766, Math.round(performance.now()));
   // =====================================================================================
   // STAIRWELL  x[6.2, 9.4]  z[-41.6, -32.6]   (two flights, 10 steps of 0.25)
   // =====================================================================================
@@ -785,6 +790,7 @@ export function buildHouse(game, T, opts = {}) {
     p.box(M.darkWood, 6.2, TY, -32.7, 7.8, TY + 1.0, -32.6);
     if (e === '2196') for (let k = 0; k < 6; k++) p.boxc(M.rubble, 8.6 + (R() - 0.5), 0.25, -36.4 - k * 0.6, 0.6, 0.5, 0.5, R() * 3);
   }
+  console.log('M6DBG', 788, Math.round(performance.now()));
   // =====================================================================================
   // TOWER  floor TY, x[-7, 6.2], z[-41, -29.6], up to 21
   // =====================================================================================
@@ -882,6 +888,7 @@ export function buildHouse(game, T, opts = {}) {
   { const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.24), new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.5, metalness: 0.4 })); rec.add(body); for (const s of [-1, 1]) { const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.02, 20), M.brass); reel.position.set(s * 0.08, 0.07, 0); rec.add(reel); } const lbl = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.08), new THREE.MeshBasicMaterial({ map: textPlate(['K.V. — FOR WHEN THE CHILD RETURNS'], { bg: '#e8dcc0', size: 26, w: 512, h: 96 }) })); lbl.rotation.x = -Math.PI / 2; lbl.position.y = 0.065; lbl.position.z = 0.09; lbl.scale.set(0.9, 0.9, 1); rec.add(lbl); }
   world.recorder = rec;
 
+  console.log('M6DBG', 885, Math.round(performance.now()));
   // ---------- optional: the lying clock (2026 display case) ----------
   // five carriage clocks standing on the display case; one of them shows a time that has not happened yet (8:14)
   {
@@ -906,6 +913,7 @@ export function buildHouse(game, T, opts = {}) {
     watch.position.set(5.12, 1.6, world.carriage[3].g.position.z); watch.rotation.set(0.5, 0.4, 0); watch.visible = false; groups['2026'].add(watch);
     world.boyWatch = watch;
   }
+  console.log('M6DBG', 909, Math.round(performance.now()));
   // ---------- optional: the date drum on the pivot column + Hensel's locked drawer (2049 workshop) ----------
   {
     const blank = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.38), new THREE.MeshStandardMaterial({ map: textPlate(['·  ·  ·  ·'], { bg: '#2a2620', ink: '#c8b890', size: 120 }), emissive: 0xffffff, emissiveMap: textPlate(['·  ·  ·  ·'], { bg: '#2a2620', ink: '#c8b890', size: 120 }), emissiveIntensity: 0.25, roughness: 0.6 }));
@@ -922,6 +930,7 @@ export function buildHouse(game, T, opts = {}) {
     world.drawer = drawer;
   }
 
+  console.log('M6DBG', 925, Math.round(performance.now()));
   // ---------- atmosphere ----------
   const dustW = new Motes(380, [-8, 0.2, -29, 8, 8.5, -1.5], 0xffe2b0, 0.05, 0.12); groups['2049'].add(dustW.mesh); world.updaters.push(dt => dustW.update(dt)); world.dust = dustW;
   const dustS = new Motes(200, [-7, 0.2, -41, 6, 4.4, -30], 0xffe2b0, 0.04, 0.1); groups['2026'].add(dustS.mesh); world.updaters.push(dt => dustS.update(dt));
@@ -938,6 +947,7 @@ export function buildHouse(game, T, opts = {}) {
   let rain = null;
   try { rain = RZ.particles({ kind: 'rain', count: 3500 }); scene.add(rain); world.rain = rain; } catch (err) { console.warn('m6 rain', err); }
 
+  console.log('M6DBG', 941, Math.round(performance.now()));
   // ---------- build all batches ----------
   arch.all.build(groups.all, { blockers: true, game, name: 'arch' }); props.all.build(groups.all, { name: 'props' });
   for (const e of ERAS) { arch[e].build(groups[e], { blockers: true, game, name: 'arch' + e }); props[e].build(groups[e], { name: 'props' + e }); }

@@ -1494,6 +1494,15 @@ def shoe_objects(B, c, cov, params=None):
                 if perp.length > 1e-4:
                     v.co += perp.normalized() * pr["lip"] * k_
                 v.co += fwd * pr["lip"] * 0.8 * k_ * (1 if along > 0 else -0.6)
+        if params and cov.get("_shaft"):     # a boot shaft overlaps the hull's top: tuck the hull under it (no z-fight)
+            ax = to_bl(B.Jm["ankle_" + s])
+            for v in bm.verts:
+                t_ = min(max((v.co.z - (collar - 0.045)) / 0.025, 0.0), 1.0)
+                if t_ > 0:
+                    rel = v.co - ax
+                    rel.z = 0
+                    if rel.length > 1e-4:
+                        v.co -= rel.normalized() * 0.0045 * t_
         bm.to_mesh(me)
         bm.free()
         dec = o.modifiers.new("dec", "DECIMATE")
@@ -1501,9 +1510,18 @@ def shoe_objects(B, c, cov, params=None):
         BC.apply_modifiers(o)
         BC.smooth(o)
         sz = max(0.012, zb + band + 0.0015) if params else 0.012
+        if params:      # cut the hull along the sole line: the sole / upper split is a clean edge, not decimation teeth
+            bm = bmesh.new()
+            bm.from_mesh(o.data)
+            bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-5, plane_co=(0, 0, sz), plane_no=(0, 0, 1))
+            bm.to_mesh(o.data)
+            bm.free()
         set_cell_uvs(o, "shoe", "yz", per_face=lambda p: "sole" if p.center.z < sz else "shoe")
         zz = np.array([v.co.z for v in o.data.vertices])
         set_mask(o, np.stack([np.zeros_like(zz), np.where(zz < sz, pr["sole_gloss"], pr["gloss"]), np.zeros_like(zz)], 1))
+        if params:      # already low-poly: the body decimation would collapse across the sole / upper cell seam (teeth)
+            a = o.data.attributes.new("_keep", "FLOAT", "POINT")
+            a.data.foreach_set("value", np.ones(len(o.data.vertices), np.float32))
         ref = np.array([i for i in B.bodyv if B.vb[i] in (f"foot_{s}", f"toe_{s}", f"shin_{s}") and B.P[i, 1] < collar + 0.05])
         WSTORE[o.name] = nearest_weights(obj_world_verts(o), to_bl_np(B.P[ref]), B.W[ref], 4)
         out.append(o)
@@ -2251,6 +2269,45 @@ def select_class(mesh, cls, which):
     bmesh.update_edit_mesh(mesh.data)
 
 
+def fix_uv_stretch(mesh):
+    """After decimation: a face whose corners landed on two atlas islands (an edge collapse across a uv seam) samples
+    a stretch of unrelated texels (skin on a coat). Each such corner takes the uv it has in a neighbouring face so the
+    face's uvs are coherent again (the combination with the smallest uv spread)."""
+    import itertools
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    uvl = bm.loops.layers.uv.active
+    fixed = 0
+    if uvl is not None:
+        for f in bm.faces:
+            ls = list(f.loops)
+            uv = [l[uvl].uv.copy() for l in ls]
+            span = max((a - b).length for a, b in itertools.combinations(uv, 2))
+            size = max(e.calc_length() for e in f.edges)
+            if span < 0.03 or span < 6 * size:
+                continue
+            cand = []
+            for l in ls:
+                cs = [l[uvl].uv.copy()]
+                for l2 in l.vert.link_loops:
+                    u2 = l2[uvl].uv
+                    if all((u2 - c).length > 1e-6 for c in cs):
+                        cs.append(u2.copy())
+                cand.append(cs[:4])
+            best, bs = None, span
+            for combo in itertools.product(*cand):
+                sp = max((a - b).length for a, b in itertools.combinations(combo, 2))
+                if sp < bs - 1e-6:
+                    best, bs = combo, sp
+            if best is not None:
+                for l, u in zip(ls, best):
+                    l[uvl].uv = u
+                fixed += 1
+    bm.to_mesh(mesh.data)
+    bm.free()
+    return fixed
+
+
 def decimate_protected(mesh, B, target, face_keep=1.0):
     """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest."""
     e = to_bl(B.L.eye)
@@ -2301,6 +2358,9 @@ def decimate_protected(mesh, B, target, face_keep=1.0):
             bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)))
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
+    nfix = fix_uv_stretch(mesh)
+    if nfix:
+        print("  uv seam faces repaired:", nfix, flush=True)
     if mesh.data.attributes.get("_keep"):
         mesh.data.attributes.remove(mesh.data.attributes["_keep"])
     print("  decimate", c_id(mesh), n, "->", sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris (target", target, ")", flush=True)

@@ -883,7 +883,7 @@ export default {
     act({ pos: [-22.8, TY + 1.4, -1.6], radius: 2.6, states: ['thriving'], prompt: 'Talk to Iru the potter', onUse: () => ui.subtitle('potter', S.quest ? 'The yard is dry for the first time this season. The cup will be ready when you come back. Whenever that is.' : 'The leat floods my yard and the barley dies of thirst. The gates are marked, but nobody reads marks anymore.', 4200) });
     // Tala: the water quest hook (after the first conversation)
     act({ pos: [7.8, 1.5, 5.5], radius: 2.6, states: ['thriving'], prompt: 'Ask Tala about the fields', enabled: () => S.metTala && !questStarted && !busy && S.toured && !talaAtHead, onUse: safe(async () => {
-      if (questStarted || busy) return; busy = true;
+      if (questStarted || busy || !S.metTala || !S.toured || talaAtHead) return; busy = true;
       try {
         await enter([5.2, 1.9, 8.2], [7.8, 1.6, 5.5], 1.2, 42);
         tala.lookTarget = kai.head;
@@ -1039,7 +1039,7 @@ export default {
       }
     });
     act({ pos: [TALA_HEAD[0], TY + 1.5, TALA_HEAD[1]], radius: 2.8, states: ['thriving'], prompt: 'Speak with Tala at the head works', enabled: () => talaAtHead && levered === 0 && !S.diverted, onUse: safe(async () => {
-      if (busy || T.current !== 'thriving') return; busy = true;
+      if (busy || T.current !== 'thriving' || !talaAtHead || levered > 0 || S.diverted) return; busy = true;
       try {
         headTalk = true;
         await enter([TALA_HEAD[0] - 1.6, TY + 2.3, TALA_HEAD[1] + 3.2], [B55, TY + 0.6, -53], 1.4, 48);
@@ -1258,7 +1258,7 @@ export default {
     const BARKS = [{ x: -1, z: 6, id: 'villager', line: 'Keeper\'s guest! Sit, the bread is nearly done.' }, { x: -24, z: 0, id: 'potter', line: 'Mind the drying clay, stranger. And the mud. Always the mud.' }, { x: 9, z: -1, id: 'villager', line: 'The wheel turns slower every year. The river is in a hurry to be somewhere else.' }, { x: -5, z: -15, id: 'villager', line: 'You wear no dust, but the old story knows your face.' }];
     game.onUpdate(() => { if (T.current !== 'thriving' || busy || ui.dlgActive) return; for (const b of BARKS) if (!b.done && nearK(b.x, b.z, 5)) { b.done = true; ui.subtitle(b.id, b.line, 3600); } });
     // 1 · Tala at the water steps
-    await new Promise(res => { const it = act({ pos: [7.8, 1.5, 5.5], radius: 3.2, states: ['thriving'], prompt: 'Speak with Tala', onUse: () => { done(it); res(); } }); });
+    await new Promise(res => { const it = act({ pos: [7.8, 1.5, 5.5], radius: 3.2, states: ['thriving'], prompt: 'Speak with Tala at the water steps', onUse: () => { done(it); res(); } }); });
     await enter([4.6, 1.9, 8.6], [7.8, 1.6, 5.5], 1.4, 42);
     tala.lookTarget = kai.head; placeNiko(5.0, 3.6, Math.PI * 0.75);
     await game.talk([
