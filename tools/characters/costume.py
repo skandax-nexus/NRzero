@@ -557,6 +557,7 @@ def build_layers(c, B, cov):
             BH.taubin(L, 2)
         shape_layer(L, B, g, LM, cov)
         if g.get("cat") in ("top", "over", "bottom") and g.get("drape", True) and g.get("shape") not in ("pauldron", "plates", "gorget", "leg_wraps", "leggings"):
+            g["_female"] = c["macro"].get("gender", 1.0) < 0.5
             drape_torso(L, B, g, LM)
         if g.get("cat") in ("top", "over"):
             smooth_shoulder_weights(L, B)
@@ -570,8 +571,7 @@ def build_layers(c, B, cov):
                       * ((B.aw["L"] + B.aw["R"])[L.base] < 0.3))
             need = need + 0.007 * crease
         push_out(L, B, need)
-        if g.get("cat") == "top" and c["macro"].get("gender", 1.0) < 0.5:
-            bridge_bust(L, B, 0.03 if g.get("role") == "outer" else 0.018)
+        # (bridge_bust is superseded by drape_torso: its local max raised a disc round each nipple)
         d = ((L.pos - B.P[L.base]) * B.N[L.base]).sum(1)
         OFF[L.base] = np.maximum(OFF[L.base], d * ss(-0.004, 0.012, L.cov))
         L.mask[:, 1] = g.get("gloss", 0.0)
@@ -590,9 +590,9 @@ def build_layers(c, B, cov):
 
 def drape_torso(L, B, g, LM):
     """Cloth bridges the body instead of shrink-wrapping it. Around the torso axis, the layer's radius per height row
-    and angle bin is closed over the anatomy's concavities and small bumps (a grey dilation about 4.5 cm wide and 4 cm
-    tall, then a blur): the shell spans the intermammary and gluteal clefts, the spine groove and the hollows beside
-    the scapulae, and a nipple becomes the apex of a smooth dome instead of a point. Vertices only move outward.
+    and angle bin gets a grey closing (about 4.5 cm wide and 4 cm tall: the shell spans the intermammary and gluteal
+    clefts, the spine groove and the hollows beside the scapulae) and a small opening (bumps narrower than ~2.4 cm,
+    such as nipples and rib / scapula ridges, are pressed flat on the bust by up to 5 mm), then a light blur.
     Garments with a tail (coats, dresses, tunics) also hang straight down from the widest hip / buttock ring below the
     hip: the back no longer follows the buttocks into the leg split."""
     k = LM["k"]
@@ -612,37 +612,52 @@ def drape_torso(L, B, g, LM):
     nb, dy = 96, 0.01
     y0 = lo_y - 0.02
     ny_ = int(np.ceil((top_y + 0.03 - y0) / dy)) + 1
-    bi = ((th + np.pi) / (2 * np.pi) * nb).astype(int) % nb
     yi = np.clip(((Q[:, 1] - y0) / dy).astype(int), 0, ny_ - 1)
+    # per 1 cm slice: the 2D convex hull of the cross-section (x, z - zc); its radius per angle bin. The hull spans
+    # every concavity of the slice (clefts, the spine groove, between the breasts) and leaves convex shapes alone
+    # (a polar dilation would bulge flat surfaces out into arcs)
+    angs = -np.pi + (np.arange(nb) + 0.5) * 2 * np.pi / nb
+    dirs = np.stack([np.sin(angs), np.cos(angs)], 1)
     R = np.zeros((ny_, nb))
-    np.maximum.at(R, (yi, bi), r)
-    for row in range(ny_):                       # fill empty bins round the ring
-        good = np.nonzero(R[row] > 0)[0]
-        if len(good) == 0:
+    X2 = np.stack([Q[:, 0], Q[:, 2] - zc], 1)
+    for row in range(ny_):
+        m = np.abs(yi - row) <= 0
+        if m.sum() < 8:
             continue
-        R[row] = np.interp(np.arange(nb), np.r_[good - nb, good, good + nb], np.r_[R[row, good], R[row, good], R[row, good]])
-    filled = R.any(1)
+        hull = _hull2d(X2[m])
+        if len(hull) < 3:
+            continue
+        R[row] = _ray_hull(hull, dirs)
+    filled = R.max(1) > 0
     if not filled.any():
         return
     rows = np.nonzero(filled)[0]
     for row in range(ny_):                       # empty rows: nearest filled row
         if not filled[row]:
             R[row] = R[rows[np.argmin(np.abs(rows - row))]]
+    R = np.where(R > 0, R, np.median(R[R > 0]))
     rmean = float(np.median(r))
-    wb = max(1, int(round(0.0225 * k / (rmean * 2 * np.pi / nb))))      # +-2.25 cm of arc
-    wy = 2                                                              # +-2 cm of height
-    D = R.copy()
-    for d in range(1, wb + 1):
-        D = np.maximum(D, np.maximum(np.roll(R, d, 1), np.roll(R, -d, 1)))
-    D2 = D.copy()
-    for d in range(1, wy + 1):
-        D2[d:] = np.maximum(D2[d:], D[:-d])
-        D2[:-d] = np.maximum(D2[:-d], D[d:])
-    S = D2
-    for _ in range(3):                           # blur (stays above the closing almost everywhere)
+    arc = rmean * 2 * np.pi / nb
+
+    def morph(A, wb_, op):
+        D = A.copy()
+        for d in range(1, wb_ + 1):
+            D = op(D, op(np.roll(A, d, 1), np.roll(A, -d, 1)))
+        return D
+    # opening with a small window (erode, then dilate): bumps narrower than ~4.5 cm (nipples with the areola, rib /
+    # scapula ridges) are pressed flat (on the bust by up to 5 mm; elsewhere the shell only moves outward)
+    ws = max(2, int(round(0.024 * k / arc)))
+    S = morph(morph(R, ws, np.minimum), ws, np.maximum)
+    for _ in range(2):                           # soften the steps between slices
         S = (np.roll(S, 1, 1) + 2 * S + np.roll(S, -1, 1)) / 4
         S[1:-1] = (S[:-2] + 2 * S[1:-1] + S[2:]) / 4
-    if g.get("tail") and g.get("cat") == "top":  # hang straight down from the widest ring below the hip
+    if g.get("cat") == "top" and g.get("_female"):   # the front falls from the bust apex instead of following the underbust fold
+        front_b = np.abs(angs) < np.radians(75)
+        r_hi = int(np.clip((LM["ch"] + 0.07 * k - y0) / dy, 0, ny_ - 1))
+        r_lo = int(np.clip((LM["ch"] - 0.14 * k - y0) / dy, 0, ny_ - 1))
+        for row in range(r_hi - 1, r_lo - 1, -1):
+            S[row, front_b] = np.maximum(S[row, front_b], S[row + 1, front_b] - 0.0028)
+    if g.get("cat") in ("top", "over"):          # hang straight down from the widest ring below the hip (no tuck under the buttocks)
         hip_row = int(np.clip((LM["hip"] + 0.02 * k - y0) / dy, 0, ny_ - 1))
         for row in range(hip_row - 1, -1, -1):
             S[row] = np.maximum(S[row], S[row + 1] * 0.997)
@@ -658,10 +673,46 @@ def drape_torso(L, B, g, LM):
     y_b = np.minimum(y_a + 1, ny_ - 1)
     St = (S[y_a, b_a] * (1 - tb) + S[y_a, b_b] * tb) * (1 - ty) + (S[y_b, b_a] * (1 - tb) + S[y_b, b_b] * tb) * ty
     wv = ss(lo_y - 0.005, lo_y + 0.03 * k, Q[:, 1]) * ss(top_y + 0.01, top_y - 0.05 * k, Q[:, 1]) * np.clip((0.3 - aw[idx]) / 0.15, 0, 1)
-    nr = r + np.clip(St - r, 0, 0.045 * k) * wv
+    bust = ss(0.015, 0.04, Q[:, 2] - zc) * ss(LM["ch"] - 0.12 * k, LM["ch"] - 0.07 * k, Q[:, 1]) * ss(LM["ch"] + 0.12 * k, LM["ch"] + 0.07 * k, Q[:, 1])
+    nr = r + np.clip(St - r, -0.005 * bust, 0.045 * k) * wv     # only the bust's small bumps are pressed in
     sc = nr / np.maximum(r, 1e-6)
     L.pos[idx, 0] = Q[:, 0] * sc
     L.pos[idx, 2] = zc + (Q[:, 2] - zc) * sc
+
+
+def _hull2d(P):
+    """Convex hull (monotone chain) of 2D points, counter-clockwise."""
+    pts = sorted(set(map(tuple, np.round(P, 5))))
+    if len(pts) < 3:
+        return np.array(pts)
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lo, hi = [], []
+    for p in pts:
+        while len(lo) >= 2 and cross(lo[-2], lo[-1], p) <= 0:
+            lo.pop()
+        lo.append(p)
+    for p in reversed(pts):
+        while len(hi) >= 2 and cross(hi[-2], hi[-1], p) <= 0:
+            hi.pop()
+        hi.append(p)
+    return np.array(lo[:-1] + hi[:-1])
+
+
+def _ray_hull(H, dirs):
+    """Distance from the origin along each direction to the boundary of convex polygon H (origin inside; 0 if not)."""
+    A, Bq = H, np.roll(H, -1, 0)
+    E = Bq - A                                                   # edges
+    # origin + t d = A + u E  ->  solve per (direction, edge)
+    den = dirs[:, None, 0] * E[None, :, 1] - dirs[:, None, 1] * E[None, :, 0]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = (A[None, :, 0] * E[None, :, 1] - A[None, :, 1] * E[None, :, 0]) / den
+        u = (A[None, :, 0] * dirs[:, None, 1] - A[None, :, 1] * dirs[:, None, 0]) / den
+    ok = (np.abs(den) > 1e-12) & (u >= -1e-6) & (u <= 1 + 1e-6) & (t > 0)
+    t = np.where(ok, t, np.inf)
+    out = t.min(1)
+    return np.where(np.isfinite(out), out, 0.0)
 
 
 def bridge_bust(L, B, reach):
@@ -948,10 +999,12 @@ def tail_weights(pts_bl, J, H, top_z, long=False, split_front=False, split_back=
     sx = sx * (1 - hard) + np.clip(pts_bl[:, 0] / 0.012, -1, 1) * hard
     kz = J["knee_L"].z
     below = np.clip((kz + 0.02 - pts_bl[:, 2]) / 0.25, 0, 1) * (0.6 if long else 0.4)
-    if panel:     # a coat skirt that swings as one panel: `panel` of it stays with the hips, the rest blends both thighs
-        lw = np.minimum(lw, (1 - panel) * (t ** 0.7))
-        sx = sx * 0.45 * (1 - hard) + sx * hard
-        below = below * 0.5
+    if panel:     # the back of a coat skirt swings as one panel: `panel` of it stays with the hips, the rest blends both
+        # thighs (the front panels beside the opening still follow their own legs, so a striding knee never pokes through)
+        bk = np.clip((pts_bl[:, 1] - py - 0.03) / 0.05, 0, 1)
+        lw = lw * (1 - bk) + np.minimum(lw, (1 - panel) * (t ** 0.7)) * bk
+        sx = sx * (1 - 0.55 * bk * (1 - hard))
+        below = below * (1 - 0.5 * bk)
     W[:, BH.BI["hips"]] = 1 - lw
     for s_, side in (("L", 0.5 + 0.5 * sx), ("R", 0.5 - 0.5 * sx)):
         W[:, BH.BI["thigh_" + s_]] = lw * side * (1 - below)
@@ -1149,7 +1202,10 @@ def extend_tail(L, B, g, LM, cov, layers):
     legb = [BH.BI[b] for b in ("thigh_L", "thigh_R", "shin_L", "shin_R")]
     th_b, th_t = Wb[..., legb].sum(-1), Wt[..., legb].sum(-1)
     depth_ = top_z - grid[..., 1]
-    alpha = np.clip((th_b - th_t) / np.maximum(th_b, 1e-3), 0, 1) * (ss(0.2, 0.1, depth_) if not tl.get("panel") else ss(0.09, 0.03, depth_))
+    alpha = np.clip((th_b - th_t) / np.maximum(th_b, 1e-3), 0, 1) * ss(0.2, 0.1, depth_)
+    if tl.get("panel"):    # the back panel: only its top few cm follow the legs as much as the trousers do
+        bkp = np.clip((BH.to_bl_np(grid.reshape(-1, 3))[:, 1].reshape(rows, M) - B.J["pelvis"].y - 0.03) / 0.05, 0, 1)
+        alpha = alpha * (1 - bkp) + alpha * ss(0.09, 0.03, depth_) * bkp
     Wt = Wt * (1 - alpha[..., None]) + Wb * alpha[..., None]
     Wt /= np.maximum(Wt.sum(-1, keepdims=True), 1e-9)
     # aux uv: u = arc along the loop (column), v = down the tail
@@ -2080,9 +2136,16 @@ def helmet(c, B, h, hp, LM):
         rings.append((z, cc, R, pad))
     # grid in MH coords for the aux painter
     verts = []
+    oz, ohz, oha = eye_z - 0.022 * k, 0.07 * k, 0.78        # the face opening: an ellipse (centre height, half height, half angle)
+
+    def w_open(z):
+        return oha * math.sqrt(max(0.0, 1 - ((z - oz) / ohz) ** 2)) if open_face else 0.0
     for z, (cx, cy), R, pad in rings:
+        wz = w_open(z)
         for kk in range(n):
             a = -math.pi + (kk + 0.5) * 2 * math.pi / n
+            if wz > 0 and abs(a + math.pi / 2) < wz:        # columns inside the opening snap onto its edge (a smooth rim)
+                a = -math.pi / 2 + math.copysign(wz, a + math.pi / 2)
             kr = int(((a + math.pi) / (2 * math.pi) * len(R))) % len(R)
             rr = R[kr] + pad
             verts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr, z))
@@ -2093,13 +2156,11 @@ def helmet(c, B, h, hp, LM):
     hg = dict(h, color=h.get("color") or "e6e8ea")
     enc = grid_piece("helmet", gridc, edge, hg, dict(helmet=1.0, visor=h.get("visor", "slit"), eye=B.L.eye.copy()))
     faces, uvs = [], []
-    oz, ohz, oha = eye_z - 0.022 * k, 0.07 * k, 0.78        # the face opening: an ellipse (centre height, half height, half angle)
     for r in range(len(zs) - 1):
         for m in range(n):
             m2 = (m + 1) % n
-            a = -math.pi + (m + 0.5) * 2 * math.pi / n
-            zm = (zs[r] + zs[r + 1]) / 2
-            if open_face and ((zm - oz) / ohz) ** 2 + ((a + math.pi / 2) / oha) ** 2 < 1.0:
+            a = -math.pi + (m + 1.0) * 2 * math.pi / n          # the face's middle angle
+            if open_face and abs(a + math.pi / 2) < min(w_open(zs[r]), w_open(zs[r + 1])) + 1e-6:
                 continue
             faces.append([r * n + m, r * n + m2, (r + 1) * n + m2, (r + 1) * n + m])
             uvs.append([enc(r, m), enc(r, m + 1), enc(r + 1, m + 1), enc(r + 1, m)])
@@ -2182,6 +2243,9 @@ def extras(c, B, cov, layers):
                 if len(lp) > 12:
                     out.append(BH.rope_from_loop(key + "_roll", L, lp, 0.005, "acc" if L.g.get("shape") != "belt" else "trim"))
     # ---- shoes, head pieces, hair pieces ----
+    # hanging hair clears the collars and the hood roll too (it lay inside them and flickered through)
+    hr = [BH.from_bl_np(BH.obj_world_verts(o)) for o in out if o is not None and o.name.startswith(("collar", "hood_roll"))]
+    cov["_hair_ref"] = np.concatenate(hr) if hr else None
     out += shoes(c, B, cov, cos["feet"], LM)
     out += head_pieces(c, B, cov, layers, cos, LM)
     out += BH.hair_pieces(c, B, cov, layers)
@@ -2240,6 +2304,8 @@ def hair_extra(c, B, cov, layers, LM):
             ref.append(layers[kk].pos)
     if layers.get("hair") is not None:
         ref.append(layers["hair"].pos)
+    if cov.get("_hair_ref") is not None:
+        ref.append(cov["_hair_ref"])
     ref = np.concatenate(ref)
     vol = BH.SHELL.get(style, 0.006)
     if style == "waves":
@@ -2285,7 +2351,7 @@ def hair_extra(c, B, cov, layers, LM):
             start = Vector((hc2.x, hc2.y, zr)) + dirh * (r0 - 0.002)
             drop = c.get("locLen", 0.16) * (0.8 + 0.4 * rng.random())
             back = Vector((0, 1, 0)) * (0.03 * abs(math.sin(a)))        # side locs swing back behind the ear
-            out_dir = dirh * 0.02
+            out_dir = dirh * 0.011
             pts = [start, start + out_dir * 1.0 + back * 0.4 + Vector((0, 0, -drop * 0.35)), start + out_dir * 1.5 + back * 0.8 + Vector((0, 0.005, -drop * 0.7)),
                    start + out_dir * 1.7 + back + Vector((0, 0.01, -drop))]
             o = BH.hair_tube("loc", pts, [0.0065, 0.006, 0.0055, 0.004], seg=6)

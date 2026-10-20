@@ -1026,7 +1026,8 @@ function ensureWorld(shader) {
   // aerial perspective: haze glows toward the sun (forward Mie scattering); zero at night / overcast
   shader.fragmentShader = shader.fragmentShader.replace('#include <fog_fragment>', `#include <fog_fragment>
     #ifdef USE_FOG
-    { vec3 rzV = normalize(vFogWorld - cameraPosition); float rzMu = max(dot(rzV, rzFogSunDir), 0.0);
+    if (rzFogSun.r + rzFogSun.g + rzFogSun.b > 0.0) {   // uniform: skipped at night / overcast, where it adds zero
+      vec3 rzV = normalize(vFogWorld - cameraPosition); float rzMu = max(dot(rzV, rzFogSunDir), 0.0);
       gl_FragColor.rgb += rzFogSun * fogFactor * (pow(rzMu, 5.0) * 0.55 + pow(rzMu, 32.0) * 1.2); }
     #endif`);
 }
@@ -2135,39 +2136,46 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     if (region > 3.5) alb *= 1.0 - step(0.55, fract(P.y * 22.0)) * 0.35;
     alb = mix(alb, vec3(0.2, 0.09, 0.035), ruin * 0.5); orm = vec3(1.0, 0.55 + ruin * 0.3, 0.55 * (1.0 - ruin)); return;
   }
-#if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 3
-  vec3 wall = vec3(0.4, 0.35, 0.3); o4 = vec4(1.0, 0.85, 0.0, 0.5); nW = N;
+  // window cell first (region 0), so the wall texture is only fetched where some wall shows
+  bool winR = region < 0.5;
+  float bay = vWin.x, flH = vWin.y, ww = vWin.z, wh = vWin.w, gH = vWin2.x, sill = vWin2.y, topY = vWin2.z;
+  float st = mod(vWin2.w, 10.0); float wflag = floor(vWin2.w / 10.0 + 0.01); bool shopFace = wflag > 0.5 && wflag < 1.5;
+  bool gf = P.y < gH; bool shop = gf && shopFace;
+  if (gf && wflag > 1.5) winR = false;   // ground floor the scene dressed itself: plain wall
+  vec2 cid = vec2(0.0), cl = vec2(0.0), wmin = vec2(0.0), wmax = vec2(0.0); float ch = 1.0, zone = 0.0, farW = 0.0, open = 0.0;
+  if (winR) {
+    if (gf) { cid = vec2(floor(P.x / bay), -1.0); cl = vec2(P.x - cid.x * bay, P.y); ch = gH;
+      if (shop) { wmin = vec2(0.14, 0.4); wmax = vec2(bay - 0.14, gH - 0.95); }
+      else { wmin = vec2((bay - ww) * 0.5, sill + (gH - flH) * 0.6); wmax = wmin + vec2(ww, wh); } }
+    else { float fy = (P.y - gH) / flH; cid = vec2(floor(P.x / bay), floor(fy)); cl = vec2(P.x - cid.x * bay, (fy - cid.y) * flH); ch = flH;
+      wmin = vec2((bay - ww) * 0.5, sill); wmax = wmin + vec2(ww, wh); }
+    zone = 1.0 - smoothstep(topY - aa.y, topY + aa.y, P.y);
+    // far away only the cheap per-cell facade below is drawn (each window a flat lit / dark cell, no frames: a window
+    // under ~5 px on 'low', ~3.5 px on 'medium'), skipping the per-window work
+#if RZ_INTERIOR == 0
+    farW = smoothstep(0.08, 0.28, max(aa.x, aa.y));
 #else
-  vec3 wall = rzWall(region > 4.5 ? 4.0 : layer, P, T, B, N, o4, nW);
+    farW = smoothstep(0.11, 0.4, max(aa.x, aa.y));
 #endif
-#if !defined(RZ_FACADE_PROBE) || RZ_FACADE_PROBE != 4
-  wall *= mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), vFac.w) * (0.88 + 0.24 * rzH12(vec2(bseed * 91.0, 3.0)));
-  wall *= 1.0 - (1.0 - smoothstep(0.0, 1.5, P.y)) * 0.35;
-#endif
-  if (ruin > 0.0) { wall = mix(wall, vec3(dot(wall, vec3(0.3, 0.5, 0.2))), 0.4 * ruin) * (1.0 - 0.3 * ruin); wall = mix(wall, vec3(0.085, 0.13, 0.045), moss * 0.35 * (1.0 - smoothstep(0.0, 4.0, P.y))); }
+    // the window mask is exactly 0 outside its box grown by the AA width: wall pixels skip it
+    if (farW < 0.999 && zone > 0.0 && cl.x > wmin.x - aa.x && cl.x < wmax.x + aa.x && cl.y > wmin.y - aa.y && cl.y < wmax.y + aa.y) open = rzBoxM(cl, wmin, wmax, aa) * zone;
+  }
+  vec3 wall = vec3(0.3); o4 = vec4(1.0, 0.85, 0.0, 0.5);
+  if (open < 0.999 || farW > 0.001) {
+    wall = rzWall(region > 4.5 ? 4.0 : layer, P, T, B, N, o4, nW);
+    wall *= mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), vFac.w) * (0.88 + 0.24 * rzH12(vec2(bseed * 91.0, 3.0)));
+    wall *= 1.0 - (1.0 - smoothstep(0.0, 1.5, P.y)) * 0.35;
+    if (ruin > 0.0) { wall = mix(wall, vec3(dot(wall, vec3(0.3, 0.5, 0.2))), 0.4 * ruin) * (1.0 - 0.3 * ruin); wall = mix(wall, vec3(0.085, 0.13, 0.045), moss * 0.35 * (1.0 - smoothstep(0.0, 4.0, P.y))); }
+  }
   alb = wall; orm = o4.rgb;
 #if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 2
   return;
 #endif
-  if (region > 0.5) return;
-  float bay = vWin.x, flH = vWin.y, ww = vWin.z, wh = vWin.w, gH = vWin2.x, sill = vWin2.y, topY = vWin2.z;
-  float st = mod(vWin2.w, 10.0); float wflag = floor(vWin2.w / 10.0 + 0.01); bool shopFace = wflag > 0.5 && wflag < 1.5;
-  bool gf = P.y < gH; bool shop = gf && shopFace;
-  if (gf && wflag > 1.5) return;
-  vec2 cid, cl, wmin, wmax; float ch;
-  if (gf) { cid = vec2(floor(P.x / bay), -1.0); cl = vec2(P.x - cid.x * bay, P.y); ch = gH;
-    if (shop) { wmin = vec2(0.14, 0.4); wmax = vec2(bay - 0.14, gH - 0.95); }
-    else { wmin = vec2((bay - ww) * 0.5, sill + (gH - flH) * 0.6); wmax = wmin + vec2(ww, wh); } }
-  else { float fy = (P.y - gH) / flH; cid = vec2(floor(P.x / bay), floor(fy)); cl = vec2(P.x - cid.x * bay, (fy - cid.y) * flH); ch = flH;
-    wmin = vec2((bay - ww) * 0.5, sill); wmax = wmin + vec2(ww, wh); }
-  float zone = 1.0 - smoothstep(topY - aa.y, topY + aa.y, P.y);
-  // far away (a window under ~2 px) only the averaged facade below is drawn: skip the per-window work there
-  float farW = smoothstep(0.16, 0.55, max(aa.x, aa.y));
-  float open = 0.0;
-  if (farW < 0.999) {
-    float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone * (shop ? 0.0 : 1.0);
+  if (!winR) return;
+  // sill (below the window, never on shop fronts): exactly 0 outside its box grown by the AA width
+  if (!shop && farW < 0.999 && zone > 0.0 && cl.x > wmin.x - 0.07 - aa.x && cl.x < wmax.x + 0.07 + aa.x && cl.y > wmin.y - 0.09 - aa.y && cl.y < wmin.y + aa.y) {
+    float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone;
     alb = mix(alb, vec3(0.40, 0.38, 0.35), sillM);
-    open = rzBoxM(cl, wmin, wmax, aa) * zone;
   }
   if (open > 0.001) {
     vec3 hS = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
@@ -2199,12 +2207,38 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   if (farW > 0.0) {
     float cov = clamp((wmax.x - wmin.x) * (wmax.y - wmin.y) / max(bay * ch, 0.1), 0.0, 0.9) * zone;
     vec3 avgE = vec3(0.30, 0.24, 0.17) * rzLit * rzIntI * cov * (shop ? 1.6 : 1.0) * (1.0 - ruin * 0.9);
+    // the cell's own room (same hash as the near path, so a window keeps its state when it switches), faded to the
+    // average once a cell is smaller than about a pixel (no shimmer)
+    float cellK = 1.0 - smoothstep(0.5, 1.2, max(aa.x / bay, aa.y / ch));
+    if (cellK > 0.0) {
+      vec3 hF = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
+      bool litF = hF.x < rzLit * (shop ? 1.8 : 1.0) * (1.0 - ruin * 0.95);
+      vec3 lcF = hF.y < 0.5 ? vec3(1.0, 0.66, 0.38) : (hF.y < 0.8 ? vec3(1.0, 0.84, 0.66) : vec3(0.72, 0.86, 1.0));
+      vec2 inW = step(wmin, cl) * step(cl, wmax);
+      vec3 cellE = litF ? lcF * rzIntI * (0.3 + 0.55 * hF.z) * (shop ? 1.35 : 0.8) * 0.62 : vec3(0.004);
+      float cw = mix(cov, inW.x * inW.y * zone, smoothstep(0.35, 0.15, max(aa.x / (wmax.x - wmin.x), aa.y / (wmax.y - wmin.y))));
+      avgE = mix(avgE, cellE * cw, cellK); cov = mix(cov, cw, cellK);
+    }
     alb = mix(alb, mix(wall, vec3(0.025), cov), farW); orm = mix(orm, mix(o4.rgb, vec3(1.0, 0.12, 0.0), cov), farW); emi = mix(emi, avgE, farW);
   }
 }
 #endif
 `;
 
+// 'low' tier facades: direct lights (the street's point lights, moon / sun) shade them Lambert-only with a fixed sliver
+// of specular, no GGX; image-based light (env reflections in the glass) is untouched. Rough walls look the same (GGX
+// adds under ~4 % there); glass loses only its point-light glints. Branch-free, so it is cheaper on every rasterizer.
+const FACADE_LIGHT_GLSL = /* glsl */`
+#ifndef RZ_FACADE_FULL_LIGHT
+void RE_Direct_RzFacade(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
+  vec3 irr = saturate(dot(geometryNormal, directLight.direction)) * directLight.color;
+  reflectedLight.directDiffuse += irr * BRDF_Lambert(material.diffuseColor);
+  reflectedLight.directSpecular += irr * material.specularColor * 0.03;
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_RzFacade
+#endif
+`;
 const facadeCache = new Map();
 /**
  * Interior-mapped facade material (one draw call for a whole city block built with cityBlock / buildingMesh).
@@ -2216,6 +2250,10 @@ export function windowInteriorMaterial(opts = {}) {
   const key = qualityName + JSON.stringify(opts);
   if (facadeCache.has(key)) return facadeCache.get(key);
   const arr = textureArray(WALL_LAYERS, { size: opts.texSize || Q.tex });
+  // phone tiers: nearest-mip filtering of the wall layers (half the texel reads of trilinear, invisible on textured
+  // walls; measured -7 % frame on the facade-heavy m1a view, docs/RENDERING.md stage 4)
+  const minF = (opts.interiorDetail ?? Q.interior) < 2 ? THREE.LinearMipmapNearestFilter : THREE.LinearMipmapLinearFilter;   // the cached array is shared by medium and high
+  for (const t of [arr.map, arr.normalMap, arr.ormMap]) if (t && t.minFilter !== minF) { t.minFilter = minF; t.needsUpdate = true; }
   const U = {
     rzWA: { value: arr.map }, rzWN: { value: arr.normalMap }, rzWO: { value: arr.ormMap }, rzWTile: { value: arr.tiles },
     rzLit: { value: opts.lit ?? 0.35 }, rzDay: { value: opts.daylight ?? 0 }, rzIntI: { value: opts.interior ?? 1 }, rzComfort: shared.comfort,
@@ -2224,6 +2262,7 @@ export function windowInteriorMaterial(opts = {}) {
   const lite = (opts.interiorDetail ?? Q.interior) === 0;
   addMod(mat, 'facade', shader => {
     ensureWorld(shader);
+    if (lite) patch(shader, 'f', '#include <lights_physical_pars_fragment>', FACADE_LIGHT_GLSL, 'after');   // A/B: defines.RZ_FACADE_FULL_LIGHT
     if (lite) shader.uniforms.rzSpecAAOn = { value: 0 };   // the lite facade's normals are flat: no specular AA needed
     patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz;');
     patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;');

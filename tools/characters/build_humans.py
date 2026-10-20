@@ -1279,7 +1279,7 @@ def paint(c, B, cov, res, path_out):
         if style in ("undercut", "fade"):   # shaved sides: the scalp shows through, fading toward the top
             sh_ = ss(0.075, 0.04, rel[:, 1])[:, None] * (0.55 if style == "undercut" else 0.45)
             hcol = hcol * (1 - sh_) + col * sh_
-        fa_ = np.clip(0.25 + 0.75 * fade_in, 0, 1)[:, None]
+        fa_ = np.clip(fade_in, 0, 1)[:, None]
         col[under] = (hcol * fa_ + col * (1 - fa_))[under]
     # ---------------- garments (outermost layer wins) ----------------
     costume_mode = "_costume" in cov
@@ -2048,7 +2048,7 @@ def hair_pieces(c, B, cov, layers):
         R_ = to_bl_np(np.concatenate(ref))
         R_ = R_[np.abs(R_[:, 0]) < 0.035]
         braid = style == "braid"
-        drop = float(c.get("hairDrop", 0.27 if braid else 0.2)) * B.H / 1.75
+        drop = float(c.get("hairDrop", 0.27 if braid else 0.17)) * B.H / 1.75
         g0 = hc + V((0, hry * 0.9 + vol, -0.012))
         nseg = 16 if braid else 11
         pts, radii = [], []
@@ -2058,7 +2058,7 @@ def hair_pieces(c, B, cov, layers):
             z = g0.z - drop * t ** 1.05
             m = np.abs(R_[:, 2] - z) < 0.012
             surf = R_[m, 1].max() if m.any() else g0.y
-            r = (0.0145 if braid else 0.019) * (1 - 0.72 * t ** 1.3) + 0.003
+            r = (0.0145 if braid else 0.021) * (1 - (0.72 if braid else 0.55) * t ** 1.5) + (0.003 if braid else 0.005)
             if braid:
                 r *= 1 + 0.16 * abs(math.sin(t * math.pi * 7.5))
             y = max(surf + r + 0.004, g0.y + 0.012 * math.sin(min(t * 3, 1) * math.pi / 2))
@@ -2082,6 +2082,8 @@ def hair_pieces(c, B, cov, layers):
     if style in ("long", "bob"):
         ref = [head_frame(B), B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["neck", "chest", "clavicle_L", "clavicle_R"])]]
         ref += [Lt.pos for k_, Lt in layers.items() if k_.startswith("top") and Lt is not None]
+        if cov.get("_hair_ref") is not None:
+            ref.append(cov["_hair_ref"])
         ref = np.concatenate(ref)
         if style == "long":
             out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.085, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.016, narrow=36, rows=20, tip=0.07, seg=44, vol=vol))
@@ -2110,7 +2112,7 @@ def hair_tube(name, pts, radii, seg=10):
         for k in range(seg):
             bm.faces.new((rings[i][k], rings[i][(k + 1) % seg], rings[i + 1][(k + 1) % seg], rings[i + 1][k]))
     d_end = (pts[-1] - pts[-2]).normalized()
-    tip = bm.verts.new(V(pts[-1]) + d_end * radii[-1] * 1.6)
+    tip = bm.verts.new(V(pts[-1]) + d_end * radii[-1] * 0.9)
     for k in range(seg):
         bm.faces.new((rings[-1][k], rings[-1][(k + 1) % seg], tip))
     d_0 = (pts[0] - pts[1]).normalized()

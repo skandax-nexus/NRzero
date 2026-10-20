@@ -7,9 +7,9 @@ export const rng = mulberry;
 const texCache = new Map();
 
 // Infrastructure upgrade switches (docs/RENDERING.md, stage 4): ?infra=off builds the shared kit exactly as before the
-// upgrade (A/B captures); ?infra=nofacade,nomasonry,nolamp,nobatch,nostreet switch single parts off.
+// upgrade (A/B captures); ?infra=nofacade,nomasonry,nolamp,nobatch switch single parts off.
 const INFRA = (() => { try { return new Set(String(new URLSearchParams(window.location.search).get('infra') || '').split(',').filter(Boolean)); } catch { return new Set(); } })();
-/** false when ?infra=off or ?infra=no<part> switched an upgrade part off (facade, masonry, lamp, batch, street). */
+/** false when ?infra=off or ?infra=no<part> switched an upgrade part off (facade, masonry, lamp, batch). */
 export function infraOn(part) { return !INFRA.has('off') && !INFRA.has('no' + part); }
 
 export function canvasTex(w, h, draw, key, opts = {}) {
@@ -361,7 +361,7 @@ function buildFacade(m, obst, fac) {
     const b = new THREE.Box3(mn, mx).applyMatrix4(M);
     return avoid(b.min, b.max);
   };
-  const tall = h > 60, low = RZ.getQuality() === 'low';
+  const tall = h > 60, low = RZ.getQuality() !== 'high';   // phone tiers: no balusters / treads / rungs (sub-pixel there)
   const o = {
     width, depth, height: h, base: -h / 2, yaw, seed: ud.seed * 17 + Math.floor(r() * 1000), era: ud.era, wall, faces, groundBlank, avoid: avoidLocal,
     detail: low || ud.far ? 'low' : 'high', groundLedge: !groundBlank[0],

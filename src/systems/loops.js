@@ -20,6 +20,16 @@
 // For M9-style long loops: duration may be minutes; `iteration` counts repetitions; `variant(fn)` lets authored
 // sequences deviate slightly per repetition ("repeat actions with small deviations"); `setLayer` drives the
 // loop-memory music layer (loopState.layer) that themes can read to add one instrument per repetition.
+//
+// Mission 9 extensions (a whole city district on a nine-minute loop):
+//   new LocalLoop(game, { ..., clock: 8 * 3600 + 5 * 60 })  // HUD shows wall-clock time (08:05:00 + t) instead of m:ss
+//   loop.clockAt(t) -> '08:09:41'; loop.skipTo(t) waits forward (fires every event on the way; knowledge-based waiting)
+//   new LoopPatrol(loop, actor, { keys, fov, range, near })  // an enemy on an authored, loop-timed route with a vision
+//       cone on the ground; patrol.update(dt) -> alert 0..1 (line of sight via game.collision.blocked; crouch shrinks it)
+//   new SyncClock(group, { loop }) / syncClocks([...])        // public clocks that show the loop's time in step, until
+//       one is desynced (held, set back, spun) for the rest of the repetition; `allDesynced()` for array puzzles
+
+import * as THREE from 'three';
 
 /** Shared, read-only for music themes: the active loop's time, iteration and memory layer. */
 export const loopState = { active: null, t: 0, iteration: 0, layer: 0, duration: 1 };
@@ -71,7 +81,7 @@ export class LocalLoop {
     this.events = []; this.hazards = []; this.tracked = []; this.knowledge = []; this.markers = [];
     this._onReset = []; this._onWrap = []; this._resetting = false; this.maxLayer = opts.maxLayer ?? 4; this.layer = 0;
     this.maxKnown = opts.maxKnown ?? 4; this.persist = opts.persist !== false; this.resetToast = opts.resetToast;
-    this.scene = game.scene;
+    this.scene = game.scene; this.clock = opts.clock ?? null;
     if (this.persist) {
       const store = game.flags.loopKnowledge = game.flags.loopKnowledge || {};
       store[this.id] = store[this.id] || [];
@@ -95,6 +105,21 @@ export class LocalLoop {
   progress(t0, t1, t = this.t) { if (!this.window(t0, t1, t)) return -1; const len = (t1 - t0 + this.duration) % this.duration || this.duration; return ((t - t0 + this.duration) % this.duration) / len; }
   /** Per-repetition deviation helper: fn(iteration) -> value (e.g. which door a patrol uses this time). */
   variant(fn) { return fn(this.iteration); }
+  /** Wall-clock text for loop time t (needs opts.clock = seconds after midnight at t = 0). */
+  clockAt(t = this.t) {
+    if (this.clock === null) return fmt(t);
+    const s = Math.floor(this.clock + Math.max(0, t)), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60, r = s % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+  }
+  /** Wait forward to loop time t (same repetition): every event on the way fires, so the world stays consistent. */
+  skipTo(t) {
+    t = Math.min(this.duration - 0.05, t);
+    if (t <= this.t) return false;
+    const prev = this.t; this.t = t; this.fireRange(prev, t); this.syncState(); this.renderTime();
+    for (const f of this._onSkip || []) try { f(prev, t, this); } catch (err) { console.error(err); }
+    return true;
+  }
+  onSkip(fn) { (this._onSkip = this._onSkip || []).push(fn); return fn; }
 
   /** Hazard test: fn(loop) returns falsy, or a message (string/true) to rewind the loop. */
   hazard(fn) { this.hazards.push(fn); return fn; }
@@ -221,8 +246,8 @@ export class LocalLoop {
     if (!this.hud || !this._shown) return;
     const k = Math.max(0, Math.min(1, this.t / this.duration));
     this.$fg.style.strokeDashoffset = 170 * (1 - k);
-    const txt = fmt(this.t); if (txt !== this._lastTxt) { this._lastTxt = txt; this.$time.textContent = txt; }
-    const it = 'LOOP ' + this.iteration + (this.frozen ? ' · HELD' : ''); if (it !== this._lastIt) { this._lastIt = it; this.$iter.textContent = it; }
+    const txt = this.clock === null ? fmt(this.t) : this.clockAt().slice(0, 5); if (txt !== this._lastTxt) { this._lastTxt = txt; this.$time.textContent = txt; }
+    const it = (this.iterLabel ? this.iterLabel(this) : 'LOOP ' + this.iteration) + (this.frozen ? ' · HELD' : '') + (this.clock !== null ? ' · ' + this.clockAt() : ''); if (it !== this._lastIt) { this._lastIt = it; this.$iter.textContent = it; }
   }
   renderHud(newKey) {
     if (!this.hud) return;
@@ -274,4 +299,85 @@ export function loopRoutine(loop, actor, keys) {
     actor.pose = a.pose || null;
     if (a.bark && a._said !== loop.iteration) { a._said = loop.iteration; a.bark(loop.iteration); }
   });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Mission 9: enemy patrols that live the loop
+// ---------------------------------------------------------------------------------------------------------------------
+const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+/**
+ * An enemy on an authored, loop-timed route (loopRoutine keys, or a function of the iteration for "changing enemy
+ * positions") with a readable vision cone painted on the ground. update(dt) returns the alert level 0..1.
+ *   const p = new LoopPatrol(loop, actor, { keys: it => it % 2 ? ODD : EVEN, range: 11, fov: 0.55, near: 1.6, color })
+ *   p.hold = true   // keep the actor where it is (scripted scenes); p.enabled = false switches sight off
+ * Sight: inside range and the cone (half-angle fov), with line of sight through game.collision; crouching shortens the
+ * range to 62 %; `near` m is a sense radius all round (they hear footsteps). Residue Vision does not hide the player.
+ */
+export class LoopPatrol {
+  constructor(loop, actor, o = {}) {
+    this.loop = loop; this.game = loop.game; this.actor = actor; this.keys = o.keys || [];
+    this.range = o.range ?? 10; this.fov = o.fov ?? 0.5; this.near = o.near ?? 1.4; this.alert = 0; this.enabled = true; this.hold = false;
+    this.eyeY = o.eyeY ?? 1.65; this.name = o.name || 'patrol';
+    const segs = 24, geo = new THREE.BufferGeometry(), pos = [0, 0, 0], idx = [];
+    for (let i = 0; i <= segs; i++) { const a = -this.fov + (2 * this.fov) * i / segs; pos.push(Math.sin(a) * this.range, 0, Math.cos(a) * this.range); if (i) idx.push(0, i, i + 1); }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
+    this.coneMat = new THREE.MeshBasicMaterial({ color: o.color ?? 0xffd27a, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+    this.cone = new THREE.Mesh(geo, this.coneMat); this.cone.renderOrder = 2; this.cone.userData.noBatch = true;
+    this.game.scene.add(this.cone);
+    this.stopRoutine = this.keys && (typeof this.keys === 'function' || this.keys.length) ? loopRoutine(loop, actor, (it) => (this.hold ? [] : (typeof this.keys === 'function' ? this.keys(it) : this.keys))) : null;
+  }
+  /** Where the routine puts the actor at loop time t (for tests / hints). */
+  facing() { return this.actor.root.rotation.y; }
+  update(dt) {
+    const g = this.game, a = this.actor, r = a.root, pl = g.player;
+    const on = this.enabled && r.visible;
+    this.cone.visible = on;
+    if (!on) { this.alert = 0; return 0; }
+    const yaw = r.rotation.y;
+    this.cone.position.set(r.position.x, r.position.y + 0.04, r.position.z); this.cone.rotation.y = yaw;
+    const eye = _v.set(r.position.x, r.position.y + this.eyeY, r.position.z);
+    const tgt = _w.set(pl.pos.x, pl.pos.y + (pl.crouching ? 0.7 : 1.25), pl.pos.z);
+    const dx = tgt.x - eye.x, dz = tgt.z - eye.z, dist = Math.hypot(dx, dz);
+    const range = this.range * (pl.crouching ? 0.62 : 1);
+    let d = Math.atan2(dx, dz) - yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    const dy = Math.abs(tgt.y - eye.y);
+    let seen = dy < 4.5 && ((dist < range && Math.abs(d) < this.fov) || dist < this.near * (pl.crouching ? 0.6 : 1));
+    if (seen && dist > 0.8 && g.collision.blocked(eye, tgt, Math.min(eye.y, tgt.y) + 0.3, g.temporal.current)) seen = false;
+    const rate = seen ? (1.9 - dist / Math.max(1, range)) * 1.15 : -0.6;
+    this.alert = Math.max(0, Math.min(1.1, this.alert + dt * rate));
+    const k = Math.min(1, this.alert);
+    this.coneMat.opacity = 0.1 + k * 0.22;
+    this.coneMat.color.setRGB(1, 0.82 - k * 0.6, 0.48 - k * 0.3);
+    if (seen && k > 0.25) a.faceTowards(pl.pos.x, pl.pos.z, dt, 3);
+    a.lookTarget = k > 0.2 ? pl.char.head : null;
+    return Math.min(1, this.alert);
+  }
+  reset() { this.alert = 0; this.coneMat.opacity = 0.1; }
+  dispose() { this.stopRoutine?.(); this.cone.parent?.remove(this.cone); }
+}
+
+/**
+ * Public clocks held in step by a loop: each shows the loop's wall-clock time (opts.loop.clock + t) through a setter
+ * (h, m, s) => void, until it is desynced (`clock.desync(mode)`: 'stop' holds the hands, 'spin' races them, a number sets
+ * a fixed minute-of-day) for the rest of the repetition. Desyncs clear on every wrap and reset of the loop.
+ *   const set = syncClocks(loop, [{ id: 'A', set: (h, m, s) => face.userData.set(h, m + s / 60) }, ...])
+ *   set.byId.A.desync('stop'); set.allDesynced(); set.count()
+ */
+export function syncClocks(loop, list) {
+  const clocks = list.map(c => ({ ...c, mode: null, spin: 0, desync(mode = 'stop') { if (this.mode) return false; this.mode = mode; this.at = loop.t; this.onDesync?.(mode); return true; }, resync() { this.mode = null; this.onResync?.(); } }));
+  const byId = Object.fromEntries(clocks.map(c => [c.id, c]));
+  const clear = () => clocks.forEach(c => { if (c.mode) c.resync(); });
+  loop.onWrap(clear); loop.onReset(clear);
+  const off = loop.game.onUpdate((dt) => {
+    const base = (loop.clock ?? 0) + loop.t;
+    for (const c of clocks) {
+      let s = base;
+      if (c.mode === 'stop') s = (loop.clock ?? 0) + c.at;
+      else if (c.mode === 'spin') { c.spin += dt * 900; s = base + c.spin; }
+      else if (typeof c.mode === 'number') s = c.mode;
+      const h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60, sec = s % 60;
+      c.set?.(h, m, sec);
+    }
+  });
+  return { clocks, byId, off, count: () => clocks.filter(c => c.mode).length, allDesynced: () => clocks.every(c => c.mode) };
 }

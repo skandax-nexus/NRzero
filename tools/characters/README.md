@@ -40,6 +40,10 @@ To add a character, add an entry to `CAST`, rebuild, and (for a named role) add 
   collars sewn onto the garment, the hood-down pillow, hoods up, ribbons (harness straps, belts, sashes), buckles,
   pouches, knee pads, chunky soles, gloves, caps, helmets and hair pieces. Tails, collars, hoods and straps are painted
   in the atlas "aux" region from their own 3D positions, so they match the body layers.
+- `costume.drape_torso`: before a garment is finished, each 1 cm torso slice is replaced by its 2D convex hull
+  (clefts, the spine groove and the gap between the breasts are bridged), small bumps on the bust are pressed flat,
+  and tops hang straight down from the widest hip / buttock ring (and, for women, from the bust apex), so cloth never
+  shrink-wraps the anatomy.
 - One material per character: `baseColorTexture`, `normalTexture` and, when anything glows, `emissiveTexture` with
   `emissiveFactor` 1 (three.js shows it as `emissiveMap`). The glow colour is in the material's `extras.glow`.
 
@@ -69,6 +73,10 @@ glTF output the runtime uses (`src/human/cast3d.js` → `person.gadgets`, `setGa
   `segs`, `seg_mode`, `bone`; material `<id>_glow_<hex>` (extras `slot: 'glow'`, `glow: <hex>`, one per colour);
   vertex attribute `_gseg` = segment index (chronolith glyphs 0..6, echo vents 0..1, shard / vial index).
 - `gp_<type>`: hand props (staff, spear, umbrella, phone, scanner, jar ...), extras `gadget`, `prop: 'hand'`.
+- `gl_<type>`: see-through smoked lens planes (AR glasses, the AR monocle), extras `gadget`, `slot: 'glass'`; material
+  `<id>_glass` (alpha-blended, glTF `alphaMode: BLEND`). Crowds with baked glow leave the lens out (one draw call).
+- `continuum_armor`: the Continuum's ceramic plates as rigid gadget geometry (chamfered pearl plates with a darker edge
+  and a graphite side wall, each weighted 100 % to one bone), so no plate bends at a joint.
 - The armature root carries `gadgets`: JSON [{type, bone, glow, idle, segs, seg_mode, prop, node, color, baked}].
 - Budgets under 11 000 triangles (crowds, children) bake glow into the atlas emissive at its idle level: no gx_ nodes.
 

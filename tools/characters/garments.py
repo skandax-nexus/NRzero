@@ -127,7 +127,7 @@ GARMENTS = {
     "responder_shell": T(neck=(0.03, 0.02), collar=STAND(0.052, 0.003), hem=-0.065, cuff="sealed", thick=0.0115, fab="shell", gloss=0.36,
                          det=["two_tone", "taped_seams", "zip:placket", "reflective:torso,arms", "chevrons:back"], c2="2a2f36", c3="c8ccd0"),
     "labcoat49": T(neck=(0.024, 0.018), collar=STAND(0.03, 0.0, -0.001, "mandarin"), hem=-0.035, cuff="band", thick=0.0095, loose=5, inflate=0.4, ease=0.006,
-                   fab="coated_twill", gloss=0.12, tail=dict(end=0.31, flare=0.12, split=0.03, vent=0.13, panel=0.6),
+                   fab="coated_twill", gloss=0.12, tail=dict(end=0.31, flare=0.16, split=0.03, vent=0.13, panel=0.6),
                    det=["placket:concealed", "bonded_seams", "pocket:hip_slash", "drape_ao"], c2="1a1e24", c3="38c8c0"),
     "labcoat26": T(neck=(0.02, 0.17), collar=STAND(0.02, 0.016, 0.0, "notch"), hem=-0.03, cuff=None, thick=0.0085, loose=9, inflate=0.85, fab="cotton",
                    gloss=0.0, tail=dict(end=0.31, flare=0.2, split=0.02, vent=0.12), open_front=0.045, det=["lapels", "pocket:patch_hip", "pocket:patch_chest", "buttons"]),

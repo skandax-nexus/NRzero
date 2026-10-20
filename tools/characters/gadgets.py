@@ -1886,7 +1886,7 @@ def g_cont_chest(g):
     k = K.k
     p, n = K.front(0.0, K.J["chest"].z + 0.05 * k, r=0.03)
     M = rot(frame(p, n, UP), "Z", math.pi / 6)
-    top = 0.0076                                   # the chest plate's top surface over the suit
+    top = PLATE_LIFT + PLATE_THICK                 # the chest plate's top surface over the suit
     g.part(cyl(0.031 * k, top + 0.0004, n=6, bev=0.0012, M=local(M, 0, 0, -0.001)), "2a2d32", 0.7, smooth=False)        # hex well rim
     g.part(cyl(0.024 * k, 0.001, n=6, M=local(M, 0, 0, top - 0.0016)), "121418", 0.85, smooth=False)                  # recessed floor
     g.part(cyl(0.012 * k, 0.0012, n=6, M=local(M, 0, 0, top - 0.0012)), GLASS, 0.95, smooth=False)                    # core
@@ -1898,7 +1898,8 @@ def g_cont_chest(g):
 
 
 # ---------------- Continuum armour: rigid ceramic plates ----------------
-PEARL, PEARL_EDGE, PLATE_GAP = "e6e8ea", "b9bdc2", "34373d"
+PEARL, PEARL_EDGE, PLATE_GAP = "dadde0", "8d9298", "2c2f34"
+PLATE_LIFT, PLATE_THICK = 0.0042, 0.0058       # torso plates: their top stands 10 mm off the suit (no suit poking through when posed)
 
 
 def _squircle_map(u, v, e=4.0):
@@ -1910,7 +1911,7 @@ def _squircle_map(u, v, e=4.0):
     return u * m / q, v * m / q
 
 
-def rigid_plate(g, P, N, thick=0.005, inset=0.0026, bone=None, col=PEARL, edge=PEARL_EDGE, side=PLATE_GAP, gloss=0.76):
+def rigid_plate(g, P, N, thick=0.005, inset=0.0036, bone=None, col=PEARL, edge=PEARL_EDGE, side=PLATE_GAP, gloss=0.76):
     """A rigid ceramic plate from a rows x cols grid of lifted surface points P (Vectors) and normals N: a smooth top
     (pearl), a chamfer ring (a darker edge, reads as edge wear / AO), a short graphite side wall down into the suit.
     Weighted 100 % to `bone` (it never bends at a joint)."""
@@ -1971,7 +1972,7 @@ def rigid_plate(g, P, N, thick=0.005, inset=0.0026, bone=None, col=PEARL, edge=P
                smooth=sm, wt=bone, recalc=False)
 
 
-def _torso_plate(g, x_half, z0, z1, back=False, rows=7, cols=7, bone="chest", lift=0.0025, e=4.0, thick=0.005, x_off=0.0):
+def _torso_plate(g, x_half, z0, z1, back=False, rows=7, cols=7, bone="chest", lift=PLATE_LIFT, e=4.0, thick=PLATE_THICK, x_off=0.0):
     """A torso plate: x half-width (a number, or a function of z) round x_off, from height z0 to z1 (Blender z up), on
     the front (or back) of the dressed body."""
     K = g.K
@@ -1997,7 +1998,7 @@ def _torso_plate(g, x_half, z0, z1, back=False, rows=7, cols=7, bone="chest", li
     return P, N
 
 
-def _limb_plate(g, j0, j1, t0, t1, a0, a1, front, fams, bone, rows=5, cols=7, lift=0.0025, thick=0.0048, e=5.0):
+def _limb_plate(g, j0, j1, t0, t1, a0, a1, front, fams, bone, rows=5, cols=7, lift=0.005, thick=0.0052, e=5.0):
     """A plate wrapping part of a limb: rows along the bone (t0..t1 between joints j0, j1), cols round it (angles a0..a1
     radians from the `front` direction)."""
     K = g.K
@@ -2037,9 +2038,9 @@ def g_cont_armor(g):
     k = K.k
     J = K.J
     ch, sp, sh = J["chest"].z, J["spine"].z, J["shoulder_L"].z
-    _torso_plate(g, lambda z: (0.118 - 0.03 * max(0.0, (ch + 0.02 * k - z) / (0.1 * k))) * k, ch - 0.055 * k, sh - 0.045 * k, bone="chest", rows=8, cols=8)
+    _torso_plate(g, lambda z: (0.118 - 0.03 * max(0.0, (ch + 0.02 * k - z) / (0.1 * k))) * k, ch - 0.055 * k, sh - 0.045 * k, bone="chest", rows=8, cols=9)
     for i, (z0, z1) in enumerate(((sp + 0.035 * k, ch - 0.068 * k), (sp - 0.03 * k, sp + 0.027 * k))):
-        _torso_plate(g, (0.082 - 0.008 * i) * k, z0, z1, bone="spine" if i == 0 else "hips", rows=4, cols=7, e=6.0, thick=0.0045)
+        _torso_plate(g, (0.082 - 0.008 * i) * k, z0, z1, bone="spine" if i == 0 else "hips", rows=4, cols=7, e=6.0, lift=0.0055, thick=0.005)
     for s in (1, -1):        # the back plate is split down the spine (the stabilizer mount sits in the gap)
         _torso_plate(g, 0.058 * k, ch - 0.07 * k, sh - 0.03 * k, back=True, bone="chest", rows=6, cols=5, x_off=s * 0.07 * k)
     sides = o.get("pauldrons", "LR")
@@ -2047,7 +2048,7 @@ def g_cont_armor(g):
         s = 1 if sd == "L" else -1
         fa = frozenset(("arm" + sd, "torso"))
         if sd in sides:      # pauldron: a cap over the deltoid, rigid on the upper arm
-            _limb_plate(g, "shoulder_" + sd, "elbow_" + sd, -0.12, 0.42, -1.25, 1.25, V((s, 0, 0.35)), fa, "upperarm_" + sd, rows=6, cols=7, thick=0.0055)
+            _limb_plate(g, "shoulder_" + sd, "elbow_" + sd, -0.06, 0.4, -1.15, 1.15, V((s, 0, 0.45)), fa, "upperarm_" + sd, rows=6, cols=7, thick=0.0055, e=3.0)
         if sd in o.get("bracers", "L"):
             _limb_plate(g, "elbow_" + sd, "wrist_" + sd, 0.2, 0.8, -1.5, 1.5, -K.hand(sd)["palm"], frozenset(("arm" + sd,)), "forearm_" + sd, rows=5, cols=7)
         fl = frozenset(("leg" + sd,))
@@ -2063,7 +2064,7 @@ def g_rank(g):
     K, o = g.K, g.o
     k = K.k
     p, n = K.front(0.085 * k, K.J["chest"].z + 0.1 * k, r=0.01)
-    M = frame(p + n * 0.0068, n, UP)          # on the ceramic chest plate
+    M = frame(p + n * (PLATE_LIFT + PLATE_THICK - 0.001), n, UP)          # on the ceramic chest plate
     g.part(box(0.07 * k, 0.016 * k, 0.004, bev=0.0012, M=M), GRAPH, 0.7)
     for i in range(int(o.get("pips", 3))):
         g.light(box(0.012 * k, 0.007 * k, 0.0012, bev=0.0004, M=local(M, (-0.02 + 0.02 * i) * k, 0, 0.004)), seg=float(i))

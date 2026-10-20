@@ -47,6 +47,7 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
               const t = m.userData.tint; if (t) m.color.setRGB(t[0], t[1], t[2]);
               m.envMapIntensity = 0.8;
               if (mk && m.userData.slot === 'atlas') skinShade(m);
+              if (m.userData.slot === 'glass') { o.castShadow = false; m.depthWrite = false; }   // see-through lens: no shadow on the eyes
             });
           }
         });
