@@ -59,7 +59,7 @@ export function registerM7Cast() {
     vp: { sex: 'm', pitch: 0.78, rate: 0.95, langs: ['en-AU', 'en-GB', 'en-US'] },
   });
   registerCast('scav', { name: 'SCAVENGER', role: '2196', vp: { sex: 'f', pitch: 1.0, rate: 1.05, langs: ['en-AU', 'en-GB'] } });
-  registerCast('mirarec', { name: 'RECORDING · M. VAREN', role: 'Found behind the seventeenth stone', voice: true, vp: { sex: 'f', pitch: 1.04, rate: 0.9, langs: ['en-GB', 'en-US'] } });
+  registerCast('mirarec', { name: 'RECORDING · M. VAREN', role: 'Found behind the seventeenth stone', voice: true, vp: { sex: 'f', pitch: 1.05, rate: 0.94, langs: ['en-GB', 'en-US'] } }); // Mira's profile
   registerCast('helixlog', { name: 'HELIX SITE LOG', role: 'Site 3 · automated', voice: true, vp: { sex: 'f', pitch: 1.1, rate: 1.08, langs: ['en-US', 'en-GB'] } });
 }
 // grunts: era 2196 survivor archetypes, built at LOD (they are seen mostly at range)

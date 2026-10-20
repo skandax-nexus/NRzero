@@ -286,6 +286,7 @@ export default {
     // SCRIPT
     // =====================================================================================
     ui.missionTag('MISSION 6 · THE CLOCKMAKER\'S HOUSE'); ui.show('hud', true);
+    const tStart = game.time;
     T.unlocked = false; T.refreshHud();
     const kai = pl.char;
     pl.place(...P.streetStart, Math.PI); game.checkpoint(...P.streetStart, Math.PI);
@@ -301,6 +302,8 @@ export default {
     await cc;
     await game.shot([-2.0, 2.0, 41.5], [0, 1.6, 37.6], 2.2, { fov: 40 });
     kai.lookTarget = new THREE.Vector3(-0.4, 15, -28.8);
+    // bridge from M5: the survey tag under Niko's valley carried the same pencilled note
+    if (F.m5complete) await game.say('kai', 'Niko stayed with his valley. I came back to the city with a survey tag and two words in pencil.');
     await game.talk([
       ['kai', 'Every Helix site survey from 2031 has the same pencil note in the margin. "Ask Hensel."'],
       ['kai', 'Hensel fixes clocks. And every clock in this city stopped at eight-fourteen.'],
@@ -738,6 +741,9 @@ export default {
     ui.subtitle('recording', '…do not let him see the ninth minute.', 3200);
     await game.wait(2.4);
     oskar.pose = null;
+    const mins = Math.round((game.time - tStart) / 60);
+    const debt = { told: 'You told him about Lotte', urged: 'You urged him to read the letters', kept: 'You kept his silence' }[F.clockmakerDebt] || 'The Clockmaker\'s Debt unresolved';
+    await ui.chapterCard('MISSION 6 COMPLETE', 'The Clockmaker\'s House', `Shards ${state.shards}/3 · ${debt} · Loop rewinds ${F.m6loopResets || 0}${mins ? ' · ' + mins + ' min' : ''}`, 3600);
     game.releaseCam(); ui.letterbox(false); audio.allBeds(0); audio.setTheme(null);
     loop.dispose(); sLoop.dispose(); T.locked = false;
     F.m6done = true;

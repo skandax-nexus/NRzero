@@ -270,7 +270,7 @@ export function registerM6Cast() {
   });
   registerCast('recording', {
     name: 'RECORDING · 2026', role: 'Reel found inside the escapement', voice: true,
-    vp: { sex: 'm', pitch: 0.7, rate: 0.84, langs: ['en-GB', 'en-US'] },
+    vp: { sex: 'm', pitch: 0.72, rate: 0.86, langs: ['en-GB', 'en-US'] }, // the Witness's profile (older Kai; M8's figure)
   });
   registerCast('neighbor', { name: 'NEIGHBOUR', role: 'Clock quarter · 2049', vp: { sex: 'm', pitch: 0.92, rate: 0.98, langs: ['en-GB', 'en-US'] } });
 }

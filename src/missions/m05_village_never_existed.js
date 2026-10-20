@@ -1345,7 +1345,7 @@ export default {
     const pick = await game.choice('niko', 'Promise me you will stop changing the world.', ['"I\'ll try."', '"I can\'t promise that. Not until I find Mira."']);
     F.m5_promise = pick === 0 ? 'tried' : 'refused';
     if (pick === 0) await game.talk([['niko', 'Trying is what the sixteen said.'], ['kai', 'Then I\'ll be the first who means it.']]);
-    else await game.talk([['niko', 'Mira. The sister in the drawing.'], ['kai', 'She\'s the reason for all of it.'], ['niko', 'Then I will keep holding your arm.']]);
+    else await game.talk([['niko', 'Mira?'], ['kai', 'My sister. She\'s the reason for all of it.'], ['niko', 'Then I will keep holding your arm.']]);
     // bridge to M6 (Rain City, "Ask Hensel") and M7 (Niko waits at the Sky House)
     await game.talk([
       ['niko', 'Go back to your city. Find who carried the heart away.'],

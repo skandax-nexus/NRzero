@@ -1792,11 +1792,22 @@ const FACADE_GLSL = /* glsl */`
 uniform highp sampler2DArray rzWA, rzWN, rzWO;
 uniform float rzWTile[7];
 uniform float rzLit, rzDay, rzIntI, rzComfort;
-varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2;
+varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz;
+// RZ_INTERIOR (from the realism tier): 0 = lite (one wall tap, back-wall-only rooms: phones on 'low'),
+// 1 = rooms without furniture / curtains, 2 = full interior mapping
+#ifndef RZ_INTERIOR
+#define RZ_INTERIOR 2
+#endif
 vec3 rzWall(float layer, vec2 uvm, vec3 T, vec3 B, vec3 N, out vec4 orm, out vec3 nW){
   int li = int(layer + 0.5); vec3 c = vec3(uvm / rzWTile[li], layer);
-  vec4 a = texture(rzWA, c); orm = texture(rzWO, c); vec3 tn = texture(rzWN, c).xyz * 2.0 - 1.0;
-  nW = normalize(T * tn.x + B * tn.y + N * tn.z); return a.rgb;
+  vec4 a = texture(rzWA, c);
+#if RZ_INTERIOR == 0
+  orm = vec4(1.0, 0.85, 0.0, 0.5); nW = N;
+#else
+  orm = texture(rzWO, c); vec3 tn = texture(rzWN, c).xyz * 2.0 - 1.0;
+  nW = normalize(T * tn.x + B * tn.y + N * tn.z);
+#endif
+  return a.rgb;
 }
 float rzBoxM(vec2 p, vec2 mn, vec2 mx, vec2 aa){ vec2 s = smoothstep(mn - aa, mn + aa, p) * (1.0 - smoothstep(mx - aa, mx + aa, p)); return s.x * s.y; }
 vec3 rzPal(float h){
@@ -1815,6 +1826,16 @@ float rzFurn(vec2 q, float kind, float cx){
 vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, float bseed){
   vec3 h = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
   vec3 h2 = rzH32(cid.yx * 1.37 + vec2(bseed * 57.0, 5.0));
+#if RZ_INTERIOR == 0
+  { // lite: the back wall seen through the window (parallax), one lamp gradient, no ray-box
+    bool lit0 = h.x < rzLit * (shop ? 1.8 : 1.0);
+    vec3 lc0 = h.y < 0.5 ? vec3(1.0, 0.66, 0.38) : (h.y < 0.8 ? vec3(1.0, 0.84, 0.66) : vec3(0.72, 0.86, 1.0));
+    float li0 = lit0 ? (0.3 + 0.55 * h.z) * rzIntI * (shop ? 1.5 : 1.0) : 0.0;
+    float yb = clamp((g.y + vt.y / max(vt.z, 0.05) * rD * 0.5) / ch, 0.0, 1.0);
+    vec3 a0 = rzPal(h2.x);
+    return a0 * lc0 * li0 * (0.35 + 0.75 * yb) * (shop ? 1.3 : 0.9) + lc0 * li0 * 0.5 * smoothstep(0.8, 1.0, yb) + a0 * (rzDay * 0.3 + 0.006);
+  }
+#endif
   vec3 d = normalize(vt);
   float x0 = 0.06, x1 = bw - 0.06, y1 = ch - 0.3;
   vec3 o = vec3(g, 0.0);
@@ -1848,6 +1869,7 @@ vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, 
   vec3 col = a * lc * li * (shop ? 1.6 / (1.0 + dl * dl * 0.05) : 1.5 / (1.0 + dl * dl * 0.55)) * sf * cAO;
   if (lit && surf == 2 && d.y > 0.0) { col += lc * li * 4.0 * (1.0 - smoothstep(shop ? 0.5 : 0.13, shop ? 0.56 : 0.19, shop ? abs(p.z - Lp.z) : length(p.xz - Lp.xz))); }
   col += a * (rzDay * (0.4 - 0.28 * p.z / rD) * vec3(0.85, 0.9, 1.0) + 0.006);
+#if RZ_INTERIOR >= 2
   // furniture silhouette card
   float zf = rD * (0.42 + 0.3 * h2.z); float tf = zf / d.z;
   if (tf < t) {
@@ -1870,6 +1892,7 @@ vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, 
         col = mix(col * 0.4, vec3(0.75, 0.72, 0.66) * (lc * li * 0.55 + rzDay * 0.4 + 0.008), slat); }
     }
   }
+#endif
   return col;
 }
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){

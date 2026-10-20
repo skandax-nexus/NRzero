@@ -551,6 +551,13 @@ export default {
     await game.shot([-9, 26, -2], [12, 4, 30], 3.6, { fov: 48 });   // over the drum toward the dawn
     await game.shot([3.2, 1.7, 73.4], [-0.6, 1.5, 76.8], 2.0, { fov: 40 });
     niko.lookTarget = kai.head; kai.lookTarget = niko.head;
+    // bridge from M5 (Niko promised to wait here) and M6 (the tower clock in Rain City)
+    if (F.m6done) await game.talk([
+      ['niko', 'You came back. I said I would wait at the foot of the steps.'],
+      ['kai', 'A clockmaker in my city stopped his tower clock just short of the ninth minute. Then the stone pulled me back here.'],
+      ['niko', 'Then it wants you to climb.'],
+    ]);
+    else if (F.m5complete) await game.say('niko', 'You came back. I said I would wait at the foot of the steps.');
     await game.talk([
       ['niko', 'Seventeen steps. Count them when you climb. The keepers cut one for every time the stranger came.'],
       ['kai', 'And the eighteenth?'],

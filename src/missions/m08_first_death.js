@@ -103,7 +103,7 @@ export default {
     const music = (fade = 1.6) => { for (const d of T.defs) d.theme = themeFor(); audio.setTheme(themeFor(), fade); };
     const lockMusic = (th, fade) => { musicLock = th; music(fade); };
 
-    T.configure([{ id: '2049', key: '1', name: 'PRESENT', year: 'HELIX · THU 21.10.2049', glyph: '◎', color: '#5fe6ff', theme: 'm8-altered', apply: () => {} }], '2049');
+    T.configure([{ id: '2049', key: '1', name: 'PRESENT', year: 'HELIX · TUE 21.10.2049', glyph: '◎', color: '#5fe6ff', theme: 'm8-altered', apply: () => {} }], '2049');
     T.unlocked = false;
 
     // ---------- people ----------
@@ -254,7 +254,7 @@ export default {
     });
     game.interact({ pos: [P.memorial[0], 1.0, P.memorial[2] + 0.6], radius: 2.2, prompt: 'Look at the memorial', enabled: () => !S.memorial, onUse: () => { S.memorialUse = true; } });
     game.interact({ pos: [P.kiosk[0] + 1.6, 1.0, P.kiosk[2]], radius: 1.8, prompt: 'Look into the gate kiosk', onUse: () => {
-      ev('The gate kiosk', 'An empty gatehouse with the visitor log open on Tuesday: "19.10 · 07:58 · VAREN, K. — on foot, running." The pen is still on the page.', 'HELIX · FORECOURT');
+      ev('The gate kiosk', 'An empty gatehouse with the visitor log open on Sunday: "19.10 · 07:58 · VAREN, K. — on foot, running." The pen is still on the page.', 'HELIX · FORECOURT');
       ui.subtitle('kai', '07:58, on foot, running. He knew it was coming.', 3200);
     } });
 
@@ -300,11 +300,11 @@ export default {
       await game.talk([
         ['m8staff', 'Oh God. You\'re— no. You\'re his brother? Nobody said he had a brother.'],
         ['kai', 'Something like that. Did you know Dr. Lind?'],
-        ['m8staff', 'Yara? Everyone knows Yara. She went into the antechamber with him on Tuesday and never badged out.'],
+        ['m8staff', 'Yara? Everyone knows Yara. She went into the antechamber with him on Sunday and never badged out.'],
         ['m8staff', 'Rook says she\'s on leave. Rook says a lot of things.'],
       ]);
       staffB.lookTarget = null; staffB.pose = 'work'; F.m8staffTalk = true;
-      ev('A scientist on the late shift', '"She went into the antechamber with him on Tuesday and never badged out. Rook says she\'s on leave."', 'HELIX · LOBBY');
+      ev('A scientist on the late shift', '"She went into the antechamber with him on Sunday and never badged out. Rook says she\'s on leave."', 'HELIX · LOBBY');
     } });
 
     // the turnstile: Kai's own card
@@ -382,7 +382,7 @@ export default {
       await game.shot([1.2, 1.7, -44.6], [-0.9, 1.6, -46.0], 1.0, { fov: 40 });
       await game.talk([
         ['iven', 'It is you. Or it\'s your face. Either way, thanks.'],
-        ['iven', 'You want the truth about Tuesday? Rook scheduled the test for 08:00. You — he — tried to stop it at seven.'],
+        ['iven', 'You want the truth about Sunday? Rook scheduled the test for 08:00. You — he — tried to stop it at seven.'],
         ['iven', 'When Rook wouldn\'t, he wrote the containment plan himself. Every watt to Chamber One. He knew what that meant.'],
         ['iven', 'Rook signed it afterwards. Says it was his plan. Remember that when he gives the eulogy.'],
       ]);
@@ -544,7 +544,7 @@ export default {
     await game.shot([-26, 22, 46], [0, 6, -10], 0.01, { fov: 50 });
     await ui.fade(0, 1600);
     audio.setTheme('m8-altered', 2);
-    const cc = ui.chapterCard('ACT I · THE WORLD THAT REMEMBERS', 'The First Death', 'Helix Temporal Research · Rain City · Thursday 21.10.2049 · 22:40', 4400);
+    const cc = ui.chapterCard('ACT I · THE WORLD THAT REMEMBERS', 'The First Death', 'Helix Temporal Research · Rain City · Tuesday 21.10.2049 · 22:40', 4400);
     await game.shot([-12, 12, 34], [0, 5, -6], 6.0, { fov: 46 });
     await cc;
     await game.shot([9, 3.2, 16], [2, 2.4, -2], 2.6, { fov: 44 });
@@ -581,7 +581,7 @@ export default {
     ]);
     kai.pose = null;
     S.memorial = true; F.m8memorial = true; F.kaiDeadInV17 = true; diff('memorial');
-    ev('The memorial', 'Outside Helix: candles, flowers, cards and a portrait of Kai. "Dr. Kai Varen, 2018-2049. The first life lost to the Zero Second. He held the anchor so the city could keep its second." In this version of the present, Kai died on Tuesday at 08:14.', 'WHAT CHANGED');
+    ev('The memorial', 'Outside Helix: candles, flowers, cards and a portrait of Kai. "Dr. Kai Varen, 2018-2049. The first life lost to the Zero Second. He held the anchor so the city could keep its second." In this version of the present, Kai died on Sunday at 08:14.', 'WHAT CHANGED');
     lockMusic(null, 2);
     cine(false);
     if (once('cardsTip')) ui.toast('Three cards among the flowers', 2400);
@@ -615,7 +615,7 @@ export default {
         await game.shot([2.6, 1.75, -10.6], [1.0, 1.6, -12.8], 1.2, { fov: 38 });
         await game.talk([
           ['hale', 'The card says you\'re dead, Doctor.'],
-          ['hale', 'I stood at that memorial on Tuesday night. Ten minutes in the rain.'],
+          ['hale', 'I stood at that memorial on Sunday night. Ten minutes in the rain.'],
           ['kai', 'Hale. I don\'t know what I am right now.'],
           ['hale', 'You\'re the man who told me to trust him at Checkpoint C. I remember that. I shouldn\'t — I was never there. But I do.'],
           ['hale', 'Whatever you are, you came back for her. Dr. Lind. Nobody\'s looked since Rook said "leave".'],
@@ -670,7 +670,7 @@ export default {
         await game.shot([P.kaiDesk[0] - 1.8, 1.7, P.kaiDesk[2] + 1.2], [P.kaiDesk[0] + 0.3, 1.0, P.kaiDesk[2]], 1.2, { fov: 36 });
         audio.sfxPlay('rewind');
         await game.talk([
-          ['kaimemo', 'Yara. It\'s Monday, late. If the counter\'s right, it comes tomorrow at 08:14.'],
+          ['kaimemo', 'Yara. It\'s Saturday, late. If the counter\'s right, it comes tomorrow at 08:14.'],
           ['kaimemo', 'If the field holds, the second holds. And nobody remembers there was anything to hold.'],
           ['kaimemo', 'If I\'m wrong, tell Rook it was my plan. He\'ll want it to be his anyway.'],
           ['kaimemo', 'And Yara — don\'t follow me in.'],
@@ -678,7 +678,7 @@ export default {
         await game.shot([P.kaiDesk[0] - 0.4, 1.7, P.kaiDesk[2] + 1.6], [P.kaiDesk[0] - 0.9, 1.5, P.kaiDesk[2]], 1.4, { fov: 40 });
         await game.say('kai', 'My voice. Saying goodbye to someone I\'ve never met.');
         cine(false); lockMusic(null, 2); S.memo = true; F.m8memo = true; diff('office');
-        ev('Voice memo · Dr. K. Varen', 'Recorded Monday 18.10.2049, 23:41: "If the field holds, the second holds, and nobody remembers there was anything to hold. If I\'m wrong, tell Rook it was my plan. And Yara: don\'t follow me in."', 'YOUR OFFICE');
+        ev('Voice memo · Dr. K. Varen', 'Recorded Saturday 18.10.2049, 23:41: "If the field holds, the second holds, and nobody remembers there was anything to hold. If I\'m wrong, tell Rook it was my plan. And Yara: don\'t follow me in."', 'YOUR OFFICE');
       }
       if (S.yaraDesk && S.memo) break;
       objective(S.yaraDesk ? 'Search the office with your name on the door' : 'Search Dr. Lind\'s office');
@@ -692,7 +692,7 @@ export default {
     cine(true);
     await game.shot([P.server[0] + 2.2, 1.8, P.server[2] + 1.8], [P.server[0] + 0.6, 1.3, P.server[2]], 1.0, { fov: 40 });
     await game.talk([
-      ['kai', '"SEC-LOG 1. No power." The log of Tuesday morning, and it\'s dark.'],
+      ['kai', '"SEC-LOG 1. No power." The log of Sunday morning, and it\'s dark.'],
       ['kai', 'Her next read was maintenance. 08:09. Somebody moved the power.'],
     ]);
     cine(false); S.serverDark = true;
@@ -947,7 +947,7 @@ export default {
         ['kai', 'I know.'],
         ['yara', 'He always did, too. Every time.'],
       ]);
-      ev('Yara Lind, saved', 'Kai took her hand as the field opened, against what she asked. She stepped out of 08:14 into Thursday night. "He always did, too. Every time."', 'CHAMBER ONE');
+      ev('Yara Lind, saved', 'Kai took her hand as the field opened, against what she asked. She stepped out of 08:14 into Tuesday night. "He always did, too. Every time."', 'CHAMBER ONE');
     } else {
       F.m8yara = 'held';
       yara.pose = 'nod';
@@ -990,7 +990,7 @@ export default {
       h.lookTarget = kai.head;
       await game.talk([
         ['hale', 'Kai. Rook\'s people are on the lift, and Brandt\'s with them.'],
-        ['hale', 'I buried you on Tuesday. I\'m not doing it twice. Service passage. Now.'],
+        ['hale', 'I buried you on Sunday. I\'m not doing it twice. Service passage. Now.'],
       ]);
     } else {
       await game.talk([

@@ -23,7 +23,10 @@ How a character is made:
 - Skirts, coat tails and aprons are cloth tubes: both thighs blend across the front and back panels (the cloth
   stretches between the legs instead of splitting), the hem rim has its own normals, and they skip decimation.
 - A per-vertex "_mask" attribute (skin, gloss, hair) drives the runtime skin shading in assets/js/humans.js.
-- Decimation protects the face (full density), then the rest of the head, then the body takes the reduction.
+- Decimation classes: face, rest of the head, hands (their own ratio: under the body's ratio the fingers became cones)
+  and the body + garments, which never go below 42 % (lower, the collapse folded cloth into holes and smeared texels).
+  Atlas island borders are weighted in the 'feat' group so no collapse joins two islands; small hard pieces (pouches,
+  buckles, panels, knots) are not decimated. Budgets are targets: a character lands above them rather than tearing.
 """
 import json, math, os, sys
 from functools import lru_cache

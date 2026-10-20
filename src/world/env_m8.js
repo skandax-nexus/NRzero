@@ -51,8 +51,8 @@ export function registerM8Cast() {
     rimColor: 0xffc890, glow: 0x2a2010, bg: 0x101014,
     vp: { sex: 'f', pitch: 1.02, rate: 0.98, langs: ['en-GB', 'en-IE', 'en-US'] },
   });
-  registerCast('kai17', { name: 'KAI VAREN · ECHO 08:0x', role: 'Security log · version 17', portraitOf: 'kai', voice: true, vp: { sex: 'm', pitch: 0.92, rate: 1.0, langs: ['en-GB', 'en-US'] } });
-  registerCast('kaimemo', { name: 'VOICE MEMO · DR. K. VAREN', role: 'Recorded Monday 18.10.2049', portraitOf: 'kai', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 0.95, langs: ['en-GB', 'en-US'] } });
+  registerCast('kai17', { name: 'KAI VAREN · ECHO 08:0x', role: 'Security log · version 17', portraitOf: 'kai', voice: true, vp: { sex: 'm', pitch: 0.95, rate: 1.0, langs: ['en-US', 'en-GB'] } }); // Kai's own voice profile
+  registerCast('kaimemo', { name: 'VOICE MEMO · DR. K. VAREN', role: 'Recorded Saturday 18.10.2049', portraitOf: 'kai', voice: true, vp: { sex: 'm', pitch: 0.95, rate: 0.97, langs: ['en-US', 'en-GB'] } });
   registerCast('helixai', { name: 'HELIX SYSTEMS', role: 'Facility intelligence · automated', voice: true, vp: { sex: 'f', pitch: 1.12, rate: 1.04, langs: ['en-US', 'en-GB'] } });
   registerCast('radio', { name: 'SECURITY RADIO', role: 'Helix channel 2', voice: true, vp: { sex: 'm', pitch: 0.85, rate: 1.05, langs: ['en-US', 'en-GB'] } });
   registerCast('yaraecho', { name: 'DR. YARA LIND · ECHO 08:0x', role: 'Security log · version 17', portraitOf: 'yara', vp: { sex: 'f', pitch: 1.04, rate: 1.0, langs: ['en-GB', 'en-IE', 'en-US'] } });
@@ -61,7 +61,7 @@ export function registerM8Cast() {
   registerCast('m8guard', { name: 'HELIX SECURITY', role: 'Night desk · Level 1', look: { ...GUARD, lod: false }, vp: { sex: 'm', pitch: 0.84, rate: 1.0, langs: ['en-US', 'en-GB'] } });
   registerCast('m8staff', { name: 'HELIX SCIENTIST', role: 'Late shift', look: { ...STAFF[1], lod: false }, vp: { sex: 'f', pitch: 1.06, rate: 1.02, langs: ['en-GB', 'en-US'] } });
   registerCast('m8tech', { name: 'LAB B TECHNICIAN', role: 'Iven Marr\'s team', look: { ...TECHS[0], lod: false }, vp: { sex: 'f', pitch: 1.0, rate: 1.05, langs: ['en-US', 'en-GB'] } });
-  registerCast('figure', { name: '— — —', role: 'Unidentified · camera C4', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.9, langs: ['en-GB'] } });
+  registerCast('figure', { name: '— — —', role: 'Unidentified · camera C4', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.86, langs: ['en-GB', 'en-US'] } }); // the Witness's profile (M3 catwalk, M6 reel)
 }
 // 2049 Helix crowd (COSTUMES.md helix_sci_m / helix_sci_f / helix_sec_1 / technician), built at LOD
 export const STAFF = [
@@ -162,11 +162,12 @@ export const TEX = {
     lines(g, state === 'ok' ? ['08:04–08:14  RESTORED', '6/6 segments re-synced'] : ['08:04–08:14  CORRUPTED', '6 segments · timestamps lost', 'Re-sync at source cameras'], 20, 100, 20, state === 'ok' ? '#9fffc8' : '#ffb070', 1.5);
   }),
   version: () => screenTex('version', 1024, 512, (g, W) => {
-    g.textAlign = 'center'; lines(g, ['HELIX · TIMELINE AUDIT'], W / 2, 70, 34, '#5fe6ff');
-    lines(g, ['CURRENT TIMELINE'], W / 2, 170, 30, '#9fb4c8'); lines(g, ['VERSION 17'], W / 2, 270, 96, '#e8f6ff');
-    lines(g, ['PREVIOUS VERSIONS: 16', 'SURVIVING RECORDS: NONE'], W / 2, 360, 30, '#ff9a8a', 1.5);
+    // kept clear of the top fifth: from the antechamber floor the soffit hides the screen's upper edge
+    g.textAlign = 'center'; lines(g, ['HELIX · TIMELINE AUDIT'], W / 2, 132, 32, '#5fe6ff');
+    lines(g, ['CURRENT TIMELINE'], W / 2, 196, 28, '#9fb4c8'); lines(g, ['VERSION 17'], W / 2, 292, 92, '#e8f6ff');
+    lines(g, ['PREVIOUS VERSIONS: 16', 'SURVIVING RECORDS: NONE'], W / 2, 372, 30, '#ff9a8a', 1.45);
   }),
-  memo: () => screenTex('memo', 384, 256, (g) => { lines(g, ['VOICE MEMO · K. VAREN', 'Mon 18.10.2049 · 23:41', '', '▶  0:38'], 20, 44, 22, '#5fe6ff', 1.4); }),
+  memo: () => screenTex('memo', 384, 256, (g) => { lines(g, ['VOICE MEMO · K. VAREN', 'Sat 18.10.2049 · 23:41', '', '▶  0:38'], 20, 44, 22, '#5fe6ff', 1.4); }),
   ante: (state) => screenTex('ante' + state, 512, 256, (g) => {
     lines(g, ['CONTAINMENT · CHAMBER 1'], 20, 40, 22, '#5fe6ff');
     const m = { idle: ['FIELD HELD SINCE 08:14:00', 'OCCUPANT: 1 · UNRESOLVED'], sealed: ['CONTAINMENT ENGAGED', 'FIELD COLLAPSE IMMINENT'], open: ['FIELD RELEASED', 'OCCUPANT: — '] }[state];

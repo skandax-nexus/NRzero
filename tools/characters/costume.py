@@ -1471,15 +1471,17 @@ def skirt_piece(c, B, g, LM, layers):
     length = g.get("length", 0.25) * H
     pts = [B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["hips", "spine", "thigh_L", "thigh_R"])]]
     over_top = g.get("shape") == "hipwrap"      # a hip-wrap is wrapped over the tunic (it poked through it from below)
+    if over_top:     # short, over the hips only: lower down the tunic's tail swings with the thighs and cuts through it
+        length = min(length, 0.095 * H)
     for kk, L in layers.items():
         if L.g.get("cat") in ("bottom", "limb") or (over_top and L.g.get("cat") in ("top", "over")):
             pts.append(L.pos)
     pts = np.concatenate(pts)
     rows = 9
     ys = [top_y - length * i / (rows - 1) for i in range(rows)]
-    pad = [(0.009 if over_top else 0.004) + (0.016 if over_top else 0.006) * i / (rows - 1) for i in range(rows)]
+    pad = [(0.007 if over_top else 0.004) + (0.008 if over_top else 0.006) * i / (rows - 1) for i in range(rows)]
     n = 56
-    grid = ring_grid(B, pts, ys, pad, n, dilate=2 if over_top else 0)
+    grid = ring_grid(B, pts, ys, pad, n, dilate=1 if over_top else 0)
     # monotonic radius + flare + pleats
     cz = zc_at(B, np.array(ys))
     for i in range(1, rows):
