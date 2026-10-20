@@ -52,11 +52,13 @@ export function makeGhostMaterial(color = 0x5fe6ff) {
 // ---------- look -> human parameters ----------
 const HAIR_MAP = { quiff: 'quiff', long: 'long', wavy: 'bob', bob: 'bob', bun: 'bun', 'tied-back': 'tied-back', messy: 'messy', short: 'short', curly: 'curly', swept: 'swept', 'grey-swept': 'grey-swept', buzz: 'buzz', bald: 'bald' };
 const q = (v, step) => Math.round(v / step) * step;
+// look.sex may be a 0..1 blend or 'f' / 'm' (mission looks); otherwise look.female
+const femaleness = look => (typeof look.sex === 'number' ? look.sex : typeof look.sex === 'string' ? (/^f/i.test(look.sex) ? 1 : 0) : (look.female ? 1 : 0));
 
 function humanParams(look) {
   const p = look, seed = p.seed ?? (hashStr(JSON.stringify([p.skin, p.hair, p.hairStyle, p.top, p.pants, p.height, p.female, p.face, p.age])) % 100000);
   const R = mulberry(seed);
-  const sex = p.sex ?? (p.female ? 1 : 0);
+  const sex = femaleness(p);
   const greyHair = new THREE.Color(p.hair ?? 0).getHSL({}).l > 0.45 && new THREE.Color(p.hair ?? 0).getHSL({}).s < 0.2;
   const age = p.age ?? (p.child || (p.height ?? 1.8) < 1.4 ? Math.round(4 + ((p.height ?? 1.2) - 1.0) * 20) : greyHair ? 50 + Math.floor(R() * 18) : 22 + Math.floor(R() * 26));
   const detail = p.detail || (p.lod ? 'low' : 'medium');
@@ -105,7 +107,7 @@ function pickTemplate(look) {
   if (look.template && cast.ids.includes(look.template)) return look.template;
   if (look.role && ROLE_TEMPLATE[look.role]) return ROLE_TEMPLATE[look.role];
   const h = hashStr(JSON.stringify([look.skin, look.hair, look.top, look.pants, look.height, look.seed]));
-  const fem = look.sex != null ? look.sex > 0.5 : !!look.female;
+  const fem = femaleness(look) > 0.5;
   const kid = look.child || (look.height ?? 1.75) < 1.4;
   const grey = new THREE.Color(look.hair ?? 0).getHSL({}).l > 0.45;
   const settler = look.sash != null || look.pantsType === 'wraps' || look.era === 'ancient';
