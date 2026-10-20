@@ -124,7 +124,7 @@ function decalTex(kind) {
       for (let k = 0; k < 900; k++) { g.fillStyle = `rgba(30,24,18,${r() * 0.4})`; g.fillRect(r() * w, r() * h, 3 + r() * 9, 2 + r() * 5); }
     } else if (kind === 'safe') { // yellow gap markings
       g.fillStyle = 'rgba(214,170,40,0.92)'; g.fillRect(0, 0, w, 40); g.fillRect(0, h - 40, w, 40);
-      g.font = '700 88px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillStyle = 'rgba(214,170,40,0.85)'; g.fillText('WARTEN', w / 2, h / 2 + 30);
+      g.font = '700 88px Rajdhani, sans-serif'; g.textAlign = 'center'; g.fillStyle = 'rgba(214,170,40,0.85)'; g.fillText('WAIT', w / 2, h / 2 + 30);
       for (let k = 0; k < 900; k++) { g.fillStyle = `rgba(30,24,18,${r() * 0.5})`; g.fillRect(r() * w, r() * h, 3 + r() * 9, 2 + r() * 5); }
     } else if (kind === 'puddle') {
       for (let k = 0; k < 8; k++) { const x = r() * w, y = r() * h, rr = 40 + r() * 120; const gr = g.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, rr * 1.5, rr, r() * 3, 0, 7); g.fill(); }
@@ -376,6 +376,7 @@ export function buildHouse(game, T, opts = {}) {
     towerStone: pm('cutStone', { color: 0x7a7266, joint: 0x4a443c, rows: 7, weathering: 0.7 }),
     slate: pm('paintedMetalPanel', { color: 0x2c3034, cols: 6, rows: 12, wear: 0.5, grime: 0.6, gloss: 0.4, wet: 0.8 }),
     iron: pm('paintedMetalPanel', { color: 0x2e3a34, cols: 1, rows: 1, wear: 0.55, grime: 0.6, gloss: 0.5 }),
+    machine: pm('paintedMetalPanel', { color: 0x46564a, cols: 4, rows: 2, wear: 0.65, grime: 0.55, gloss: 0.45 }),
     steel: pm('brushedMetal', { color: 0x8a8c8e, smudge: 0.6 }),
     rust: pm('rust', { amount: 0.75 }),
     concrete: pm('concrete', { color: 0x3e3a34, stains: 1, formwork: 0, cracks: 0.12, pores: 0.8 }),
@@ -534,6 +535,12 @@ export function buildHouse(game, T, opts = {}) {
   for (let row = 0; row < 3; row++) for (let k = 0; k < 7; k++) { const zz = 0.4 + k * 1.0 + (row % 2) * 0.45; if (zz > 7.4) continue; clocks.push({ p: [7.08, 1.55 + row * 0.72, zz], ry: -Math.PI / 2, r: 0.18 + R() * 0.14, face: Math.floor(R() * 3), off: R() * 600, rate: 0.5 + R() * 0.2, skip: true }); }
   for (let k = 0; k < 9; k++) { const x = -6.4 + k * 0.72; if (Math.abs(x) < 1.2) continue; clocks.push({ p: [x, 2.7 + (k % 2) * 0.35, -0.68], ry: 0, r: 0.16 + R() * 0.08, face: k % 3, off: R() * 600, rate: 0.5, skip: true }); }
   for (const [x0, x1] of [[-6.2, -1.6], [1.6, 6.2]]) for (let k = 0; k < 4; k++) clocks.push({ p: [x0 + (x1 - x0) * (k + 0.5) / 4, 1.1 + (k % 2) * 0.5, 7.86], ry: Math.PI, r: 0.2 + R() * 0.06, face: (k + 1) % 3, off: R() * 600, rate: 0.5, skip: true });
+  // the four longcase clocks along the back wall: dial in the hood, a brass pendulum window below
+  for (const [k, x] of [-4.6, -3.5, 3.5, 4.6].entries()) clocks.push({ p: [x, 1.86, -0.33], ry: 0, r: 0.22, face: k % 3, off: R() * 600, rate: 0.5, skip: true });
+  for (const e of ['2026', '2049', '2196']) for (const x of [-4.6, -3.5, 3.5, 4.6]) {
+    props[e].box(M.brassDark, x - 0.2, 0.5, -0.36, x + 0.2, 1.5, -0.33); props[e].box(M.blackIron, x - 0.16, 0.54, -0.335, x + 0.16, 1.46, -0.33);
+    props[e].box(M.brass, x - 0.012, 0.8, -0.33, x + 0.012, 1.42, -0.32); props[e].cyl(M.brass, x, 0.8, -0.32, 0.09, 0.02, 16, [Math.PI / 2, 0, 0]);
+  }
   const shopClocks = clockSet(clocks, faces, { glow: 0.05 });
   groups['2049'].add(shopClocks.group);
   const pastClocks = clockSet(clocks.map(c => ({ ...c, rate: 1 / 60, skip: false, off: 900 + R() * 4 })), faces, { glow: 0.04 });
@@ -587,7 +594,12 @@ export function buildHouse(game, T, opts = {}) {
       col(null, [Math.min(s * 6.55, s * 8.2), 0, -18.0], [Math.max(s * 6.55, s * 8.2), 1.25, -4.2]);
       for (let k = 0; k < 3; k++) { const zz = -6 - k * 4; p.box(M.oak, s * 7.7, 1.6, zz - 1.4, s * 8.2, 1.65, zz + 1.4); p.box(M.oak, s * 7.7, 2.3, zz - 1.4, s * 8.2, 2.35, zz + 1.4); for (let j = 0; j < 5; j++) p.boxc(j % 2 ? M.brassDark : M.darkWood, s * 7.95, 1.8, zz - 1.1 + j * 0.55, 0.3, 0.3, 0.4); }
       // hammer-line machine walls
-      p.box(M.iron, s * 1.42, 0, -25.0, s * 8.2, 2.6, -18.6); col(null, [Math.min(s * 1.42, s * 8.2), 0, -25.0], [Math.max(s * 1.42, s * 8.2), 2.6, -18.6]);
+      p.box(M.machine, s * 1.42, 0, -25.0, s * 8.2, 2.6, -18.6);
+      for (let k = 0; k <= 6; k++) p.box(M.steel, s * 1.36, 0, -24.95 + k * 1.05, s * 1.42, 2.6, -24.83 + k * 1.05);   // rib plates
+      p.box(M.brassDark, s * 1.34, 2.5, -25.05, s * 1.6, 2.68, -18.55); p.box(M.blackIron, s * 1.36, 0, -25.0, s * 1.42, 0.22, -18.6);
+      p.cyl(M.brass, s * 1.3, 1.95, -21.8, 0.05, 6.3, 10, [Math.PI / 2, 0, 0]); p.cyl(M.rust, s * 1.31, 0.75, -21.8, 0.07, 6.3, 10, [Math.PI / 2, 0, 0]);
+      for (const zz of [-24.3, -22.8, -20.8, -19.3]) { p.box(M.blackIron, s * 1.3, 1.25, zz - 0.18, s * 1.38, 1.6, zz + 0.18); p.cyl(M.brass, s * 1.29, 1.42, zz, 0.11, 0.03, 14, [0, 0, Math.PI / 2]); }
+      col(null, [Math.min(s * 1.42, s * 8.2), 0, -25.0], [Math.max(s * 1.42, s * 8.2), 2.6, -18.6]);
       for (let k = 0; k < 3; k++) { p.box(M.steel, s * 2.2, 2.6, -24 + k * 2, s * 3.6, 3.4, -23 + k * 2); p.cyl(M.rust, s * 5.2, 3.1, -21.8, 0.5, 1.0, 16); }
       for (let k = 0; k < 4; k++) p.cyl(M.steel, s * 1.5, 1.6, -19 - k * 1.8, 0.07, 3.2, 8, [0, 0, 0]);
       // benches around the gate zone
@@ -725,7 +737,7 @@ export function buildHouse(game, T, opts = {}) {
   }
   // mantel clocks (settable) in 2026 and 2049
   world.mantel = {};
-  for (const e of ['2026', '2049']) { const mc = settableClock(0.16, clockFace({ aged: e === '2049', seed: 7 }), { h: 4, m: 0, depth: 0.12 }); mc.position.set(-6.32, 1.82, -35.5); mc.rotation.y = Math.PI / 2; S(e, mc); props[e].box(M.oak, -6.5, 1.6, -35.75, -6.2, 2.05, -35.25); world.mantel[e] = mc; }
+  for (const e of ['2026', '2049']) { const mc = settableClock(0.16, clockFace({ aged: e === '2049', seed: 7 }), { h: 4, m: 0, depth: 0.12 }); mc.position.set(-6.17, 1.84, -35.5); mc.rotation.y = Math.PI / 2; S(e, mc); props[e].box(M.oak, -6.55, 1.6, -35.78, -6.18, 2.08, -35.22); props[e].box(M.brass, -6.58, 2.08, -35.82, -6.15, 2.12, -35.18); props[e].box(M.brass, -6.58, 1.6, -35.82, -6.15, 1.64, -35.18); world.mantel[e] = mc; }
   // fire
   const fireLight = glowMat(0xff7a30, 3); const fire = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 10), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })); fire.position.set(-6.85, 0.3, -35.5); S('2026', fire);
   const embers = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 1.2), fireLight); embers.position.set(-6.85, 0.05, -35.5); groups.all.add(embers); world.embers = embers; world.fire = fire;
@@ -776,8 +788,8 @@ export function buildHouse(game, T, opts = {}) {
       const y = 0.25 * k, z0 = -35.6 - 0.5 * k, z1 = z0 + 0.5;
       a.box(M.oak, 7.8, y - 0.25, z0, 9.4, y, z1); col([e], [7.8, y - 0.3, z0], [9.4, y, z1]);
     }
-    a.box(M.oak, 6.2, 2.25, -41.6, 9.4, 2.5, -40.6); col([e], [6.2, 2.0, -41.6], [9.4, 2.5, -40.6]);
-    for (let k = 1; k <= 10; k++) { const y = 2.5 + 0.25 * k, z0 = -40.6 + 0.5 * (k - 1); a.box(M.oak, 6.2, y - 0.25, z0, 7.8, y, z0 + 0.5); col([e], [6.2, y - 0.3, z0], [7.8, y, z0 + 0.5]); }
+    a.box(M.oak, 6.62, 2.25, -41.6, 9.4, 2.5, -40.6); col([e], [6.2, 2.0, -41.6], [9.4, 2.5, -40.6]);
+    for (let k = 1; k <= 10; k++) { const y = 2.5 + 0.25 * k, z0 = -40.6 + 0.5 * (k - 1); a.box(M.oak, 6.62, y - 0.25, z0, 7.8, y, z0 + 0.5); col([e], [6.2, y - 0.3, z0], [7.8, y, z0 + 0.5]); }
     a.box(M.oak, 6.2, TY - 0.25, -35.6, 7.8, TY, -32.6); col([e], [6.2, TY - 0.3, -35.6], [7.8, TY, -32.6]);
     // balustrade between the flights + newel posts
     p.box(M.darkWood, 7.75, 0, -40.6, 7.85, 3.5, -35.6); col([e], [7.72, 0, -40.6], [7.88, 6.2, -35.6]);

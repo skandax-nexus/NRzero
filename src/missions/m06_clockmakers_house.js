@@ -659,9 +659,9 @@ export default {
       collarObjective();
     };
     W.collars.forEach((c, i) => { c.pv.rotation.y = -((c.value / 12) * Math.PI * 2); c.prevV = (c.value / 12) * Math.PI * 2; });
-    game.interact({ pos: [P.shaft[0] + 0.6, P.lowCollar, P.shaft[1]], radius: 1.9, once: false, states: ['2049'], prompt: 'Turn the lower collar', onUse: () => setCollar(0) });
-    game.interact({ pos: [P.shaft[0] + 0.7, P.midCollar, P.shaft[1]], radius: 1.8, once: false, states: ['2026'], prompt: 'Turn the middle collar', onUse: () => setCollar(1) });
-    game.interact({ pos: [P.shaft[0] - 0.75, P.highCollar, P.shaft[1]], radius: 1.8, once: false, states: ['2196'], prompt: 'Turn the upper collar', onUse: () => setCollar(2) });
+    game.interact({ pos: [P.shaft[0] + 0.6, P.lowCollar, P.shaft[1]], radius: 1.9, once: false, states: ['2049'], enabled: () => !state.ended, prompt: 'Turn the lower collar', onUse: () => setCollar(0) });
+    game.interact({ pos: [P.shaft[0] + 0.7, P.midCollar, P.shaft[1]], radius: 1.8, once: false, states: ['2026'], enabled: () => !state.ended, prompt: 'Turn the middle collar', onUse: () => setCollar(1) });
+    game.interact({ pos: [P.shaft[0] - 0.75, P.highCollar, P.shaft[1]], radius: 1.8, once: false, states: ['2196'], enabled: () => !state.ended, prompt: 'Turn the upper collar', onUse: () => setCollar(2) });
     shard('2026', [1.9, P.scaffoldTop + 0.5, -34.0], 'Temporal shard: the scaffold', 'On Hensel\'s 2026 scaffold, beside the middle collar, a shard of crystallised time. Below it, chalk on a plank: "for K.V. — not yet".');
     game.onUpdate(() => {
       if (zone !== 'tower' || !game.control) return;
@@ -697,9 +697,9 @@ export default {
 
     // ---------- the recording ----------
     cine(true); lockMusic('m6-witness');
-    pl.place(P.shaft[0] + 1.3, TY, P.shaft[1] + 0.2, -Math.PI / 2);
+    pl.place(P.shaft[0] + 1.25, TY, P.shaft[1] + 0.35, -Math.PI / 2);
     kai.pose = 'work';
-    await game.shot([P.shaft[0] + 2.6, TY + 1.6, P.shaft[1] + 1.4], [P.shaft[0] + 0.6, TY + 1.0, P.shaft[1]], 1.4, { fov: 36 });
+    await game.shot([P.shaft[0] + 1.8, TY + 1.25, P.shaft[1] - 1.6], [P.shaft[0] + 0.6, TY + 0.75, P.shaft[1]], 1.4, { fov: 38 });
     kai.pose = null; audio.sfxPlay('rewind');
     await game.wait(0.6);
     await game.talk([

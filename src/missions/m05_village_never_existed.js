@@ -728,7 +728,12 @@ export default {
       if (!last || Math.hypot(p.x - last.x, p.z - last.z) > 0.45) { trail.push({ x: p.x, z: p.z }); if (trail.length > 500) { trail.shift(); nIdx = Math.max(0, nIdx - 1); } }
       if (!nikoFollow) return;
       const n = niko.root.position, dK = Math.hypot(p.x - n.x, p.z - n.z);
-      if ((dK > 26 || Math.abs(p.y - n.y) > 4) && trail.length) { const b = trail[Math.max(0, trail.length - 6)]; n.set(b.x, groundAt(b.x, b.z, p.y + 0.5), b.z); nIdx = trail.length - 6; }
+      if ((dK > 26 || Math.abs(p.y - n.y) > 4) && trail.length) {
+        // catch up out of sight: a step behind Kai (away from the camera), never on top of him
+        const c = game.engine.camera.position, ax = p.x - c.x, az = p.z - c.z, al = Math.hypot(ax, az) || 1;
+        const bx = p.x - ax / al * 1.6 + az / al * 0.7, bz = p.z - az / al * 1.6 - ax / al * 0.7;
+        n.set(bx, groundAt(bx, bz, p.y + 0.5), bz); resetTrail(); trail.push({ x: p.x, z: p.z });
+      }
       if (dK < 2.1) { niko.speed = 0; niko.faceTowards(p.x, p.z, dt, 4); }
       else {
         nIdx = Math.min(Math.max(nIdx, 0), trail.length - 1);
@@ -738,7 +743,7 @@ export default {
         n.x += dx / dd * step; n.z += dz / dd * step; niko.speed = sp; niko.faceTowards(tgt.x, tgt.z, dt, 8);
       }
       const gy = groundAt(n.x, n.z, n.y + 0.5); n.y += (gy - n.y) * Math.min(1, dt * 12);
-      if (dK < 0.55) { n.x += (n.x - p.x) / Math.max(dK, 0.01) * 0.02; n.z += (n.z - p.z) / Math.max(dK, 0.01) * 0.02; }
+      if (dK < 0.9) { const far = dK > 0.01, ox = far ? (n.x - p.x) / dK : 0.71, oz = far ? (n.z - p.z) / dK : 0.71, k = (0.9 - dK) * Math.min(1, dt * 6); n.x += ox * k; n.z += oz * k; }
     });
 
     await PERF('characters');
@@ -781,7 +786,7 @@ export default {
       stateDef('abandoned', '2', 'ABANDONED', 'c. 400 CE', '◒', '#c8d08a', 'm5empty'),
       stateDef('flooded', '3', 'FLOODED', '2049 · RESERVOIR 7', '◑', '#5fe6ff', 'm5drowned'),
     ], 'thriving');
-    T.onSwitch(() => { refreshWorld(); machineTune(); });
+    T.onSwitch(() => { refreshWorld(); machineTune(); if (S.toured && !busy && game.control) { const o = mainObjective(); if (o !== objText) objective(o); } });
     // residue vision toggles show only this state's echoes
     let lastRes = false; game.onUpdate(() => { if (game.residueOn !== lastRes) { lastRes = game.residueOn; refreshWorld(); } });
     const restoreTheme = () => audio.setTheme(T.def()?.theme || 'm5thrive');
@@ -807,8 +812,14 @@ export default {
     let objText = '', hintT = 0;
     const objective = (t) => { objText = t; hintT = 0; game.objective(t); };
     const mark = b => b ? '●' : '○';
+    // the objective always reflects the furthest open step, so a cutscene in another era never hides an open task
     const mainObjective = () => {
-      if (S.diverted && S.wall) return S.released ? (S.hatch ? 'Find what the Keepers\' Door was hiding' : 'Walk down into the drained village. Open the Keepers\' Door') : 'Walk the levee to the outlet tower (2049) and release the pressure gate';
+      if (studied) return 'Compare the machine in the other states (1 · 2 · 3)';
+      if (S.hatch) return 'Follow the tunnel under the terrace';
+      if (S.diverted && S.wall) return S.released ? 'Walk down into the drained village. Open the Keepers\' Door' : 'Walk the levee to the outlet tower (2049) and release the pressure gate';
+      if (!S.diverted && headTalk && T.current === 'thriving') return levered < 3 ? `Lever the boulders out of the eastern channel mouth (${levered}/3)` : 'Close the village sluice at the windlass';
+      if (!S.wall && wallSeen && T.current === 'abandoned') return S.drains < 3 ? `Clear the three choked drains in the terrace wall (${S.drains}/3)` : S.braced < 2 ? `Brace the bulge with two roof beams from the ruins (${S.braced}/2)` : 'Drive the stone wedges under the braces';
+      if (S.diverted && !S.sawAbPost && !S.sawFlPost) return 'See what the change did to the later states (2 · 3)';
       return `Open the way to the Keepers' Door — ${mark(S.diverted)} a way to the outlet tower (2049) · ${mark(S.wall)} the terrace wall must not fall (c. 400 CE)`;
     };
     const HINTS = () => {
@@ -1028,12 +1039,15 @@ export default {
     let talaAtHead = false, levered = 0, headTalk = false;
     const TALA_HEAD = [20.6, -49.2], TALA_STEPS = [7.8, 5.5];
     // Tala works at the water steps; once Kai heads up to the shelf she is already waiting at the head works
-    // (she only moves while Kai is far from both spots, so nobody sees her teleport)
+    // (she only moves while nobody can see her teleport: Kai is far from both spots, in another era, or both spots
+    // are behind the camera — so a player who arrives at the shelf directly, e.g. after a switch, is never stuck)
+    const camFwd = new THREE.Vector3();
+    const unseen = (x, z) => { const c = game.engine.camera.position; game.engine.camera.getWorldDirection(camFwd); const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz) || 1; return (dx * camFwd.x + dz * camFwd.z) / d < 0.2; };
     game.onUpdate(() => {
       if (busy) return;
       const p = game.player.pos, wantHead = S.toured && !S.diverted && (headTalk || p.z < -30);
       if (wantHead === talaAtHead) return;
-      if (Math.hypot(p.x - TALA_STEPS[0], p.z - TALA_STEPS[1]) > 18 && Math.hypot(p.x - TALA_HEAD[0], p.z - TALA_HEAD[1]) > 12) {
+      if (T.current !== 'thriving' || (Math.hypot(p.x - TALA_STEPS[0], p.z - TALA_STEPS[1]) > 18 && Math.hypot(p.x - TALA_HEAD[0], p.z - TALA_HEAD[1]) > 12) || (unseen(...TALA_STEPS) && unseen(...TALA_HEAD))) {
         talaAtHead = wantHead;
         if (wantHead) { tala.root.position.set(TALA_HEAD[0], TY, TALA_HEAD[1]); tala.root.rotation.y = Math.PI * 0.85; } else { tala.root.position.set(TALA_STEPS[0], 0, TALA_STEPS[1]); tala.root.rotation.y = Math.PI / 2; }
       }
@@ -1051,19 +1065,19 @@ export default {
           ['tala', 'Ropes are on the boulders. Lever them toward the bank. The crew will pull.'],
         ]);
         audio.setTheme('m5work');
-        objective('Lever the boulders out of the eastern channel mouth (0/3)');
+        objective(mainObjective());
       } finally { tala.lookTarget = null; leave(); busy = false; }
     }) });
-    boulders.forEach((b, i) => act({ pos: [b.userData.home.x - 1.2, TY + 0.8, b.userData.home.z], radius: 2.6, states: ['thriving'], hold: 1.6, prompt: 'Lever the boulder (hold E)', enabled: () => talaAtHead && objText.startsWith('Lever') && !b.userData.moved, onUse: safe(async (it) => {
+    boulders.forEach((b, i) => act({ pos: [b.userData.home.x - 1.2, TY + 0.8, b.userData.home.z], radius: 2.6, states: ['thriving'], hold: 1.6, prompt: 'Lever the boulder (hold E)', enabled: () => talaAtHead && headTalk && !b.userData.moved, onUse: safe(async (it) => {
       if (b.userData.moved || T.current !== 'thriving') return;
       b.userData.moved = true; done(it); levered++; audio.sfxPlay('metal'); game.shake = 0.12; bCols[i].enabled = false; colList.splice(colList.findIndex(c => c.b === bCols[i]), 1);
       const from = b.position.clone(), to = new THREE.Vector3(B55 + 5.4 + i * 0.3, TY + 0.55, -55.5 + i * 1.7);
       await new Promise(res => { let u = 0; const off = game.onUpdate(dt => { u = Math.min(1, u + dt * 0.8); b.position.lerpVectors(from, to, u); b.position.y += Math.sin(u * Math.PI) * 1.2; b.rotation.x += dt * 3; if (u >= 1) { off(); res(); } }); });
       game.shake = 0;
-      objective(levered < 3 ? `Lever the boulders out of the eastern channel mouth (${levered}/3)` : 'Close the village sluice at the windlass');
+      objective(mainObjective());
       if (levered < 3) ui.subtitle('villager', ['Pull! Again!', 'It moves! It moves!'][levered - 1], 2000);
     }) }));
-    act({ pos: [A53 + 4.4, TY + 1.0, HZ], radius: 2.6, states: ['thriving'], hold: 2.4, prompt: 'Close the village sluice (hold E)', enabled: () => talaAtHead && !S.diverted && objText.length > 0, onUse: safe(async () => {
+    act({ pos: [A53 + 4.4, TY + 1.0, HZ], radius: 2.6, states: ['thriving'], hold: 2.4, prompt: 'Close the village sluice (hold E)', enabled: () => talaAtHead && headTalk && !S.diverted, onUse: safe(async () => {
       if (S.diverted || T.current !== 'thriving' || busy) return;
       if (levered < 3) { ui.subtitle('tala', 'Not yet! Give it a road first, or it will climb the bank and take the houses tonight.', 3800); return; }
       busy = true;
@@ -1088,7 +1102,7 @@ export default {
       tala.lookTarget = null;
       rewrite(); restoreTheme();
       ui.addEvidence('The river turned east', 'In c. 1000 BCE Kai helped Tala\'s people clear the rockfall and close the village sluice. The river returned to its eastern channel; the village began a stone levee along it.', 'HEAD WORKS · c. 1000 BCE');
-      leave(); objective('See what the change did to the later states (2 · 3)');
+      leave(); objective(mainObjective());
       game.checkpoint(TALA_HEAD[0], TY, TALA_HEAD[1] + 1.5, Math.PI);
     }
     // consequences seen on switching
@@ -1101,7 +1115,7 @@ export default {
         await game.talk([['niko', 'You keep changing the world.'], ['kai', 'I\'m trying to get home.'], ['niko', 'Then stop changing it.']]);
         niko.lookTarget = null; kai.lookTarget = null;
         ui.addEvidence('"The one who turned the river"', 'After the diversion, the empty village of c. 400 CE is intact, and a memorial stone shows a figure with a ring on the wrist turning the river. Niko: "You keep changing the world." Kai: "I\'m trying to get home." Niko: "Then stop changing it."', 'THE VILLAGE · c. 400 CE');
-        leave(); if (S.sawFlPost) objective(mainObjective());
+        leave(); objective(mainObjective());
       }); }
       if (S.diverted && id === 'flooded' && !S.sawFlPost) { S.sawFlPost = true; cinematic(async () => {
         await enter([18, 9, -40], [26, 2.4, 10], 2.0, 50);
@@ -1126,7 +1140,7 @@ export default {
       if (!wallSeen && S.toured && T.current === 'abandoned' && nearK(-11.5, -4.5, 6.5) && game.control && !busy) { wallSeen = true; cinematic(async () => {
         await enter([-8.6, 1.8, -1.0], [-13.4, 1.2, -5], 1.4, 46);
         await game.talk([['kai', 'Look at the face. It\'s bulging — the whole middle section is moving.'], ['kai', 'It\'s not the stones that are failing. It\'s the water behind them. Those drain holes are choked solid.'], ['niko', 'In my time they weep after every rain. The keepers clean them at the spring feast.'], ['kai', 'Nobody\'s held a feast here for three hundred years.']]);
-        leave(); objective(`Clear the three choked drains in the terrace wall (${S.drains}/3)`); ui.toast('Residue Vision [F] shows where the water used to run', 3500);
+        leave(); objective(mainObjective()); ui.toast('Residue Vision [F] shows where the water used to run', 3500);
         game.checkpoint(-9, 0.02, -5, -Math.PI / 2);
       }); }
       if (carrying) beamProp.visible = true;
@@ -1135,7 +1149,7 @@ export default {
       if (plugs[i].userData.cleared || T.current !== 'abandoned') return;
       plugs[i].userData.cleared = true; done(it); S.drains++; refreshWorld(); audio.sfxPlay('spark'); audio.water(0.16);
       ui.subtitle('kai', ['There — it\'s running. Brown water. Centuries of it.', 'Second one. Listen to it.', 'Pressure\'s off. Now brace the bulge before it moves again.'][S.drains - 1], 3000);
-      objective(S.drains < 3 ? `Clear the three choked drains in the terrace wall (${S.drains}/3)` : 'Brace the bulge with two roof beams from the ruins (0/2)');
+      objective(mainObjective());
     }) }));
     BEAMS.forEach((m) => act({ pos: [m.position.x, 0.9, m.position.z], radius: 2.2, states: ['abandoned'], prompt: 'Take the fallen roof beam', enabled: () => S.drains >= 3 && !carrying && !m.userData.taken, onUse: (it) => {
       if (carrying || S.drains < 3 || T.current !== 'abandoned') return;
@@ -1144,7 +1158,7 @@ export default {
     BRACE.forEach((b, i) => act({ pos: [b.x + 0.4, 0.9, b.z], radius: 2.0, states: ['abandoned'], hold: 1.2, prompt: 'Brace the wall with the beam (hold E)', enabled: () => !!carrying && S.braced === i, onUse: (it) => {
       if (!carrying || S.braced !== i || T.current !== 'abandoned') return;
       done(it); carrying = null; beamProp.visible = false; S.braced++; refreshWorld(); audio.sfxPlay('door'); game.shake = 0.06; setTimeout(() => { game.shake = 0; }, 300);
-      objective(S.braced < 2 ? 'Brace the bulge with two roof beams from the ruins (1/2)' : 'Drive the stone wedges under the braces');
+      objective(mainObjective());
     } }));
     act({ pos: [-11.6, 0.8, -4.8], radius: 2.4, states: ['abandoned'], hold: 2.0, prompt: 'Drive the wedges (hold E)', enabled: () => S.braced >= 2 && !S.wall, onUse: safe(async () => {
       if (S.braced < 2 || S.wall || busy) return; busy = true;
@@ -1169,7 +1183,7 @@ export default {
     act({ pos: vpos(MAIN), radius: 1.9, states: ['flooded'], hold: 2.6, prompt: 'Release the main gate (hold E)', enabled: () => atTower && !S.released, onUse: safe(async () => {
       if (S.released || T.current !== 'flooded' || busy) return;
       if (!S.wall) { ui.subtitle('kai', 'Not yet. Drain it now and I only uncover a landslide.', 3000); return; }
-      if (pressure > 0.6) { overTries++; game.shake = 0.18; audio.sfxPlay('metal'); setTimeout(() => { game.shake = 0; }, 500); ui.subtitle('kai', overTries > 1 ? 'Read the placard, Kai. Bypass valves first — equalize, then the gate.' : 'It won\'t move against that pressure. The needle\'s in the red.', 3200); return; }
+      if (pressure > 0.6) { overTries++; game.shake = 0.18; audio.sfxPlay('metal'); setTimeout(() => { game.shake = 0; }, 500); ui.subtitle('kai', v1 && v2 ? 'Both bypasses are open. Let the needle fall below sixty first.' : overTries > 1 ? 'Read the placard, Kai. Bypass valves first — equalize, then the gate.' : 'It won\'t move against that pressure. The needle\'s in the red.', 3200); return; }
       busy = true; try { await drain(); } finally { busy = false; }
     }) });
     async function drain() {
@@ -1203,7 +1217,7 @@ export default {
         audio.sfxPlay('door');
         await new Promise(res => { let u = 0; const off = game.onUpdate(dt => { u = Math.min(1, u + dt * 0.6); hatchPivot.rotation.y = -u * 1.7; if (u >= 1) { off(); res(); } }); });
         S.hatch = true; refreshWorld(); audio.setTheme('m5machine'); audio.hum(0.07, 41);
-        leave(); objective('Follow the tunnel under the terrace'); game.checkpoint(DOOR.x + 0.8, 0.02, doorMid, -Math.PI / 2);
+        leave(); objective(mainObjective()); game.checkpoint(DOOR.x + 0.8, 0.02, doorMid, -Math.PI / 2);
       } finally { busy = false; }
     }) });
     act({ pos: [-29.0, -1.6, MZ], radius: 3.2, prompt: 'Study the machine', enabled: () => S.hatch && !studied, onUse: safe(async () => {
@@ -1219,7 +1233,7 @@ export default {
       await game.say('kai', 'Helix survey. Site zero, fourteenth of March 2029. Core recovered, sent to Helix Lab 1. Site to be flooded. Authorised: E. Rook.');
       await game.say('kai', F.trustedHale === false ? 'Security escort: Brandt. The man I trusted in the lift.' : 'Security escort: Brandt. Hale was right about him.');
       ui.addEvidence('Survey tag SZ-0', 'Helix surveyed "Site Zero" on 14.03.2029, removed the machine\'s core to Helix Lab 1, and flooded the valley in 2031. Authorised: E. Rook. Security escort: Brandt. Helix says it built the Chronolith in 2031.', 'THE CHAMBER · 2049');
-      leave(); objective('Compare the machine in the other states (1 · 2 · 3)');
+      leave(); objective(mainObjective());
       ui.toast('The chamber exists in every state. Switch here.', 3500);
       compared[T.current] = true;
       T.unlocked = true;

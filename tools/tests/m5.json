@@ -214,6 +214,12 @@
 "timeout": 900000
 },
 {
+"eval": "__game.player.place(20.0,3.7,-36,3.14); null"
+},
+{
+"wait": 2500
+},
+{
 "eval": "__game.player.place(20.0,3.7,-47.6,3.14); null"
 },
 {
@@ -497,7 +503,7 @@
 "wait": 2000
 },
 {
-"until": "__game.control && !__game.ui.dlgActive && !__game.cine && __game.ui.evidence.some(e=>e.title.includes(\"Reservoir 7 drained\"))",
+"until": "__game.ui.evidence.some(e=>e.title.includes(\"Reservoir 7 drained\")) && __game.control && !__game.ui.dlgActive && !__game.cine || (__game.control && !__game.cine && !__game.ui.dlgActive && (__game.__m5t=(__game.__m5t||0)+1)%24===0 && (__game.use(\"Release the main gate\"), false))",
 "timeout": 1200000
 },
 {

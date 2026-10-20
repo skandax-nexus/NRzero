@@ -32,6 +32,10 @@ for (let row = 0; row < rows; row++) {
   const tx = +(q.get('tx') || 0), fov = q.get('fov');        // ?tx=<x> shifts the view sideways, ?fov=<deg> zooms (close-ups)
   if (fov) { cam.fov = +fov; cam.updateProjectionMatrix(); }
   cam.position.set(tx, face ? 1.55 : ty + 0.1, dd); cam.lookAt(tx, ty, 0); cams.push(cam);
+  // ?focus=<bone> (head, chest, hips, hand_L ...): aim at that bone of the row's first person (close-ups of gadgets);
+  // ?d is then the distance from the bone, ?fy / ?tx shift the aim point up / sideways
+  const fb = q.get('focus') && people.find(p => p.root.userData.row === row)?.bones[q.get('focus')];
+  if (fb) { scene.updateMatrixWorld(true); const c = fb.getWorldPosition(new THREE.Vector3()); c.x += tx; c.y += +(q.get('fy') || 0); cam.position.set(c.x, c.y + 0.04, c.z + (q.get('d') ? +q.get('d') : 0.8)); cam.lookAt(c); }
 }
 r.setScissorTest(true);
 for (let row = 0; row < rows; row++) {

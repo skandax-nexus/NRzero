@@ -1,6 +1,6 @@
 #!/bin/bash
 # Capture several reference-view sets in a row, retrying a set when the renderer is OOM-killed (shared container).
-#   bash tools/render/runall.sh <out root> "m1 high 1280 720;m1 low 844 390 --mobile;..."
+#   bash tools/render/runall.sh <out root> "m1 high 1280 720;m1 low 844 390 --mobile;..."  (extra refviews flags such as --ab may follow)
 # Writes <out root>/<gfx>[_mobile]/ (pngs, <mission>_<gfx>[_mobile].json, <mission>.log). See docs/RENDERING.md.
 # Env: BASE=http://localhost:PORT/ captures another server (e.g. a frozen "before" copy of the site).
 OUT=$1; [ -z "$OUT" ] || [ -z "$2" ] && { echo "usage: runall.sh <out root> \"<mission> <gfx> <W> <H> [--mobile];...\""; exit 2; }
@@ -8,7 +8,7 @@ cd "$(dirname "$0")/../.." || exit 2
 IFS=';' read -ra SPECS <<< "$2"
 for spec in "${SPECS[@]}"; do
   read -r mis gfx w h mob <<< "$spec"
-  sub=$gfx; [ -n "$mob" ] && sub=${gfx}_mobile
+  sub=$gfx; [[ "$mob" == *--mobile* ]] && sub=${gfx}_mobile
   mkdir -p "$OUT/$sub"
   for try in 1 2 3 4 5 6; do
     echo "== $mis $sub try $try $(date +%T)"

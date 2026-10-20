@@ -10,6 +10,7 @@
 //                    HUD / dialogue / letterbox DOM is hidden so only the 3D frame is captured.
 //                    Close-up views (fov <= 45) hold engine.focus() on the look target like game.shot() does, and
 //                    engine.settlePost() snaps the smoothed post values (grade, eye adaptation, focus) first.
+//   REF.postOff(list) switches post features off for an A/B capture (null restores them).
 //   REF.measure(n)   times 3 full frames (composer) and 1 scene-pass-only frame, each fenced with readPixels, and
 //                    records renderer counts. Results are also pushed to window.REF_LOG.
 (() => {
@@ -74,10 +75,17 @@
           calls: st.calls, tris: st.triangles, sceneCalls: st.sceneCalls, sceneTris: st.sceneTriangles,
           frameMs: +med(full).toFixed(1), frameMinMs: +Math.min(...full).toFixed(1), sceneMinMs: +Math.min(...sc).toFixed(1),
           lights: L, objects, instanced, transparent, materials: mats.size, programs: r.info.programs.length,
-          textures: r.info.memory.textures, geometries: r.info.memory.geometries, era: g.temporal.current };
+          textures: r.info.memory.textures, geometries: r.info.memory.geometries, era: g.temporal.current, post: st.post, grade: E.grade };
         const mem = performance.memory; if (mem) res.jsHeapMB = Math.round(mem.usedJSHeapSize / 1048576);
         (window.REF_LOG = window.REF_LOG || []).push(res); return res;
       }
+    },
+    // A/B: switch the post features listed in `off` off (null = back to the saved set), snapping the smoothed values.
+    postOff(off) {
+      if (off) { if (!REF._postSave) REF._postSave = new Set(E.postOff); E.postOff = new Set(off); }
+      else if (REF._postSave) { E.postOff = REF._postSave; REF._postSave = null; }
+      E.applyPost(); E.settlePost(); draw.call(E, g.time);
+      return E.stats.post;
     },
     // PNG data URL of the current frame (canvas only: cheaper and steadier than a page screenshot).
     grab() { draw.call(E, g.time); return E.renderer.domElement.toDataURL('image/png'); },

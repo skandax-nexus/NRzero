@@ -509,10 +509,13 @@ class Gad:
 # ----------------------------------------------------------------------------------------------------------------
 # shared builders
 # ----------------------------------------------------------------------------------------------------------------
-def band_geo(R, w, t, gap=0.0015, ch=None, a0=None, a1=None, n=None, groove=None, along=0.0):
-    """A band (closed ring, or an arc a0..a1 in radians from dorsal) of width w and thickness t on a limb ring."""
+def band_geo(R, w, t, gap=0.0015, ch=None, a0=None, a1=None, n=None, groove=None, along=0.0, fit=False):
+    """A band (closed ring, or an arc a0..a1 in radians from dorsal) of width w and thickness t on a limb ring.
+    fit=True with R from fitted_ring ("r_lo" / "r_hi": limb radii at the elbow-side / hand-side edge): the inner lip
+    of each edge closes in to the limb there, so a band sized to a sleeve hem shows no gap over the bare wrist."""
     ch = t * 0.45 if ch is None else ch
     rr = R["r"]
+    edge = {0: R.get("r_lo"), 5: R.get("r_hi")} if fit else {}
     nr = len(rr)
     closed = a0 is None
     n = n or nr
@@ -529,7 +532,12 @@ def band_geo(R, w, t, gap=0.0015, ch=None, a0=None, a1=None, n=None, groove=None
         gr = 1.0
         if groove and closed and (i % groove == 0):
             gr = 0.55
-        for dr, da in prof:
+        for j, (dr, da) in enumerate(prof):
+            re_ = edge.get(j)
+            if re_ is not None:
+                r_e = min(re_[i0] * (1 - f) + re_[(i0 + 1) % nr] * f + gap * 0.5, r)
+                verts.append(tuple(R["c"] + R["ax"] * (da + along) + d * r_e))
+                continue
             verts.append(tuple(R["c"] + R["ax"] * (da + along) + d * (r + dr * (gr if dr > 0 else 1.0))))
     faces = []
     m = len(prof)
@@ -556,24 +564,50 @@ def ring_frame(R, th, t=0.0, along=0.0, gap=0.0015):
     return frame(p, d, R["ax"])
 
 
-def torso_loop(K, p_hi, p_lo, n=28, fams=TORSO, lift=0.003, skip_src=()):
+def torso_loop(K, p_hi, p_lo, n=36, fams=TORSO, lift=0.003, skip_src=(), seg=0.025):
     """Closed path around the torso in the plane through p_hi (over a shoulder) and p_lo (a hip) that contains the
-    forward axis: a sash / bandolier / bag strap line. Returns points and outward normals."""
+    forward axis: a sash / bandolier / bag strap line. Returns n points (even arc length) and outward normals.
+    Rays are cast at evenly spaced angles, then more are added wherever two hits are further apart than `seg`
+    (the turn over the shoulder and round the hip), so no chord cuts into the cloth."""
     p_hi, p_lo = V(p_hi), V(p_lo)
     u = (p_hi - p_lo).normalized()
     f = V((0, -1, 0))
     f = (f - u * f.dot(u)).normalized()
     c = (p_hi + p_lo) / 2
-    P, N = [], []
-    for i in range(n):
-        th = 2 * math.pi * i / n
+
+    def hit(th):
         d = u * math.cos(th) + f * math.sin(th)
-        h = K.ray(c + d * 0.7, -d, fams, 1.4, skip_src)
-        if h is None:
-            continue
-        P.append(h[0] + h[1] * lift)
-        N.append(h[1])
-    return _smooth_loop(P, N)
+        return K.ray(c + d * 0.7, -d, fams, 1.4, skip_src)
+    pts = []
+    for i in range(36):
+        th = 2 * math.pi * i / 36
+        h = hit(th)
+        if h is not None:
+            pts.append((th, h[0], h[1]))
+    for _ in range(6):
+        add = []
+        for i in range(len(pts)):
+            a_, b_ = pts[i], pts[(i + 1) % len(pts)]
+            if (a_[1] - b_[1]).length > seg:
+                tb = b_[0] if b_[0] > a_[0] else b_[0] + 2 * math.pi
+                if tb - a_[0] < 1e-3:
+                    continue
+                h = hit((a_[0] + tb) / 2)
+                if h is not None:
+                    add.append(((a_[0] + tb) / 2 % (2 * math.pi), h[0], h[1]))
+        if not add or len(pts) > 400:
+            break
+        pts = sorted(pts + add, key=lambda x: x[0])
+    P = [p_ + n_ * lift for _, p_, n_ in pts]
+    N = [n_ for _, _, n_ in pts]
+    P, N = _smooth_loop(P, N, it=1)
+    A = np.array([tuple(p_) for p_ in P + [P[0]]])
+    Nn = np.array([tuple(n_) for n_ in N + [N[0]]])
+    d = np.r_[0, np.cumsum(np.linalg.norm(np.diff(A, axis=0), axis=1))]
+    t = np.linspace(0, d[-1], n, endpoint=False)
+    Pr = [V(tuple(np.interp(tt, d, A[:, j]) for j in range(3))) for tt in t]
+    Nr = [V(tuple(np.interp(tt, d, Nn[:, j]) for j in range(3))).normalized() for tt in t]
+    return Pr, Nr
 
 
 def neck_loop(K, z_front, z_back, n=24, fams=TORSO | {"neck"}, lift=0.003, r_out=0.2):
@@ -606,8 +640,13 @@ def surf_path(K, guide, fams=TORSO, lift=0.003):
     """Points of a guide polyline dropped onto the nearest outer surface (rays from outside along each guide
     point's outward direction from the torso axis)."""
     P, N = [], []
-    for g in guide:
-        g = V(g)
+    dense = []
+    for i in range(len(guide) - 1):
+        g0, g1 = V(guide[i]), V(guide[i + 1])
+        m = max(1, int(math.ceil((g1 - g0).length / 0.025)))
+        dense += [g0.lerp(g1, j / m) for j in range(m)]
+    dense.append(V(guide[-1]))
+    for g in dense:
         c = V((0, -float(BH.costume.zc_at(K.B, g.z)), g.z))
         out = (g - c)
         out = out.normalized() if out.length > 1e-4 else V((0, -1, 0))
@@ -659,10 +698,45 @@ def opt_side(o, d):
 
 
 # ---------------- wrist and arm pieces ----------------
-def wrist_band(g, sd, w, t, col, gloss, along=-0.035, n=16, groove=None, fams=None):
+def fitted_ring(K, sd, along, w, n=16, fams=None, t=1.0):
+    """Limb ring for a band of width w centred `along` metres from the wrist: outer radius = the widest of five
+    sections under the band (a sleeve hem never pokes through), inner lips = the limb radius at each edge."""
+    R = K.limb_ring(sd, "elbow_", "wrist_", t, n=n, along=along, fams=fams)
+    secs = [K.limb_ring(sd, "elbow_", "wrist_", t, n=n, along=along + f * (w / 2 - 0.002), fams=fams)["r"] for f in (-1, -0.5, 0.5, 1)]
+    R["r"] = np.max(np.stack([R["r"]] + secs), 0)
+    R["r_lo"], R["r_hi"] = secs[0], secs[3]
+    return R
+
+
+def sleeve_hem(K, sd, fams=None):
+    """`along` (metres from the wrist joint) of the sleeve hem on the forearm: the last sharp drop of the limb radius
+    going toward the hand (None: bare forearm, or the sleeve runs over the wrist)."""
+    key = ("hem", sd)
+    if key not in K._sub:
+        st = 0.004 * K.k
+        al = np.arange(-0.11 * K.k, 0.006 * K.k, st)
+        r = np.array([float(np.mean(K.limb_ring(sd, "elbow_", "wrist_", 1.0, n=8, along=a, fams=fams)["r"])) for a in al])
+        hem = None
+        for i in range(1, len(al)):
+            if r[i - 1] - r[i] > 0.0025:
+                hem = float(al[i])
+        K._sub[key] = hem
+    return K._sub[key]
+
+
+def wrist_band(g, sd, w, t, col, gloss, along=-0.035, n=16, groove=None, fams=None, auto=None):
+    """A band at the wrist. Narrow bands (auto, w <= 3.5 cm) never straddle a sleeve hem: they move onto the bare
+    wrist below it when there is room, else up onto the sleeve end."""
     K = g.K
-    R = K.limb_ring(sd, "elbow_", "wrist_", 1.0, n=n, along=along * K.k, fams=fams)
-    g.part(band_geo(R, w * K.k, t, groove=groove), col, gloss, smooth=True)
+    along *= K.k
+    ww = w * K.k
+    if (ww <= 0.035 if auto is None else auto):
+        hem = sleeve_hem(K, sd, fams)
+        if hem is not None and along - ww / 2 < hem < along + ww / 2:
+            below = hem + ww / 2 + 0.003
+            along = below if below + ww / 2 <= 0.006 * K.k else hem - ww / 2 - 0.002
+    R = fitted_ring(K, sd, along, ww, n=n, fams=fams)
+    g.part(band_geo(R, w * K.k, t, groove=groove, fit=True), col, gloss, smooth=True)
     return R
 
 
@@ -763,10 +837,10 @@ def g_kid_band(g):
     K, o = g.K, g.o
     sd = opt_side(o, "L")
     g.bone = "forearm_" + sd
-    R = wrist_band(g, sd, 0.02, 0.006, o.get("color", "e8d36a"), 0.3, along=-0.02, n=14)
+    R = wrist_band(g, sd, 0.02, 0.006, o.get("color", "e8d36a"), 0.3, along=-0.02, n=12)
     M = ring_frame(R, 0.0, t=0.004)
-    g.part(cyl(0.012, 0.004, n=12, bev=0.0015, M=M), o.get("case", "f2efe6"), 0.5, smooth="auto")
-    g.light(lathe([(0.0085, 0.0), (0.0085, 0.0015), (0.006, 0.0035), (0.0, 0.0045)], n=12, M=local(M, 0, 0, 0.0038)), smooth=True)
+    g.part(cyl(0.012, 0.004, n=10, bev=0.0015, M=M), o.get("case", "f2efe6"), 0.5, smooth="auto")
+    g.light(lathe([(0.0085, 0.0), (0.0085, 0.0015), (0.006, 0.0035), (0.0, 0.0045)], n=8, M=local(M, 0, 0, 0.0038)), smooth=True)
     g.glow_hex = (o.get("glow") or "ffe066").lstrip("#")
     g.idle = float(o.get("idle", 0.6))
 
@@ -796,8 +870,8 @@ def g_scav_scanner(g):
     sd = opt_side(o, "R")
     g.bone = "forearm_" + sd
     k = K.k
-    R = K.limb_ring(sd, "elbow_", "wrist_", 0.62, n=16)
-    g.part(band_geo(R, 0.11 * k, 0.005, groove=4), o.get("sleeve", CANVAS), 0.05, smooth=True)
+    R = fitted_ring(K, sd, 0.0, 0.11 * k, n=16, t=0.62)
+    g.part(band_geo(R, 0.11 * k, 0.005, groove=4, fit=True), o.get("sleeve", CANVAS), 0.05, smooth=True)
     M = ring_frame(R, 0.0, t=0.005)
     g.part(box(0.058 * k, 0.08 * k, 0.011, bev=0.003, M=M), o.get("color", OLIVE), 0.35)
     g.part(box(0.012 * k, 0.03 * k, 0.006, bev=0.002, M=local(M, 0.034 * k, -0.02 * k, 0)), STEEL, 0.6)
@@ -816,8 +890,8 @@ def g_cont_forearm(g):
     sd = opt_side(o, "R")
     g.bone = "forearm_" + sd
     k = K.k
-    R = K.limb_ring(sd, "elbow_", "wrist_", 0.55, n=18)
-    g.part(band_geo(R, 0.12 * k, 0.0075), o.get("color", "dfe1e3"), 0.75, smooth=True)
+    R = fitted_ring(K, sd, 0.0, 0.12 * k, n=18, t=0.55)
+    g.part(band_geo(R, 0.12 * k, 0.0075, fit=True), o.get("color", "dfe1e3"), 0.75, smooth=True)
     M = ring_frame(R, 0.0, t=0.0075)
     if o.get("slate"):
         g.part(box(0.05 * k, 0.08 * k, 0.0045, bev=0.002, M=M), GRAPH, 0.7)
@@ -832,7 +906,7 @@ def g_cont_forearm(g):
 
 def bangles(g, sd, count, w, t, col, along0, step, n=14, bone="forearm_"):
     for i in range(count):
-        wrist_band(g, sd, w, t, col, 0.75, along=along0 - i * step, n=n)
+        wrist_band(g, sd, w, t, col, 0.75, along=along0 - i * step, n=n, auto=False)
 
 
 @gadget("bronze_bracelets", "forearm_L")
@@ -844,7 +918,7 @@ def g_bracelets(g):
     cnt = int(o.get("count", 2))
     for sd in sides:
         sub = Gad(K, g.typ, "forearm_" + sd, o)
-        bangles(sub, sd, cnt, 0.006, 0.0032, o.get("color", BRONZE), -0.012, 0.011, n=14)
+        bangles(sub, sd, cnt, 0.006, 0.0032, o.get("color", BRONZE), -0.012, 0.011, n=10)
         _merge(g.body, sub.body)
 
 
@@ -865,7 +939,7 @@ def g_armlet(g):
     K, o = g.K, g.o
     sd = opt_side(o, "R")
     g.bone = "upperarm_" + sd
-    R = K.limb_ring(sd, "shoulder_", "elbow_", 0.42, n=16)
+    R = K.limb_ring(sd, "shoulder_", "elbow_", 0.42, n=12)
     col = o.get("color", BRONZE)
     g.part(band_geo(R, 0.026 * K.k, 0.0028), col, 0.75, smooth=True)
     for da in (-0.009, 0.009):
@@ -938,8 +1012,15 @@ def g_monocle(g):
     M = rot(M, "Y", s * 0.25)
     col = o.get("color", GRAPH)
     lw, lh = 0.036 * K.k, 0.026 * K.k
-    g.part(box(lw + 0.005, lh + 0.005, 0.003, bev=0.0012, M=M), col, 0.65)
-    g.light(box(lw, lh, 0.0006, M=local(M, 0, 0, 0.003)))
+    rim, rt = 0.0032, 0.0046
+    g.part(box(lw + 0.002, lh + 0.002, 0.0026, bev=0.001, M=M), col, 0.65)                     # lens seat
+    for sy in (1, -1):                                                                          # raised bezel
+        g.part(box(lw + 2 * rim, rim, rt, bev=0.0012, M=local(M, 0, sy * (lh + rim) / 2, 0)), col, 0.7)
+    for sx in (1, -1):
+        g.part(box(rim, lh, rt, bev=0.0012, M=local(M, sx * (lw + rim) / 2, 0, 0)), col, 0.7)
+    g.part(box(0.009, 0.006, 0.006, bev=0.0018, M=local(M, s * (lw / 2 - 0.004), lh / 2 + rim + 0.002, 0.0)), GUN, 0.6)  # sensor pod
+    g.part(cyl(0.0018, 0.0012, n=8, M=local(M, s * (lw / 2 - 0.004), lh / 2 + rim + 0.002, 0.006)), GLASS, 0.9, smooth="auto")
+    g.light(box(lw, lh, 0.0006, M=local(M, 0, 0, 0.0027)))
     if o.get("cracked"):
         g.part(box(0.0012, lh * 0.9, 0.0004, M=rot(local(M, -0.004, 0, 0.0036), "Z", 0.5)), "2a2522", 0.2)
     tip = M @ V((s * (lw / 2 + 0.002), 0.004, 0.0015))
@@ -1158,60 +1239,72 @@ def g_magnifier(g):
 
 @gadget("respirator", "head")
 def g_respirator(g):
-    """Half-mask respirator with two filter canisters (worn='face', or 'neck': hanging at the neck)."""
+    """Half-mask respirator: a contoured shell over nose and mouth (snout forward, rubber seal lip), two filter
+    cartridges on the cheeks and an exhale valve (worn='face', or 'neck': hanging at the neck)."""
     K, o = g.K, g.o
     k = K.k
     worn = o.get("worn", "neck")
-    col = o.get("color", "2e2e2a")
+    col = o.get("color", "33352f")
+    fcol = o.get("filter", "7a7862")
     mouth = BH.to_bl(K.B.L.mouth)
     if worn == "face":
-        rows, cols = 5, 7
-        grid = []
+        rows, cols, amax = 6, 9, 1.15
+        z_hi, z_lo = mouth.z + 0.045 * k, mouth.z - 0.05 * k
+        zc = mouth.z - 0.004 * k
+        grid, dirs = [], []
         for i in range(rows):
-            z = mouth.z + 0.04 * k - 0.085 * k * i / (rows - 1)
-            row = []
+            v = i / (rows - 1)
+            z = z_hi + (z_lo - z_hi) * v
+            row, drow = [], []
             for j in range(cols):
-                a = -1.2 + 2.4 * j / (cols - 1)
+                u = -1 + 2 * j / (cols - 1)
+                a = u * amax * (0.8 + 0.2 * math.sin(math.pi * v))      # narrower over the nose bridge and chin
                 d = V((math.sin(a), -math.cos(a), 0))
                 cen = V((0, K.eyec.y + 0.04, z))
                 h = K.toward(cen, d, HEAD, 0.3)
-                row.append((h[0] if h else cen + d * 0.09) + d * (0.012 + 0.012 * (1 - abs(a) / 1.2)))
+                bulge = max(0.0, 1 - u * u) * max(0.0, 1 - ((z - zc) / (0.055 * k)) ** 2)
+                row.append((h[0] if h else cen + d * 0.09) + d * (0.006 + 0.02 * bulge))
+                drow.append(d)
             grid.append(row)
+            dirs.append(drow)
         verts = [tuple(p) for r in grid for p in r]
-        faces = [[i * cols + j, i * cols + j + 1, (i + 1) * cols + j + 1, (i + 1) * cols + j] for i in range(rows - 1) for j in range(cols - 1)]
+        quads = [[i * cols + j, i * cols + j + 1, (i + 1) * cols + j + 1, (i + 1) * cols + j] for i in range(rows - 1) for j in range(cols - 1)]
         nv = len(verts)
-        inner = []
-        for i in range(rows):
-            for j in range(cols):
-                p = V(verts[i * cols + j])
-                a = -1.2 + 2.4 * j / (cols - 1)
-                inner.append(tuple(p - V((math.sin(a), -math.cos(a), 0)) * 0.004))
-        verts += inner
-        faces += [[nv + f[3], nv + f[2], nv + f[1], nv + f[0]] for f in faces[:]]
-        for i in range(rows - 1):
-            for j in (0, cols - 1):
-                a, b = i * cols + j, (i + 1) * cols + j
-                faces.append([a, b, nv + b, nv + a])
-        for j in range(cols - 1):
-            for i in (0, rows - 1):
-                a, b = i * cols + j, i * cols + j + 1
-                faces.append([a, b, nv + b, nv + a])
+        verts += [tuple(V(verts[i * cols + j]) - dirs[i][j] * 0.004) for i in range(rows) for j in range(cols)]
+        faces = quads + [[nv + f[3], nv + f[2], nv + f[1], nv + f[0]] for f in quads]
+        ring = [(0, j) for j in range(cols)] + [(i, cols - 1) for i in range(1, rows)] + [(rows - 1, j) for j in range(cols - 2, -1, -1)] + [(i, 0) for i in range(rows - 2, 0, -1)]
+        for q in range(len(ring)):
+            a_, b_ = ring[q], ring[(q + 1) % len(ring)]
+            ia, ib = a_[0] * cols + a_[1], b_[0] * cols + b_[1]
+            faces.append([ia, ib, nv + ib, nv + ia])
         g.part((verts, faces), col, 0.35, smooth=True)
-        cm = V(grid[rows // 2 + 1][cols // 2])
-        base = frame(cm, V((0, -1, -0.25)).normalized(), UP)
+        seal = [V(verts[r[0] * cols + r[1]]) - dirs[r[0]][r[1]] * 0.002 for r in ring]      # rubber seal lip
+        g.part(tube(seal + [seal[0]], 0.0028, n=4, caps=False), BLACK, 0.2, smooth=True)
+        ci = rows // 2
+        cm = V(grid[ci][cols // 2])
+        base = frame(cm, V((0, -1, -0.2)).normalized(), UP)
+        for jj in (1, cols - 2):                          # filter cartridges on the cheeks
+            d = dirs[ci][jj]
+            fwd = (d + V((0, -0.6, -0.25))).normalized()
+            Mc = frame(V(grid[ci][jj]) - d * 0.004, fwd, UP)
+            g.part(cyl(0.02 * k, 0.018, n=10, bev=0.003, M=Mc), fcol, 0.25, smooth="auto")
+            g.part(cyl(0.021 * k, 0.004, n=10, M=local(Mc, 0, 0, 0.004)), BLACK, 0.3, smooth="auto")
+            g.part(cyl(0.012 * k, 0.0015, n=10, M=local(Mc, 0, 0, 0.018)), GRAPH, 0.3, smooth="auto")
+        g.part(cyl(0.013 * k, 0.01, n=10, bev=0.002, M=local(base, 0, -0.012 * k, -0.002)), GRAPH, 0.45, smooth="auto")   # exhale valve
+        g.part(box(0.016 * k, 0.003, 0.0016, M=local(base, 0, -0.012 * k, 0.008)), BLACK, 0.2)
         P, N = strap_round_head(K, mouth.z, mouth.z + 0.05 * k)
         strap(g, [p for p in P if p.y > K.eyec.y - 0.02], [n for p, n in zip(P, N) if p.y > K.eyec.y - 0.02], 0.014 * k, 0.003, "2a2a26", soft=False)
-    else:
-        g.bone = "chest"
-        nz = K.J["neck"].z
-        p, n = K.patch(V((0, K.J["neck"].y, nz - 0.02 * k)), V((0, -1, -0.15)), TORSO | {"neck", "head"}, 0.01)
-        base = frame(p + n * 0.012, (n + V((0, 0, -0.7))).normalized(), UP)
-        g.part(lathe([(0.0, 0.0), (0.034 * k, 0.0), (0.04 * k, 0.012), (0.028 * k, 0.03), (0.0, 0.034)], n=10, M=rot(base, "X", 0.0)), col, 0.35, smooth=True)
-        P, N = neck_loop(K, nz - 0.02 * k, nz + 0.03 * k, lift=0.01)
-        strap(g, P, N, 0.012 * k, 0.003, "2a2a26", closed=True)
-    for s in (1, -1):
-        Mc = rot(local(base, s * 0.034 * k, -0.01 * k, 0.012), "Y", s * 0.7)
-        g.part(cyl(0.017 * k, 0.02, n=10, bev=0.003, M=Mc), o.get("filter", "6a6a5a"), 0.3, smooth="auto")
+        return
+    g.bone = "chest"
+    nz = K.J["neck"].z
+    p, n = K.patch(V((0, K.J["neck"].y, nz - 0.02 * k)), V((0, -1, -0.15)), TORSO | {"neck", "head"}, 0.01)
+    base = frame(p + n * 0.012, (n + V((0, 0, -0.7))).normalized(), UP)
+    g.part(lathe([(0.0, 0.0), (0.034 * k, 0.0), (0.04 * k, 0.012), (0.028 * k, 0.03), (0.0, 0.034)], n=10, M=base), col, 0.35, smooth=True)
+    P, N = neck_loop(K, nz - 0.02 * k, nz + 0.03 * k, lift=0.01)
+    strap(g, P, N, 0.012 * k, 0.003, "2a2a26", closed=True)
+    for s_ in (1, -1):
+        Mc = rot(local(base, s_ * 0.034 * k, -0.01 * k, 0.012), "Y", s_ * 0.7)
+        g.part(cyl(0.017 * k, 0.02, n=10, bev=0.003, M=Mc), fcol, 0.3, smooth="auto")
         g.part(cyl(0.011 * k, 0.0015, n=10, M=local(Mc, 0, 0, 0.02)), BLACK, 0.2, smooth="auto")
     g.part(cyl(0.012 * k, 0.012, n=10, bev=0.002, M=local(base, 0, -0.018 * k, 0.018)), GRAPH, 0.4, smooth="auto")
 
@@ -1296,6 +1389,18 @@ def g_headlamp(g):
 
 
 # ---------------- chest and shoulders ----------------
+def strap_x(K, z, s, back=False):
+    """x of the harness / sling strap crossing the front (or back) at height z on side s (None: no strap there)."""
+    xs = []
+    for i in range(40):
+        x = s * (0.015 + 0.004 * i) * K.k
+        yc = -float(BH.costume.zc_at(K.B, z)) if hasattr(BH, "costume") else 0.0
+        h = K.ray(V((x, yc + (0.5 if back else -0.5), z)), V((0, -1 if back else 1, 0)), TORSO, 1.0)
+        if h is not None and K.fsrc[h[2]].startswith("strap_"):
+            xs.append(x)
+    return sum(xs) / len(xs) if xs else None
+
+
 @gadget("shoulder_lamp", "chest")
 def g_shoulder_lamp(g):
     """Compact hex lamp on the harness strap high on the left shoulder (cool-white cone in dark areas)."""
@@ -1303,7 +1408,9 @@ def g_shoulder_lamp(g):
     k = K.k
     sd = opt_side(o, "L")
     s = 1 if sd == "L" else -1
-    p, n = K.front(s * 0.105 * k, K.J["chest"].z + 0.125 * k)
+    z = K.J["chest"].z + 0.125 * k
+    x = strap_x(K, z, s) or s * 0.105 * k
+    p, n = K.front(x, z)
     M = frame(p - n * 0.002, (n + V((0, 0, 0.15))).normalized(), UP)
     col = o.get("color", GUN)
     g.part(box(0.036 * k, 0.03 * k, 0.006, bev=0.002, M=M), BLACK, 0.3)
@@ -1376,6 +1483,8 @@ def g_slate_pocket(g):
     g.part(box(0.07 * k, 0.1 * k, 0.011, bev=0.003, M=M), col, 0.15)
     g.part(box(0.072 * k, 0.026 * k, 0.003, bev=0.001, M=local(M, 0, 0.04 * k, 0.011)), col, 0.2)
     g.part(box(0.05 * k, 0.012 * k, 0.0035, bev=0.001, M=local(M, 0, 0.052 * k, 0.009)), GRAPH, 0.6)
+    g.part(box(0.056 * k, 0.012 * k, 0.0075, bev=0.0015, M=local(M, 0, 0.056 * k, 0.002)), BLACK, 0.8)     # the slate
+    g.part(box(0.046 * k, 0.03 * k, 0.0012, bev=0.0005, M=local(M, 0, -0.018 * k, 0.011)), BLACK, 0.05)   # grip patch
 
 
 def _wear_color(K, names, d):
@@ -1632,8 +1741,8 @@ def g_sample_rig(g):
     for i in range(6):
         x = (-0.075 + 0.03 * i) * k
         vm = rot(local(M0, x, -0.03 * k, 0.026), "X", -math.pi / 2)
-        g.part(cyl(0.0085, 0.075 * k, n=8, M=vm), "5a6a62", 0.9, smooth="auto")
-        g.part(cyl(0.0095, 0.012, n=8, bev=0.001, M=local(vm, 0, 0, 0.075 * k)), ("8a3a2a", "3a5a8a", STEEL)[i % 3], 0.5, smooth="auto")
+        g.part(cyl(0.0085, 0.075 * k, n=6, M=vm), "5a6a62", 0.9, smooth="auto")
+        g.part(cyl(0.0095, 0.012, n=6, M=local(vm, 0, 0, 0.075 * k)), ("8a3a2a", "3a5a8a", STEEL)[i % 3], 0.5, smooth="auto")
         g.light(cyl(0.006, 0.045 * k, n=6, M=local(vm, 0, 0, 0.008)), seg=float(i))
     g.part(box(0.2 * k, 0.03 * k, 0.012, bev=0.003, M=local(M0, 0, -0.005, 0.016)), o.get("rigColor", OLIVE), 0.1)
     for s in (1, -1):
@@ -1866,10 +1975,11 @@ def pack_straps(g, M, w, h, col, width=0.04, thick=0.004, crossed=False):
     """Two shoulder straps from the top of a back pack over the shoulders down the chest to under the arms."""
     K = g.K
     k = K.k
+    mx = 1 if M.col[0][0] >= 0 else -1        # the pack's local x may point to -x on the back: pick the strap's own side
     for s in (1, -1):
         sd = "L" if s > 0 else "R"
         sh = K.J["shoulder_" + sd]
-        top = M @ V((s * w * 0.3, h * 0.45, 0.0))
+        top = M @ V((mx * s * w * 0.3, h * 0.45, 0.0))
         guide = [top, V((s * 0.075 * k, K.J["neck"].y + 0.06, sh.z + 0.04 * k)), V((s * 0.09 * k, K.J["neck"].y - 0.02, sh.z + 0.05 * k)),
                  V((s * 0.105 * k, sh.y - 0.1, sh.z - 0.02 * k)), V((s * 0.12 * k, sh.y - 0.09, K.J["chest"].z - 0.04 * k)),
                  V((s * 0.15 * k, sh.y - 0.02, K.J["chest"].z - 0.08 * k))]
@@ -1936,8 +2046,13 @@ def g_salvage(g):
     g.part(cyl(0.05 * k, w, n=10, bev=0.012, M=br), o.get("roll", "6a6a54"), 0.05, smooth="auto")
     for f in (0.22, 0.78):
         g.part(torus(0.052 * k, 0.004, n=10, m=4, M=local(br, 0, 0, w * f)), "2a2620", 0.2, smooth=True)
+    g.part(box(w * 1.04, h * 0.2, d * 0.55, bev=0.018 * k, M=local(M, 0, h * 0.42, d * 0.5)), "4e4030", 0.08)      # lid
+    for f in (-0.28, 0.28):                                                   # compression straps with buckles
+        g.part(box(0.026 * k, h * 0.92, 0.004, M=local(M, w * f, -h * 0.02, d + 0.001)), "2e2820", 0.15)
+        g.part(box(0.034 * k, 0.03 * k, 0.006, bev=0.002, M=local(M, w * f, h * 0.18, d + 0.002)), GUN, 0.5)
     sc = rot(local(M, w * 0.5 + 0.03, -h * 0.1, d * 0.45), "X", -math.pi / 2)
-    g.part(cyl(0.03 * k, 0.2 * k, n=10, bev=0.006, M=local(sc, 0, 0, -0.1 * k)), STEEL, 0.5, smooth="auto")
+    g.part(cyl(0.03 * k, 0.2 * k, n=10, bev=0.006, M=local(sc, 0, 0, -0.1 * k)), "6a6e66", 0.35, smooth="auto")
+    g.part(cyl(0.031 * k, 0.012, n=10, bev=0.002, M=local(sc, 0, 0, 0.09 * k)), "3a3a32", 0.3, smooth="auto")
     pack_straps(g, M, w, h, "3a3226", width=0.04)
 
 
@@ -2040,7 +2155,8 @@ def g_beads(g):
     K, o = g.K, g.o
     k = K.k
     P, N = neck_loop(K, K.J["chest"].z + 0.075 * k, K.J["neck"].z + 0.01 * k, lift=0.006, n=24)
-    P2 = resample(P + [P[0]], 30 if K.lod else 22)[:-1]
+    P2 = resample(P + [P[0]], (26, 20, 16)[2 - K.lod])[:-1]
+    nb = (6, 5, 4)[2 - K.lod]
     cols = o.get("colors", [CLAY, "6a3a2a"])
     i0 = int(np.argmin([p.y for p in P2]))
     for i, p in enumerate(P2):
@@ -2048,7 +2164,7 @@ def g_beads(g):
         M = frame(p, d, UP)
         big = i == i0
         r = 0.0065 if big else 0.0048
-        g.part(lathe([(0.0, -r), (r * 0.8, -r * 0.6), (r, 0.0), (r * 0.8, r * 0.6), (0.0, r)], n=6, M=M), BRONZE if big else cols[i % len(cols)], 0.7 if big else 0.3, smooth=True)
+        g.part(lathe([(0.0, -r), (r * 0.9, -r * 0.45), (r * 0.9, r * 0.45), (0.0, r)], n=nb, M=M), BRONZE if big else cols[i % len(cols)], 0.7 if big else 0.3, smooth=True)
 
 
 @gadget("bronze_pin", "chest")
@@ -2071,7 +2187,7 @@ def g_tally(g):
     K, o = g.K, g.o
     k = K.k
     p_hi, p_lo = ensure_diag(K, opt_side(o, "L"))
-    P, N = torso_loop(K, p_hi, p_lo, lift=0.004)
+    P, N = torso_loop(K, p_hi, p_lo, n=28, lift=0.004)
     g.part(ribbon(P, N, 0.007 * k, 0.004, closed=True), o.get("color", "8a6a44"), 0.15, smooth=True, wt="soft")
     front = [(p, n) for p, n in zip(P, N) if p.y < K.J["chest"].y - 0.03 and K.J["spine"].z < p.z < K.J["chest"].z + 0.1 * k]
     front.sort(key=lambda t: -t[0].z)
@@ -2083,7 +2199,7 @@ def g_tally(g):
         g.part(tube(pts, 0.0018, n=4), cols[i % len(cols)], 0.1, smooth=True)
         for f in (0.4, 0.75):
             kp = p + n * (0.003 + 0.006 * f) + V((0, 0, -L * f))
-            g.part(lathe([(0.0, -0.004), (0.0035, -0.002), (0.0035, 0.002), (0.0, 0.004)], n=5, M=frame(kp, UP, V((0, -1, 0)))), cols[i % len(cols)], 0.1, smooth=True)
+            g.part(lathe([(0.0, -0.004), (0.0035, -0.002), (0.0035, 0.002), (0.0, 0.004)], n=4, M=frame(kp, UP, V((0, -1, 0)))), cols[i % len(cols)], 0.1, smooth=True)
 
 
 @gadget("shard_bandolier", "chest")
@@ -2098,13 +2214,17 @@ def g_shards(g):
     g.part(ribbon(P, N, 0.045 * k, 0.004, closed=True), o.get("color", "4a3a28"), 0.12, smooth=True, wt="soft")
     front = [(p, n, i) for i, (p, n) in enumerate(zip(P, N)) if p.y < K.J["chest"].y - 0.02 and K.J["spine"].z - 0.04 < p.z < K.J["shoulder_L"].z - 0.02]
     front.sort(key=lambda t: -t[0].z)
+    slots = 6 if K.lod else 4
+    if len(front) > slots:
+        front = [front[int(round(j * (len(front) - 1) / (slots - 1)))] for j in range(slots)]
     cnt = 0
     for j, (p, n, i) in enumerate(front):
         d = (P[(i + 1) % len(P)] - P[i - 1]).normalized()
         M = frame(p + n * 0.004, n, d)
+        g.part(box(0.034 * k, 0.012 * k, 0.003, M=local(M, 0, -0.012 * k, 0)), "2e2418", 0.2)          # the loop strap
         for dx in (-0.011, 0.011):
             sm = local(M, dx * k, 0, 0)
-            g.part(box(0.009 * k, 0.03 * k, 0.006, bev=0.0015, M=sm), "2a2c2e", 0.6)
+            g.part(box(0.009 * k, 0.034 * k, 0.006, taper=0.25, M=sm), "2a2c2e", 0.6)
             g.light(box(0.004 * k, 0.004 * k, 0.0008, M=local(sm, 0, 0.009 * k, 0.006)), seg=float(cnt))
             cnt += 1
     g.segs = cnt
@@ -2420,8 +2540,8 @@ def g_umbrella(g):
     ax = h["axis"]
     up_dir = -ax
     kid = K.B.H < 1.45
-    L = (0.85 if not kid else 0.62) * k
-    R = (0.5 if not kid else 0.36) * k
+    L = 0.85 * k if not kid else 0.72         # a child's umbrella is small, but its shaft still clears her head
+    R = 0.5 * k if not kid else 0.36
     c = h["grip"]
     top = c + up_dir * L
     g.part(tube([c + ax * 0.06 * k, top + up_dir * 0.03], 0.0065 * k, n=6), GRAPH, 0.6, smooth=True)
@@ -2557,7 +2677,8 @@ def finish(K):
         out["meta"].append(dict(type=g.typ, bone=g.bone, glow=bool(node) or (K.bake and any(isinstance(cc, tuple) for cc in body.col)),
                                 idle=float(g.idle), segs=int(g.segs), seg_mode=g.seg_mode, prop=g.prop or "", node=node or "",
                                 color=g.glow_hex, baked=bool(K.bake)))
-    print("  gadgets", len(K.gads), "->", out["tris"], "tris", "(baked glow)" if K.bake else "(%d glow meshes)" % len(out["glow"]), flush=True)
+    print("  gadgets", len(K.gads), "->", out["tris"], "tris", "(baked glow)" if K.bake else "(%d glow meshes)" % len(out["glow"]),
+          " ".join("%s=%d" % (g.typ, g.body.tris() + g.glow.tris()) for g in K.gads), flush=True)
     return out
 
 

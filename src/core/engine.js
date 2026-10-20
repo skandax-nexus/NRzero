@@ -212,15 +212,15 @@ const CinemaShader = {
 // lift / gamma / gain per channel; saturation; contrast (slope of the S-curve at the pivot); shoulder 0..1 (soft roll
 // off of saturated highlights); shadows / highlights = colour balance multipliers (normalised to unit luminance).
 export const GRADES = {
-  neutral: { lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], saturation: 1.04, contrast: 1.05, pivot: 0.4, shoulder: 0.35, shadows: [1, 1, 1], highlights: [1, 1, 1] },
-  // 2049 Rain City / present day: deeper blacks under the fog, cool teal shadows, warm skin and neon highlights
-  rain2049: { lift: [-0.006, -0.004, 0], gamma: [1, 1, 1], gain: [1.03, 1.03, 1.05], saturation: 1.1, contrast: 1.1, pivot: 0.2, shoulder: 0.5, shadows: [0.9, 1.0, 1.14], highlights: [1.05, 1.0, 0.95] },
+  neutral: { lift: [-0.004, -0.004, -0.004], gamma: [1, 1, 1], gain: [1, 1, 1], saturation: 1.06, contrast: 1.08, pivot: 0.4, shoulder: 0.35, shadows: [1, 1, 1], highlights: [1, 1, 1] },
+  // 2049 Rain City / present day: deeper blacks under the fog, punchier neon, cool teal shadows, warm skin and lamp highlights
+  rain2049: { lift: [-0.011, -0.009, -0.002], gamma: [1, 1, 1], gain: [1.05, 1.04, 1.05], saturation: 1.22, contrast: 1.15, pivot: 0.31, shoulder: 0.5, shadows: [0.95, 1.0, 1.07], highlights: [1.045, 1.0, 0.955] },
   // 2026 Helix / the past: warm amber, tungsten highlights, soft brown shadows
-  helix2026: { lift: [0.006, 0.002, -0.006], gamma: [1, 1, 1], gain: [1.04, 1.0, 0.93], saturation: 0.96, contrast: 1.08, pivot: 0.36, shoulder: 0.6, shadows: [1.06, 1.0, 0.9], highlights: [1.06, 1.0, 0.88] },
-  // 2196 devastated future: bleached, green-grey shadows, dusty warm highlights
-  ruin2196: { lift: [-0.002, 0.004, 0.002], gamma: [1, 1, 1], gain: [0.99, 1.02, 0.98], saturation: 0.86, contrast: 1.1, pivot: 0.36, shoulder: 0.5, shadows: [0.94, 1.05, 1.02], highlights: [1.04, 1.01, 0.92] },
-  // ancient valley at sunset: golden highlights, cooler blue shadows for depth
-  ancient: { lift: [-0.02, -0.018, -0.01], gamma: [1, 1, 1], gain: [1.0, 1.01, 1.03], saturation: 1.0, contrast: 1.12, pivot: 0.45, shoulder: 0.5, shadows: [0.88, 0.98, 1.2], highlights: [1.02, 1.0, 0.97] },
+  helix2026: { lift: [-0.004, -0.006, -0.012], gamma: [1, 1, 1], gain: [1.05, 1.01, 0.94], saturation: 1.05, contrast: 1.12, pivot: 0.36, shoulder: 0.6, shadows: [1.05, 1.0, 0.92], highlights: [1.05, 1.0, 0.91] },
+  // 2196 devastated future: slightly bleached, green-grey shadows, dusty warm highlights, harder contrast
+  ruin2196: { lift: [-0.012, -0.006, -0.008], gamma: [1, 1, 1], gain: [1.02, 1.04, 1.0], saturation: 0.98, contrast: 1.18, pivot: 0.3, shoulder: 0.5, shadows: [0.94, 1.05, 1.02], highlights: [1.05, 1.01, 0.92] },
+  // ancient valley at sunset: golden highlights, cooler blue shadows for depth, richer foliage
+  ancient: { lift: [-0.012, -0.012, -0.006], gamma: [1, 1, 1], gain: [1.05, 1.02, 0.98], saturation: 1.15, contrast: 1.14, pivot: 0.42, shoulder: 0.5, shadows: [0.95, 1.0, 1.08], highlights: [1.04, 1.0, 0.94] },
 };
 const GRADE_KEYS = ['lift', 'gamma', 'gain', 'shadows', 'highlights'];
 
@@ -302,9 +302,9 @@ const AOCompositeShader = {
       }
       float ao = sum / ws;
       float k = uIntensity * (1.0 - smoothstep(uFade.x, uFade.y, z)) * exp(-(uFog * z) * (uFog * z));
-      k *= 1.0 - smoothstep(0.9, 2.6, dot(col.rgb, LUMA));
+      k *= 1.0 - smoothstep(1.2, 3.5, dot(col.rgb, LUMA));
       col.rgb *= mix(1.0, ao, k);
-      if (uDebug > 0.5) col.rgb = vec3(mix(1.0, ao, k));
+      if (uDebug > 0.5) col.rgb = vec3(uDebug > 1.5 ? ao : mix(1.0, ao, k));
       gl_FragColor = col;
     }`,
 };
@@ -338,13 +338,13 @@ class AOPass extends Pass {
     this.gtao = quadMat(GTAOShader, { NORMAL_VECTOR_TYPE: 0, SAMPLES: 12, FRAGMENT_OUTPUT: 'vec4(ao, -viewPos.z, 0., 1.)' });
     const u = this.gtao.uniforms;
     u.tNoise.value = bayerNoise(); u.tDepth.value = this.sceneRT.depthTexture;
-    u.radius.value = 0.55; u.thickness.value = 0.9; u.distanceExponent.value = 1.6; u.distanceFallOff.value = 1; u.scale.value = 1.15;
+    u.radius.value = 0.8; u.thickness.value = 0.8; u.distanceExponent.value = 2; u.distanceFallOff.value = 1; u.scale.value = 1.6;
     this.blur = quadMat(AOBlurShader); this.blur.uniforms.tAO.value = this.aoRT.texture;
     this.comp = quadMat(AOCompositeShader);
     this.comp.uniforms.tAO.value = this.blurRT.texture; this.comp.uniforms.tDepth.value = this.sceneRT.depthTexture; this.comp.uniforms.tDiffuse.value = this.sceneRT.texture;
     this.quad = new FullScreenQuad(null);
     this._cc = new THREE.Color(); this._clearAO = new THREE.Color(1, 1000, 0);
-    this.intensity = 0.8; this.fog = 0;
+    this.intensity = 0.9; this.fog = 0;
   }
   setSize(w, h) {
     this.sceneRT.setSize(w, h);
@@ -627,7 +627,7 @@ export class Engine {
     this.fx.tBloom.value = this.bloom.texture;
     // RenderPass draws into the AO pass's depth-textured target when AO is on (the AO composite writes the result to
     // the composer's buffer), so AO and depth of field read the scene depth without drawing the scene twice.
-    this._toneKey = '';
+    this._toneKey = -1; this._toneSpace = '';
 
     // Per-frame statistics: scene = shadow maps + main pass, total = including post-processing.
     this.stats = { sceneCalls: 0, sceneTriangles: 0, calls: 0, triangles: 0, fps: 0, frameMs: 0, pixelRatio: 1, scale: 1, post: '' };
@@ -704,7 +704,7 @@ export class Engine {
     const set = (k, on) => { if (on) defs[k] = ''; else delete defs[k]; };
     set('CHEAP', s.cheapPost); set('FXAA', fxaa); set('AUTO_EXPOSURE', ae); set('NO_GRADE', off.has('nograde')); set('BLOOM', s.bloom);
     delete defs.FUSED_OUTPUT;
-    this._toneKey = '';   // tone-mapping defines are rebuilt on the next frame
+    this._toneKey = -1;   // tone-mapping defines are rebuilt on the next frame
     this.cinema.material.needsUpdate = true;
     this._ae.snap = 0.5; this._ae.ref = 0.6;
     this.stats.post = [ao && 'gtao', ae && 'eye', this.dofAllowed && 'dof', s.bloom && 'bloom', fxaa && 'fxaa', smaa && 'smaa', !off.has('nograde') && 'grade'].filter(Boolean).join('+');
@@ -827,9 +827,8 @@ export class Engine {
   _updatePost(dt) {
     const r = this.renderer, fx = this.fx;
     // tone mapping defines follow the renderer (missions set exposure; tone mapping itself rarely changes)
-    const key = r.toneMapping + '|' + r.outputColorSpace;
-    if (key !== this._toneKey) {
-      this._toneKey = key;
+    if (r.toneMapping !== this._toneKey || r.outputColorSpace !== this._toneSpace) {
+      this._toneKey = r.toneMapping; this._toneSpace = r.outputColorSpace;
       const defs = this.cinema.material.defines;
       for (const k in TONE_DEFINES) delete defs[TONE_DEFINES[k]];
       if (TONE_DEFINES[r.toneMapping]) defs[TONE_DEFINES[r.toneMapping]] = '';
@@ -842,7 +841,7 @@ export class Engine {
     if (this.aoPass.enabled) {
       const f = this.scene?.fog;
       this.aoPass.fog = f?.isFogExp2 ? f.density : f?.isFog ? 1.2 / Math.max(1, f.far) : 0;
-      this.aoPass.comp.uniforms.uDebug.value = this.postOff.has('aodebug') ? 1 : 0;
+      this.aoPass.comp.uniforms.uDebug.value = this.postOff.has('aodebug') ? 1 : this.postOff.has('aoraw') ? 2 : 0;
     }
     const E = this.exposurePass;
     if (E.enabled) {
