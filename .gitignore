@@ -8,4 +8,4 @@ __pycache__/
 # uncompressed character builds (the compressed staging cast is kept)
 assets/models/staging/raw/
 # interim staged cast builds (the reviewed cast is swapped into assets/models/cast.glb)
-assets/models/staging/*.glb
+assets/models/staging/**/*.glb
