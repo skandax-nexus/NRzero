@@ -876,7 +876,7 @@ def set_mask(o, m):
     a.data.foreach_set("vector", np.ascontiguousarray(m, dtype=np.float32).ravel())
 
 
-def layer_object(L):
+def layer_object(L, B=None):
     uvs = [uv for f in L.fuv for uv in f]
     o = mesh_from(L.name, to_bl_np(L.pos), L.faces, uvs)
     set_mask(o, L.mask)
@@ -884,6 +884,21 @@ def layer_object(L):
     if keep is not None:      # cloth tails keep their full density (decimation would cut chords into the legs under them)
         a = o.data.attributes.new("_keep", "FLOAT", "POINT")
         a.data.foreach_set("value", np.asarray(keep, dtype=np.float32))
+    rim = getattr(L, "_rim", None)
+    hem = np.zeros(len(L.pos), np.float32)
+    if rim:                   # visible hems: the rim strip and the garment's border loop keep their shape in decimation
+        hem[list(rim)] = 1.0
+        hem[list(L._rim_src.values())] = 1.0
+    if B is not None and L.name != "hair":
+        # the armpit / crotch bands of a garment: a collapse across them joins sleeve and side (or the two legs)
+        # into one long triangle, a web that hangs from the arm when it swings
+        aw = (B.aw["L"] + B.aw["R"])[L.base]
+        lw = B.legs[L.base]
+        band = ((aw > 0.12) & (aw < 0.88)) | ((lw > 0.12) & (lw < 0.88) & (np.abs(L.pos[:, 0]) < 0.06))
+        hem[band] = 1.0
+    if hem.any():
+        a = o.data.attributes.new("_hem", "FLOAT", "POINT")
+        a.data.foreach_set("value", hem)
     WSTORE[o.name] = L.W
     return o
 
@@ -2254,7 +2269,7 @@ def build(c, tex_dir):
                     costume.push_out(Lx, B, cov["_OFF"][Lx.base] + 0.004)
                     Lx.mask[:, 1] = 0.0
                 layers[key] = Lx
-    parts = [layer_object(Lr) for Lr in layers.values()]
+    parts = [layer_object(Lr, B) for Lr in layers.values()]
     parts += eye_objects(B, c)
     gk = None
     if costume_mode:
@@ -2319,13 +2334,10 @@ def select_class(mesh, cls, which):
     bm = bmesh.from_edit_mesh(mesh.data)
     keep = bm.verts.layers.float.get("_keep")
     # a garment border carries a rim strip (hem thickness): the visible edge is then one ring inside the open
-    # boundary, so the boundary vertices, their face ring and that ring's vertices all stay (no ragged hems)
-    ring = set()
-    for e in bm.edges:
-        if e.is_boundary:
-            for v in e.verts:
-                for f in v.link_faces:
-                    ring.update(f.verts)
+    # boundary, so the faces on the rim and on the hem loop (`_hem`, layer_object) stay (no ragged hems); hide cuts
+    # under an outer garment are invisible and only keep their boundary vertices
+    hem = bm.verts.layers.float.get("_hem")
+    ring = set(v for v in bm.verts if v[hem] > 0.5) if hem is not None else set()
     for f in bm.faces:
         f.select_set(cls(f.calc_center_median()) == which and not (keep is not None and any(v[keep] > 0.5 for v in f.verts))
                      and not any(v in ring for v in f.verts))
@@ -2452,13 +2464,14 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     target = max(target - kept, 2000)          # protected cloth tails are not decimated
     total = sum(n.values())
     if total > target:
+        face_min = 0.3 if face_keep < 1.0 else 0.4      # crowds / children are seen from further away
         head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
         for _ in range(24):      # the body (and its garments) must not drop below ~30 %: spikes and chords appear
             body_k = (target - n["face"] * face_keep - n["head"] * head_k) / max(n["body"], 1)
             if body_k >= 0.3:
                 break
             head_k = max(0.2, head_k * 0.88)
-            face_keep = max(0.4, face_keep * 0.94)
+            face_keep = max(face_min, face_keep * 0.94)
         body_k = max(body_k, 0.12)
         for which, ratio in (("body", body_k), ("head", head_k), ("face", face_keep)):
             if ratio >= 0.999:
@@ -2473,10 +2486,16 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
     nfix = fix_uv_stretch(mesh)
+    if mesh.data.uv_layers:     # a collapse can push a corner a hair outside the atlas: 0..1 keeps texcoords quantizable
+        uvd = mesh.data.uv_layers.active.data
+        uv = np.zeros(len(uvd) * 2)
+        uvd.foreach_get("uv", uv)
+        uvd.foreach_set("uv", np.clip(uv, 0.0, 1.0))
     if nfix:
         print("  uv seam faces repaired:", nfix, flush=True)
-    if mesh.data.attributes.get("_keep"):
-        mesh.data.attributes.remove(mesh.data.attributes["_keep"])
+    for an in ("_keep", "_hem"):
+        if mesh.data.attributes.get(an):
+            mesh.data.attributes.remove(mesh.data.attributes[an])
     if feat is not None:
         mesh.vertex_groups.remove(mesh.vertex_groups["feat"])
         print("  feature-protected vertices %.0f %%" % (feat * 100), flush=True)

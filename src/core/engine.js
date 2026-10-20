@@ -996,6 +996,8 @@ export class Engine {
         if (!L.sig || ((sig !== L.sig || moved) && t - L.lastCap > 2)) { L.sig = sig; this._startProbe(t); }
       }
     }
+    // probe brightened toward the studio level: diffuse keeps it, reflections at most 4x physical
+    RZ.setEnvSpecular(scene.environment === P.texture && L.captured ? Math.min(1, 4 / Math.max(1e-3, P.scale)) : 1);
     // wet weather (global shader state): eases over ~2 s
     const wt = this.lightOn('wet') ? L.wetTarget : 0;
     L.wet += (wt - L.wet) * (dt > 0 ? 1 - Math.exp(-dt / 0.7) : 1);
@@ -1022,7 +1024,10 @@ export class Engine {
     const L = this._light;
     L.probe.start(this.scene, this.camera.position, {
       hide: o => !!(o.userData.character || o.userData.rzRain || o.isPoints || o.isLineSegments || o.isSprite),
-      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: 0.2 },
+      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: 0.15 },
+      // emissive panels stay bright in reflections without blowing wet floors out; tinted eras keep their hue in the
+      // key / hemisphere lights and fog, so the probe adds less of it (an orange sunset would turn green grass brown)
+      clamp: this.scene.userData.envClamp ?? 8, saturation: this.scene.userData.envSaturation ?? ({ ancient: 0.45, ruin2196: 0.55, helix2026: 0.8 }[gradeForScene(this.scene)] ?? 1),
     });
     L.lastCap = t;
   }

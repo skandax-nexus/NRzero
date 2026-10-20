@@ -179,7 +179,7 @@ GARMENTS = {
     "leather_hipwrap": dict(cat="skirt", shape="hipwrap", fab="leather", gloss=0.25, length=0.17, det=["stitch_edges", "clay"], z=72),
     "gorget": O(shape="gorget", thick=0.009, fab="metal", gloss=0.6, rim=0.006, det=["gorget_lines"], z=72),
     "half_cape": O(shape="half_cape", side="L", thick=0.014, loose=10, fab="satin", gloss=0.3, rim=0.003, det=["cape_trim"], z=75),
-    "mantle_wrap": O(shape="mantle", side="L", thick=0.009, loose=10, fab="linen", gloss=0.0, rim=0.0, det=["dye", "border", "fold_lines"], z=70, roll=True),
+    "mantle_wrap": O(shape="mantle", side="L", thick=0.009, loose=10, fab="linen", gloss=0.0, rim=0.0, det=["dye", "fold_lines", "stitch_edges"], z=70, roll=True),
     "sash": O(shape="sash", thick=0.007, loose=4, fab="linen", gloss=0.0, rim=0.0, det=["dye", "fold_lines"], z=74, knot="L", width=0.085),
     "cord_belt": O(shape="belt", thick=0.004, fab="cord", gloss=0.0, rim=0.0, z=75, width=0.012, roll=True),
     "leather_belt": O(shape="belt", thick=0.0045, fab="leather", gloss=0.35, rim=0.004, z=75, width=0.032, buckle=True),
@@ -613,6 +613,11 @@ def paint(g, X, seed):
             m = ss(sh - 0.15, sh - 0.13, y) * tor + ss(0.26, 0.24, X.sa) * arm
             mix(np.clip(1 - m, 0, 1), hexc(g["c2"]))
             seam(line(y - sh + 0.14, 0.0016) * tor + line(X.sa - 0.25, 0.0016) * arm)
+        elif name == "armband":     # a cloth band round the left upper arm (the medic's red armband): arg = colour
+            m = line(X.sa - 0.13, 0.05, 0.001) * arm * (X.side > 0)
+            mix(m, hexc(arg or "a8262e") * (0.92 + 0.08 * vnoise(X.q, 300, seed + 7)[:, None]))
+            h = h + 0.0012 * m
+            seam(line(np.abs(X.sa - 0.13) - 0.025, 0.0015) * arm * (X.side > 0), 0.0004, 0.75)
         elif name == "sleeve_stripe":
             m = line(np.radians(X.aa - 80) * X.ra, 0.012, 0.001) * arm
             mix(m, c3)

@@ -1532,16 +1532,16 @@ export function captureEnvironment(renderer, scene, position, opts = {}) {
 
 // Copy a captured cube into a fresh cube target with NaN / inf / negative texels removed, radiance clamped and scaled.
 let sanitizeState = null;
-function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0) {
+function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0, sat = 1) {
   if (!sanitizeState) {
     const mat = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 }, uAdd: { value: 0 } },
+      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 }, uAdd: { value: 0 }, uSat: { value: 1 } },
       vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform samplerCube tSrc; uniform float uMax, uScale, uAdd; varying vec3 vDir;
+      fragmentShader: `uniform samplerCube tSrc; uniform float uMax, uScale, uAdd, uSat; varying vec3 vDir;
         void main(){ vec3 c = textureCube(tSrc, normalize(vDir)).rgb;
           bvec3 bad = bvec3(isnan(c.r) || isinf(c.r), isnan(c.g) || isinf(c.g), isnan(c.b) || isinf(c.b));
           c = mix(c, vec3(0.0), bad);
-          c = clamp(c, 0.0, uMax) * uScale + uAdd; gl_FragColor = vec4(c, 1.0); }`,
+          c = clamp(c, 0.0, uMax); c = max(mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, uSat), 0.0) * uScale + uAdd; gl_FragColor = vec4(c, 1.0); }`,
       side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false,
     });
     const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat); box.frustumCulled = false;
@@ -1550,7 +1550,7 @@ function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0) {
   }
   const size = srcRT.width;
   if (!out) out = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false });
-  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale; sanitizeState.mat.uniforms.uAdd.value = add;
+  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale; sanitizeState.mat.uniforms.uAdd.value = add; sanitizeState.mat.uniforms.uSat.value = sat;
   new THREE.CubeCamera(0.1, 10, out).update(r, sanitizeState.sc);
   sanitizeState.mat.uniforms.tSrc.value = null;
   return out;
@@ -1725,7 +1725,7 @@ export function installLightingChunks() {
   C.lights_fragment_maps = C.lights_fragment_maps.replace(find, `{
 			vec3 rzRv = reflect( - geometryViewDir, geometryNormal );
 			float rzHz = clamp( 1.0 + 1.2 * dot( rzRv, nonPerturbedNormal ), 0.0, 1.0 );
-			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz );
+			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz * rzEnvS.x );
 		}`);
   installWetChunks();
 }
@@ -3552,6 +3552,13 @@ export function roadPaint(o = {}) {
 // types), so setWetness() is a global switch with no recompiles. Dry (amount 0) costs one uniform branch.
 const WET_A = { x: 0, y: 0, z: 0, w: 0 };          // amount, time (s), puddles, detail (ripples + streaks)
 const WET_B = { x: 0, y: 0.4, z: 0.22, w: 0.56 };  // ground y, puddle max height above ground, puddle scale (1/m), coverage threshold
+const ENV_S = { x: 1, y: 0, z: 0, w: 0 };           // x: image-based specular multiplier (see setEnvSpecular)
+/**
+ * Global multiplier on the image-based specular of every MeshStandard / MeshPhysical material (default 1). The engine
+ * lowers it when a dark place's probe was brightened to the studio level the scene was authored for: diffuse ambient
+ * keeps the authored brightness, reflections stay close to physical (no milky mirror floors at night).
+ */
+export function setEnvSpecular(k = 1) { ENV_S.x = Math.max(0, k); return ENV_S.x; }
 /**
  * Global wet-weather state: setWetness({ amount: 0..1, puddles: 0..1, detail: 0..1, ground: y, height: m, scale: 1/m,
  * coverage: 0..1 (fraction of flat ground under water, default ~0.3), time: s }). Missing fields keep their value.
@@ -3574,8 +3581,8 @@ let wetInstalled = false;
 function installWetChunks() {
   if (wetInstalled) return; wetInstalled = true;
   const C = THREE.ShaderChunk, L = THREE.ShaderLib;
-  for (const id of ['standard', 'physical']) if (L[id] && !L[id].uniforms.rzWetA) Object.assign(L[id].uniforms, { rzWetA: { value: WET_A }, rzWetB: { value: WET_B } });
-  C.lights_physical_pars_fragment = `uniform vec4 rzWetA; uniform vec4 rzWetB;
+  for (const id of ['standard', 'physical']) if (L[id] && !L[id].uniforms.rzWetA) Object.assign(L[id].uniforms, { rzWetA: { value: WET_A }, rzWetB: { value: WET_B }, rzEnvS: { value: ENV_S } });
+  C.lights_physical_pars_fragment = `uniform vec4 rzWetA; uniform vec4 rzWetB; uniform vec4 rzEnvS;
 float rzwHash( vec2 p ) { p = fract( p * vec2( 123.34, 456.21 ) ); p += dot( p, p + 45.32 ); return fract( p.x * p.y ); }
 float rzwNoise( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
 	return mix( mix( rzwHash( i ), rzwHash( i + vec2( 1.0, 0.0 ) ), f.x ), mix( rzwHash( i + vec2( 0.0, 1.0 ) ), rzwHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); }
@@ -3635,7 +3642,8 @@ if ( rzWetA.x > 0.001 ) {
  *   probe.start(scene, camera.position, { hide: o => !!o.userData.character, normalize: { luminance: 0.6, strength: 0.5 } });
  *   each frame: probe.step(1)  (true when done), or probe.finish() to complete at once
  * start() options: hide(o) -> bool, normalize (see captureEnvironment, plus fill: 0..0.9 = share of the mean radiance
- * spread evenly as bounce light), measure, scale, clamp (max radiance, 32),
+ * spread evenly as bounce light), measure, scale, clamp (max radiance, 32), saturation (1 = as captured; < 1 keeps a
+ * strongly tinted place, e.g. an orange sunset sky, from tinting every surface twice over),
  * shadows: true re-renders shadow maps per face (default false: the current maps are reused, the probe sees the
  * frame's shadows). Objects with userData.noCapture are always hidden. probe.ms = cost of the last capture.
  */
@@ -3693,7 +3701,7 @@ export class EnvProbe {
           if (fill > 0) { add = lum * scale * fill; scale *= 1 - fill; }
         }
       }
-      sanitizeCube(r, this.rt, clamp, scale, this.clean, add);
+      sanitizeCube(r, this.rt, clamp, scale, this.clean, add, J.opts.saturation ?? 1);
       this.target = this.pm.fromCubemap(this.clean.texture, this.target);
       r.setRenderTarget(prevRT, prevFace, prevMip);
       this.luminance = lum; this.scale = scale; this.position.copy(J.pos); this.version++;
