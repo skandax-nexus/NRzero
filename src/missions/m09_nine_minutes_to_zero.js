@@ -80,7 +80,11 @@ export default {
       pts.forEach((l, i) => { const s = list[i]; if (!s || s.dd > 900) { l.intensity = 0; return; } l.position.set(...s.p); l.color.set(s.c); l.intensity = s.i; l.distance = s.d; });
     });
     const rain = new Rain(low ? 900 : 2200, 40); scene.add(rain.mesh);
-    game.onUpdate(dt => rain.update(dt, game.engine.camera));
+    game.onUpdate(dt => {
+      const c = game.engine.camera.position;   // no rain under the glass roof, in the café or under the viaduct-deck ring
+      const under = (c.x > -16 && c.x < 16 && c.z < -56.3 && c.z > -81.7 && c.y < 9) || (c.x > -18 && c.x < -10 && c.z > 31 && c.z < 46 && c.y < 4.2);
+      rain.mesh.visible = !under; if (!under) rain.update(dt, game.engine.camera);
+    });
     audio.rain(0.25); audio.wind(0.12); audio.crowd?.(0.05);
 
     T.configure([{ id: '2049', key: '1', name: 'MERIDIAN', year: 'SUN 19.10.2049 · THE NINE MINUTES', glyph: '◎', color: '#5fe6ff', theme: 'm9-loop', apply: () => {} }], '2049');
@@ -98,7 +102,7 @@ export default {
     const hint = (cond, secs, fn) => { let t = 0; return game.onUpdate(dt => { if (!game.control || ui.dlgActive) return; if (cond()) { t += dt; if (t > secs) { t = -secs; fn(); } } else t = 0; }); };
     const ev = (title, text, tag) => ui.addEvidence(title, text, tag);
     const choose = (id, text, opts) => { if (game.autoplay && game.autoQueue?.length) game.autoChoice = game.autoQueue.shift(); return game.choice(id, text, opts); };
-    const objective = (t) => { if (S.obj !== t) { S.obj = t; game.objective(t); } };
+    const objective = (t, quiet) => { if (S.obj === t) return; const key = t.replace(/\d\d:\d\d:\d\d|\d\d:\d\d/g, ''); S.obj = t; if (quiet || key === S.objKey) ui.objective(t); else game.objective(t); S.objKey = key; };
     const onRoof = () => pl.pos.y > 6.8 && pl.pos.x < -27.5 && pl.pos.x > -44 && pl.pos.z < -18 && pl.pos.z > -44;
     const inSafe = () => pl.pos.z > 28;
     const inHall = () => pl.pos.x > -16 && pl.pos.x < 16 && pl.pos.z < -56.3 && pl.pos.z > -81.7;
@@ -213,9 +217,9 @@ export default {
     const damageFor = (it) => { W.damage.forEach(d => { d.mesh.visible = it >= d.it; }); };
     const setShield = (on) => {
       S.lockLost = !on; W.shieldBox.enabled = on; W.shield.visible = on;
-      W.rings.forEach(r => { r.material.emissiveIntensity = on ? 2.4 : 0.25; });
+      W.rings.forEach(r => { r.material.emissiveIntensity = on ? 1.6 : 0.2; });
     };
-    const setCore = (c, pulled) => { c.pulled = pulled; c.core.position.y = pulled ? 0.5 : c.home; c.core.material.emissiveIntensity = pulled ? 0.15 : 2.4; };
+    const setCore = (c, pulled) => { c.pulled = pulled; c.core.position.y = pulled ? 0.5 : c.home; c.core.material.emissiveIntensity = pulled ? 0.1 : 1.1; };
     const restoreRepetition = () => {
       setShutter(0); setBackDoor(false); setAwning(false); setShield(true);
       W.cores.forEach(c => setCore(c, false));
@@ -225,6 +229,7 @@ export default {
       S.run = { A: false, B: false, C: false, cores: 0, sabotaged: false, freed: false, back: false };
       S.alarm = false; musicState.alarm = 0; patrols[3].enabled = false; patrols[4].enabled = false; trD.root.visible = false; trE.root.visible = false;
       ines.root.visible = false; S.inesWith = false; ines.root.position.set(51, 0, -80); ines.speed = 0;
+      if (!S.final) { S.top = false; S.lifting = false; W.liftCab.position.y = 0; W.liftPanel.material.emissive.set(0xff4d5e); }
       patrols.forEach(p => p.reset());
       damageFor(loop.iteration);
       if (W.tram) W.tram.position.x = -110;
@@ -260,7 +265,11 @@ export default {
     const freezeAll = (on) => { for (const c of [trA, trB, trC, trD, trE, ines, rhee, dev, vendor, mother, boy, ...civs]) c.frozen = on; };
     async function zeroReset() {
       if (zeroing || loop._resetting) return;
-      zeroing = true; loop.paused = true; game.control = false;
+      zeroing = true; loop.paused = true;
+      // a conversation or a staged shot finishes first (the district waits on the last second with you)
+      if (ui.dlgActive || S.scoping || game.cine) { for (const c of [trA, trB, trC, ines, rhee, vendor, mother, boy, ...civs]) c.speed = 0; await game.waitFor(() => !ui.dlgActive && !S.scoping && !game.cine); }
+      if (S.final) { zeroing = false; S.zeroNow = true; return; }   // the band went to the ring in the last second
+      game.control = false;
       audio.setTheme('m9-reset', 0.4); audio.silence(1.4); freezeAll(true);
       ui.toast('08:14:00', 1600); audio.sfxPlay('heartbeat');
       let k = 0; const off = game.onUpdate(dt => { k = Math.min(1, k + dt * 1.5); game.engine.fx.uFreeze.value = k * 0.8; });
@@ -315,7 +324,7 @@ export default {
       add(AWNING - 50, 'the mother on the avenue', 'family');
       if (!knows('pB1') && !knows('pB0')) add(B_WIN[parity()][0] - 10, 'see what Patrol B does next');
       if (!knows('pC')) add(C_AWAY[0] - 10, 'watch the substation gate');
-      L.sort((a, b) => a.t - b.t);
+      L.sort((a, b) => a.t - b.t); L.splice(5);
       L.push({ t: DUR - 6, label: '08:14:00 · let the loop run out' });
       return L;
     };
@@ -335,7 +344,7 @@ export default {
     // --- the scope on the station roof: observe the square and map patrols ---
     game.interact({ pos: [P.scope[0], 8.2, P.scope[2]], radius: 1.8, prompt: 'Watch the square through the scope', once: false, enabled: () => !S.scoping, onUse: async () => {
       S.scoping = true; S.scopeUsed = true; cine(true);
-      const look = async (ch, txt) => { const p = ch.root.position; await game.shot([P.scope[0] + 0.4, 8.7, P.scope[2]], [p.x, p.y + 1.2, p.z], 1.6, { fov: 22 }); if (txt) ui.subtitle('kai', txt, 2200); await game.wait(1.0); };
+      const look = async (ch, txt) => { const p = ch.root.position; await game.shot([P.scope[0] + 0.5, 9.5, P.scope[2]], [p.x, p.y + 1.2, p.z], 1.6, { fov: 22 }); if (txt) ui.subtitle('kai', txt, 2200); await game.wait(1.0); };
       await look(trA, 'Patrol A. Round the fountain, the same lap, every lap.'); learn('pA', { time: 0 });
       const bOn = loop.window(B_WIN[parity()][0], B_WIN[parity()][1]);
       await look(trB, bOn ? 'Patrol B, parked on the bank steps. Right in front of the clock.' : 'Patrol B, pacing the north side. He\'ll go back to the bank.');
@@ -343,7 +352,7 @@ export default {
       const cAway = loop.window(C_AWAY[0], C_AWAY[1]);
       await look(trC, cAway ? 'The substation gate. Nobody on it. He walked off.' : 'Patrol C. The substation gate. He doesn\'t move.');
       if (cAway) learn('pC');
-      await game.shot([P.scope[0] + 0.3, 8.6, P.scope[2] - 0.2], [-4, 4, -66], 1.4, { fov: 30 });
+      await game.shot([P.scope[0] + 0.4, 9.6, P.scope[2] - 0.2], [-4, 4, -66], 1.4, { fov: 30 });
       if (!S.seen.scopeHall) { S.seen.scopeHall = true; ui.subtitle('kai', 'And beyond: the Market Hall, the mast in the substation, the tower. All of it on the same nine minutes.', 3600); await game.wait(2.4); }
       cine(false); S.scoping = false;
     } });
@@ -422,11 +431,10 @@ export default {
     });
     // the transmitter's three cores
     W.cores.forEach((c, i) => {
-      game.interact({ pos: [c.x, 1.2, c.z], radius: 1.6, hold: 1.4, prompt: 'Pull the transmitter core (hold)', once: false, enabled: () => S.lockLost && !c.pulled, onUse: () => {
+      game.interact({ pos: [c.x, 1.2, c.z], radius: 1.6, hold: 1.4, prompt: `Pull the ${['west', 'east', 'south'][i]} transmitter core (hold)`, once: false, enabled: () => S.lockLost && !c.pulled, onUse: () => {
         setCore(c, true); S.run.cores = W.cores.filter(x => x.pulled).length; audio.sfxPlay('spark'); game.shake = 0.1; setTimeout(() => { game.shake = 0; }, 300);
         ui.toast(`CORE ${S.run.cores}/3`, 1400);
         if (S.run.cores === 3) sabotage();
-        void i;
       } });
     });
     game.interact({ pos: [W.shield.position.x - 4.8, 1.2, W.shield.position.z], radius: 2.2, prompt: 'Look at the transmitter', once: false, enabled: () => !S.lockLost && !S.seen.mastLook2, onUse: () => {
@@ -444,7 +452,7 @@ export default {
       S.talkingInes = true; audio.sfxPlay('blip');
       if (!S.inesMet) {
         cine(true);
-        await game.shot([P.intercom[0] - 2.2, 1.9, P.intercom[2] - 1.6], [51, 1.4, -83], 1.2, { fov: 40 });
+        await game.shot([P.intercom[0] + 2.6, 1.8, P.intercom[2] - 3.4], [P.intercom[0] - 0.2, 1.4, P.intercom[2] + 0.4], 1.2, { fov: 42 });
         const L = loop.iteration;
         await game.talk([
           ['ines', 'Somebody\'s there. Somebody\'s actually there. Say something.'],
@@ -527,7 +535,7 @@ export default {
       S.top = true; S.lifting = false; F.m9tower = true;
       cine(false);
     };
-    game.interact({ pos: [P.anchor[0], 49.2, P.anchor[2] + 0.4], radius: 1.8, prompt: 'Put your band to the ring', enabled: () => S.top && !S.final, onUse: () => { S.anchorUse = true; } });
+    game.interact({ pos: [P.anchor[0], 49.2, P.anchor[2] + 0.4], radius: 1.8, prompt: 'Put your band to the ring', enabled: () => S.top && !S.final && S.phase === 'run' && !zeroing, onUse: () => { S.anchorUse = true; } });
 
     // --- residue at the tower door: the ninth minute of the first loop (Residue Vision) ---
     W.ghost = (() => { try { const c = game.actor('m9echo', { ...CAST.witness.look, era: '2049' }, -35.6, Y0, -95.2, -Math.PI / 2); c.setGhost(0xff6a4a); c.pose = 'work'; game.residue(c.root); return c; } catch (err) { console.warn('m9 echo', err); return null; } })();
@@ -692,18 +700,18 @@ export default {
     await game.waitFor(() => S.firstReset && game.control);
     learn('reset');
     // the voice from the speakers
-    cine(true); lockMusic('m9-reset');
+    cine(true); lockMusic('m9-reset'); S.obj = ''; ui.objective('');
     S.phase = 'map';
     await game.shot([4.0, 1.7, 46.6], [-6.6, 4.4, 26], 1.6, { fov: 40 });
     audio.sfxPlay('spark');
     await game.talk([['kai', 'I was on the roof. Now I\'m back at the boundary, and it\'s five past eight again.']]);
-    await game.shot([-4.4, 2.4, 30.0], [-6.6, 4.6, 26], 1.6, { fov: 30 });
+    await game.shot([-4.6, 3.0, 29.4], [-6.6, 4.6, 26], 1.6, { fov: 24 }); W.speakerPulse = 1;
     audio.sfxPlay('motif');
     await game.talk([['m9voice', 'You have nine minutes.']]);
     await game.shot([-3.4, 1.7, 33.2], [pl.pos.x, 1.6, pl.pos.z], 1.0, { fov: 36 });
     await game.talk([['kai', 'To do what?']]);
     await game.shot([-6.0, 3.8, 28.4], [-6.6, 4.6, 26], 1.4, { fov: 26 });
-    await game.talk([['m9voice', 'To become me.']]);
+    await game.talk([['m9voice', 'To become me.']]); W.speakerPulse = 0;
     audio.silence(1.2); await game.wait(1.0);
     F.m9voice = true;
     await game.shot([5.0, 1.8, 44.5], [1.5, 1.5, 48.8], 1.4, { fov: 40 });
@@ -722,10 +730,10 @@ export default {
     hint(() => mapped() < 4 && !onRoof(), 120, () => ui.subtitle('kai', mapped() < 1 ? 'The roof scope. From up there I can see all three of them.' : !knows('pC') ? 'The substation guard. He\'ll have to move sometime. The roof or the gate, at eleven past.' : 'Patrol B changes from loop to loop. I need to see him on the bank steps in an odd loop and an even one.', 3600));
     hint(() => found() < 3 && mapped() >= 2, 150, () => ui.subtitle('kai', !knows('clockA') ? 'The station clock. There was a cabinet under it.' : !knows('clockB') ? 'The bank clock. The cabinet\'s on the portico — when B isn\'t standing on it.' : 'Clock C is inside the Market Hall. The shutter opens at ten past.', 3400));
     hint(() => !S.inesMet && knows('clockA'), 160, () => ui.subtitle('kai', 'Someone keeps knocking in the substation. The lane behind the yard runs right past the cabin.', 3400));
-    while (!(mapped() === 4 && found() === 3 && S.inesMet)) {
+    while (!(mapped() === 4 && found() === 3 && S.inesMet) && !S.run.freed) {
       objective(prepObj());
       const sig = mapped() + found() * 10 + (S.inesMet ? 100 : 0);
-      await game.waitFor(() => mapped() + found() * 10 + (S.inesMet ? 100 : 0) !== sig);
+      await game.waitFor(() => mapped() + found() * 10 + (S.inesMet ? 100 : 0) !== sig || S.run.freed);
       if (mapped() === 4 && once('mapDone')) {
         F.m9patrolsMapped = true;
         ev('The patrol map', 'Two loops of watching: Patrol A laps the fountain every 1:25. Patrol B guards the bank clock 08:06:30-08:09 on odd loops and 08:09-08:12 on even loops. Patrol C holds the substation gate except 08:11:00-08:12:10.', 'MERIDIAN · KNOWLEDGE');
@@ -736,18 +744,21 @@ export default {
 
     // ---------- the plan ----------
     await game.waitFor(() => game.control && !ui.dlgActive);
+    const improvised = S.run.freed;   // the player pulled the whole run off before putting the plan into words
     S.phase = 'plan';
-    cine(true);
-    await game.shot([pl.pos.x + 2.4, pl.pos.y + 1.9, pl.pos.z + 2.4], [pl.pos.x, pl.pos.y + 1.5, pl.pos.z], 1.2, { fov: 40 });
-    await game.talk([
-      ['kai', 'All right. One loop. Everything in order.'],
-      ['kai', 'Clock A on the station roof — any time. Clock B when Patrol B isn\'t on the steps. Clock C once the hall opens at ten past.'],
-      ['kai', 'Then the cores while the gate is empty, eleven past to twelve-ten. Ines. The tower. Before 08:14.'],
-      ['kai', 'Miss one step and I start again at 08:05. Knowing a little more.'],
-    ]);
-    learn('plan');
+    if (!improvised) {
+      cine(true);
+      await game.shot([pl.pos.x + 2.4, pl.pos.y + 1.9, pl.pos.z + 2.4], [pl.pos.x, pl.pos.y + 1.5, pl.pos.z], 1.2, { fov: 40 });
+      await game.talk([
+        ['kai', 'All right. One loop. Everything in order.'],
+        ['kai', 'Clock A on the station roof — any time. Clock B when Patrol B isn\'t on the steps. Clock C once the hall opens at ten past.'],
+        ['kai', 'Then the cores while the gate is empty, eleven past to twelve-ten. Ines. The tower. Before 08:14.'],
+        ['kai', 'Miss one step and I start again at 08:05. Knowing a little more.'],
+      ]);
+      cine(false);
+    }
+    learn('plan', { silent: improvised });
     ev('The plan', 'In one loop: knock clocks A (station roof, hold the relay), B (bank portico, pull the fuse, outside Patrol B\'s window) and C (Market Hall gallery, set the trigger to 08:05:00) out of step; pull the mast\'s three cores while Patrol C is away (08:11:00-08:12:10); free Ines; take the lift to the ring on Meridian Tower before 08:14:00.', 'MERIDIAN · THE PLAN');
-    cine(false);
     S.phase = 'run';
     const runObj = () => {
       const r = S.run;
@@ -796,11 +807,13 @@ export default {
     offF(); game.engine.fx.uFreeze.value = 0;
     audio.sfxPlay('rewind'); shiftPulse = 1.0;
     // the reset wave washes the district back to 08:05 below the ring
-    const wave = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
-    wave.position.set(0, 0, -68); scene.add(wave);
-    await game.shot([-40, 55, -80], [0, 4, -45], 0.01, { fov: 56 });
-    await tween(3.2, u => { wave.scale.setScalar(1 + u * 120); wave.material.opacity = 0.24 * (1 - u * 0.9); });
-    wave.parent?.remove(wave);
+    const waveMat = new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+    const wave = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2), waveMat);
+    const ringW = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 96), new THREE.MeshBasicMaterial({ color: 0xdff8ff, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    ringW.rotation.x = Math.PI / 2; wave.position.set(0, 0, -68); ringW.position.set(0, 0.4, -68); scene.add(wave, ringW);
+    await game.shot([-44, 58, -78], [0, 2, -40], 0.01, { fov: 58 });
+    await tween(3.6, u => { const r = 2 + u * 115; wave.scale.set(r, r * 0.42, r); ringW.scale.setScalar(r); waveMat.opacity = 0.42 * (1 - u * 0.85); ringW.material.opacity = 0.9 * (1 - u * 0.7); });
+    wave.parent?.remove(wave); ringW.parent?.remove(ringW);
     freezeAll(false);
     // the city below goes back; Kai and Ines do not
     loop.paused = false; S.outside = true;
@@ -818,7 +831,7 @@ export default {
     ]);
     // the long coat on the station tower: he didn't reset either
     figure.root.visible = true; figure.lookTarget = null;
-    await game.shot([P.anchor[0] - 0.6, 49.9, P.anchor[2] + 1.4], [-35, 22.2, -30], 2.4, { fov: 18 });
+    await game.shot([-36.0, 51.0, -88.2], [-35, 21.9, -30], 2.4, { fov: 10 });
     audio.sfxPlay('motif');
     await game.talk([['kai', 'On the station clock. A long coat. He\'s not moving back with the rest of them, either.']]);
     await tween(1.6, u => { figure.root.position.y = 20.9 - u * 0.02; }); figure.root.visible = false;

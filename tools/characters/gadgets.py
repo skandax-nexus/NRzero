@@ -1885,8 +1885,15 @@ def g_cont_chest(g):
     K, o = g.K, g.o
     k = K.k
     p, n = K.front(0.0, K.J["chest"].z + 0.05 * k, r=0.03)
-    M = rot(frame(p, n, UP), "Z", math.pi / 6)
     top = PLATE_LIFT + PLATE_THICK                 # the chest plate's top surface over the suit
+    cp = getattr(K, "chest_plate", None)
+    if cp:     # sit on the chest plate's own top (it bridges the sternum, so it stands higher than the suit there)
+        P_, N_ = cp
+        col_ = len(P_[0]) // 2
+        r_ = min(range(len(P_)), key=lambda r: abs(P_[r][col_].z - p.z))
+        p, n = P_[r_][col_] - N_[r_][col_] * PLATE_LIFT, N_[r_][col_].normalized()
+        top = PLATE_LIFT + PLATE_THICK + 0.0012     # a hair proud of the plate: the bezel reads flush, nothing z-fights
+    M = rot(frame(p, n, UP), "Z", math.pi / 6)
     g.part(cyl(0.031 * k, top + 0.0004, n=6, bev=0.0012, M=local(M, 0, 0, -0.001)), "2a2d32", 0.7, smooth=False)        # hex well rim
     g.part(cyl(0.024 * k, 0.001, n=6, M=local(M, 0, 0, top - 0.0016)), "121418", 0.85, smooth=False)                  # recessed floor
     g.part(cyl(0.012 * k, 0.0012, n=6, M=local(M, 0, 0, top - 0.0012)), GLASS, 0.95, smooth=False)                    # core
@@ -2038,7 +2045,7 @@ def g_cont_armor(g):
     k = K.k
     J = K.J
     ch, sp, sh = J["chest"].z, J["spine"].z, J["shoulder_L"].z
-    _torso_plate(g, lambda z: (0.118 - 0.03 * max(0.0, (ch + 0.02 * k - z) / (0.1 * k))) * k, ch - 0.055 * k, sh - 0.045 * k, bone="chest", rows=8, cols=9)
+    K.chest_plate = _torso_plate(g, lambda z: (0.118 - 0.03 * max(0.0, (ch + 0.02 * k - z) / (0.1 * k))) * k, ch - 0.055 * k, sh - 0.045 * k, bone="chest", rows=8, cols=9)
     for i, (z0, z1) in enumerate(((sp + 0.035 * k, ch - 0.068 * k), (sp - 0.03 * k, sp + 0.027 * k))):
         _torso_plate(g, (0.082 - 0.008 * i) * k, z0, z1, bone="spine" if i == 0 else "hips", rows=4, cols=7, e=6.0, lift=0.0055, thick=0.005)
     for s in (1, -1):        # the back plate is split down the spine (the stabilizer mount sits in the gap)
@@ -2497,7 +2504,7 @@ def g_shards(g):
     sd = opt_side(o, "R")
     p_hi, p_lo = ensure_diag(K, sd)
     P, N = torso_loop(K, p_hi, p_lo, n=40, lift=0.004)
-    g.part(ribbon(P, N, 0.046 * k, 0.0035, closed=True), o.get("color", "3c3a30"), 0.12, smooth=True, wt="soft")
+    g.part(ribbon(P, N, 0.046 * k, 0.0035, closed=True), o.get("color", "3c3a30"), 0.12, smooth=False, wt="soft")   # flat webbing
     idx = [i for i, p in enumerate(P) if p.y < K.J["chest"].y - 0.02 and K.J["spine"].z - 0.06 < p.z < K.J["shoulder_L"].z - 0.01]
     if len(idx) < 3:
         return
@@ -2522,12 +2529,12 @@ def g_shards(g):
         p = F[m - 1].lerp(F[m], f)
         n = FN[m - 1].lerp(FN[m], f).normalized()
         d = (F[m] - F[m - 1]).normalized()
-        M = frame(p + n * 0.0035, n, d)            # local y along the strap, x across it
-        g.part(box(0.026 * k, 0.012 * k, 0.0034, bev=0.0008, M=local(M, 0, 0, 0.0)), "2a2822", 0.15)        # elastic loop
+        M = frame(p + n * 0.0075, n, d)            # local y along the strap, x across it (clear of the strap's top)
+        g.part(box(0.03 * k, 0.013 * k, 0.0036, bev=0.0008, M=local(M, 0, 0, -0.004)), "2a2822", 0.15, wt="soft")       # elastic loop
         sm = local(M, 0, 0, 0.0012)
-        g.part(box(0.038 * k, 0.0085 * k, 0.0042, bev=0.001, taper=0.15, M=sm), "2c3034" if j % 3 else "3a3530", 0.65)   # the shard
-        g.part(box(0.006 * k, 0.0088 * k, 0.0046, bev=0.0008, M=local(sm, 0.018 * k, 0, 0)), "6a6e74", 0.6)    # its contact cap
-        g.light(box(0.0036 * k, 0.0036 * k, 0.0006, M=local(sm, 0.0115 * k, 0, 0.0043)), seg=float(j))
+        g.part(box(0.038 * k, 0.0085 * k, 0.0042, bev=0.001, taper=0.15, M=sm), "2c3034" if j % 3 else "3a3530", 0.65, wt="soft")   # the shard
+        g.part(box(0.006 * k, 0.0088 * k, 0.0046, bev=0.0008, M=local(sm, 0.018 * k, 0, 0)), "6a6e74", 0.6, wt="soft")    # its contact cap
+        g.light(box(0.0036 * k, 0.0036 * k, 0.0006, M=local(sm, 0.0115 * k, 0, 0.0043)), seg=float(j), wt="soft")
     g.segs = slots
     g.glow_hex = (o.get("glow") or "b6ff8a").lstrip("#")
     g.idle = float(o.get("idle", 0.3))
@@ -2854,9 +2861,12 @@ def _hand_slate(g, sd, size, col, bumper=None, screen=True, palm=False):
     h = hand_prop(g, sd)
     k = g.K.k
     w, l, t = size
-    if palm:      # a phone lies in the palm, inside the hand's length, its lit screen facing out of the palm
-        c = h["wrist"] + h["axis"] * (0.52 * h["len"]) + h["palm"] * (0.25 * h["th"])
-        M = mat_axes(h["across"], h["axis"], h["palm"], c)
+    if palm:      # a phone held in the fist along the fingers, inside the hand's length: its lit screen faces forward
+        # (the thumb side of a hanging hand), so it reads as a phone, not as a blade below the fist
+        fwd = h["across"] if h["across"].y < 0 else -h["across"]
+        side = h["axis"].cross(fwd).normalized()
+        c = h["grip"] + h["axis"] * (0.1 * h["len"]) - fwd * (t * 0.5)
+        M = mat_axes(side, h["axis"], fwd, c)
     else:
         M = mat_axes(h["across"], h["axis"], h["palm"], h["grip"] + h["palm"] * 0.004 + h["axis"] * (l * 0.15))
     if bumper:

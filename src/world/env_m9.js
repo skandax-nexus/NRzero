@@ -60,7 +60,7 @@ export function registerM9Cast() {
   registerCast('m9trooper', { name: 'CONTINUUM TROOPER', role: 'Meridian array · patrol', look: { ...TROOPER }, vp: { sex: 'm', pitch: 0.8, rate: 0.98, langs: ['en-GB', 'en-US'] } });
   registerCast('rhee', {
     name: 'OFFICER RHEE', role: 'Continuum · Meridian array · starting to remember',
-    look: { era: '2196', costume: 'continuum_2', sex: 1, female: true, age: 33, height: 1.76, build: 1.0, skin: 0xe8c0a0, hair: 0x0e0a08, hairStyle: 'bun',
+    look: { era: '2196', costume: 'continuum_2', seed: 3, sex: 1, female: true, age: 33, height: 1.76, build: 1.0, skin: 0xe8c0a0, hair: 0x0e0a08, hairStyle: 'bun',
       face: { jaw: -0.05, cheek: 0.3, nose: -0.1, noseWidth: -0.1, lips: 0.05, brow: -0.1, eyeSize: 0.05, faceLength: 0.05, chin: 0.0 },
       topType: 'armored', top: 0xe6e8ea, topKind: 'synthetic', armor: true, coat: null, pantsType: 'cargo', pants: 0x202328, shoes: 'boots', boots: 0x202328, gloves: 0x202328, sash: null },
     vp: { sex: 'f', pitch: 1.0, rate: 0.98, langs: ['en-GB', 'en-US'] },
@@ -209,7 +209,7 @@ export function buildMeridian(game, scene) {
   const white = new THREE.MeshStandardMaterial({ color: 0xe0e2e4, roughness: 0.4 });
   const black = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.35, metalness: 0.4 });
   const brass = new THREE.MeshStandardMaterial({ color: 0xc89a4a, metalness: 0.7, roughness: 0.32 });
-  const warm = glowMat(0xffd8a0, 1.6), gold = glowMat(0xffd27a, 2.4), cyan = glowMat(0x5fe6ff, 2.2), red = glowMat(0xff4d5e, 2.0);
+  const warm = glowMat(0xffd8a0, 1.6), gold = glowMat(0xffb84a, 1.1), cyan = glowMat(0x5fe6ff, 2.2), red = glowMat(0xff4d5e, 2.0);
   const awningMat = new THREE.MeshStandardMaterial({ color: 0x7a1f1f, roughness: 0.85, side: THREE.DoubleSide });
   const B = new Batch();
   const box = (x0, y0, z0, x1, y1, z1, o) => col.add([Math.min(x0, x1), y0, Math.min(z0, z1)], [Math.max(x0, x1), y1, Math.max(z0, z1)], o);
@@ -356,7 +356,13 @@ export function buildMeridian(game, scene) {
     } catch (e) { console.warn('m9 trees', e); }
   }
   // PA speakers on poles (the voice comes from them)
-  for (const [x, z] of [[-6.6, 26], [8, -18], [-8, -46], [0, -52.8]]) { B.cyl(M.dark, x, 2.4, z, 0.06, 4.8, 8); B.boxc(M.dark, x, 4.6, z, 0.36, 0.5, 0.36); B.boxc(black, x, 4.6, z + 0.19, 0.28, 0.4, 0.02); W.speakers.push([x, 4.6, z]); }
+  W.speakerLeds = [];
+  for (const [x, z, ry] of [[-6.6, 26, 0.6], [8, -18, Math.PI], [-8, -46, 0], [0, -52.8, Math.PI]]) {
+    B.cyl(M.dark, x, 2.5, z, 0.07, 5.0, 8); B.boxc(M.dark, x, 4.85, z, 0.5, 0.12, 0.5);
+    for (const a of [ry, ry + Math.PI]) { B.geo(M.steel, new THREE.CylinderGeometry(0.34, 0.1, 0.6, 14, 1, true), [x + Math.sin(a) * 0.3, 4.55, z + Math.cos(a) * 0.3], [Math.PI / 2 - 0.35, a, 0]); }
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), glowMat(0x6affc8, 1.2)); led.position.set(x, 4.98, z); led.userData.noBatch = true; scene.add(led); W.speakerLeds.push(led);
+    W.speakers.push([x, 4.6, z]);
+  }
 
   // ================= the station (Clock A) =================
   signPlane(TEX.station(), 9, 1.5, -27.9, 5.6, -31, Math.PI / 2, 0.2);
@@ -415,8 +421,18 @@ export function buildMeridian(game, scene) {
   };
   hallWall(-16, HZ0, 16, HZ0, [[-3.2, 3.2]]); hallWall(-16, HZ1, 16, HZ1, [[7.6, 10.4]]); hallWall(-16, HZ0, -16, HZ1); hallWall(16, HZ0, 16, HZ1);
   // arched window strips (dark glass) + piers outside
-  for (let x = -14; x <= 14; x += 4) if (Math.abs(x) > 4) { B.box(glass, x - 1.1, 2.0, HZ0 + 0.31, x + 1.1, 7.6, HZ0 + 0.34); B.box(M.stone, x - 1.25, 1.8, HZ0 + 0.3, x + 1.25, 2.0, HZ0 + 0.5); }
-  for (let z = -60; z >= -78; z -= 4) for (const s of [-1, 1]) B.box(glass, s * 16.3 - 0.02, 2.0, z - 1.1, s * 16.34, 7.6, z + 1.1);
+  const hallWin = new THREE.MeshStandardMaterial({ color: 0x1a222a, roughness: 0.15, metalness: 0.2, emissive: 0xffd2a0, emissiveIntensity: 0.22, envMapIntensity: 1.3 });
+  for (let x = -14; x <= 14; x += 4) if (Math.abs(x) > 4) {
+    B.box(hallWin, x - 1.1, 2.0, HZ0 + 0.31, x + 1.1, 7.6, HZ0 + 0.34); B.box(M.stone, x - 1.25, 1.8, HZ0 + 0.3, x + 1.25, 2.0, HZ0 + 0.55);
+    B.box(M.dark, x - 0.04, 2.0, HZ0 + 0.33, x + 0.04, 7.6, HZ0 + 0.4); for (const y of [3.9, 5.8]) B.box(M.dark, x - 1.1, y - 0.04, HZ0 + 0.33, x + 1.1, y + 0.04, HZ0 + 0.4);
+    B.box(M.stone, x - 1.3, 7.6, HZ0 + 0.3, x + 1.3, 8.0, HZ0 + 0.5);
+  }
+  for (const x of [-16.2, -12, -8, -4, 4, 8, 12, 16.2]) B.box(M.stone, x - 0.3, 0, HZ0 + 0.2, x + 0.3, HH + 0.3, HZ0 + 0.7);   // pilasters
+  B.box(M.stone, -16.4, 0, HZ0 + 0.2, 16.4, 0.8, HZ0 + 0.6);                                                                 // plinth
+  for (let z = -60; z >= -78; z -= 4) for (const s of [-1, 1]) { B.box(hallWin, s * 16.3 - 0.02, 2.0, z - 1.1, s * 16.34, 7.6, z + 1.1); B.box(M.dark, s * 16.3 - 0.05, 2.0, z - 0.04, s * 16.38, 7.6, z + 0.04); }
+  // the gable over the entrance
+  const gab = new THREE.Shape(); gab.moveTo(-16.4, 0); gab.lineTo(16.4, 0); gab.lineTo(0, 3.6); gab.closePath();
+  B.geo(M.brick, new THREE.ExtrudeGeometry(gab, { depth: 0.6, bevelEnabled: false }), [0, HH + 0.5, HZ0 - 0.3]);
   B.box(M.stone, -16.4, HH, HZ1 - 0.4, 16.4, HH + 0.5, HZ0 + 0.4);
   // pitched glass roof on steel trusses
   for (const s of [-1, 1]) { const g = new THREE.Mesh(new THREE.PlaneGeometry(26.4, 17.6), glass); g.position.set(s * 8.2, HH + 2.6, (HZ0 + HZ1) / 2); g.rotation.set(-Math.PI / 2, s * -0.34, Math.PI / 2); scene.add(g); }
@@ -472,7 +488,7 @@ export function buildMeridian(game, scene) {
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.geo(M.steel, new THREE.CylinderGeometry(0.08, 0.12, MH, 6), [mx + sx * 0.9, MH / 2, mz + sz * 0.9], [sz * 0.03, 0, -sx * 0.03]);
   for (let y = 2; y < MH; y += 2.4) { const s = 1 - y / MH * 0.06; for (const [a, b] of [[[-1, -1], [1, 1]], [[1, -1], [-1, 1]]]) B.geo(M.steel, new THREE.BoxGeometry(2.6 * s, 0.05, 0.05), [mx, y + 1.2, mz + (a[1] + b[1]) * 0.0], [0, Math.atan2(b[1] - a[1], b[0] - a[0]), 0.6]); }
   box(mx - 1.1, 0, mz - 1.1, mx + 1.1, MH, mz + 1.1);
-  W.rings = [9, 16, 23].map((y, i) => { const r = new THREE.Mesh(new THREE.TorusGeometry(2.2 - i * 0.4, 0.09, 8, 48), gold.clone()); r.position.set(mx, y, mz); r.rotation.x = Math.PI / 2; scene.add(r); return r; });
+  W.rings = [9, 16, 23].map((y, i) => { const r = new THREE.Mesh(new THREE.TorusGeometry(2.2 - i * 0.4, 0.09, 8, 48), glowMat(0xffc860, 1.6)); r.position.set(mx, y, mz); r.rotation.x = Math.PI / 2; scene.add(r); return r; });
   const dish = new THREE.Mesh(new THREE.SphereGeometry(1.4, 20, 10, 0, Math.PI * 2, 0, 1.0), M.steel); dish.position.set(mx, MH + 0.3, mz); dish.rotation.x = Math.PI; scene.add(dish);
   W.beacon = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), red.clone()); W.beacon.position.set(mx, MH + 1.0, mz); scene.add(W.beacon);
   // the shield (array lock) and the three power cores
@@ -545,6 +561,7 @@ export function buildMeridian(game, scene) {
     if (W.boundary) { W.boundary.material.map.offset.x = (t * 0.02) % 1; W.boundary.material.opacity = 0.28 + Math.sin(t * 0.8) * 0.06; }
     W.shards.forEach((m, i) => { if (m.parent) { m.rotation.y = t * 1.4 + i; m.position.y = SHARDS[i][1] + Math.sin(t * 2 + i) * 0.06; } });
     if (W.water) W.water.material.opacity = 0.82 + Math.sin(t * 1.3) * 0.03;
+    W.speakerLeds.forEach(l => { l.material.emissiveIntensity = W.speakerPulse ? 1.2 + Math.abs(Math.sin(t * 9)) * 2.5 : 1.0; });
   };
   return W;
 }

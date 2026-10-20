@@ -661,6 +661,8 @@ def drape_torso(L, B, g, LM):
         hip_row = int(np.clip((LM["hip"] + 0.02 * k - y0) / dy, 0, ny_ - 1))
         for row in range(hip_row - 1, -1, -1):
             S[row] = np.maximum(S[row], S[row + 1] * 0.997)
+        for row in range(1, ny_):                # and above it the cloth eases out toward the hip (no shelf at the waist)
+            S[row] = np.maximum(S[row], S[row - 1] - 0.0035)
     # bilinear lookup
     fy = np.clip((Q[:, 1] - y0) / dy - 0.5, 0, ny_ - 1.001)
     fb = (th + np.pi) / (2 * np.pi) * nb - 0.5
@@ -1101,7 +1103,9 @@ def extend_tail(L, B, g, LM, cov, layers):
         yi = np.clip(np.round((yy - ys[0]) / 0.01).astype(int), 0, len(ys) - 1)
         bi = ((ang + 180) / 360 * nb).astype(int) % nb
         fr_ = np.clip(np.cos(np.radians(ang)), 0, 1) ** 2
-        fit = R[yi, bi] + 0.008 + 0.012 * t + (0.006 + 0.012 * np.sqrt(t)) * fr_     # room for the striding thigh
+        # room for the striding thigh, eased in over the top rows (a full pad at once stepped the skirt out like a box)
+        ease_in = ss(0.0, 0.35, t)
+        fit = R[yi, bi] + 0.003 + 0.005 * ease_in + 0.012 * t + (0.006 + 0.012 * np.sqrt(t)) * fr_ * ease_in
         taper = np.where(yy > LM["hip"], 0.985, 1.0)
         r = np.maximum(r_prev * taper, fit)                      # follows the body, never cuts into it
         rr = r * (1 + flare * t ** 1.3)                          # the hem swings out a little (no compounding)
@@ -1109,6 +1113,16 @@ def extend_tail(L, B, g, LM, cov, layers):
         grid.append(q)
         r_prev = r
     grid = np.stack(grid)                            # rows x M x 3
+    # no steps down the tail: an upper row rises toward a bulge further down (within ~11 mm per row), so the profile
+    # flares smoothly instead of stepping out where the thighs or a pad below need room
+    radial_ = np.hypot(grid[..., 0], grid[..., 2] - cz(np.maximum(grid[..., 1], LM["crotch"])))
+    for r_ in range(rows - 2, 0, -1):
+        need = np.maximum(radial_[r_], radial_[r_ + 1] - 0.011)
+        sc_ = need / np.maximum(radial_[r_], 1e-6)
+        czr = cz(np.maximum(grid[r_, :, 1], LM["crotch"]))
+        grid[r_, :, 0] *= sc_
+        grid[r_, :, 2] = czr + (grid[r_, :, 2] - czr) * sc_
+        radial_[r_] = need
     # vents / slits: the ring is cut at a column; below the vent top the two edges spread apart along the ring
     length = np.linalg.norm(np.diff(grid, axis=0), axis=2).sum(0)       # per column
     depth = np.concatenate([np.zeros((1, M)), np.cumsum(np.linalg.norm(np.diff(grid, axis=0), axis=2), 0)])
@@ -1379,7 +1393,7 @@ COLLAR = {  # profile (a = out of the opening, o = off the garment surface) metr
     "turtle": lambda h, fl, ln: [(-0.028, -0.001), (-0.006, 0.001), (h * 0.35, 0.0055), (h * 0.7, 0.009), (h, 0.0045)],
     "crew": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.6, 0.0026), (h, 0.0014)],
     "shirt": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.7, 0.0028), (h, 0.0055), (h * 0.55, 0.0105), (h * 0.05 - fl * 0.4, 0.0085 + fl * 0.35)],
-    "notch": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.7, 0.0028), (h, 0.0055), (h * 0.55, 0.0105), (-fl * 1.2, 0.006 + fl * 0.3)],
+    "notch": lambda h, fl, ln: [(-0.004, 0.0008), (h * 0.7, 0.0032), (h, 0.0075), (h * 0.55, 0.0135), (-fl * 1.2, 0.0095 + fl * 0.4)],
 }
 
 
@@ -1388,9 +1402,9 @@ def collar_piece(L, B, g, LM, cell_flags):
     if not loops:
         return None
     nl = max(loops, key=lambda lp: L.pos[lp, 1].mean() - 2 * np.abs(L.pos[lp, 0]).mean())
-    if L.pos[nl, 1].mean() < B.Jm["chest"][1]:
-        return None
     col = g["collar"]
+    if L.pos[nl, 1].mean() < B.Jm["chest"][1] - (0.1 if col["kind"] == "notch" else 0.0):   # (a deep V still gets its lapels)
+        return None
     k = LM["k"]
     prof = COLLAR[col["kind"]](col["h"] * k, col.get("flare", 0.0) * k, col.get("lean", 0.0) * k)
     nl = sorted_loop(L.pos, nl)
@@ -1418,7 +1432,16 @@ def collar_piece(L, B, g, LM, cell_flags):
         if col["kind"] == "notch":   # lapels: at the front the profile lies down along the chest
             dA = up[None] * (1 - front[:, None]) + (-up[None] * 0.8 + radial * 0.2) * front[:, None]
             dA /= np.linalg.norm(dA, axis=1, keepdims=True)
-        rows.append(P0 + dA * aa[:, None] + radial * oo[:, None] + N * 0.0)
+        out_ = radial
+        if col["kind"] == "notch":   # the lapels lie ON the chest: offset along the garment normal there, not horizontally
+            out_ = radial * (1 - front[:, None]) + N * front[:, None]
+            out_ = out_ / np.maximum(np.linalg.norm(out_, axis=1, keepdims=True), 1e-9)
+            # and down the chest along its surface (tangent), not straight down through it
+            tdown = -up[None] + N * (N @ up)[:, None]
+            tdown /= np.maximum(np.linalg.norm(tdown, axis=1, keepdims=True), 1e-9)
+            dA = up[None] * (1 - front[:, None]) + (tdown * 0.85 + radial * 0.15) * front[:, None]
+            dA /= np.linalg.norm(dA, axis=1, keepdims=True)
+        rows.append(P0 + dA * aa[:, None] + out_ * oo[:, None])
     # the base of a stand collar is sewn ON the garment: the rows below the opening are projected onto the garment's
     # outer surface (just above it), so the collar overlaps the neckline and no sliver of neck shows where it dips
     if col["kind"] not in ("crew", "shirt", "notch"):

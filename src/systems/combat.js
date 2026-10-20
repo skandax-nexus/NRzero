@@ -7,7 +7,8 @@
 //   const C = new Combat(game, { hp: 4, onDown: () => C.fail('YOU WERE TAKEN DOWN') });
 //   const e = C.addEnemy(character, { patrol: [[x, z], [x, z]], armed: true, states: ['2196'], kind: 'trooper' });
 //   C.giveWeapon();                 // the captured temporal weapon: R / click / FIRE = stun bolt, hold = displace
-//   C.noise([x, y, z], 12, 'console');  // distraction: unaware enemies in range walk over and look around
+//   C.noise([x, y, z], 12, 'console', 6, [e1, e2]);  // distraction: unaware enemies in range (optionally only these)
+//                                   walk over and look around for `hold` seconds
 //   C.decoy([x, y, z], 4);          // an afterimage (Echo Step) they see, chase and shoot instead of Kai
 //   C.reset();                      // checkpoint restore: everyone back on patrol, Kai healed (restrained stay down)
 //   C.allDown(list?) / C.alerted() / C.threat()  for scripting; combatState for music themes.
@@ -203,10 +204,10 @@ export class Combat {
   }
 
   /** Distraction: unaware enemies within radius walk to pos and look around. */
-  noise(pos, radius = 10, kind = 'noise', hold = 6) {
+  noise(pos, radius = 10, kind = 'noise', hold = 6, only = null) {
     const p = pos.isVector3 ? pos : new THREE.Vector3(...pos);
     for (const e of this.enemies) {
-      if (!this.live(e) || !this.inEraAt(e)) continue;
+      if (!this.live(e) || (only && !only.includes(e))) continue;   // the caller decides which era (and who) hears it
       if (['alert', 'stunned', 'surrender', 'displaced'].includes(e.state)) continue;
       if (e.char.root.position.distanceTo(p) > radius) continue;
       e.last.copy(p); e.investKind = kind; e.searchT = 0; e.holdT = hold; e.state = 'patrol'; this.setState(e, 'investigate');

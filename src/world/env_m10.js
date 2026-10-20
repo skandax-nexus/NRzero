@@ -294,8 +294,12 @@ export function buildBlock(game, scene) {
   for (let x = -20; x <= 20; x += 5) { lightStrip('2049', x - 1.1, -1.8, x + 1.1, -1.4, GH - 0.62, white); lightStrip('2049', x - 1.1, 6.2, x + 1.1, 6.6, GH - 0.02, white); }
   // 2196: cells (pearl partitions, gold-lit frames, force bars), bunks, crates, the guard post, rubble
   for (const x of [-17.6, -13.2, -8.8, -4.4, 0, 4.4, 8.8, 13.2, 17.6]) {
-    solid('2196', pearl, x - 0.12, 0, 3.6, x + 0.12, 3.4, 9.45);
-    B96.box(trim, x - 0.18, 0, 3.45, x + 0.18, 3.6, 3.75); B96.box(gold, x - 0.03, 0.2, 3.44, x + 0.03, 3.3, 3.46);
+    if (x === 0) {   // the partition between cells 3 and 4 has the vent (an open grate) low down
+      solid('2196', pearl, x - 0.12, 0, 3.6, x + 0.12, 3.4, 6.9); solid('2196', pearl, x - 0.12, 0, 7.9, x + 0.12, 3.4, 9.45);
+      solid('2196', pearl, x - 0.12, 1.65, 6.9, x + 0.12, 3.4, 7.9); solid('2196', pearl, x - 0.12, 0, 6.9, x + 0.12, 0.45, 7.9);
+      blk(x - 0.12, 0, 6.9, x + 0.12, 1.65, 7.9, '2196');
+    } else solid('2196', pearl, x - 0.12, 0, 3.6, x + 0.12, 3.4, 9.45);
+    B96.box(trim, x - 0.18, 0, 3.45, x + 0.18, 3.6, 3.75); B96.box(goldDim, x - 0.03, 0.2, 3.44, x + 0.03, 3.3, 3.46);
   }
   B96.box(pearl, -17.6, 3.4, 3.45, 17.6, 3.7, 9.45);   // cell-row canopy
   B96.box(gold, -17.6, 3.38, 3.43, 17.6, 3.42, 3.47);
@@ -313,7 +317,9 @@ export function buildBlock(game, scene) {
   solid('2049', M.panelDark49, cv[0] - 0.35, 0.7, 9.2, cv[0] + 0.35, 1.5, 9.45); B49.box(green, cv[0] - 0.1, 1.32, 9.18, cv[0] + 0.1, 1.38, 9.2);
   solid('2196', M.rust, cv[0] - 0.35, 0.7, 9.2, cv[0] + 0.35, 1.5, 9.45); B96.cyl(M.rust, cv[0], 3.6, 9.32, 0.07, 4.2, 8);
   // the vent between cells 3 and 4
-  B96.box(M.darkSteel, -0.14, 0.25, 6.9, 0.14, 0.95, 7.9); for (let k = 0; k < 5; k++) B96.box(M.steel, -0.16, 0.3 + k * 0.13, 6.92, 0.16, 0.34 + k * 0.13, 7.88);
+  for (const z of [6.9, 7.86]) B96.box(M.darkSteel, -0.15, 0.45, z, 0.15, 1.65, z + 0.04);
+  for (const y of [0.45, 1.61]) B96.box(M.darkSteel, -0.15, y, 6.9, 0.15, y + 0.04, 7.9);
+  for (let k = 0; k < 6; k++) B96.box(M.steel, -0.025, 0.55 + k * 0.19, 6.92, 0.025, 0.575 + k * 0.19, 7.88);
   // guard post (2196) at the west end
   solid('2196', graphite, -23.2, 0, -2.6, -21.8, 1.05, 2.2); B96.box(pearl, -23.3, 1.05, -2.7, -21.7, 1.12, 2.3); B96.box(gold, -21.75, 0.9, -2.6, -21.7, 0.95, 2.2);
   W.screens.roster = plane(TEX.roster(false), 0.9, 0.68, [-22.4, 1.62, 1.3], Math.PI / 2, '2196');
@@ -341,6 +347,19 @@ export function buildBlock(game, scene) {
   W.doors.east = makeSlide(scene, T, col, pearl, gold, [24, 0, 0], 'z', 3.2, 2.9, ['2196'], 0.3);
   W.doors.armoury = makeSlide(scene, T, col, pearl, gold, [14, 0, -9], 'x', 2.4, 2.7, ['2196'], 0.24);
   W.doors.vault = makeSlide(scene, T, col, M.darkSteel, red, [14, 0, -9.05], 'x', 2.4, 2.7, ['2049'], 0.34);
+
+  // set dressing: floor inlays and hazard paint, vertical conduits, ceiling sensors (2196) / cameras and exit signs (2049)
+  const paint = new THREE.MeshStandardMaterial({ color: 0xd9b020, roughness: 0.6 }), extRed = new THREE.MeshStandardMaterial({ color: 0xb01e1e, roughness: 0.45 });
+  for (const z of [-2.9, 3.05]) B96.box(goldDim, -23.6, 0.004, z - 0.03, 23.6, 0.01, z + 0.03);
+  B49.box(paint, -23.6, 0.013, 2.0, 23.6, 0.018, 2.12); B49.box(paint, -23.6, 0.013, -3.4, 23.6, 0.018, -3.28);
+  for (let x = -21; x <= 21; x += 6) { B.cyl(M.darkSteel, x, GH / 2, -8.72, 0.07, GH, 8); B.box(M.steel, x - 0.18, 1.3, -8.84, x + 0.18, 1.7, -8.76); }
+  for (const x of [-15, -3, 9, 21]) { B96.geo(pearl, new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), [x, GH - 0.6, 0.6], [Math.PI, 0, 0]); B96.cyl(gold, x, GH - 0.62, 0.6, 0.235, 0.03, 18); }
+  for (const x of [-12, 12]) { B49.box(M.panelDark49, x - 0.12, GH - 1.0, -8.7, x + 0.12, GH - 0.8, -8.4); B49.box(red, x - 0.03, GH - 0.95, -8.41, x + 0.03, GH - 0.9, -8.39); }
+  for (const x of [-19, 7]) B49.box(extRed, x - 0.25, 0.9, -8.8, x + 0.25, 1.6, -8.62);
+  B49.box(green, -21.6, 2.75, -8.82, -20.4, 3.05, -8.78);
+  B.box(M.steel, -24, 4.4, -7.2, 24, 4.46, -6.6); for (let x = -22; x <= 22; x += 4) B.box(M.darkSteel, x - 0.03, 4.46, -6.95, x + 0.03, GH - 0.6, -6.85);
+  for (let x = 26; x < 55; x += 3) B.cyl(M.darkSteel, x, 3.9, -2.6, 0.08, 3.0, 8, [0, 0, Math.PI / 2]);
+  for (const r of [6, 12]) { const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.04, r + 0.04, 72), goldDim); ring.rotation.x = -Math.PI / 2; ring.position.set(TC[0], 0.006, TC[1]); scene.add(ring); T.only(ring, '2196'); }
 
   // ======================= SUBSTATION (2049) / RELAY VAULT (2196) =======================
   floor(-22, -21, -8, -9, 4.5);
@@ -516,7 +535,8 @@ export function buildBlock(game, scene) {
 
   // ======================= build batches =======================
   const shell = B.build(scene, { blockers: true, game });
-  const m49 = B49.build(scene); const m96 = B96.build(scene);
+  const m49 = B49.build(scene, { blockers: true, game }); const m96 = B96.build(scene, { blockers: true, game });
+  for (const d of Object.values(W.doors)) if (d.group) game.blocker(d.group.children[0]);
   for (const m of m49) T.only(m, '2049');
   for (const m of m96) T.only(m, '2196');
   W.shell = shell;

@@ -273,6 +273,8 @@ function facadeAABB(o, out = new THREE.Box3()) {
  * Build the facade boxes of `scene` that are still plain (called by the engine every frame; returns at once when
  * none are waiting). Missions that render without the engine can call it once after building the scene.
  */
+/** Timings of the last resolveFacades() that built something (ms): scan, probes + avoid tests, geometry, material. */
+export const facadeStats = { n: 0, scan: 0, probe: 0, geometry: 0, material: 0, total: 0, avoidCalls: 0 };
 export function resolveFacades(scene) {
   if (!FACADES.length) return 0;
   const mine = [];
@@ -300,14 +302,17 @@ export function resolveFacades(scene) {
     for (const c of o.children) visit(c);
   };
   visit(scene);
+  Object.assign(facadeStats, { n: mine.length, scan: performance.now() - t0, probe: 0, geometry: 0, material: 0, avoidCalls: 0 });
   for (const m of mine) {
     try { buildFacade(m, obst, fac); } catch (e) { console.warn('kit: facade upgrade failed, keeping the plain box', e); }
   }
-  return performance.now() - t0;
+  facadeStats.total = performance.now() - t0;
+  return facadeStats.total;
 }
 const FACE_DIRS = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0]];   // building front (+z), right (+x), back, left
 const _v = new THREE.Vector3(), _q = new THREE.Box3();
 function buildFacade(m, obst, fac) {
+  const tb = performance.now();
   const ud = m.userData.rzFacadeBox, { w, h, d } = ud;
   const self = facadeAABB(m), M = m.matrixWorld, R3 = new THREE.Matrix3().setFromMatrix4(M);
   // probe slab in front of a local face direction k: out from the face by [o0, o1], across `span` of its width, y [y0, y1]
@@ -351,6 +356,7 @@ function buildFacade(m, obst, fac) {
   const groundBlank = [0, 1, 2, 3].map(j => info[toBox(j)].dressed);
   const pad = 0.04;
   const avoid = (mn, mx) => {
+    facadeStats.avoidCalls++;
     _q.min.copy(mn).addScalar(-pad); _q.max.copy(mx).addScalar(pad);
     for (const it of obst) if (it.b.intersectsBox(_q)) return true;
     for (const it of fac) if (it.o !== m && it.b.intersectsBox(_q)) return true;
@@ -369,10 +375,13 @@ function buildFacade(m, obst, fac) {
   if (glass) Object.assign(o, { floorHeight: 3.5 + r() * 0.4, bay: 2.6 + r() * 0.8, windowWidth: undefined, mullion: 3, ledges: 0, balconies: 0, cornice: false, fireEscape: false });
   if (glass) { const bay = o.bay; o.windowWidth = bay * 0.86; o.windowHeight = o.floorHeight * 0.74; o.sill = o.floorHeight * 0.13; }
   if (ud.far) Object.assign(o, { ac: 0, pipes: 0, holo: tall ? 0 : (r() < 0.3 ? 1 : 0), cables: 0, roof: { bulkhead: r() < 0.5, hvac: 1, tank: false, antenna: r() < 0.5 ? 1 : 0, billboard: false, dish: false } });
+  const tg = performance.now(); facadeStats.probe += tg - tb;
   const geo = RZ.facadeGeometry(o);
+  const tm = performance.now(); facadeStats.geometry += tm - tg;   // includes the avoid() tests
   ud.legacyGeo = m.geometry; ud.geo = geo;   // the plain box is kept for A/B captures (setInfraLegacy)
   m.geometry = geo;
   m.material = ud.mat = RZ.windowInteriorMaterial({ lit: 0.42, daylight: 0, interior: 1.25 });
+  facadeStats.material += performance.now() - tm;
   ud.built = true; ud.info = { faces, groundBlank, main, wall, triangles: geo.index.count / 3 };
 }
 

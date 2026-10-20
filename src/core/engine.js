@@ -743,7 +743,7 @@ export class Engine {
     scene.environment = scene.environment || this.envTexture;
     this.renderPass.scene = scene;
     this._lightScene(scene);
-    this._batch.reset(); this._bFrames = 0;
+    this._batch.reset(); this._bFrames = 0; this.stats.facadeMs = 0;
     this._sweep = 0;
     // a new place: its own grade at once, no focus, the eye adapts from scratch
     this.focus(null); this._focus.amount = 0; this.dofPass.enabled = false;
@@ -1199,7 +1199,7 @@ export class Engine {
   //            are distance-culled (tier infra.smallCull). ?infra=nobatch / scene.userData.batch = false opt out.
   _updateInfra() {
     const s = this.scene; if (!s) return;
-    try { KIT.resolveFacades(s); } catch (e) { console.warn('facades', e); }
+    try { const ms = KIT.resolveFacades(s); if (ms) this.stats.facadeMs = Math.round((this.stats.facadeMs || 0) + ms); } catch (e) { console.warn('facades', e); }
     const B = this._batch;
     if (!this.batchOn || s.userData.batch === false) { if (B.scene) B.reset(); return; }
     const f = ++this._bFrames;

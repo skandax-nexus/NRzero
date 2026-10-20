@@ -318,10 +318,12 @@ export class LoopPatrol {
     this.loop = loop; this.game = loop.game; this.actor = actor; this.keys = o.keys || [];
     this.range = o.range ?? 10; this.fov = o.fov ?? 0.5; this.near = o.near ?? 1.4; this.alert = 0; this.enabled = true; this.hold = false;
     this.eyeY = o.eyeY ?? 1.65; this.name = o.name || 'patrol';
-    const segs = 24, geo = new THREE.BufferGeometry(), pos = [0, 0, 0], idx = [];
-    for (let i = 0; i <= segs; i++) { const a = -this.fov + (2 * this.fov) * i / segs; pos.push(Math.sin(a) * this.range, 0, Math.cos(a) * this.range); if (i) idx.push(0, i, i + 1); }
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
-    this.coneMat = new THREE.MeshBasicMaterial({ color: o.color ?? 0xffd27a, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+    // a fan in two rings (apex -> mid -> rim) whose vertex colours fade out, so the cone reads as a scan, not a slab
+    const segs = 24, geo = new THREE.BufferGeometry(), pos = [0, 0, 0], colr = [0.9, 0.9, 0.9], idx = [];
+    for (let i = 0; i <= segs; i++) { const a = -this.fov + (2 * this.fov) * i / segs; pos.push(Math.sin(a) * this.range * 0.55, 0, Math.cos(a) * this.range * 0.55, Math.sin(a) * this.range, 0, Math.cos(a) * this.range); colr.push(0.45, 0.45, 0.45, 0.06, 0.06, 0.06); }
+    for (let i = 0; i < segs; i++) { const m0 = 1 + i * 2, r0 = m0 + 1, m1 = m0 + 2, r1 = m0 + 3; idx.push(0, m0, m1, m0, r0, r1, m0, r1, m1); }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); geo.setIndex(idx);
+    this.coneMat = new THREE.MeshBasicMaterial({ color: o.color ?? 0xffd27a, vertexColors: true, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, toneMapped: false });
     this.cone = new THREE.Mesh(geo, this.coneMat); this.cone.renderOrder = 2; this.cone.userData.noBatch = true;
     this.game.scene.add(this.cone);
     this.stopRoutine = this.keys && (typeof this.keys === 'function' || this.keys.length) ? loopRoutine(loop, actor, (it) => (this.hold ? [] : (typeof this.keys === 'function' ? this.keys(it) : this.keys))) : null;
@@ -346,13 +348,13 @@ export class LoopPatrol {
     const rate = seen ? (1.9 - dist / Math.max(1, range)) * 1.15 : -0.6;
     this.alert = Math.max(0, Math.min(1.1, this.alert + dt * rate));
     const k = Math.min(1, this.alert);
-    this.coneMat.opacity = 0.1 + k * 0.22;
+    this.coneMat.opacity = 0.3 + k * 0.45;
     this.coneMat.color.setRGB(1, 0.82 - k * 0.6, 0.48 - k * 0.3);
     if (seen && k > 0.25) a.faceTowards(pl.pos.x, pl.pos.z, dt, 3);
     a.lookTarget = k > 0.2 ? pl.char.head : null;
     return Math.min(1, this.alert);
   }
-  reset() { this.alert = 0; this.coneMat.opacity = 0.1; }
+  reset() { this.alert = 0; this.coneMat.opacity = 0.3; }
   dispose() { this.stopRoutine?.(); this.cone.parent?.remove(this.cone); }
 }
 

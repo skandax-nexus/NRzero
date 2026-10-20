@@ -683,6 +683,8 @@ def paint(g, X, seed):
             seam(line(np.abs(X.x) - ww, 0.0018) * box(y, sp - 0.14, sp + 0.03, X.x, -1, 1) * front * tor + line(y - sp - 0.03, 0.0018) * (np.abs(X.x) < ww) * front * tor)
         elif name == "lapels":
             nk = J["neck"][1]
+            shade(X.collar, 0.9)                                    # the lapels and collar: a shade darker (they catch less light)
+            seam(line(X.f - 0.004, 0.0016) * X.collar, 0.0004, 0.75)  # their edge
             for sg in (1, -1):
                 lx = 0.02 + 0.36 * (nk - 0.06 - y)
                 ln = line(X.x * sg - lx - 0.045 + 0.2 * ss(nk - 0.12, nk - 0.05, y) * 0.2, 0.0022) * box(y, J["chest"][1] - 0.05, nk, X.x * sg, 0, 0.2) * front

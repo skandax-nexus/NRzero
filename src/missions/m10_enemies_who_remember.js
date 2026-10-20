@@ -193,6 +193,12 @@ export default {
       const ch = mkTrooper(i); const old = C.enemies.find(q => q.char === ch); if (old) C.removeEnemy(old); placeCh(ch, x, z, yaw);
       const e = C.addEnemy(ch, { states: ['2196'], voice: 'trooper', barks: BARKS, yaw, ...o }); return e;
     };
+    const CH_BARKS = {
+      spot: ['Assessment contact. Engage.', 'Intake seventeen, by the barriers!', 'He is in the old year again — watch the gaps!'],
+      search: ['He shifted. Hold the ring.', 'Where did he go? Sweep the benches.'],
+      lost: ['Holding.'],
+      yield: ['I yield! The assessment is over for me.', 'Down — I\'m down.'],
+    };
     const BARKS = {
       spot: ['Contact! Intake seventeen!', 'There — by the pillars!', 'Varen is out of his cell!'],
       search: ['He was here. Spread out.', 'Check the shadows. He likes the shadows.', 'Lost him. Again.'],
@@ -355,7 +361,9 @@ export default {
     sera.lookTarget = kai.head || null; kai.lookTarget = sera.head || null;
     await game.shot([-1.6, 1.0, 6.2], [0.4, 0.8, 7.4], 1.4, { fov: 40 });
     await game.talk([['sera', 'Seventeen. You awake?'], ['kai', 'Who\'s there?']]);
-    await game.shot([-0.25, 0.92, 7.25], [0.75, 0.95, 7.4], 1.8, { fov: 30 });
+    const seraHead = () => { const h = sera.head ? sera.head.getWorldPosition(V()) : V(0.75, 1.25, 7.4); h.y = Math.max(0.7, Math.min(1.5, h.y + 0.06)); return h; };
+    let sh = seraHead();
+    await game.shot([-0.3, sh.y, 7.2], [sh.x, sh.y, sh.z], 1.8, { fov: 30 });
     await game.talk([
       ['sera', 'Sera Voss. Cell four. I run the people the Continuum hasn\'t caught yet. Mostly.'],
       ['sera', 'They dragged you in shouting a name. Mira.'],
@@ -363,12 +371,13 @@ export default {
     ]);
     audio.silence(1.2); await game.wait(1.0);
     await game.talk([['sera', '...Say that again.'], ['kai', 'Kai Varen. Why?']]);
-    await game.shot([-0.1, 0.95, 7.35], [0.75, 0.98, 7.4], 1.2, { fov: 24 });
+    sh = seraHead();
+    await game.shot([-0.15, sh.y, 7.3], [sh.x, sh.y, sh.z], 1.2, { fov: 24 });
     audio.sfxPlay('heartbeat');
     await game.say('sera', 'In my time, your face is on every memorial.');
-    await game.shot([0.3, 0.98, 7.5], [-0.75, 0.98, 7.4], 1.0, { fov: 26 });
+    await game.shot([0.35, sh.y, 7.5], [-0.75, sh.y - 0.05, 7.4], 1.0, { fov: 26 });
     await game.say('kai', 'For saving the world?');
-    await game.shot([-0.1, 0.95, 7.35], [0.75, 0.98, 7.4], 1.0, { fov: 22 });
+    await game.shot([-0.15, sh.y, 7.3], [sh.x, sh.y, sh.z], 1.0, { fov: 22 });
     audio.silence(1.4); await game.wait(1.1);
     await game.say('sera', 'For ending it.');
     await game.wait(0.8);
@@ -436,7 +445,7 @@ export default {
       ['kai', 'Three breakers. Gallery services. Row circuit, cells three and four. Vault and east gate maglocks.'],
       ['kai', 'They built their whole block on Helix copper and never rewired it. What I throw here, they lose there.'],
     ]);
-    objective('Throw the breakers: services (A) to draw the guards, then the row circuit (B) for Sera; the vault (C)');
+    objective('Throw the breakers: A draws the guards, B opens Sera\'s cell, C the vault');
     game.interact({ pos: [-21.6, 1.4, -15.5], radius: 1.6, prompt: 'Read Iven\'s maintenance note', states: ['2049'], onUse: () => { F.m10ivenNote = true; ev('Iven\'s note (2049)', 'I. Marr, 20.10.49: "Re-cabled SL4 after the 08:14 lockdown. Row circuit, services and maglocks still on the original copper. Whoever designed this level wired it to last a hundred years. Didn\'t ask why."', 'HELIX · SL4'); ui.subtitle('kai', 'Iven. Wired to last a hundred years. Someone knew.', 3000); } });
     const throwBreaker = (i) => {
       const id = 'ABC'[i]; power[id] = false;
@@ -453,7 +462,7 @@ export default {
         if (i === 0) {
           ui.toast('SL4-A ISOLATED · 2196: GUARD POST CONSOLE SHORTED', 2600);
           // in 2196 the guard post console dies: both gallery guards walk over to look at it, in the dark
-          C.noise(W.consoleSparkPos, 60, 'console', 55);
+          C.noise(W.consoleSparkPos, 60, 'console', 55, [g1, g2]);
           S.distractAt = game.time;
           await game.say('kai', 'Their console shares this line. That should pull them both to the west end. And the lights.');
         } else if (i === 1) {
@@ -627,7 +636,7 @@ export default {
         const idx = [3, 4, 5, 6, 7, 0][(n * 3 + k) % 6];
         const old = C.enemies.find(e => e.char === troopers[idx]); if (old) C.removeEnemy(old);
         const o = (opts && opts[k]) || {};
-        const e = enemy(idx, x, z, yaw, { patrol: [[x - 6, z]], range: 22, fov: 1.0, keep: 7, rate: 2.8, ...o });
+        const e = enemy(idx, x, z, yaw, { patrol: [[x - 6, z]], range: 22, fov: 1.0, keep: 7, rate: 2.8, barks: CH_BARKS, ...o });
         e.last.copy(pl.pos); C.setState(e, 'alert'); list.push(e);
       });
       await game.wait(1.4); S.exitOpen = false;
