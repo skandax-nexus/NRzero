@@ -863,8 +863,11 @@ export function buildHouse(game, T, opts = {}) {
   {
     const p = props['2196'];
     const st = [[3.8, 4.8, -31, -29.8, 0.4], [2.8, 3.8, -31, -29.8, 0.8], [1.8, 2.8, -31, -29.8, 1.2], [0.8, 1.8, -31, -29.8, 1.6], [-0.2, 0.8, -31, -29.8, 2.0], [-1.2, -0.2, -31, -29.8, 2.4], [-2.2, -1.2, -31, -29.8, 2.8], [-3.3, -2.2, -31, -29.8, 3.2], [-3.3, -2.1, -32, -31, 3.6], [-3.3, -2.1, -33, -32, 4.0], [-3.3, -2.1, -33.6, -33, 4.4]];
-    for (const [x0, x1, z0, z1, h] of st) { p.box(M.rubble, x0, TY + h - 0.45, z0, x1, TY + h, z1); col(['2196'], [x0, TY + h - 0.45, z0], [x1, TY + h, z1]); }
-    p.box(M.rubble, -3.3, TY + 4.4, -36.4, -0.85, TY + 4.8, -33.6); col(['2196'], [-3.3, TY + 4.3, -36.4], [-0.85, TY + 4.8, -33.6]);
+    // a heap of masonry and fallen floor slabs against the south wall: solid down to the floor, so it reads as a pile
+    for (const [x0, x1, z0, z1, h] of st) { p.box(M.rubble, x0, TY, z0, x1, TY + h, z1); col(['2196'], [x0, TY, z0], [x1, TY + h, z1]); }
+    p.box(M.rubble, -3.3, TY + 4.4, -36.4, -0.85, TY + 4.8, -33.6);
+    for (const [x, zz] of [[-3.2, -36.3], [-0.95, -36.3], [-3.2, -33.7]]) p.box(M.rust, x - 0.07, TY, zz - 0.07, x + 0.07, TY + 4.4, zz + 0.07);   // the old floor posts still carry the ledge
+    p.boxc(M.rust, -2.1, TY + 2.3, -36.3, 0.08, 3.2, 0.08, 0, 0, 0.62); col(['2196'], [-3.3, TY + 4.3, -36.4], [-0.85, TY + 4.8, -33.6]);
     p.boxc(M.darkWood, 0.6, TY + 1.8, -30.4, 9.4, 0.5, 0.5, 0.05, 0, 0.36);
     p.boxc(M.darkWood, -2.7, TY + 2.6, -34.4, 0.45, 0.45, 6, 0.1, 0.62, 0);
     for (let k = 0; k < 10; k++) { const x = -6 + R() * 3, zz = -40 + R() * 3, s = 0.4 + R() * 0.8; p.boxc(M.rubble, x, s / 2, zz, s * 1.4, s, s, R() * 3); }

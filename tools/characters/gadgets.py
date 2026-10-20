@@ -20,6 +20,7 @@ The armature (glTF root node) carries `gadgets`: a JSON list of {type, bone, glo
 """
 import json
 import math
+import os
 import numpy as np
 
 BH = None
@@ -449,9 +450,10 @@ class Kit:
         s.hands[sd] = dict(wrist=V(w), axis=V(a), palm=V(pn), across=V(ac), grip=V(grip), len=L)
         return s.hands[sd]
 
-    def limb_ring(s, sd, j0, j1, t, n=16, fams=None, along=0.0):
+    def limb_ring(s, sd, j0, j1, t, n=16, fams=None, along=0.0, inner=False):
         """Cross-section of the dressed limb at fraction t from joint j0 to j1 (+ `along` metres): centre, axis, dorsal
-        and side axes, radius per angle (angle 0 = dorsal = back of the hand / outside of the arm)."""
+        and side axes, radius per angle (angle 0 = dorsal = back of the hand / outside of the arm). inner=True: the
+        innermost surface (rays from the bone outward: the skin under a loose sleeve)."""
         a, b = s.J[j0 + sd], s.J[j1 + sd]
         ax = (b - a).normalized()
         c = a.lerp(b, t) + ax * along
@@ -463,7 +465,7 @@ class Kit:
         for i in range(n):
             th = 2 * math.pi * i / n
             d = e1 * math.cos(th) + e2 * math.sin(th)
-            h = s.ray(c + d * 0.16, -d, fams, 0.3)
+            h = s.ray(c + d * 0.002, d, fams, 0.3) if inner else s.ray(c + d * 0.16, -d, fams, 0.3)
             rr.append((h[0] - c).dot(d) if h is not None else np.nan)
         rr = np.array(rr)
         if np.isnan(rr).all():
@@ -698,11 +700,11 @@ def opt_side(o, d):
 
 
 # ---------------- wrist and arm pieces ----------------
-def fitted_ring(K, sd, along, w, n=16, fams=None, t=1.0):
+def fitted_ring(K, sd, along, w, n=16, fams=None, t=1.0, inner=False):
     """Limb ring for a band of width w centred `along` metres from the wrist: outer radius = the widest of five
     sections under the band (a sleeve hem never pokes through), inner lips = the limb radius at each edge."""
-    R = K.limb_ring(sd, "elbow_", "wrist_", t, n=n, along=along, fams=fams)
-    secs = [K.limb_ring(sd, "elbow_", "wrist_", t, n=n, along=along + f * (w / 2 - 0.002), fams=fams)["r"] for f in (-1, -0.5, 0.5, 1)]
+    R = K.limb_ring(sd, "elbow_", "wrist_", t, n=n, along=along, fams=fams, inner=inner)
+    secs = [K.limb_ring(sd, "elbow_", "wrist_", t, n=n, along=along + f * (w / 2 - 0.002), fams=fams, inner=inner)["r"] for f in (-1, -0.5, 0.5, 1)]
     R["r"] = np.max(np.stack([R["r"]] + secs), 0)
     R["r_lo"], R["r_hi"] = secs[0], secs[3]
     return R
@@ -721,21 +723,31 @@ def sleeve_hem(K, sd, fams=None):
             if r[i - 1] - r[i] > 0.0025:
                 hem = float(al[i])
         K._sub[key] = hem
+        if os.environ.get("GADGET_DEBUG"):
+            print("  hem", sd, hem, " ".join("%.3f:%.4f" % (a, b) for a, b in zip(al, r)), flush=True)
     return K._sub[key]
 
 
 def wrist_band(g, sd, w, t, col, gloss, along=-0.035, n=16, groove=None, fams=None, auto=None):
-    """A band at the wrist. Narrow bands (auto, w <= 3.5 cm) never straddle a sleeve hem: they move onto the bare
-    wrist below it when there is room, else up onto the sleeve end."""
+    """A band at the wrist. Narrow bands (auto, w <= 3.5 cm) never straddle a sleeve hem: under a loose sleeve
+    (1.2 cm or more of room) they sit on the skin, half out below the hem; under a fitted one they move onto the
+    bare wrist below the hem when there is room, else up onto the sleeve end."""
     K = g.K
     along *= K.k
     ww = w * K.k
+    inner = False
     if (ww <= 0.035 if auto is None else auto):
         hem = sleeve_hem(K, sd, fams)
-        if hem is not None and along - ww / 2 < hem < along + ww / 2:
-            below = hem + ww / 2 + 0.003
-            along = below if below + ww / 2 <= 0.006 * K.k else hem - ww / 2 - 0.002
-    R = fitted_ring(K, sd, along, ww, n=n, fams=fams)
+        if hem is not None and hem > along - ww:
+            a_ = hem - 0.01 * K.k
+            ro = float(np.mean(K.limb_ring(sd, "elbow_", "wrist_", 1.0, n=8, along=a_, fams=fams)["r"]))
+            ri = float(np.mean(K.limb_ring(sd, "elbow_", "wrist_", 1.0, n=8, along=a_, fams=fams, inner=True)["r"]))
+            if ro - ri > 0.012:
+                inner, along = True, min(hem + ww * 0.3, 0.004 * K.k - ww / 2)
+            elif along - ww / 2 < hem < along + ww / 2:
+                below = hem + ww / 2 + 0.003
+                along = below if below + ww / 2 <= 0.006 * K.k else hem - ww / 2 - 0.002
+    R = fitted_ring(K, sd, along, ww, n=n, fams=fams, inner=inner)
     g.part(band_geo(R, w * K.k, t, groove=groove, fit=True), col, gloss, smooth=True)
     return R
 
@@ -1279,7 +1291,7 @@ def g_respirator(g):
             faces.append([ia, ib, nv + ib, nv + ia])
         g.part((verts, faces), col, 0.35, smooth=True)
         seal = [V(verts[r[0] * cols + r[1]]) - dirs[r[0]][r[1]] * 0.002 for r in ring]      # rubber seal lip
-        g.part(tube(seal + [seal[0]], 0.0028, n=4, caps=False), BLACK, 0.2, smooth=True)
+        g.part(tube(seal + [seal[0]], 0.0028, n=3, caps=False), BLACK, 0.2, smooth=True)
         ci = rows // 2
         cm = V(grid[ci][cols // 2])
         base = frame(cm, V((0, -1, -0.2)).normalized(), UP)
