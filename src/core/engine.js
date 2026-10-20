@@ -958,6 +958,10 @@ export class Engine {
     scene.traverse(o => {
       if (o.isLight) lights.push(o);
       else if (o.userData.character) chars.push(o);
+      else if (o.userData.contactShadow) {   // opt-in props: userData.contactShadow = true | radius | { radius, strength, scale }
+        const c = o.userData.contactShadow;
+        chars.push(typeof c === 'object' ? { object: o, radius: c.radius, strength: c.strength, scale: c.scale } : { object: o, radius: typeof c === 'number' ? c : undefined });
+      }
       if (o.userData.rzRain && o.visible) rain = true;
     });
     this._sigLights = lights;

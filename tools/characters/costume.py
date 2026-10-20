@@ -288,10 +288,13 @@ def f_over(g, B, LM, cov):
         y0, y1 = LM["spn"] - 0.075 * k, LM["ch"] + 0.13 * k
         front = np.minimum(np.minimum(fr, y - y0), y1 - y)
         back = np.minimum(np.minimum(bk, y - y0), (LM["sh"] - 0.04 * k) - y)
-        strap = np.minimum(0.028 - np.abs(np.abs(P[:, 0]) - 0.085 * k), y - (LM["ch"] + 0.05 * k))
+        # shoulder straps: a constant-width band over the top of the shoulder from the front plate to the back plate
+        # (no torso-weight cut: that ended them in two horns at the collarbones)
+        strap = np.minimum(0.026 * k - np.abs(np.abs(P[:, 0]) - 0.088 * k), y - (LM["ch"] + 0.05 * k)) - B.hw * 0.3
         cumm = np.minimum(y - y0, (y0 + 0.14 * k) - y)
-        f = np.maximum(np.maximum(front, back), np.maximum(strap, cumm))
-        return f * np.clip(tor * 1.4, 0, 1) - B.arms * 0.3 - (1 - np.clip(tor * 1.4, 0, 1)) * 0.05
+        f = np.maximum(np.maximum(front, back), cumm)
+        tw_ = np.clip(tor * 1.4, 0, 1)
+        return np.maximum(np.minimum(f, (tw_ - 0.3) * 0.1) - B.arms * 0.3, strap)
     if shape == "harness":
         belt_y = LM["spn"] - 0.055 * k
         belt = (0.022 * k - np.abs(y - belt_y)) * B.tw - B.arms * 0.3 - B.legs * 0.0
@@ -1396,8 +1399,9 @@ def skirt_piece(c, B, g, LM, layers):
     top_y = LM["spn"] - 0.01 * k
     length = g.get("length", 0.25) * H
     pts = [B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["hips", "spine", "thigh_L", "thigh_R"])]]
+    over_top = g.get("shape") == "hipwrap"      # a hip-wrap is wrapped over the tunic (it poked through it from below)
     for kk, L in layers.items():
-        if L.g.get("cat") in ("bottom", "limb"):
+        if L.g.get("cat") in ("bottom", "limb") or (over_top and L.g.get("cat") in ("top", "over")):
             pts.append(L.pos)
     pts = np.concatenate(pts)
     rows = 9
@@ -1544,6 +1548,8 @@ def ribbon_ok(g, cos):
     """Straps / belts become ribbons unless a broader garment is worn over them (a poncho or cloak keeps the layer)."""
     if g.get("shape") not in RIBBON_SHAPES or g.get("fab") == "cord":
         return False
+    if g.get("shape") == "sash" and g.get("width", 0.085) > 0.06:
+        return False       # a wide cloth sash is a body layer: a ribbon at the largest radius of its band floats off the belly
     return not any(t.get("z", 50) > g.get("z", 60) for t in cos["top"])
 
 

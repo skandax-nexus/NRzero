@@ -22,7 +22,7 @@ export const P = {
   yaraDesk: [9.2, 0, -21.5], kaiDoor: [2.3, 0, -29.0], kaiDesk: [9.2, 0, -29.5], drawing: [11.8, 1.6, -29.0],
   server: [-11.0, 0, -18.4], board: [-7.0, 0, -27.6], records: [-10.6, 0, -38.5], breakers: [11.9, 0, -42.5],
   readerSec: [-2.3, 1.3, -20.2], readerMaint: [2.3, 1.3, -37.2], readerAnte: [2.3, 1.3, -49.6],
-  labDoor: [-2.2, 0, -46], labValve: [-10.6, 0, -48.8], serviceDoor: [16.5, 0, -10], anteConsole: [0, 0, -57.6],
+  labDoor: [-2.2, 0, -46], labValve: [-4.0, 0, -41.55], serviceDoor: [16.5, 0, -10], anteConsole: [0, 0, -57.6],
   window: [-4.2, 0, -59.3], chamberDoor: [0, 0, -60.6],
 };
 // Six security cameras of the corrupted 08:04-08:14 log (where their segments re-sync in Residue Vision)
@@ -55,6 +55,12 @@ export function registerM8Cast() {
   registerCast('kaimemo', { name: 'VOICE MEMO · DR. K. VAREN', role: 'Recorded Monday 18.10.2049', portraitOf: 'kai', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 0.95, langs: ['en-GB', 'en-US'] } });
   registerCast('helixai', { name: 'HELIX SYSTEMS', role: 'Facility intelligence · automated', voice: true, vp: { sex: 'f', pitch: 1.12, rate: 1.04, langs: ['en-US', 'en-GB'] } });
   registerCast('radio', { name: 'SECURITY RADIO', role: 'Helix channel 2', voice: true, vp: { sex: 'm', pitch: 0.85, rate: 1.05, langs: ['en-US', 'en-GB'] } });
+  registerCast('yaraecho', { name: 'DR. YARA LIND · ECHO 08:0x', role: 'Security log · version 17', portraitOf: 'yara', vp: { sex: 'f', pitch: 1.04, rate: 1.0, langs: ['en-GB', 'en-IE', 'en-US'] } });
+  registerCast('haleecho', { name: 'OFF. R. HALE · ECHO 08:06', role: 'Security log · version 17', portraitOf: 'hale', vp: { sex: 'm', pitch: 0.86, rate: 1.0, langs: ['en-US', 'en-GB'] } });
+  registerCast('brandtecho', { name: 'M. BRANDT · ECHO 08:06', role: 'Security log · version 17', portraitOf: 'brandt', vp: { sex: 'm', pitch: 0.8, rate: 1.02, langs: ['en-GB', 'en-US'] } });
+  registerCast('m8guard', { name: 'HELIX SECURITY', role: 'Night desk · Level 1', look: { ...GUARD, lod: false }, vp: { sex: 'm', pitch: 0.84, rate: 1.0, langs: ['en-US', 'en-GB'] } });
+  registerCast('m8staff', { name: 'HELIX SCIENTIST', role: 'Late shift', look: { ...STAFF[1], lod: false }, vp: { sex: 'f', pitch: 1.06, rate: 1.02, langs: ['en-GB', 'en-US'] } });
+  registerCast('m8tech', { name: 'LAB B TECHNICIAN', role: 'Iven Marr\'s team', look: { ...TECHS[0], lod: false }, vp: { sex: 'f', pitch: 1.0, rate: 1.05, langs: ['en-US', 'en-GB'] } });
   registerCast('figure', { name: '— — —', role: 'Unidentified · camera C4', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.9, langs: ['en-GB'] } });
 }
 // 2049 Helix crowd (COSTUMES.md helix_sci_m / helix_sci_f / helix_sec_1 / technician), built at LOD
@@ -137,7 +143,7 @@ export const TEX = {
   plaqueNew: (aligned) => textPlate('plaqueNew' + aligned, 512, 640, (g) => {
     g.strokeStyle = '#8a7a5a'; g.lineWidth = 6; g.strokeRect(14, 14, 484, 612); g.fillStyle = '#2a2418'; g.textAlign = 'center';
     lines(g, ['HELIX TEMPORAL', 'RESEARCH', ''], 256, 90, 40, '#2a2418');
-    lines(g, ['Founded 2027 by', 'Dr. Elias Rook', 'and Dr. Kai Varen', '', aligned ? 'Raised on the count kept by' : 'Raised on the work of', aligned ? 'the keepers of Site 3,' : 'the Site Zero survey', aligned ? 'who taught us to listen' : 'and those who came', aligned ? 'to the sky.' : 'before it.'], 256, 230, 30, '#3a3020');
+    lines(g, ['Founded 2029 by', 'Dr. Elias Rook', 'Programme lead', 'Dr. Kai Varen', '', aligned ? 'Raised on the count kept by' : 'Raised on the work of', aligned ? 'the keepers of Site 3,' : 'the Site Zero survey', aligned ? 'who taught us to listen' : 'and those who came', aligned ? 'to the sky.' : 'before it.'], 256, 230, 30, '#3a3020');
   }, '#d8cfb4'),
   plaqueOld: () => textPlate('plaqueOld', 512, 640, (g) => { g.textAlign = 'center'; lines(g, ['HELIX TEMPORAL', 'RESEARCH', '', 'Founded 2029', 'Director', 'Dr. Elias Rook'], 256, 120, 40, '#5fe6ff'); }, 'rgba(0,0,0,0)'),
   memorial: () => textPlate('memorial', 512, 256, (g) => { g.fillStyle = '#0c0c0e'; g.fillRect(0, 0, 512, 256); g.textAlign = 'center'; lines(g, ['DR. KAI VAREN', '2018 – 2049'], 256, 70, 46, '#efe8d8'); lines(g, ['The first life lost to the Zero Second.', 'He held the anchor so the city could keep its second.'], 256, 190, 22, '#b8b0a0'); }),
@@ -269,7 +275,23 @@ export function buildHelix(game, scene, opts = {}) {
   const r = rng(808);
   const flowerMats = [0xf2efe6, 0xe8d8a0, 0xc83a4a, 0xf0c8d0].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 }));
   const stemMat = new THREE.MeshStandardMaterial({ color: 0x2f4a2a, roughness: 0.8 });
-  for (let k = 0; k < 26; k++) { const x = Mm[0] + (r() - 0.5) * 2.8, z = Mm[2] + 0.1 + r() * 0.7; B.cyl(stemMat, x, 0.3, z, 0.01, 0.3, 4); B.geo(flowerMats[k % 4], new THREE.IcosahedronGeometry(0.06, 0), [x, 0.47, z]); }
+  // bouquets laid on the ground: a paper cone, leaves and a tight head of blooms, each at its own angle
+  const paperMats = [0xf4f0e6, 0xc8b08a, 0x1c1c1e].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, side: THREE.DoubleSide }));
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x2f4a2a, roughness: 0.75 });
+  const bloomGeo = new THREE.IcosahedronGeometry(0.028, 1), cone = new THREE.ConeGeometry(0.075, 0.42, 9, 1, true), leafGeo = new THREE.SphereGeometry(0.03, 6, 4);
+  for (let k = 0; k < 9; k++) {
+    const x = Mm[0] - 1.35 + k * 0.33 + (r() - 0.5) * 0.12, z = Mm[2] + 0.35 + r() * 0.35, yaw = (r() - 0.5) * 1.2, tilt = Math.PI / 2 - 0.08;
+    const dir = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));            // bouquets point away from the visitor
+    const base = new THREE.Vector3(x, 0.17, z);
+    B.geo(paperMats[k % 3], cone, base.toArray(), [-(tilt), yaw, 0]);
+    const head = base.clone().addScaledVector(dir, -0.22).setY(0.2);   // the open end of the cone
+    for (let j = 0; j < 7; j++) {
+      const o = [(r() - 0.5) * 0.09, (r() - 0.2) * 0.05, (r() - 0.5) * 0.09];
+      B.geo(flowerMats[(k + j) % 4], bloomGeo, [head.x + o[0], head.y + o[1], head.z + o[2]]);
+      if (j < 3) B.geo(leafMat, leafGeo, [head.x + o[2] * 1.3, head.y - 0.02, head.z + o[0] * 1.3], [0, r() * 3, 0], [1.6, 0.3, 0.7]);
+    }
+  }
+  void stemMat;
   const candles = [];
   for (let k = 0; k < 9; k++) { const x = Mm[0] + (k - 4) * 0.3 + (r() - 0.5) * 0.1, z = Mm[2] + 0.75 + (r() - 0.5) * 0.12; B.cyl(white, x, 0.21, z, 0.035, 0.1, 8); B.cyl(new THREE.MeshPhysicalMaterial({ color: 0xc83a2a, transparent: true, opacity: 0.55, roughness: 0.1 }), x, 0.2, z, 0.05, 0.13, 10); candles.push([x, 0.3, z]); }
   const flame = new THREE.InstancedMesh(new THREE.SphereGeometry(0.018, 6, 4), glowMat(0xffb060, 6), candles.length);
@@ -346,7 +368,7 @@ export function buildHelix(game, scene, opts = {}) {
   const D = P.directory; B.box(M.darkSteel, D[0] - 0.4, 0.12, D[2] - 0.3, D[0] + 0.4, 1.0, D[2] + 0.3); blockBox(D[0] - 0.45, 0, D[2] - 0.35, D[0] + 0.45, 1.6, D[2] + 0.35);
   B.boxc(black, D[0], 1.45, D[2], 0.95, 0.72, 0.06, 0, -0.2);
   const dir = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.66), new THREE.MeshBasicMaterial({ map: TEX.directory(!!opts.trusted), toneMapped: false }));
-  dir.position.set(D[0], 1.45, D[2] + 0.035); dir.rotation.x = -0.2; scene.add(dir);
+  dir.position.set(D[0], 1.45, D[2] + 0.035); dir.rotation.x = -0.2; scene.add(dir); W.screens.dir = dir;
   const dirOld = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.66), new THREE.MeshBasicMaterial({ map: TEX.directoryOld(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
   dirOld.position.set(D[0], 1.45 + 0.75, D[2] + 0.1); dirOld.rotation.x = -0.1; scene.add(dirOld); W.ghosts.directory = dirOld;
   // benches and planters in the lobby
@@ -397,7 +419,7 @@ export function buildHelix(game, scene, opts = {}) {
   lab.position.set(-2.0, Y0 + 1.2, -46); scene.add(lab); game.blocker(lab);
   W.doors.lab = { box: blockBox(-2.15, 0, -47, -1.85, 2.4, -45), open: 0, target: 0, upd: (u) => { lab.position.y = Y0 + 1.2 + u * 2.3; } };
   W.labLight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.3), new THREE.MeshStandardMaterial({ color: 0, emissive: 0xff4d5e, emissiveIntensity: 2.4 })); W.labLight.position.set(-1.85, Y0 + 2.55, -46); scene.add(W.labLight);
-  const V = P.labValve; B.cyl(M.rust, V[0], Y0 + 1.6, V[2], 0.09, 3.2, 10); const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 6, 20), new THREE.MeshStandardMaterial({ color: 0xc83a2a, roughness: 0.5 })); wheel.position.set(V[0] + 0.15, Y0 + 1.2, V[2]); wheel.rotation.y = Math.PI / 2; scene.add(wheel); W.wheel = wheel;
+  const V = P.labValve; B.cyl(M.rust, V[0], Y0 + 1.6, V[2], 0.09, 3.2, 10); const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 6, 20), new THREE.MeshStandardMaterial({ color: 0xc83a2a, roughness: 0.5 })); wheel.position.set(V[0], Y0 + 1.2, V[2] + 0.16); scene.add(wheel); W.wheel = wheel;
   for (let k = 0; k < 3; k++) { const z = -43.5 - k * 1.8; B.box(white, -9.6, Y0 + 0.82, z - 0.4, -5.0, Y0 + 0.9, z + 0.4); blockBox(-9.6, 0, z - 0.4, -5.0, 0.9, z + 0.4); }
   src(-7, H - 0.3, -46, 0xffb070, 8, 8);
   // YARA'S OFFICE (x 2..12, z -16..-25)
@@ -437,8 +459,17 @@ export function buildHelix(game, scene, opts = {}) {
   src(14.5, H - 0.3, -10, 0xffc080, 8, 9); src(14.5, H - 0.3, -30, 0xffc080, 8, 9);
   const sDoor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 2.0), new THREE.MeshStandardMaterial({ color: 0x4a5058, metalness: 0.6, roughness: 0.45 })); sDoor.position.set(16.5, Y0 + 1.2, -10); scene.add(sDoor);
   W.doors.service = { box: blockBox(16.35, 0, -11, 16.65, 2.4, -9), open: 0, target: 0, upd: (u) => { sDoor.position.z = -10 - u * 1.9; } };
+  // service keypad (yard side) and its residue: four worn keys pressed in order by the last hand that used it
+  B.box(M.darkSteel, 16.62, Y0 + 1.05, -8.75, 16.72, Y0 + 1.55, -8.45);
+  const kp = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.42), new THREE.MeshBasicMaterial({ map: screenTex('keypad', 128, 208, (g) => { g.font = `600 22px ${FONT}`; g.textAlign = 'center'; for (let i = 0; i < 12; i++) { const k = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'][i]; g.fillStyle = '#16242c'; g.fillRect(8 + (i % 3) * 40, 40 + Math.floor(i / 3) * 40, 32, 32); g.fillStyle = '#9fb4c8'; g.fillText(k, 24 + (i % 3) * 40, 64 + Math.floor(i / 3) * 40); } g.fillStyle = '#ffb070'; g.fillText('SERVICE', 64, 26); }), toneMapped: false }));
+  kp.position.set(16.73, Y0 + 1.3, -8.6); kp.rotation.y = Math.PI / 2; scene.add(kp);
+  const kpOld = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.8), new THREE.MeshBasicMaterial({ map: canvasTex(128, 208, (g) => {
+    g.clearRect(0, 0, 128, 208); g.font = `700 22px ${FONT}`; g.textAlign = 'center';
+    [['0', 10, 1], ['8', 7, 2], ['1', 0, 3], ['4', 3, 4]].forEach(([k, i, n]) => { const x = 24 + (i % 3) * 40, y = 56 + Math.floor(i / 3) * 40; g.fillStyle = 'rgba(95,230,255,0.85)'; g.beginPath(); g.arc(x, y, 17, 0, 7); g.fill(); g.fillStyle = '#021016'; g.fillText(k, x, y + 8); g.fillStyle = '#9ff4ff'; g.font = `700 14px ${FONT}`; g.fillText(String(n), x + 16, y - 12); g.font = `700 22px ${FONT}`; });
+  }, 'm8kpOld'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  kpOld.position.set(16.8, Y0 + 1.3, -8.6); kpOld.rotation.y = Math.PI / 2; scene.add(kpOld); W.ghosts.keypad = kpOld;
   // ANTECHAMBER (x -8..8, z -50..-60), the containment control room
-  slab(-8, -50, 8, -60.6, 0.12, M.floor, 0.3, false);
+  slab(-8, -50, 8, -60.6, 0.12, M.floor, 0.3);
   wall(2, -46, 2, -50, H, M.wall, [], Y0); wall(2, -50, 8, -50, 4.2, M.wall, [], Y0); wall(-8, -50, -2, -50, 4.2, M.wall, [], Y0);
   wall(-8, -50, -8, -60, 4.2, M.wallDark, [], Y0); wall(8, -50, 8, -60, 4.2, M.wallDark, [], Y0);
   B.box(M.ceiling, -8, 4.3, -60.4, 8, 4.5, -50);
@@ -451,6 +482,12 @@ export function buildHelix(game, scene, opts = {}) {
   const bdl = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 0.3), bdM), bdr = bdl.clone(); bdl.position.set(-0.75, Y0 + 1.5, -60); bdr.position.set(0.75, Y0 + 1.5, -60); bd.add(bdl, bdr); scene.add(bd); game.blocker(bdl); game.blocker(bdr);
   const bdRing = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.05, 6, 48), cyanGlow.clone()); bdRing.position.set(0, Y0 + 1.6, -59.8); scene.add(bdRing); W.bdRing = bdRing;
   W.doors.chamber = { box: blockBox(-1.5, 0, -60.3, 1.5, 3.1, -59.7), open: 0, target: 0, upd: (u) => { bdl.position.x = -0.75 - u * 1.45; bdr.position.x = 0.75 + u * 1.45; } };
+  // the antechamber door at the end of the research corridor (frosted glass, badge reader N0)
+  B.box(M.wall, -2, Y0 + 2.6, -50.12, 2, 4.3, -49.88);
+  const adM = new THREE.MeshPhysicalMaterial({ color: 0xb8c8d4, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.6, depthWrite: false });
+  const adl = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.5, 0.06), adM), adr = adl.clone(); adl.position.set(-1.0, Y0 + 1.25, -50.2); adr.position.set(1.0, Y0 + 1.25, -50.2); scene.add(adl, adr);
+  const adSign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), new THREE.MeshBasicMaterial({ map: TEX.sign('CONTAINMENT · N0', '#5fe6ff', '#0c1418'), toneMapped: false })); adSign.position.set(0, Y0 + 2.8, -49.74); scene.add(adSign);
+  W.doors.ante = { box: blockBox(-2, 0, -50.35, 2, 2.6, -50.0), open: 0, target: 0, upd: (u) => { adl.position.x = -1.0 - u * 1.9; adr.position.x = 1.0 + u * 1.9; } };
   const AC = P.anteConsole; B.box(M.darkSteel, AC[0] - 2.2, Y0, AC[2] - 0.45, AC[0] + 2.2, Y0 + 0.95, AC[2] + 0.45); blockBox(AC[0] - 2.2, 0, AC[2] - 0.45, AC[0] + 2.2, 1.0, AC[2] + 0.45);
   W.screens.ante = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), new THREE.MeshBasicMaterial({ map: TEX.ante('idle'), toneMapped: false })); W.screens.ante.position.set(AC[0], Y0 + 1.35, AC[2] + 0.3); W.screens.ante.rotation.x = -0.35; scene.add(W.screens.ante);
   W.screens.version = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), new THREE.MeshBasicMaterial({ map: TEX.version(), toneMapped: false, transparent: true, opacity: 0 })); W.screens.version.position.set(0, 3.25, -50.3); W.screens.version.rotation.y = Math.PI; scene.add(W.screens.version);
@@ -479,8 +516,6 @@ export function buildHelix(game, scene, opts = {}) {
     B.boxc(M.chamber, ...polarC(deg, CH.r + 1.9), CHY + 2, 2.6, 4, 0.3, rot);
     const sideA = polarC(deg - 8, CH.r + 1.0), sideB = polarC(deg + 8, CH.r + 1.0);
     B.boxc(M.chamber, sideA[0], CHY + 2, sideA[1], 0.3, 4, 1.8, rot); B.boxc(M.chamber, sideB[0], CHY + 2, sideB[1], 0.3, 4, 1.8, rot);
-    blockBox(...[Math.min(sideA[0], sideB[0]) - 0.3, 0, Math.min(sideA[1], sideB[1]) - 0.3].slice(0, 1), 0, Math.min(sideA[1], sideB[1]) - 0.3, 0, 0, 0); // placeholder (replaced below)
-    col.boxes?.pop?.();
     const [bx, bz] = polarC(deg, CH.r + 2.0); blockBox(bx - 0.6, 0, bz - 0.6, bx + 0.6, 4, bz + 0.6);
     for (const s of [sideA, sideB]) blockBox(s[0] - 0.35, 0, s[1] - 0.35, s[0] + 0.35, 4, s[1] + 0.35);
     const clamp = new THREE.Group(); clamp.position.set(x, CHY, z); clamp.rotation.y = rot; scene.add(clamp);

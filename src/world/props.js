@@ -58,6 +58,7 @@ export function lampPost(color = 0xffd9a8, h = 6.5) {
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, h, 10), metal); pole.position.y = h / 2; pole.castShadow = true; g.add(pole);
   const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.6), metal); arm.position.set(0, h - 0.1, 0.7); g.add(arm);
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.08, 0.7), glowMat(color, 5)); head.position.set(0, h - 0.17, 1.3); g.add(head);
+  g.userData.contactShadow = { radius: 0.3, scale: 0.8 };   // the engine's contact shadows ground the pole (docs/RENDERING.md)
   return g;
 }
 

@@ -2287,7 +2287,7 @@ def build(c, tex_dir):
     else:
         parts += shoe_objects(B, c, cov)
         ex = extras(c, B, cov, layers)
-    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet", "strap_", "gadget_"))]    # even quads / thin shells / hard surface: no decimation
+    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet", "strap_", "gadget_", "pouch", "buckle", "panel", "knot"))]    # even quads / thin shells / hard surface: no decimation
     gx = (gk["glow"] + gk["props"]) if gk else []      # separate skinned meshes: glow (gx_*) and hand props (gp_*)
     parts += [o for o in ex if o not in cloth]
     if costume_mode:      # aux pieces packed, their uvs mapped, then the atlas painted (it needs the pieces)
@@ -2344,7 +2344,7 @@ def select_class(mesh, cls, which):
     hem = bm.verts.layers.float.get("_hem")
     ring = set(v for v in bm.verts if v[hem] > 0.5) if hem is not None else set()
     for f in bm.faces:
-        f.select_set(cls(f.calc_center_median()) == which and not (keep is not None and any(v[keep] > 0.5 for v in f.verts))
+        f.select_set(cls(f, bm) == which and not (keep is not None and any(v[keep] > 0.5 for v in f.verts))
                      and not any(v in ring for v in f.verts))
     bm.select_flush_mode()
     for e in bm.edges:
@@ -2441,6 +2441,53 @@ def feature_group(mesh, tex_path):
     return float((wv > 0.5).mean())
 
 
+DEC_DBG = []
+
+
+def split_uv_seams(mesh):
+    """Cut the mesh open along its atlas island borders before the collapse: open borders are never collapsed
+    (select_class), so no triangle can end up spanning two islands (a smear of skin or of another garment's
+    texels across a coat). The cut vertices are tagged `_seam` and welded back after the collapse."""
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    uvl = bm.loops.layers.uv.active
+    if uvl is None:
+        bm.free()
+        return 0
+    seams = []
+    for ed in bm.edges:
+        if len(ed.link_faces) != 2:
+            continue
+        uvs = []
+        for f in ed.link_faces:
+            m = {l.vert.index: l[uvl].uv.copy() for l in f.loops if l.vert in ed.verts}
+            uvs.append(m)
+        if any((uvs[0][v.index] - uvs[1][v.index]).length > 1e-5 for v in ed.verts):
+            seams.append(ed)
+    sl = bm.verts.layers.int.get("_seam") or bm.verts.layers.int.new("_seam")
+    for ed in seams:
+        for v in ed.verts:
+            v[sl] = 1
+    if seams:
+        bmesh.ops.split_edges(bm, edges=seams)
+    bm.to_mesh(mesh.data)
+    bm.free()
+    return len(seams)
+
+
+def join_uv_seams(mesh):
+    """Weld the vertices split by split_uv_seams (they never moved) so the shading stays smooth across the seam."""
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    sl = bm.verts.layers.int.get("_seam")
+    if sl is not None:
+        vs = [v for v in bm.verts if v[sl]]
+        bmesh.ops.remove_doubles(bm, verts=vs, dist=1e-6)
+        bm.verts.layers.int.remove(sl)
+    bm.to_mesh(mesh.data)
+    bm.free()
+
+
 def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest."""
     feat = feature_group(mesh, tex) if tex else None
@@ -2448,26 +2495,32 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     e = to_bl(B.L.eye)
     hc = to_bl(B.L.eye + np.array([0, 0.02, -0.08]))
 
-    def cls(p):
+    def cls(f, bm=None):
+        # hands (bare or gloved) are their own class: a collapse driven by the body ratio turns the fingers into a cone
+        hl = bm.verts.layers.float.get("_hand") if bm is not None else None
+        if hl is not None and min(v[hl] for v in f.verts) > 0.5:
+            return "hand"
+        p = f.calc_center_median()
         d = p - e
         if d.y < 0.03 and -0.13 < d.z < 0.075 and abs(d.x) < 0.075:
             return "face"
         if (p - hc).length < 0.2 and p.z > B.J["neck"].z - 0.02:
             return "head"
         return "body"
+    nseam = 0 if os.environ.get("NOSEAM") else split_uv_seams(mesh)
     bpy.context.view_layer.objects.active = mesh
     bpy.ops.object.mode_set(mode="EDIT")
 
     def counts():
         bm = bmesh.from_edit_mesh(mesh.data)
         kl = bm.verts.layers.float.get("_keep")
-        n = {"face": 0, "head": 0, "body": 0}
+        n = {"face": 0, "head": 0, "body": 0, "hand": 0}
         kept = 0
         for f in bm.faces:
             if kl is not None and any(v[kl] > 0.5 for v in f.verts):
                 kept += len(f.verts) - 2
             else:
-                n[cls(f.calc_center_median())] += len(f.verts) - 2
+                n[cls(f, bm)] += len(f.verts) - 2
         return n, kept
     n, kept = counts()
     target = max(target - kept, 2000)          # protected cloth tails are not decimated
@@ -2475,25 +2528,30 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     if total > target:
         face_min = 0.3 if face_keep < 1.0 else 0.4      # crowds / children are seen from further away
         head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
+        hand_k = 0.45 if target >= 8000 else 0.35     # fingers stay fingers (they are seen in every gesture)
         for _ in range(24):      # the body (and its garments) must not drop below ~30 %: spikes and chords appear
-            body_k = (target - n["face"] * face_keep - n["head"] * head_k) / max(n["body"], 1)
+            body_k = (target - n["face"] * face_keep - n["head"] * head_k - n["hand"] * hand_k) / max(n["body"], 1)
             if body_k >= 0.3:
                 break
             head_k = max(0.2, head_k * 0.88)
             face_keep = max(face_min, face_keep * 0.94)
         body_k = max(body_k, 0.12)
-        for which, ratio in (("body", body_k), ("head", head_k), ("face", face_keep)):
+        hand_k = max(hand_k, body_k)
+        for which, ratio in (("body", body_k), ("hand", hand_k), ("head", head_k), ("face", face_keep)):
             if ratio >= 0.999:
                 continue
             select_class(mesh, cls, which)
             bpy.ops.mesh.decimate(ratio=float(np.clip(ratio, 0.05, 1.0)), **(vgk if which == "body" else {}))
         n2, _ = counts()
+        DEC_DBG[:] = [n2, dict(body=round(body_k, 2), hand=round(hand_k, 2), head=round(head_k, 2), face=round(face_keep, 2))]
         tot2 = sum(n2.values())
         if tot2 > target * 1.01:   # land on the budget: the body takes the overshoot
             select_class(mesh, cls, "body")
             bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)), **vgk)
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
+    if nseam:
+        join_uv_seams(mesh)
     nfix = fix_uv_stretch(mesh)
     if mesh.data.uv_layers:     # a collapse can push a corner a hair outside the atlas: 0..1 keeps texcoords quantizable
         uvd = mesh.data.uv_layers.active.data
@@ -2508,7 +2566,7 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     if feat is not None:
         mesh.vertex_groups.remove(mesh.vertex_groups["feat"])
         print("  feature-protected vertices %.0f %%" % (feat * 100), flush=True)
-    print("  decimate", c_id(mesh), n, "->", sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris (target", target, ")", flush=True)
+    print("  decimate", c_id(mesh), n, "->", sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris (target", target, ")", DEC_DBG, flush=True)
 
 
 def c_id(mesh):

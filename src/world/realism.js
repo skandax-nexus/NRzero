@@ -3552,7 +3552,7 @@ export function roadPaint(o = {}) {
 // types), so setWetness() is a global switch with no recompiles. Dry (amount 0) costs one uniform branch.
 const WET_A = { x: 0, y: 0, z: 0, w: 0 };          // amount, time (s), puddles, detail (ripples + streaks)
 const WET_B = { x: 0, y: 0.4, z: 0.22, w: 0.56 };  // ground y, puddle max height above ground, puddle scale (1/m), coverage threshold
-const ENV_S = { x: 1, y: 0, z: 0, w: 0 };           // x: image-based specular multiplier (see setEnvSpecular)
+const ENV_S = { x: 1, y: 0.1, z: 0, w: 0 };         // x: image-based specular multiplier (see setEnvSpecular), y: puddle roughness
 /**
  * Global multiplier on the image-based specular of every MeshStandard / MeshPhysical material (default 1). The engine
  * lowers it when a dark place's probe was brightened to the studio level the scene was authored for: diffuse ambient
@@ -3561,7 +3561,8 @@ const ENV_S = { x: 1, y: 0, z: 0, w: 0 };           // x: image-based specular m
 export function setEnvSpecular(k = 1) { ENV_S.x = Math.max(0, k); return ENV_S.x; }
 /**
  * Global wet-weather state: setWetness({ amount: 0..1, puddles: 0..1, detail: 0..1, ground: y, height: m, scale: 1/m,
- * coverage: 0..1 (fraction of flat ground under water, default ~0.3), time: s }). Missing fields keep their value.
+ * coverage: 0..1 (fraction of flat ground under water, default ~0.3), mirror: puddle roughness (default 0.1: point lights stretch into streaks instead of hot dots), time: s }).
+ * Missing fields keep their value.
  * Returns the current state. The engine drives it from rain in the scene (kit Rain / particles({ kind: 'rain' })).
  */
 export function setWetness(o = {}) {
@@ -3573,9 +3574,10 @@ export function setWetness(o = {}) {
   if (o.height !== undefined) WET_B.y = Math.max(0.01, o.height);
   if (o.scale !== undefined) WET_B.z = o.scale;
   if (o.coverage !== undefined) WET_B.w = 0.72 - Math.max(0, Math.min(1, o.coverage)) * 0.53;
+  if (o.mirror !== undefined) ENV_S.y = Math.max(0.02, Math.min(1, o.mirror));
   return getWetness();
 }
-export function getWetness() { return { amount: WET_A.x, time: WET_A.y, puddles: WET_A.z, detail: WET_A.w, ground: WET_B.x, height: WET_B.y, scale: WET_B.z }; }
+export function getWetness() { return { amount: WET_A.x, time: WET_A.y, puddles: WET_A.z, detail: WET_A.w, ground: WET_B.x, height: WET_B.y, scale: WET_B.z, mirror: ENV_S.y }; }
 
 let wetInstalled = false;
 function installWetChunks() {
@@ -3626,7 +3628,7 @@ if ( rzWetA.x > 0.001 ) {
 	}
 	material.diffuseColor *= 1.0 - 0.2 * rzwG - 0.25 * rzwPud;
 	material.roughness = mix( material.roughness, max( material.roughness * 0.32, 0.08 ), rzwG * 0.65 );
-	material.roughness = max( mix( material.roughness, 0.05, rzwPud ), min( geometryRoughness, 0.25 ) );
+	material.roughness = max( mix( material.roughness, rzEnvS.y, rzwPud ), min( geometryRoughness, 0.25 ) );
 	if ( rzWetA.w <= 0.0 ) normal = normalize( mix( normal, nonPerturbedNormal, rzwPud ) );
 }
 `;
@@ -3723,7 +3725,8 @@ export class EnvProbe {
  * multiplies the frame below each tracked object's feet. Cheap enough for every tier; fades out with distance.
  *   const cs = contactShadows({ max: 48, strength: 0.5 }); scene.add(cs.mesh);
  *   cs.track([kai.root, ...walkers.map(w => w.c.root)]);   each frame: cs.update(camera)
- * track() entries are Object3Ds (radius = opts.radius, default 0.45 m) or { object, radius, strength }.
+ * track() entries are Object3Ds (radius = opts.radius, default 0.45 m) or { object, radius, strength, scale }
+ * (strength replaces the shared strength, scale multiplies it).
  */
 export function contactShadows(o = {}) {
   const max = o.max ?? 48;
@@ -3755,7 +3758,7 @@ export function contactShadows(o = {}) {
         const ob = e.object; if (!ob.parent || !shown(ob)) continue;
         ob.getWorldPosition(P);
         const dist = camera ? P.distanceTo(camera.position) : 0;
-        const k = (e.strength ?? api.strength) * (1 - THREE.MathUtils.smoothstep(dist, api.fade[0], api.fade[1]));
+        const k = (e.strength ?? api.strength) * (e.scale ?? 1) * (1 - THREE.MathUtils.smoothstep(dist, api.fade[0], api.fade[1]));
         if (k <= 0.005) continue;
         const rr = e.radius ?? api.radius;
         P.y += api.lift; S.set(rr, 1, rr);
