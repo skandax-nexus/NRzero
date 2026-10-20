@@ -21,7 +21,7 @@ registerCast('caretaker', {
   bio: 'Has kept the dam at Reservoir 7 since it was filled. Grows beans on the old terrace. Asks few questions.',
   // 2049 field wear: graphite-olive softshell parka over a technical knit, cargo trousers, work boots; AR earpiece,
   // a ruggedised slate and an AR earpiece are attached in the mission (see dressCaretaker).
-  look: { era: '2049', costume: 'caretaker', sex: 'f', template: 'arin', female: true, age: 57, height: 1.66, build: 1.02, skin: 0xcf9f82, hair: 0x6a625a, hairStyle: 'short', eyes: 0x4a5a5a,
+  look: { era: '2049', costume: 'caretaker', sex: 1, template: 'arin', female: true, age: 57, height: 1.66, build: 1.02, skin: 0xcf9f82, hair: 0x6a625a, hairStyle: 'short', eyes: 0x4a5a5a,
     top: 0x3b4441, topKind: 'synthetic', topType: 'jacket', coat: 0x3d4842, coatKind: 'fabric', coatType: 'long', pants: 0x272b30, pantsType: 'cargo', shoes: 'boots', boots: 0x1b1d20,
     glasses: true, wrinkles: 0.55, face: { jaw: 0.1, cheek: 0.2, nose: 0.1, noseWidth: 0, lips: -0.1, brow: 0.1, eyeSize: -0.05, faceLength: 0.15, chin: 0.05 } },
   rimColor: 0x8fd8ff,
@@ -31,16 +31,16 @@ registerCast('echo', { name: 'ECHO', role: 'Temporal residue', voice: true, vp: 
 registerCast('echo2049', { name: 'ECHO · 2029', role: 'Temporal residue · Helix survey', voice: true, vp: { sex: 'f', pitch: 1.0, rate: 1.0, langs: ['en-US', 'en-GB'] } });
 // the 2029 Helix survey lead, seen only as residue (Helix 2049 lab jacket over a navy mock-neck, headset, wrist slate)
 registerCast('surveyor', { name: 'SURVEY LEAD · 2029', role: 'Helix survey · Site Zero',
-  look: { era: '2049', costume: 'helix_sci_f', sex: 'f', female: true, age: 44, height: 1.63, build: 0.92, skin: 0xf1c6a8, hair: 0x15130f, hairStyle: 'bob', eyes: 0x2a1c12,
+  look: { era: '2049', costume: 'helix_sci_f', sex: 1, female: true, age: 44, height: 1.63, build: 0.92, skin: 0xf1c6a8, hair: 0x15130f, hairStyle: 'bob', eyes: 0x2a1c12,
     top: 0x1d2430, topKind: 'synthetic', topType: 'jacket', coat: 0xe8eaec, coatKind: 'fabric', pants: 0x4a4e54, pantsType: 'trousers', shoes: 'shoes', boots: 0xe6e2da },
   vp: { sex: 'f', pitch: 1.0, rate: 1.02, langs: ['en-US', 'en-GB'] } });
 registerCast('villager', { name: 'VILLAGER', role: 'The lower village',
-  look: { era: 'ancient', costume: 'villager', sex: 'm', female: false, age: 52, height: 1.7, build: 0.92, skin: 0x6b4029, hair: 0x3a3430, hairStyle: 'curly', stubble: 0.6,
+  look: { era: 'ancient', costume: 'villager', sex: 0, female: false, age: 52, height: 1.7, build: 0.92, skin: 0x6b4029, hair: 0x3a3430, hairStyle: 'curly', stubble: 0.6,
     top: 0xd9c9a0, topKind: 'fabric', topType: 'tunic', sash: 0x2f5a5a, pants: 0xb89a6a, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220 },
   vp: { sex: 'm', pitch: 0.95, rate: 0.98, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
 // ancient settlement wear: undyed linen tunic, red-ochre wrap, leg wraps and sandals
 registerCast('potter', { name: 'IRU', role: 'Potter · the upper terrace',
-  look: { era: 'ancient', costume: 'potter', sex: 'f', template: 'mirela', female: true, age: 46, height: 1.6, build: 1.0, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', eyes: 0x24160c, top: 0xb4884e, topKind: 'fabric', topType: 'tunic', sash: 0x9b3b24, pants: 0x5a4632, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, wrinkles: 0.35 },
+  look: { era: 'ancient', costume: 'potter', sex: 1, template: 'mirela', female: true, age: 46, height: 1.6, build: 1.0, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', eyes: 0x24160c, top: 0xb4884e, topKind: 'fabric', topType: 'tunic', sash: 0x9b3b24, pants: 0x5a4632, pantsType: 'wraps', shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, wrinkles: 0.35 },
   rimColor: 0xffb05a, glow: 0x3a2410, bg: 0x140d08, vp: { sex: 'f', pitch: 1.05, rate: 1.0, langs: ['en-IN', 'en-ZA', 'en-GB'] } });
 // every unnamed villager wears the era's clothes (keeps the 3D cast on its settler templates)
 // each one names an anc_* archetype from docs/COSTUMES.md so the costume pass can dress it
@@ -48,7 +48,7 @@ const ANC_M = ['anc_m1', 'anc_m2', 'anc_m3', 'anc_m4'], ANC_F = ['anc_f1', 'anc_
 const ancientLook = (r, o = {}) => {
   const b = settlerLook(r), kid = !!o.child, female = o.female ?? b.female;
   const costume = kid ? (female ? 'anc_kid_f' : 'anc_kid_m') : (female ? ANC_F : ANC_M)[Math.floor(r() * 4)];
-  return { ...b, female, sex: female ? 'f' : 'm', age: kid ? (female ? 7 : 9) : ANC_AGE[costume], era: 'ancient', costume, topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', ...o };
+  return { ...b, female, sex: female ? 1 : 0, age: kid ? (female ? 7 : 9) : ANC_AGE[costume], era: 'ancient', costume, topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', ...o };
 };
 
 // ---------- music: one valley motif (A C E D) carried by each state's instruments ----------
@@ -854,7 +854,7 @@ export default {
       const m = shardFor(s);
       const it = act({ pos: s.p, radius: 1.8, states: [s.st], prompt: 'Take the temporal shard', enabled: () => !s.cond || s.cond(), onUse: () => {
         if (T.current !== s.st || (s.cond && !s.cond())) return;
-        done(it); m.userData.taken = true; refreshWorld(); S.shards++; F.m5_shards = S.shards; audio.sfxPlay('anomaly'); audio.sfxPlay('pickup');
+        done(it); m.userData.taken = true; refreshWorld(); S.shards++; F.m5_shards = S.shards; F.shards = (F.shards || 0) + 1; audio.sfxPlay('anomaly'); audio.sfxPlay('pickup');
         ui.toast(`TEMPORAL SHARD ${S.shards}/6\n${s.note}`, 4200);
         if (S.shards === 6) ui.addEvidence('Six shards of one valley', 'Every shard resonates at the Water Ring\'s frequency, whatever century it was found in. The valley is one object seen three times.', 'THE VILLAGE · SHARDS');
       } });
@@ -1236,7 +1236,8 @@ export default {
       await game.shot([MX + 1.6, MY - 1.0, MZ + 2.4], [tag.position.x, tag.position.y, tag.position.z], 1.4, { fov: 30 });
       await game.say('kai', 'Helix survey. Site zero, fourteenth of March 2029. Core recovered, sent to Helix Lab 1. Site to be flooded. Authorised: E. Rook.');
       await game.say('kai', F.trustedHale === false ? 'Security escort: Brandt. The man I trusted in the lift.' : 'Security escort: Brandt. Hale was right about him.');
-      ui.addEvidence('Survey tag SZ-0', 'Helix surveyed "Site Zero" on 14.03.2029, removed the machine\'s core to Helix Lab 1, and flooded the valley in 2031. Authorised: E. Rook. Security escort: Brandt. Helix says it built the Chronolith in 2031.', 'THE CHAMBER · 2049');
+      await game.say('kai', 'And in pencil, in the margin, someone else\'s hand: "Ask Hensel."');
+      ui.addEvidence('Survey tag SZ-0', 'Helix surveyed "Site Zero" on 14.03.2029, removed the machine\'s core to Helix Lab 1, and flooded the valley in 2031. Authorised: E. Rook. Security escort: Brandt. Helix says it built the Chronolith in 2031. Pencilled in the margin: "Ask Hensel."', 'THE CHAMBER · 2049');
       leave(); objective(mainObjective());
       ui.toast('The chamber exists in every state. Switch here.', 3500);
       compared[T.current] = true;
@@ -1345,6 +1346,13 @@ export default {
     F.m5_promise = pick === 0 ? 'tried' : 'refused';
     if (pick === 0) await game.talk([['niko', 'Trying is what the sixteen said.'], ['kai', 'Then I\'ll be the first who means it.']]);
     else await game.talk([['niko', 'Mira. The sister in the drawing.'], ['kai', 'She\'s the reason for all of it.'], ['niko', 'Then I will keep holding your arm.']]);
+    // bridge to M6 (Rain City, "Ask Hensel") and M7 (Niko waits at the Sky House)
+    await game.talk([
+      ['niko', 'Go back to your city. Find who carried the heart away.'],
+      ['niko', 'When the stone brings you back to us, come to the Sky House beyond the ridge. I will wait at the foot of the steps.'],
+      ['kai', 'If it brings me back.'],
+      ['niko', 'It always has.'],
+    ]);
     niko.lookTarget = null; kai.lookTarget = null;
     F.m5_machineFound = true; F.helixFoundMachine = true; F.villageCausalChain = ['river diverted · c. 1000 BCE', 'wall reinforced · c. 400 CE', 'pressure gate released · 2049'];
     ui.addEvidence('Helix found it', 'Niko: "Your Helix did not invent the machine. It found it." The Telling ends with "people in white" lifting the heart of the Ring out of the drowned valley. Kai told the story to the keepers sixteen times before.', 'THE CHAMBER');

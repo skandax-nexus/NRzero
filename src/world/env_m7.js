@@ -42,7 +42,7 @@ export function registerM7Cast() {
     name: 'SEFA', role: 'Sky Keeper of the Observatory',
     bio: 'The oldest keeper of the Sky House. Has counted the sun\'s risings for fifty years and keeps a seat in the sky for a star that has not arrived.',
     // ancient elder keeper (COSTUMES.md anc_f4 elder): ankle-length indigo-teal linen tunic, undyed wool mantle pinned with bronze, leg wraps, sandals
-    look: { era: 'ancient', costume: 'anc_f4', sex: 'f', female: true, template: 'mirela', age: 67, height: 1.6, build: 0.9, skin: 0x6b4029, hair: 0xb8b0a4, hairStyle: 'bun', eyes: 0x24160c,
+    look: { era: 'ancient', costume: 'anc_f4', sex: 1, female: true, template: 'mirela', age: 67, height: 1.6, build: 0.9, skin: 0x6b4029, hair: 0xb8b0a4, hairStyle: 'bun', eyes: 0x24160c,
       face: { jaw: -0.15, cheek: 0.45, nose: 0.25, noseWidth: 0.35, lips: 0.1, brow: 0.2, eyeSize: -0.1, faceLength: 0.2, chin: 0 }, wrinkles: 0.8,
       topType: 'tunic', top: 0x2f5a5a, topKind: 'fabric', sash: 0xd0a24a, pantsType: 'wraps', pants: 0x5a4632, shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050 },
     rimColor: 0xffb05a, glow: 0x3a2410, bg: 0x140d08,
@@ -52,7 +52,7 @@ export function registerM7Cast() {
     name: 'DACE', role: 'Scavenger crew boss · 2196',
     bio: 'Strips the observatory\'s bronze every week, and every week the house puts it back. Wears a rewind gauntlet he does not understand.',
     // 2196 survivor (COSTUMES.md surv_m1 scavenger): patched hooded dust-ochre poncho, scav_plate carrier, wrapped cargo trousers, resoled boots, respirator at the neck
-    look: { era: '2196', costume: 'surv_m1', sex: 'm', template: 'arin', age: 44, height: 1.79, build: 1.02, skin: 0xa77a5d, hair: 0x2a1c14, hairStyle: 'buzz', eyes: 0x3a2a18, beard: 0x2a1c14,
+    look: { era: '2196', costume: 'surv_m1', sex: 0, template: 'arin', age: 44, height: 1.79, build: 1.02, skin: 0xa77a5d, hair: 0x2a1c14, hairStyle: 'buzz', eyes: 0x3a2a18, beard: 0x2a1c14,
       face: { jaw: 0.4, cheek: 0.1, nose: 0.35, noseWidth: 0.2, lips: -0.2, brow: 0.45, eyeSize: -0.2, faceLength: 0.15, chin: 0.2 }, wrinkles: 0.35, scar: true,
       topType: 'armored', top: 0x8a7458, topKind: 'fabric', coat: 0x8a7458, coatKind: 'fabric', hood: true, vest: 0x4a4a3a, pantsType: 'cargo', pants: 0x5a4a38, shoes: 'boots', boots: 0x2a2018, gloves: 0x3a3028 },
     rimColor: 0xb6ff8a, glow: 0x1a2410, bg: 0x0e1008,
@@ -64,15 +64,15 @@ export function registerM7Cast() {
 }
 // grunts: era 2196 survivor archetypes, built at LOD (they are seen mostly at range)
 export const SCAV_LOOKS = [
-  { era: '2196', costume: 'surv_f1', sex: 'f', female: true, template: 'maren', age: 27, height: 1.7, build: 0.96, skin: 0x6b4029, hair: 0x15100b, hairStyle: 'tied-back', eyes: 0x24160c,
+  { era: '2196', costume: 'surv_f1', sex: 1, female: true, template: 'maren', age: 27, height: 1.7, build: 0.96, skin: 0x6b4029, hair: 0x15100b, hairStyle: 'tied-back', eyes: 0x24160c,
     topType: 'jacket', top: 0x6a5a44, topKind: 'fabric', vest: 0x7a6a3a, pantsType: 'cargo', pants: 0x4a4a32, shoes: 'boots', boots: 0x2a2018, gloves: 0x3a3028, lod: true },
-  { era: '2196', costume: 'surv_m1', sex: 'm', template: 'arin', age: 36, height: 1.76, build: 0.94, skin: 0xd8b08e, hair: 0x3a3430, hairStyle: 'short', eyes: 0x3a3028, stubble: true,
+  { era: '2196', costume: 'surv_m1', sex: 0, template: 'arin', age: 36, height: 1.76, build: 0.94, skin: 0xd8b08e, hair: 0x3a3430, hairStyle: 'short', eyes: 0x3a3028, stubble: true,
     topType: 'jacket', hood: true, top: 0x6a6a64, topKind: 'fabric', coat: 0x6a6a64, coatKind: 'fabric', pantsType: 'cargo', pants: 0x8a7458, shoes: 'boots', boots: 0x2a2018, lod: true },
 ];
 // ancient acolytes at the Sun Gate (anc_m3 sentry-turned-acolyte, anc_f1 water carrier)
 export const ACOLYTES = [
-  { era: 'ancient', costume: 'anc_m3', sex: 'm', age: 21, height: 1.76, build: 0.92, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'short', topType: 'tunic', top: 0xcdb48a, topKind: 'fabric', sash: 0x9b3b24, pantsType: 'wraps', pants: 0x7a6248, shoes: 'sandals', boots: 0x4a3220, lod: true },
-  { era: 'ancient', costume: 'anc_f1', sex: 'f', female: true, age: 24, height: 1.62, build: 0.9, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'long', topType: 'tunic', top: 0xd9c9a0, topKind: 'fabric', sash: 0x2f5a5a, pantsType: 'wraps', pants: 0x5a4632, shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, lod: true },
+  { era: 'ancient', costume: 'anc_m3', sex: 0, age: 21, height: 1.76, build: 0.92, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'short', topType: 'tunic', top: 0xcdb48a, topKind: 'fabric', sash: 0x9b3b24, pantsType: 'wraps', pants: 0x7a6248, shoes: 'sandals', boots: 0x4a3220, lod: true },
+  { era: 'ancient', costume: 'anc_f1', sex: 1, female: true, age: 24, height: 1.62, build: 0.9, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'long', topType: 'tunic', top: 0xd9c9a0, topKind: 'fabric', sash: 0x2f5a5a, pantsType: 'wraps', pants: 0x5a4632, shoes: 'sandals', boots: 0x4a3220, bracelets: 0xc9a050, lod: true },
 ];
 
 // ---------------------------------------------------------------------------------------------

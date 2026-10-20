@@ -1446,10 +1446,14 @@ def hood_drape(L, B):
     L.pos[:, 2] = cz + (L.pos[:, 2] - cz) / np.maximum(r, 1e-6) * nr
 
 
-def ring_grid(B, pts, ys, pad, n=40, cz=None):
-    """(len(ys) x n x 3) rings around (0, zc) fitted to pts (MH coords) at heights ys (+ pad per ring)."""
+def ring_grid(B, pts, ys, pad, n=40, cz=None, dilate=0):
+    """(len(ys) x n x 3) rings around (0, zc) fitted to pts (MH coords) at heights ys (+ pad per ring); dilate:
+    each angle bin takes the largest radius of its +-dilate neighbours (sparse points such as a tunic's tail columns)."""
     czf = cz or (lambda yy: zc_at(B, yy))
     R = radial_table(pts, czf, np.arange(min(ys) - 0.02, max(ys) + 0.03, 0.01), nb=n)
+    for _ in range(dilate):
+        R = np.maximum(R, np.maximum(np.roll(R, 1, 1), np.roll(R, -1, 1)))
+        R = np.maximum(R, np.r_[R[:1], R[:-1]])        # and the row above (a flaring tail just below a ring)
     ys0 = min(ys) - 0.02
     out = []
     for i, yy in enumerate(ys):
@@ -1475,7 +1479,7 @@ def skirt_piece(c, B, g, LM, layers):
     ys = [top_y - length * i / (rows - 1) for i in range(rows)]
     pad = [(0.009 if over_top else 0.004) + (0.016 if over_top else 0.006) * i / (rows - 1) for i in range(rows)]
     n = 56
-    grid = ring_grid(B, pts, ys, pad, n)
+    grid = ring_grid(B, pts, ys, pad, n, dilate=2 if over_top else 0)
     # monotonic radius + flare + pleats
     cz = zc_at(B, np.array(ys))
     for i in range(1, rows):
@@ -1509,7 +1513,8 @@ def skirt_piece(c, B, g, LM, layers):
     fix_winding_out(o, BH.to_bl(np.array([0, top_y - length / 2, cz.mean()])))
     BH.cloth_shell(o, 0.004)
     BH.set_mask(o, (0, g.get("gloss", 0.0), 0))
-    BH.WSTORE[o.name] = tail_weights(BH.obj_world_verts(o), B.J, H, top_y, long=False)
+    # over a tunic the wrap moves like the tunic's tail under it (same thigh take-over height), or the tail swings through it
+    BH.WSTORE[o.name] = tail_weights(BH.obj_world_verts(o), B.J, H, min(top_y, LM["hip"] + 0.05 * k) if over_top else top_y, long=False)
     return o
 
 

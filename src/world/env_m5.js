@@ -527,6 +527,9 @@ export function surveyTagTex(security = 'BRANDT') {
     g.font = '600 22px Rajdhani, sans-serif';
     ['SURVEYED 14.03.2029', 'CORE: RECOVERED  →  HELIX LAB 1', 'SITE STATUS: TO BE FLOODED (RES. 7, 2031)', 'AUTHORISED: E. ROOK', 'SECURITY ESCORT: ' + security].forEach((l, i) => g.fillText(l, 20, 136 + i * 34));
     g.strokeStyle = '#a8281c'; g.lineWidth = 4; g.strokeRect(330, 70, 160, 50); g.fillStyle = '#a8281c'; g.font = '700 24px Rajdhani, sans-serif'; g.fillText('NO RECORD', 346, 104);
+    // pencilled margin note in another hand (the lead into M6)
+    g.save(); g.translate(330, 300); g.rotate(-0.07); g.fillStyle = 'rgba(70,72,78,0.9)'; g.font = 'italic 600 26px Georgia, serif'; g.fillText('Ask Hensel', 0, 0);
+    g.strokeStyle = 'rgba(70,72,78,0.7)'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(-4, 8); g.lineTo(128, 4); g.stroke(); g.restore();
   }, 'm5tag' + security);
 }
 /** Valve placard at the outlet tower. */
