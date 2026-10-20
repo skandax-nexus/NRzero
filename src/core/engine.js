@@ -23,6 +23,7 @@ import * as KIT from '../world/kit.js';
 // Every pass is tier-gated in setQuality(); render() allocates nothing.
 // ---------------------------------------------------------------------------------------------------------------
 
+const _infraV = new THREE.Vector3();
 const LUMA_GLSL = 'const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);';
 const RAW_VS = `precision highp float;
   uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix;
@@ -549,17 +550,17 @@ function tierSettings(q, device) {
     high: { dprCap: 1.75, shadows: true, shadowMapMax: 4096, softShadows: true, bloom: true, bloomScale: 1, cheapPost: false, adaptive: false,
       ao: true, aa: 'smaa', dof: true, autoExposure: true,
       light: { probe: 256, probeMove: 25, puddles: 1, wetDetail: 1, contact: 0.3, rig: 2, pcfRadius: 1, shafts: 1 },
-      infra: { smallCull: 180 },
+      infra: { smallCull: 180, atlas: 2048 },
       hints: { characterDetail: 'high', crowd: 1, drawDistance: 1, maxLights: 12, particles: 1 } },
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
       light: { probe: 128, probeMove: 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
-      infra: { smallCull: 120 },
+      infra: { smallCull: 120, atlas: 2048 },
       hints: { characterDetail: m ? 'low' : 'high', crowd: 0.6, drawDistance: 0.8, maxLights: 6, particles: 0.6 } },
     low: { dprCap: m ? 1 : 0.75, shadows: false, shadowMapMax: 512, softShadows: false, bloom: false, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: null, dof: false, autoExposure: false,
       light: { probe: 64, probeMove: 0, puddles: 0, wetDetail: 0, contact: 0.5, rig: 1, pcfRadius: 1, shafts: 0 },
-      infra: { smallCull: 80 },
+      infra: { smallCull: 80, atlas: 1024 },
       hints: { characterDetail: 'low', crowd: 0.35, drawDistance: 0.6, maxLights: 4, particles: 0.35 } },
   };
   return { quality: q, mobile: m, ...T[q] };
@@ -685,7 +686,7 @@ export class Engine {
     const s = this.settings = tierSettings(q, this.device);
     this.quality = q;
     RZ.setQuality(q);
-    this._batch.smallCull = s.infra.smallCull;
+    this._batch.smallCull = s.infra.smallCull; this._batch.atlasSize = s.infra.atlas;
     const r = this.renderer;
     r.shadowMap.enabled = s.shadows;
     r.shadowMap.type = s.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
@@ -1207,6 +1208,14 @@ export class Engine {
       B.update(s, this.camera, f);
     } catch (e) { console.warn('static batching disabled for this scene', e); B.reset(); s.userData.batch = false; }
     this.stats.batches = B.stats.batches; this.stats.batched = B.stats.members; this.stats.batchMs = B.stats.ms;
+    // street kit: distance culling of small instanced props (userData.rzCullDist, scaled by the tier) and animated
+    // props (userData.rzAnimate + update(t): traffic lights), collected every 60 frames
+    if (f === 1 || f % 60 === 0) { const c = [], a = []; s.traverse(o => { if (o.userData.rzCullDist) c.push(o); if (o.userData.rzAnimate) a.push(o); }); this._culls = c; this._anims = a; }
+    if (this._culls?.length) {
+      const k = this.settings.infra.smallCull / 120, cam = this.camera.position;
+      for (const o of this._culls) { const r = o.boundingSphere || o.geometry?.boundingSphere; if (!r) continue; _infraV.copy(r.center).applyMatrix4(o.matrixWorld); o.visible = cam.distanceTo(_infraV) - r.radius < o.userData.rzCullDist * k; }
+    }
+    if (this._anims?.length && f % 15 === 0) for (const o of this._anims) o.userData.update?.(this.fx.uTime.value);
   }
 
   // A/B for captures and cost measurements: legacy = true shows the scene as before stage 4 (plain kit boxes, legacy

@@ -1816,8 +1816,8 @@ uniform highp sampler2DArray rzWA, rzWN, rzWO;
 uniform float rzWTile[7];
 uniform float rzLit, rzDay, rzIntI, rzComfort;
 varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz;
-// RZ_INTERIOR (from the realism tier): 0 = lite (one wall tap, back-wall-only rooms: phones on 'low'),
-// 1 = rooms without furniture / curtains, 2 = full interior mapping
+// RZ_INTERIOR (from the realism tier): 0 = lite facade with one wall tap ('low'), 1 = lite facade with the PBR wall
+// (albedo + normal + ORM taps: 'medium'), 2 = full interior mapping (ray-box rooms, furniture, curtains: 'high')
 #ifndef RZ_INTERIOR
 #define RZ_INTERIOR 2
 #endif
@@ -1908,7 +1908,7 @@ vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, 
 #endif
   return col;
 }
-#if RZ_INTERIOR > 0
+#if RZ_INTERIOR > 1
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   vec3 N = rzSafeN(vRzWN);
   bool horiz = abs(N.y) > 0.7;
@@ -1955,7 +1955,7 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
       float sn = rzN2(P * 4.0 + bseed * 9.0);
       vec3 c8 = vWin.rgb * (0.86 + 0.28 * sn);
       if (vWin2.x > 0.0) { float sx = P.x / vWin2.x; float st8 = smoothstep(0.47, 0.53, abs(fract(sx) - 0.5) * 2.0 * (1.0 - smoothstep(0.4, 1.2, fwidth(sx) * 2.0)));
-        c8 = mix(c8, vWin2.y > 0.5 ? vec3(0.78, 0.76, 0.72) : c8 * 0.45, st8); }
+        c8 = mix(c8, vWin2.y > 0.5 ? vec3(0.62, 0.6, 0.55) : c8 * 0.45, st8); }
       float rs = smoothstep(0.55, 0.85, rzFbm2(vRzWP.xz * 2.0 + vRzWP.y * 1.3)) * max(ruin, 0.15);
       alb = mix(c8, vec3(0.18, 0.08, 0.03), rs * 0.7); orm = vec3(1.0, mix(vWin.w, 0.9, rs), 0.0);
       if (moss > 0.0 && N.y > 0.5) alb = mix(alb, vec3(0.09, 0.14, 0.04), moss * smoothstep(0.35, 0.6, rzN2(P * 1.5)));
@@ -2100,7 +2100,8 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   }
 }
 #else
-// Lite facade for the 'low' tier: one wall texture tap and plain arithmetic (no noise octaves, no room ray-box);
+// Lite facade for the phone tiers: one wall texture tap on 'low' (three on 'medium') and plain arithmetic (no noise
+// octaves, no room ray-box);
 // windows keep their frames, mullions, sills, lit / unlit rooms with a lamp gradient and Fresnel glass, so the
 // buildings read the same from gameplay distance at about the cost of the textured boxes they replace.
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
@@ -2170,7 +2171,8 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     vec3 lc = hS.y < 0.5 ? vec3(1.0, 0.66, 0.38) : (hS.y < 0.8 ? vec3(1.0, 0.84, 0.66) : vec3(0.72, 0.86, 1.0));
     float yb = clamp((cl.y - wmin.y) / max(wmax.y - wmin.y, 0.1) + V.y * 0.25, 0.0, 1.0);
     float xb = 1.0 - abs((cl.x - mx) / max(wmax.x - wmin.x, 0.1)) * 0.8;
-    vec3 room = lit ? lc * rzIntI * (0.3 + 0.55 * hS.z) * (shop ? 1.35 : 0.8) * (0.25 + 0.75 * yb * yb) * xb : vec3(0.004);
+    vec3 room = lit ? lc * rzIntI * (0.3 + 0.55 * hS.z) * (shop ? 1.35 : 0.8) * (0.25 + 0.75 * yb * yb) * xb * mix(vec3(1.0), rzPal(fract(hS.z * 7.3)) * 1.35, 0.55) : vec3(0.004);
+    if (!shop && hS.z < 0.35) room *= mix(1.0, 0.28, step(1.0 - hS.y * 0.5, (cl.y - wmin.y) / max(wmax.y - wmin.y, 0.1)));   // a blind pulled part-way down
     room += rzPal(hS.z) * rzDay * 0.25;
     bool broke = ruin > 0.0 && rzH12(cid * 1.91 + vec2(bseed * 23.0, 0.7)) < ruin * 0.75;
     vec3 wAlb = mix(vec3(0.0), fc, frameM), wOrm = mix(vec3(1.0, broke ? 0.95 : 0.04, 0.0), vec3(1.0, 0.45, 0.25), frameM);
@@ -2557,7 +2559,7 @@ function addBuilding(B, o) {
           special(6, [...ledC, 2.2], [0, 0, 0, 0], () => placeBox(uc, yTop - 0.06, ext - 0.02, wl, 0.03, 0.03));
           detailRegion(3); for (const uu of [u0 + 0.2, u1 - 0.2]) B.beam(at(uu, yTop + 0.03, ext - 0.1), at(uu, yTop + 0.9, 0.02), 0.025, 0.025);
         } else {           // fabric awning (2026 striped, 2196 torn and faded)
-          const fc = era === 3 ? lin3([0x4a4436, 0x3b3f36, 0x51402e][Math.floor(r2() * 3)]) : lin3([0x7a1f1f, 0x1f3b5a, 0x2d4a2b, 0x6a5a2a, 0x333333][Math.floor(r2() * 5)]);
+          const fc = era === 3 ? lin3([0x4a4436, 0x3b3f36, 0x51402e][Math.floor(r2() * 3)]) : lin3([0xa83a2a, 0x2f5a86, 0x4a7040, 0xa08a3a, 0x6a5040][Math.floor(r2() * 5)]);
           special(8, [...fc, 0.85], [era === 3 ? 0 : 0.5, 1, 0, 0], () => {
             const a0 = at(u0, yTop + 0.02, 0.02), a1 = at(u1, yTop + 0.02, 0.02), b1 = at(u1, yTop - drop, ext), b0 = at(u0, yTop - drop, ext);
             B.quad(a0, b0, b1, a1, 'local'); B.quad(a0, a1, b1, b0, 'local');   // top and underside
@@ -4537,14 +4539,23 @@ function matValues(m, out) {   // numeric snapshot of everything that changes ho
 }
 const MAT_N = COL_KEYS.length * 3 + NUM_KEYS.length + BOOL_KEYS.length + 2;
 const _mv = new Float64Array(MAT_N);
-function matSignature(m) {
+function matSignature(m, atlas = false) {
   matValues(m, _mv);
   let s = m.type + '|' + Array.from(_mv, v => Math.round(v * 1e5)).join(',');
-  for (const k of MAP_KEYS) s += '|' + (m[k] ? m[k].uuid : '');
+  for (const k of MAP_KEYS) s += '|' + (m[k] ? (atlas && k === 'map' ? 'ATLAS' : m[k].uuid) : '');
   if (m.defines && Object.keys(m.defines).length) s += '|' + JSON.stringify(m.defines);
   return s;
 }
 function plainMaterial(m) { return m.onBeforeCompile === DEF_OBC && m.customProgramCacheKey === DEF_PCK; }
+// Unlit materials whose only map is a static canvas (neon signs, posters): members with different canvases can share
+// one batch through a texture atlas. Animated canvases (userData.redraw, or a version change later) are excluded.
+function atlasable(m, g) {
+  const t = m.map;
+  if (m.type !== 'MeshBasicMaterial' || !t || !t.isCanvasTexture || t.userData.redraw || !t.image || !t.image.width || !g.attributes.uv) return false;
+  if (t.repeat.x !== 1 || t.repeat.y !== 1 || t.offset.x !== 0 || t.offset.y !== 0 || t.rotation !== 0 || t.image.width > 2048 || t.image.height > 2048) return false;
+  for (const k of MAP_KEYS) if (k !== 'map' && m[k]) return false;
+  return true;
+}
 function transformSnap(o, out) {
   if (o.matrixAutoUpdate) { const p = o.position, q = o.quaternion, s = o.scale; out[0] = p.x; out[1] = p.y; out[2] = p.z; out[3] = q.x; out[4] = q.y; out[5] = q.z; out[6] = q.w; out[7] = s.x; out[8] = s.y; out[9] = s.z; for (let i = 10; i < 16; i++) out[i] = 0; }
   else out.set(o.matrix.elements);
@@ -4560,12 +4571,13 @@ export class StaticBatcher {
   constructor(opts = {}) {
     this.cell = opts.cell ?? 50; this.smallRadius = opts.smallRadius ?? 2; this.smallCull = opts.smallCull ?? 90;
     this.minMembers = opts.minMembers ?? 2; this.maxVerts = opts.maxVerts ?? 60000;
+    this.atlas = opts.atlas ?? true; this.atlasSize = opts.atlasSize ?? 2048;   // texture atlas for unlit canvas-textured meshes (signs)
     this.scene = null; this.batches = []; this.members = new Map(); this.anc = new Map(); this.mats = new Map();
     this.seen = new WeakMap(); this.stats = { batches: 0, members: 0, unbatched: 0, ms: 0, scans: 0 };
   }
   // drop everything (scene switch): merged geometries and private materials are freed, originals draw again
   reset() {
-    for (const b of this.batches) { b.mesh.parent?.remove(b.mesh); b.mesh.geometry.dispose(); if (b.ownMat) b.mesh.material.dispose(); }
+    for (const b of this.batches) { b.mesh.parent?.remove(b.mesh); b.mesh.geometry.dispose(); if (b.ownMat) b.mesh.material.dispose(); b.atlasTex?.dispose(); }
     for (const e of this.members.values()) if (e.o.boundingSphere === BATCH_FAR) delete e.o.boundingSphere;
     this.batches = []; this.members.clear(); this.anc.clear(); this.mats.clear(); this.seen = new WeakMap(); this.scene = null;
     this.stats.batches = this.stats.members = this.stats.unbatched = 0;
@@ -4614,15 +4626,16 @@ export class StaticBatcher {
             const m = c.material, g = c.geometry;
             const ident = !plainMaterial(m);
             let mk;
+            const atlas = !ident && this.atlas && atlasable(m, g);
             if (ident) mk = 'id:' + m.uuid;
-            else { let me = this.mats.get(m); if (!me) { me = { sig: matSignature(m), snap: new Float64Array(MAT_N), maps: MAP_KEYS.map(k => m[k] || null), members: new Set() }; matValues(m, me.snap); this.mats.set(m, me); } mk = 'sig:' + me.sig; }
+            else { let me = this.mats.get(m); if (!me) { me = { sig: matSignature(m, atlas), snap: new Float64Array(MAT_N), maps: MAP_KEYS.map(k => m[k] || null), members: new Set() }; matValues(m, me.snap); this.mats.set(m, me); } mk = (atlas ? 'atlas:' : 'sig:') + me.sig; }
             if (!g.boundingSphere) g.computeBoundingSphere();
             _bs.copy(g.boundingSphere).applyMatrix4(c.matrixWorld);
             const small = _bs.radius < this.smallRadius, big = _bs.radius > this.cell * 0.6;
             const cellK = big ? 'big' : Math.floor(_bs.center.x / this.cell) + ',' + Math.floor(_bs.center.z / this.cell);
             const attrs = Object.keys(g.attributes).sort().map(k => k + g.attributes[k].itemSize).join(',');
             const key = [mk, c.castShadow ? 1 : 0, c.receiveShadow ? 1 : 0, c.renderOrder, attrs, cellK, small ? 's' : ''].join('|');
-            let G = groups.get(key); if (!G) groups.set(key, G = { key, ident, small, list: [] });
+            let G = groups.get(key); if (!G) groups.set(key, G = { key, ident, small, atlas, list: [] });
             G.list.push({ o: c, chain, tr, center: _bs.center.clone(), radius: _bs.radius });
           }
         }
@@ -4649,6 +4662,8 @@ export class StaticBatcher {
     const arrays = {}; for (const k of names) arrays[k] = new Float32Array(nV * g0.attributes[k].itemSize);
     const I = nV > 65535 ? new Uint32Array(nI) : new Uint16Array(nI);
     const b = { mesh: null, members: [], src: null, small: G.small, center: new THREE.Vector3(), radius: 0, dirty: false, ownMat: false };
+    const rects = G.atlas ? this._pack(list) : null;
+    if (G.atlas && !rects) return null;
     let vo = 0, io = 0;
     const box = new THREE.Box3();
     for (const it of list) {
@@ -4660,6 +4675,7 @@ export class StaticBatcher {
         for (let i = 0; i < cnt; i++) {
           if (k === 'position') { _bv.fromBufferAttribute(a, i).applyMatrix4(mw); dst[(vo + i) * 3] = _bv.x; dst[(vo + i) * 3 + 1] = _bv.y; dst[(vo + i) * 3 + 2] = _bv.z; box.expandByPoint(_bv); }
           else if (k === 'normal') { _bv.fromBufferAttribute(a, i).applyMatrix3(_bn).normalize(); dst[(vo + i) * 3] = _bv.x; dst[(vo + i) * 3 + 1] = _bv.y; dst[(vo + i) * 3 + 2] = _bv.z; }
+          else if (k === 'uv' && rects) { const R4 = rects.get(o.material.map); dst[(vo + i) * 2] = R4.u0 + a.getX(i) * R4.du; dst[(vo + i) * 2 + 1] = R4.v0 + a.getY(i) * R4.dv; }
           else if (k === 'tangent' && sz === 4) { _bv.set(a.getX(i), a.getY(i), a.getZ(i)).transformDirection(mw); const j = (vo + i) * 4; dst[j] = _bv.x; dst[j + 1] = _bv.y; dst[j + 2] = _bv.z; dst[j + 3] = a.getW(i) * (flip ? -1 : 1); }
           else for (let c = 0; c < sz; c++) dst[(vo + i) * sz + c] = a.getComponent(i, c);
         }
@@ -4668,7 +4684,7 @@ export class StaticBatcher {
       if (g.index) { const ix = g.index; for (let i = 0; i < ix.count; i += 3) { const a0 = ix.getX(i) + vo, a1 = ix.getX(i + 1) + vo, a2 = ix.getX(i + 2) + vo; I[io++] = a0; I[io++] = flip ? a2 : a1; I[io++] = flip ? a1 : a2; } }
       else for (let i = 0; i < cnt; i += 3) { I[io++] = vo + i; I[io++] = vo + (flip ? i + 2 : i + 1); I[io++] = vo + (flip ? i + 1 : i + 2); }
       const vis = this._visible(o, it.chain);
-      const e = { o, b, chain: it.chain, tr: it.tr, start, count: io - start, vis, alive: true, mat: o.material, geo: o.geometry, cast: o.castShadow, recv: o.receiveShadow };
+      const e = { o, b, chain: it.chain, tr: it.tr, start, count: io - start, vis, alive: true, mat: o.material, geo: o.geometry, cast: o.castShadow, recv: o.receiveShadow, mapVer: rects ? o.material.map.version : -1 };
       b.members.push(e); this.members.set(o, e);
       for (const p of it.chain) if (!this.anc.has(p)) this.anc.set(p, { snap: transformSnap(p, new Float64Array(16)), moved: false, frame: -1 });
       if (!G.ident) this.mats.get(o.material).members.add(e);
@@ -4683,6 +4699,7 @@ export class StaticBatcher {
     const m0 = list[0].o;
     let mat = m0.material;
     if (!G.ident) { mat = m0.material.clone(); b.ownMat = true; }
+    if (rects) { mat.map = rects.texture; b.atlasTex = rects.texture; }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = 'rzBatch'; mesh.matrixAutoUpdate = false; mesh.matrixWorldAutoUpdate = true; mesh.updateMatrix();
     mesh.castShadow = m0.castShadow; mesh.receiveShadow = m0.receiveShadow; mesh.renderOrder = m0.renderOrder;
@@ -4693,6 +4710,34 @@ export class StaticBatcher {
     b.dirty = b.members.some(e => !e.vis);
     this.batches.push(b);
     return b;
+  }
+  // shelf-pack the members' canvases into one atlas canvas (scaled down until it fits atlasSize); null when it cannot
+  _pack(list) {
+    const maps = [...new Set(list.map(it => it.o.material.map))];
+    const S = this.atlasSize, pad = 4;
+    for (let scale = 1; scale >= 0.125; scale /= 2) {
+      const items = maps.map(t => ({ t, w: Math.max(4, Math.round(t.image.width * scale)), h: Math.max(4, Math.round(t.image.height * scale)) })).sort((a, b2) => b2.h - a.h);
+      let x = 0, y = 0, rowH = 0, ok = true;
+      for (const it of items) {
+        if (x + it.w + pad > S) { x = 0; y += rowH + pad; rowH = 0; }
+        if (it.w + pad > S || y + it.h + pad > S) { ok = false; break; }
+        it.x = x + pad / 2; it.y = y + pad / 2; x += it.w + pad; rowH = Math.max(rowH, it.h);
+      }
+      if (!ok) continue;
+      const H = Math.min(S, 1 << Math.ceil(Math.log2(Math.max(4, y + rowH + pad))));
+      const cv = document.createElement('canvas'); cv.width = S; cv.height = H;
+      const g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, S, H);
+      const rects = new Map();
+      for (const it of items) {
+        g.drawImage(it.t.image, it.x, it.y, it.w, it.h);
+        // flipY textures: uv (0,0) is the canvas' bottom-left corner
+        rects.set(it.t, { u0: it.x / S, du: it.w / S, v0: 1 - (it.y + it.h) / H, dv: it.h / H });
+      }
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = maps[0].colorSpace; tex.anisotropy = maps[0].anisotropy; tex.flipY = true;
+      rects.texture = tex;
+      return rects;
+    }
+    return null;
   }
   _release(e) {
     if (!e.alive) return;
@@ -4718,7 +4763,7 @@ export class StaticBatcher {
       for (const e of b.members) {
         if (!e.alive) continue;
         const o = e.o;
-        let ok = o.material === e.mat && o.geometry === e.geo && o.frustumCulled && o.layers.mask === 1 && o.castShadow === e.cast && o.receiveShadow === e.recv && transformSame(o, e.tr);
+        let ok = o.material === e.mat && o.geometry === e.geo && (e.mapVer < 0 || o.material.map.version === e.mapVer) && o.frustumCulled && o.layers.mask === 1 && o.castShadow === e.cast && o.receiveShadow === e.recv && transformSame(o, e.tr);
         if (ok) {
           let q = o.parent;
           for (let i = 0; i < e.chain.length; i++) { const p = e.chain[i]; if (q !== p || this.anc.get(p).moved) { ok = false; break; } q = p.parent; }

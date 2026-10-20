@@ -259,6 +259,7 @@ function boxRaycast(raycaster, hits) {
 const rootOf = o => { while (o.parent) o = o.parent; return o; };
 // world AABB of a mesh from its geometry's bounding box (cheap, no vertex walk)
 function meshAABB(o, out = new THREE.Box3()) {
+  if (o.isInstancedMesh) { if (!o.boundingBox) o.computeBoundingBox(); return out.copy(o.boundingBox).applyMatrix4(o.matrixWorld); }
   const g = o.geometry; if (!g) return out.makeEmpty();
   if (!g.boundingBox) g.computeBoundingBox();
   return out.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
@@ -287,14 +288,18 @@ export function resolveFacades(scene) {
   // every other mesh of the scene is an obstacle the new geometry keeps clear of (characters, sky domes, ground
   // planes and other huge things excluded); facade boxes count with their plain box
   const obst = [], fac = [];
-  scene.traverse(o => {
-    if (o.userData.character) return;
+  const visit = o => {
+    if (o.userData.character || o.userData.rzBatch) return;   // characters move; merged copies duplicate their sources
     if (o.userData.rzFacadeBox) { fac.push({ o, b: facadeAABB(o) }); return; }
-    if (!(o.isMesh || o.isInstancedMesh) || o.userData.noCapture) return;
-    const b = meshAABB(o), s = b.getSize(_hit);
-    if (!isFinite(s.x) || Math.max(s.x, s.z) > 80 || (s.x > 30 && s.z > 30) || (s.y < 0.3 && b.max.y < 0.35)) return;
-    obst.push({ o, b, s: s.clone() });
-  });
+    if ((o.isMesh || o.isInstancedMesh) && !o.userData.noCapture) {
+      const b = meshAABB(o), s = b.getSize(_hit);
+      // sprawling things (ground planes, merged street runs, skies: two sides over 12 m) are too coarse to test against
+      const big = (s.x > 12) + (s.y > 12) + (s.z > 12);
+      if (isFinite(s.x) && Math.max(s.x, s.z) <= 80 && big < 2 && !(s.y < 0.3 && b.max.y < 0.35)) obst.push({ o, b, s: s.clone() });
+    }
+    for (const c of o.children) visit(c);
+  };
+  visit(scene);
   for (const m of mine) {
     try { buildFacade(m, obst, fac); } catch (e) { console.warn('kit: facade upgrade failed, keeping the plain box', e); }
   }
@@ -377,13 +382,14 @@ function buildFacade(m, obst, fac) {
  * false shows the upgrade again. Returns the number of objects switched.
  */
 export function setInfraLegacy(scene, legacy) {
-  let n = 0;
+  let n = 0; const swaps = [];
   scene.traverse(o => {
     const f = o.userData.rzFacadeBox;
     if (f && f.built) { o.geometry = legacy ? f.legacyGeo : f.geo; o.material = legacy ? f.legacy : f.mat; n++; }
     if (o.userData.rzMasonry) { o.userData.rzMasonry.visible = !legacy; n++; }
-    if (o.userData.rzLegacy) { o.userData.rzLegacy.visible = legacy; for (const c of o.userData.rzUpgrade || []) c.visible = !legacy; n++; }
+    if (o.userData.rzSwap) swaps.push(o);
   });
+  for (const o of swaps) { o.userData.rzSwap(legacy); n++; }
   return n;
 }
 
