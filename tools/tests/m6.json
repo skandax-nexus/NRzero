@@ -1,347 +1,109 @@
 [
-{
-"until": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Knock'))",
-"timeout": 300000
-},
-{
-"shot": "a01_street.png"
-},
-{
-"eval": "__game.player.place(-2.4,0,11.4,Math.PI); __game.use('bracket clock')"
-},
-{
-"wait": 2000
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"eval": "__game.player.place(0,0,9.8,Math.PI); __game.use('Knock')"
-},
-{
-"until": "__game.control && document.getElementById('objective-text').textContent.includes('workshop')",
-"timeout": 240000
-},
-{
-"shot": "a02_shop.png"
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2026')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(-3.2,0,3.0,-Math.PI/2); __game.use('girl')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"eval": "__game.player.place(-4.2,0,3.9,-Math.PI/2); __game.use('ledger')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"eval": "__game.player.place(4.3,0,1.35,Math.PI/2); __game.use('first carriage')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"eval": "__game.player.place(4.3,0,4.2,Math.PI/2); null"
-},
-{
-"wait": 600
-},
-{
-"shot": "a03b_carriage.png"
-},
-{
-"eval": "__game.use('fourth carriage')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.flags.m6boyWatch && __game.control && !__game.ui.dlgActive",
-"timeout": 90000
-},
-{
-"eval": "__game.setResidue(true); null"
-},
-{
-"wait": 2500
-},
-{
-"shot": "a03_residue26.png"
-},
-{
-"eval": "__game.setResidue(false); null"
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2196')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(-3.0,0,6.2,Math.PI); __game.use('shard')"
-},
-{
-"wait": 1000
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2049')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(0,0.36,-2.0,Math.PI); null"
-},
-{
-"until": "__game.control && document.getElementById('objective-text').textContent.includes('Observe')",
-"timeout": 120000
-},
-{
-"shot": "a04_loop.png"
-},
-{
-"until": "document.getElementById('objective-text').textContent.includes('Cross')",
-"timeout": 240000
-},
-{
-"until": "__m6.loop.knows('year')",
-"timeout": 60000
-},
-{
-"eval": "__game.autoChoice=1; __game.player.place(-2.55,0.36,-2.7,0); __game.use('locked drawer')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.flags.m6survey && __game.control && !__game.ui.dlgActive",
-"timeout": 90000
-},
-{
-"eval": "__game.autoChoice=0; __game.player.place(0,0,-21.8,Math.PI); null"
-},
-{
-"until": "__m6.loop.resets>=1 && __game.control",
-"timeout": 60000
-},
-{
-"eval": "({resets:__m6.loop.resets, z:__game.player.pos.z, restart:__m6.loop.restart})"
-},
-{
-"shot": "a04b_after_reset.png"
-},
-{
-"eval": "__game.use('shard')"
-},
-{
-"eval": "__game.player.place(0,0,-26.2,Math.PI); null"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(0,0,-30.6,Math.PI); null"
-},
-{
-"until": "__game.control && document.getElementById('objective-text').textContent.includes('hidden way')",
-"timeout": 120000
-},
-{
-"shot": "a05_study.png"
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2026')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(0,0,-34,Math.PI); __game.use('clockmaker (2026)')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"until": "(__game.flags.loopKnowledge['m6-study26']||[]).includes('mantelIX')",
-"timeout": 180000
-},
-{
-"shot": "a06_study26.png"
-},
-{
-"eval": "__game.use('iron gate')"
-},
-{
-"wait": 500
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2196')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(4.4,0,-34.5,Math.PI/2); __game.use('collapsed wall')"
-},
-{
-"wait": 500
-},
-{
-"eval": "__game.player.place(-1.5,0,-44.4,Math.PI); __game.use('plaque')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"shot": "a07_garden96.png"
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2049')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.player.place(2.6,0,-37.3,Math.PI); __game.use('letters')"
-},
-{
-"wait": 800
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"eval": "__game.autoChoice=2; __game.player.place(-5.4,0,-35.5,-Math.PI/2); __game.use('mantel')"
-},
-{
-"until": "__game.control && document.getElementById('objective-text').textContent.includes('tower')",
-"timeout": 120000
-},
-{
-"shot": "a08_bookcase.png"
-},
-{
-"eval": "__game.autoChoice=0; __game.player.place(-3.0,0,-32.6,Math.PI); __game.use('Lotte')"
-},
-{
-"until": "__game.flags.keepersWatch && __game.control && !__game.ui.dlgActive",
-"timeout": 120000
-},
-{
-"eval": "__game.player.place(7.0,5,-34.2,-Math.PI/2); null"
-},
-{
-"until": "__game.control && document.getElementById('objective-text').textContent.includes('collars')",
-"timeout": 120000
-},
-{
-"shot": "a09_tower.png"
-},
-{
-"eval": "__game.autoChoice=1; __game.player.place(0.7,5,-35,-Math.PI/2); __game.use('lower collar')"
-},
-{
-"wait": 1000
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2026')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.autoChoice=0; __game.player.place(0.7,7.6,-35,-Math.PI/2); __game.use('middle collar')"
-},
-{
-"wait": 1000
-},
-{
-"until": "__game.control && !__game.ui.dlgActive",
-"timeout": 60000
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.use('shard')"
-},
-{
-"wait": 1000
-},
-{
-"shot": "a10_tower26.png"
-},
-{
-"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2196')"
-},
-{
-"wait": 1500
-},
-{
-"eval": "__game.autoChoice=2; __game.player.place(-1.5,9.8,-35,Math.PI/2); __game.use('upper collar')"
-},
-{
-"until": "__game.interactables.some(i=>i.prompt.includes('recording')) && __game.control",
-"timeout": 180000
-},
-{
-"shot": "a11_recorder.png"
-},
-{
-"eval": "__game.use('recording')"
-},
-{
-"wait": 5000
-},
-{
-"shot": "a12_recording.png"
-},
-{
-"until": "__game.flags.m6done",
-"timeout": 240000
-},
-{
-"shot": "a13_end.png"
-},
-{
-"eval": "({done:__game.flags.m6done, ninth:__game.flags.ninthMinute, debt:__game.flags.clockmakerDebt, watch:__game.flags.keepersWatch, shards:__game.flags.m6shards, resets:__game.flags.m6loopResets, ledger:__game.flags.varenLedger, kids:__game.flags.m6sawKids, know:__game.flags.loopKnowledge, boyWatch:__game.flags.m6boyWatch, survey:__game.flags.m6survey, ev:__game.ui.evidence.map(e=>e.title)})"
-}
+{"until": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Knock'))", "timeout": 900000},
+{"shot": "a01_street.png"},
+{"eval": "__game.player.place(-2.4,0,11.4,Math.PI); __game.use('bracket clock')"},
+{"wait": 2000},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.player.place(0,0,9.8,Math.PI); __game.use('Knock')"},
+{"until": "__game.control && document.getElementById('objective-text').textContent.includes('workshop')", "timeout": 720000},
+{"shot": "a02_shop.png"},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2026')"},
+{"wait": 1500},
+{"eval": "__game.player.place(-3.2,0,3.0,-Math.PI/2); __game.use('girl')"},
+{"wait": 800},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.player.place(-4.2,0,3.9,-Math.PI/2); __game.use('ledger')"},
+{"wait": 800},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.player.place(4.3,0,1.35,Math.PI/2); __game.use('first carriage')"},
+{"wait": 800},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.player.place(4.3,0,4.2,Math.PI/2); null"},
+{"wait": 600},
+{"shot": "a03b_carriage.png"},
+{"eval": "__game.use('fourth carriage')"},
+{"wait": 800},
+{"until": "__game.flags.m6boyWatch && __game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.setResidue(true); null"},
+{"wait": 2500},
+{"shot": "a03_residue26.png"},
+{"eval": "__game.setResidue(false); null"},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2196')"},
+{"wait": 1500},
+{"eval": "__game.player.place(-3.0,0,6.2,Math.PI); __game.use('shard')"},
+{"wait": 1000},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2049')"},
+{"wait": 1500},
+{"eval": "__game.player.place(0,0.36,-2.0,Math.PI); null"},
+{"until": "__game.control && document.getElementById('objective-text').textContent.includes('Observe')", "timeout": 360000},
+{"shot": "a04_loop.png"},
+{"until": "document.getElementById('objective-text').textContent.includes('Cross')", "timeout": 720000},
+{"until": "__m6.loop.knows('year')", "timeout": 300000},
+{"eval": "__game.autoChoice=1; __game.player.place(-2.55,0.36,-2.7,0); __game.use('locked drawer')"},
+{"wait": 800},
+{"until": "__game.flags.m6survey && __game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.autoChoice=0; __game.player.place(0,0,-21.8,Math.PI); null"},
+{"until": "__m6.loop.resets>=1 && __game.control", "timeout": 300000},
+{"eval": "({resets:__m6.loop.resets, z:__game.player.pos.z, restart:__m6.loop.restart})"},
+{"shot": "a04b_after_reset.png"},
+{"eval": "__game.use('shard')"},
+{"eval": "__game.player.place(0,0,-26.2,Math.PI); null"},
+{"wait": 1500},
+{"eval": "__game.player.place(0,0,-30.6,Math.PI); null"},
+{"until": "__game.control && document.getElementById('objective-text').textContent.includes('hidden way')", "timeout": 360000},
+{"shot": "a05_study.png"},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2026')"},
+{"wait": 1500},
+{"eval": "__game.player.place(0,0,-34,Math.PI); __game.use('clockmaker (2026)')"},
+{"wait": 800},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"until": "(__game.flags.loopKnowledge['m6-study26']||[]).includes('mantelIX')", "timeout": 540000},
+{"shot": "a06_study26.png"},
+{"eval": "__game.use('iron gate')"},
+{"wait": 500},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2196')"},
+{"wait": 1500},
+{"eval": "__game.player.place(4.4,0,-34.5,Math.PI/2); __game.use('collapsed wall')"},
+{"wait": 500},
+{"eval": "__game.player.place(-1.5,0,-44.4,Math.PI); __game.use('plaque')"},
+{"wait": 800},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"shot": "a07_garden96.png"},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2049')"},
+{"wait": 1500},
+{"eval": "__game.player.place(2.6,0,-37.3,Math.PI); __game.use('letters')"},
+{"wait": 800},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"eval": "__game.autoChoice=2; __game.player.place(-5.4,0,-35.5,-Math.PI/2); __game.use('mantel')"},
+{"until": "__game.control && document.getElementById('objective-text').textContent.includes('tower')", "timeout": 360000},
+{"shot": "a08_bookcase.png"},
+{"eval": "__game.autoChoice=0; __game.player.place(-3.0,0,-32.6,Math.PI); __game.use('Lotte')"},
+{"until": "__game.flags.keepersWatch && __game.control && !__game.ui.dlgActive", "timeout": 360000},
+{"eval": "__game.player.place(7.0,5,-34.2,-Math.PI/2); null"},
+{"until": "__game.control && document.getElementById('objective-text').textContent.includes('collars')", "timeout": 360000},
+{"shot": "a09_tower.png"},
+{"eval": "__game.autoChoice=1; __game.player.place(0.7,5,-35,-Math.PI/2); __game.use('lower collar')"},
+{"wait": 1000},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"wait": 1500},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2026')"},
+{"wait": 1500},
+{"eval": "__game.autoChoice=0; __game.player.place(0.7,7.6,-35,-Math.PI/2); __game.use('middle collar')"},
+{"wait": 1000},
+{"until": "__game.control && !__game.ui.dlgActive", "timeout": 300000},
+{"wait": 1500},
+{"eval": "__game.use('shard')"},
+{"wait": 1000},
+{"shot": "a10_tower26.png"},
+{"eval": "__game.temporal.stability=1; __game.temporal.switchTo('2196')"},
+{"wait": 1500},
+{"eval": "__game.autoChoice=2; __game.player.place(-1.5,9.8,-35,Math.PI/2); __game.use('upper collar')"},
+{"until": "__game.interactables.some(i=>i.prompt.includes('recording')) && __game.control", "timeout": 540000},
+{"shot": "a11_recorder.png"},
+{"eval": "__game.use('recording')"},
+{"wait": 5000},
+{"shot": "a12_recording.png"},
+{"until": "__game.flags.m6done", "timeout": 720000},
+{"shot": "a13_end.png"},
+{"eval": "({done:__game.flags.m6done, ninth:__game.flags.ninthMinute, debt:__game.flags.clockmakerDebt, watch:__game.flags.keepersWatch, shards:__game.flags.m6shards, resets:__game.flags.m6loopResets, ledger:__game.flags.varenLedger, kids:__game.flags.m6sawKids, know:__game.flags.loopKnowledge, boyWatch:__game.flags.m6boyWatch, survey:__game.flags.m6survey, ev:__game.ui.evidence.map(e=>e.title)})"}
 ]

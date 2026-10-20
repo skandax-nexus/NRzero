@@ -22,8 +22,8 @@ or a pure quality improvement.
 | Composer | RenderPass → UnrealBloomPass → OutputPass → Cinema pass (ripple, chromatic aberration, vignette, grain, era tint) | Render targets are HalfFloat with `samples: 0`. On `medium`/`low` the Cinema pass also does tone mapping + sRGB (`FUSED_OUTPUT`) and drops the always-on aberration (`CHEAP`). |
 | Bloom | 5-mip UnrealBloom, full resolution on high, half on medium, off on low | Threshold/strength set per scene by `newScene`. |
 | Image-based light | `scene.environment` = PMREM of three's **RoomEnvironment** (a grey indoor studio) for every scene, intensity 0.25–0.6 | A rainy night street, a lab and a sunset valley all reflect the same studio box: reflections and ambient specular do not belong to the place. |
-| Shadows | One shadow caster per scene (moon / sun directional following Kai, 44–60 m frustum, or one spot); 4096² PCF-soft on high, 1024² PCF on medium, **off on low** | Characters cast; crowd (`Walker`) does not receive. No contact shadows or AO anywhere. |
-| Lights | 7–14 unshadowed point/spot lights per scene + hemisphere | Neon only lights through emissive + bloom; lamps light the ground with additive "puddle glow" planes. |
+| Shadows | One shadow caster per scene (moon / sun directional following Kai, 44–60 m frustum, or one spot); 4096² PCF-soft on high, 1024² PCF on medium, **off on low** | Characters cast; crowd walkers (`Walker`, LOD looks) neither cast nor receive. No contact shadows or AO anywhere. |
+| Lights | 7–19 unshadowed point/spot lights per scene + hemisphere | Neon only lights through emissive + bloom; lamps light the ground with additive "puddle glow" planes. |
 | Materials | Canvas-drawn albedo (+ a roughness map for asphalt) on `MeshStandardMaterial`; no normal maps, no AO maps in missions 1-4 | `realism.js` (3.4k lines: GPU-baked PBR sets, interior-mapped facades, sky IBL, terrain, trees, grass, water, height fog) is **not used by missions 1-4 at all**; only the new missions 5+ import it. |
 | Buildings (m1) | Plain `BoxGeometry` towers with a 256×512 canvas facade (6 seeds) and an emissive window texture, stretched by `repeat` | No relief, cornices, mullions, roofs or rooftop plant; every tower reads as a lit cardboard box. |
 | Characters | Realistic heads/bodies (src/human, other workflow) lit by the scene's lights only | No dialogue key/fill/rim light, no depth-of-field separation in close-ups. |
@@ -32,8 +32,9 @@ or a pure quality improvement.
 ## 2. Reference views
 
 Twelve fixed camera poses (three per finished mission) are defined in `tools/render/views.json` and captured by
-`tools/render/refviews.mjs`. **Never edit a baselined view; add a new one instead**, so every stage compares the
-same frame. Missions are addressed by the 0-based `?m=` index (m1 = 0 … m4 = 3).
+`tools/render/refviews.mjs`. They were frozen with the stage-0 audit on 2026-10-20 (the dialogue views place Kai
+left of frame so the other speaker is visible; m2c stands Iven up first). **Never edit a baselined view; add a new
+one instead**, so every stage compares the same frame. Missions are addressed by the 0-based `?m=` index (m1 = 0 … m4 = 3).
 
 | View | Mission | What it shows |
 |---|---|---|
@@ -45,7 +46,7 @@ same frame. Missions are addressed by the 0-based `?m=` index (m1 = 0 … m4 = 3
 | `m2c_dialogue_iven` | 2 | close dialogue with Iven |
 | `m3a_establishing_2049` | 3 Chronolith chamber | high shot of the chamber in 2049 |
 | `m3b_dialogue_iven_2049` | 3 | close dialogue with Iven beside the Chronolith |
-| `m3c_future_2196` | 3 | the same chamber in the overgrown, ruined 2196 era |
+| `m3c_future_2196` | 3 | the gallery beyond the chamber in the overgrown, ruined 2196 era |
 | `m4a_establishing` | 4 Ancient valley | elevated establishing shot of the settlement at sunset |
 | `m4b_village_people` | 4 | eye-level village street with settlers |
 | `m4c_dialogue_niko` | 4 | close dialogue with Niko |
@@ -89,11 +90,11 @@ node tools/drive.mjs "http://localhost:8765/index.html?m=0&dtcap=0.25&gfx=high&a
 `<scratch>` is `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad`; the stage-0
 images and numbers are in `<scratch>/render/audit/{high,low_mobile}/`, and later stages write
 `<scratch>/render/<stage>/{high,low_mobile}/` so images can be compared side by side with the same file names.
-The drive.mjs route loads at full size and runs in old headless (see the browser note below), so it needs generous
+The drive.mjs route loads at full size and runs in old headless (see the browser note above), so it needs generous
 timeouts and may be OOM-killed on m1 / m2 at 1280×720; it yields the same frames, but refviews.mjs is the reference.
 
 Measuring notes: the container renders with CPU SwiftShader shared with other agents' test browsers (load average
-4–12 on 4 cores during the audit), so absolute frame times are only good for *relative* comparisons of the same view
+15–23 on 4 cores during the audit), so absolute frame times are only good for *relative* comparisons of the same view
 on the same run conditions; use the minimum of the 3 samples (`frame min ms`), re-run both before and after in the
 same session when a change is close to the noise, and judge phone cost primarily by calls, triangles, passes, render
 target sizes and texture taps per pixel. A renderer that is OOM-killed (the memory cgroup is shared) is retried by
@@ -101,8 +102,61 @@ target sizes and texture taps per pixel. A renderer that is OOM-killed (the memo
 
 ## 3. Baseline (stage 0)
 
-(Filled from `<scratch>/render/audit/` below.)
-<!-- BASELINE TABLE -->
+Captured 2026-10-20 with `tools/render/runall.sh <scratch>/render/audit "...all eight sets..."` (new-headless Chromium,
+SwiftShader, host load average 15-20 from other workflows' test browsers, so frame times are inflated and only
+comparable to runs under similar load; counts are exact; m1b, m1c, m2c, m3b, m4a and m4c at high were re-taken
+in a second run after their framing was fixed). Images: `<scratch>/render/audit/high/*.png` (1280×720,
+gfx=high, desktop) and `<scratch>/render/audit/low_mobile/*.png` (844×390, gfx=low, `--mobile`); raw numbers in the
+`m<N>_<gfx>[_mobile].json` files next to them. Contact sheets of all twelve views per tier:
+`<scratch>/render/audit/grid_high.png`, `<scratch>/render/audit/grid_low_mobile.png`. `calls` / `tris` are the whole frame (shadow map + scene + post);
+`scene pass ms` is shadow map + main pass only.
+
+**high, 1280×720, desktop**
+
+| view | tier | size | calls | tris | frame min ms | frame med ms | scene pass ms | lights p/s/d | transp. | programs |
+|---|---|---|---|---|---|---|---|---|---|---|
+| m1a_establishing | high | 1280x720@1 | 488 | 453k | 2833.3 | 3102.1 | 3188.3 | 7/0/1 | 67 | 43 |
+| m1b_street_people | high | 1280x720@1 | 381 | 451k | 2359.3 | 2852.5 | 1854.8 | 7/0/1 | 67 | 43 |
+| m1c_dialogue_hale | high | 1280x720@1 | 244 | 444k | 1846.3 | 2244.5 | 2349.7 | 7/0/1 | 67 | 43 |
+| m2a_establishing | high | 1280x720@1 | 299 | 79k | 2240.8 | 2576.4 | 1512.7 | 10/3/0 | 12 | 37 |
+| m2b_interior_people | high | 1280x720@1 | 138 | 75k | 2357.3 | 2600.6 | 1833.6 | 10/3/0 | 12 | 37 |
+| m2c_dialogue_iven | high | 1280x720@1 | 67 | 40k | 3468.7 | 3589.5 | 3701 | 10/3/0 | 13 | 37 |
+| m3a_establishing_2049 | high | 1280x720@1 | 75 | 35k | 2140.2 | 2273.6 | 1877.7 | 19/0/0 | 3 | 31 |
+| m3c_future_2196 | high | 1280x720@1 | 195 | 93k | 1933.4 | 2039.3 | 1573.7 | 1/2/0 | 7 | 41 |
+| m3b_dialogue_iven_2049 | high | 1280x720@1 | 41 | 28k | 2979.1 | 3006.5 | 2849.2 | 19/0/0 | 3 | 31 |
+| m4b_village_people | high | 1280x720@1 | 399 | 335k | 2475.6 | 3439.3 | 3085.6 | 8/0/1 | 12 | 39 |
+| m4a_establishing | high | 1280x720@1 | 479 | 350k | 3826.2 | 4026.9 | 3519.9 | 8/0/1 | 12 | 39 |
+| m4c_dialogue_niko | high | 1280x720@1 | 389 | 341k | 4018.9 | 4551.4 | 4107.9 | 8/0/1 | 12 | 39 |
+
+**low, 844×390, mobile (phone tier)**
+
+| view | tier | size | calls | tris | frame min ms | frame med ms | scene pass ms | lights p/s/d | transp. | programs |
+|---|---|---|---|---|---|---|---|---|---|---|
+| m1a_establishing | low (mobile) | 844x390@1 | 424 | 365k | 817.2 | 1199.1 | 969.8 | 7/0/1 | 67 | 30 |
+| m1b_street_people | low (mobile) | 844x390@1 | 328 | 362k | 1060 | 1214.2 | 1188 | 7/0/1 | 67 | 30 |
+| m1c_dialogue_hale | low (mobile) | 844x390@1 | 148 | 356k | 864.3 | 1146.2 | 1177.7 | 7/0/1 | 67 | 30 |
+| m2a_establishing | low (mobile) | 844x390@1 | 255 | 37k | 523.2 | 677.6 | 1133.2 | 10/3/0 | 12 | 24 |
+| m2b_interior_people | low (mobile) | 844x390@1 | 100 | 34k | 499.9 | 803.8 | 1153.1 | 10/3/0 | 12 | 24 |
+| m2c_dialogue_iven | low (mobile) | 844x390@1 | 24 | 20k | 752.2 | 843 | 918.6 | 10/3/0 | 13 | 24 |
+| m3a_establishing_2049 | low (mobile) | 844x390@1 | 61 | 35k | 755.6 | 827.6 | 1095.7 | 19/0/0 | 3 | 22 |
+| m3b_dialogue_iven_2049 | low (mobile) | 844x390@1 | 39 | 33k | 1093.7 | 1835.7 | 1217.1 | 19/0/0 | 3 | 22 |
+| m3c_future_2196 | low (mobile) | 844x390@1 | 86 | 36k | 905.2 | 911.1 | 630.8 | 1/2/0 | 7 | 28 |
+| m4a_establishing | low (mobile) | 844x390@1 | 276 | 292k | 1364 | 1644 | 1701.3 | 8/0/1 | 12 | 26 |
+| m4b_village_people | low (mobile) | 844x390@1 | 203 | 286k | 1486.5 | 1560.5 | 1020.1 | 8/0/1 | 12 | 26 |
+| m4c_dialogue_niko | low (mobile) | 844x390@1 | 163 | 282k | 2134.6 | 2971.5 | 1820.5 | 8/0/1 | 12 | 26 |
+
+Reading the numbers:
+- **m1 is over the phone budget on every view even on `low`**: 148–424 calls and ~360k triangles (budget ≤ 250
+  calls; the triangle count is within 700k). 433 visible meshes, 389 distinct materials, 67 transparent objects
+  (neon, puddles, signs) and no instancing at all. m4's establishing view is also over (276 calls on low).
+- `low` already drops the shadow pass (m1 453k → 365k triangles) and bloom / OutputPass; its remaining cost is the
+  forward-shaded scene: m3 2049 has **19 point lights** visible, m2 13, m1 7 (+1 directional), each evaluated per
+  pixel on every lit material.
+- The post chain on high is 15 draw calls (bloom mips + output + cinema); on low 1 (cinema with fused output).
+- Buildings are cheap boxes (m2 / m3 scenes stay under 100k triangles), so the 280–450k triangles of m1 / m4 are
+  mostly the crowds of full characters and the m4 rock / tree blobs.
+- Frame time scales mostly with pixels × lights on SwiftShader; on high the scene pass (shadow + main) is most of the
+  frame, the post chain the rest.
 
 ## 4. Gaps against a modern realistic game
 
@@ -113,8 +167,8 @@ and the lever we own that fixes it for the finished missions without editing the
 ### 4.1 Image quality
 | # | Gap | Where it shows | Lever (file) |
 |---|---|---|---|
-| G1 | **No anti-aliasing on any tier.** Canvas MSAA is wasted because the scene renders into the composer's non-multisampled targets: stair-stepped building edges, kerb lines, lamp poles, rain streaks and hair/shoulder silhouettes crawl in motion. | every view; worst on m1a (window grid, kerbs), m2a (tile grout moiré), m1c/m2c silhouettes | engine.js: MSAA on the scene target (high), FXAA fused into the Cinema pass (medium), nothing on low (dpr 1 phones) |
-| G2 | **Washed / muddy colour.** ACES Filmic on top of dark albedo crushes the night scenes into a grey-brown haze with a low black point; saturated neon clips to white-yellow cores; m2 is a uniform red wash; the m4 sunset is orange everywhere with no blue in the shadows. No per-era grade apart from a flat `uTint` multiply. | m1a/m1b (milky fog, flat greys), m2a (all red), m4a/m4b | engine.js: per-era grade fused into the Cinema pass (lift/gamma/gain, saturation, white balance, shadow tint, soft black point); evaluate AgX / Neutral tone mapping for the neon; high may add a 3D LUT |
+| G1 | **No anti-aliasing on any tier.** Canvas MSAA is wasted because the scene renders into the composer's non-multisampled targets: stair-stepped building edges, kerb lines, lamp poles, rain streaks and hair/shoulder silhouettes crawl in motion. | every view; worst on m1a (window grid sparkles, kerbs), m2a (tile grout moiré), m1c/m2c silhouettes; on low the minified facade and concrete textures shimmer (m1a, m3c) | engine.js: MSAA on the scene target (high), FXAA fused into the Cinema pass (medium), nothing on low (dpr 1 phones) |
+| G2 | **Washed / muddy colour.** ACES Filmic on top of dark albedo crushes the night scenes into a grey-brown haze with a low black point; saturated neon clips to white-yellow cores; m2 is a uniform red wash; the m4 sunset is orange everywhere with no blue in the shadows. No per-era grade apart from a flat `uTint` multiply. | m1a/m1b (milky fog, flat greys), m3a on high (bloom 0.85 + fog turn the whole chamber into white milk; the same view on low is crisper), m2a (all red), m4a/m4b | engine.js: per-era grade fused into the Cinema pass (lift/gamma/gain, saturation, white balance, shadow tint, soft black point); evaluate AgX / Neutral tone mapping for the neon; high may add a 3D LUT |
 | G3 | **Grain and chromatic aberration fight detail.** A constant 0.06 grain and always-on CA on high soften textures and make SwiftShader frames look noisier than the content. | all high views | engine.js: scale grain with luminance, CA only at the frame edge |
 
 ### 4.2 Lighting, shadows and occlusion
@@ -122,7 +176,7 @@ and the lever we own that fixes it for the finished missions without editing the
 |---|---|---|---|
 | G4 | **No ambient occlusion or contact shadows.** Walls meet floors, people meet pavements and props meet the ground with no darkening: everything floats. Crowd walkers neither cast nor receive; `low` has no shadows at all, so phones show no grounding whatsoever. | m1b (walkers, shopfront base), m2b (pipes, wall-floor joins), m4b (houses on the ground), all low views | engine.js: GTAO at half resolution on high; props.js / kit.js: soft contact-shadow decals (one quad, depth-write off) under walkers, characters' feet and props on medium/low; baked AO in kit materials |
 | G5 | **Wrong image-based light.** Every scene reflects three's grey RoomEnvironment studio: wet asphalt reflects a white box instead of the neon street, metal reads as grey plastic, the lab and the valley share one reflection. | m1a/m1b street (no neon on the wet road except the additive puddle quads), m3 chronolith metal, m4 stone | engine.js: per-scene procedural environment (realism.skyEnvironment / an interior preset) built from the scene's sky/fog/hemi colours when a mission set none; optional one-time cube capture for the m1 street |
-| G6 | **Flat, single-source lighting.** Interiors are lit by unshadowed point lights with no falloff shaping or bounce: walls are evenly lit planes, ceilings black, no light pools; the m1 lamps light the ground only through puddle sprites. | m2a/m2b (flat grey walls), m3a, m1b (shopfront wall), m4a (houses without sky fill / bounce) | engine.js: env + AO do most of it; kit.js lampPost/light helpers: shaped pools, emissive fixtures that actually read as light sources; height fog in-scatter around lights |
+| G6 | **Flat, single-source lighting.** Interiors are lit by unshadowed point lights with no falloff shaping or bounce: walls are evenly lit planes, ceilings black, no light pools; the m1 lamps light the ground only through puddle sprites. | m2a/m2b (flat grey walls), m3a, m1b (shopfront wall), m4a (houses without sky fill / bounce); on low the m1 lamp heads are flat white bars because bloom is off and nothing else conveys emission | engine.js: env + AO do most of it; kit.js lampPost/light helpers: shaped pools, emissive fixtures that actually read as light sources; height fog in-scatter around lights |
 | G7 | **Dialogue / character lighting.** Close-ups use whatever gameplay light happens to be there: faces are under-exposed or lit from behind, no key / fill / rim, no catch-lights, no subject separation from the background. | m1c (Hale's face lit flat from the front, Kai a black silhouette), m2c (both characters nearly black), m3b, m4c | engine.js + a small hook in game.shot / talk: a camera-relative dialogue rig (key + rim, unshadowed, only while a close shot is active), depth-of-field on high |
 
 ### 4.3 Materials
@@ -142,7 +196,7 @@ and the lever we own that fixes it for the finished missions without editing the
 |---|---|---|---|
 | G12 | **Boxy buildings.** m1 towers are single `BoxGeometry` blocks with a stretched 256×512 facade print: no mullions, window reveals, ledges, cornices, setbacks, balconies, roofs or ground-floor structure; the window grid repeats visibly; the skyline is flat cards. m2/m3 interiors are box rooms; m4 houses are a box + cone. | m1a (both street walls), m1c background, m2a/m2b, m4a | kit.js: `facadeTextures` → higher-resolution facade with frames, sills and lit-interior variation (normal + roughness companions); `box()` recognises facade materials and adds relief / rooftop dressing as merged geometry (one extra draw per building at most); realism.cityBlock for new missions |
 | G13 | **Missing street infrastructure.** No kerb stones or gutters, drains, manholes, bollards, railings, traffic lights, crossings, street furniture, overhead wiring, signage poles, rooftop plant (AC units, water tanks, antennas beyond one red stick), transit details (rails, sleepers, platform edges, catenary masts are a few boxes). | m1a/m1b/m1c, m2 corridor (no conduits / signage / doors), m3a (chamber plant), m4b (no fences, carts, wells) | props.js / kit.js: a street-furniture set (lamp post rebuild, bollard, railing, drain, kerb strip, traffic light, cable runs, rooftop units, transit shelter, signage pole) built as instanced / merged meshes; existing `lampPost` upgraded in place. Placing new furniture in missions 1-4 needs the missions workflow (one call each); see Plan 5 |
-| G14 | **Vegetation is primitive.** m4 trees are dodecahedron blobs on cylinders defined inside the mission; no grass, shrubs or ground cover; the 2196 overgrowth of m3 is a few tinted boxes / tubes. | m4a, m4b, m3c | realism.js tree / forest / instancedGrass / ivy exist for new missions; for m4 / m3 the missions workflow must swap the call (we cannot edit missions) |
+| G14 | **Vegetation and terrain are primitive.** m4 trees are faceted dodecahedron blobs on cylinders and the cliffs are flat-shaded dodecahedra, both defined inside the mission; the grass is a speckled texture on a plane with no blades, shrubs or ground cover; the 2196 overgrowth of m3 is straight green tubes over flat brown boxes. | m4a, m4b, m4c, m3c | realism.js tree / forest / instancedGrass / ivy exist for new missions; for m4 / m3 the missions workflow must swap the call (we cannot edit missions) |
 
 ### 4.6 Characters (other workflows own the models)
 | # | Gap | Where it shows | Owner |
@@ -152,8 +206,8 @@ and the lever we own that fixes it for the finished missions without editing the
 ### 4.7 Performance (phones)
 | # | Gap | Measured | Lever |
 |---|---|---|---|
-| G16 | **m1 exceeds the phone budget**: ~480 draw calls / 450k triangles on the establishing view at high (budget ≤ 250 calls); each building, sign and lamp is its own draw, the 13+ umbrella walkers are full characters. | see table (section 3) | kit.js / props.js: merge static meshes per material after a scene is built (opt-in helper, used by the engine only on medium/low where it is invisible), instanced lamps / signs, crowd LOD distances per tier |
-| G17 | **Many unshadowed point lights** (7–14 per scene, all forward-shaded per pixel on every material). | lights column | engine tier hints: clamp the per-scene light count on low (fade the weakest into emissive + env) |
+| G16 | **m1 exceeds the phone budget on the phone tier itself**: 424 / 328 / 148 calls on low (488 / 381 / 244 on high) against a budget of ≤ 250; m4a 276 on low. 433 meshes, 389 materials, no instancing; each building, sign and lamp is its own draw, the 13+ umbrella walkers are full characters. | section 3 | kit.js / props.js: merge static meshes per material after a scene is built (opt-in helper, used by the engine only on medium/low where it is invisible), instanced lamps / signs, crowd LOD distances per tier |
+| G17 | **Many unshadowed point lights**: m3 2049 has 19 visible point lights, m2 10 + 3 spots, m4 8, m1 7, all forward-shaded per pixel on every lit material, on every tier (the tier hint `maxLights` is not enforced). | lights column | engine tier hints: clamp the per-scene light count on low (fade the weakest into emissive + env) |
 
 ## 5. Plan
 

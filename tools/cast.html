@@ -16,11 +16,12 @@ scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(),
 const key = new THREE.DirectionalLight(0xffe6cc, 2.6); key.position.set(2, 3, 3); scene.add(key);
 const rim = new THREE.DirectionalLight(0xbfd4ff, 1.4); rim.position.set(-3, 2, -2); scene.add(rim);
 // ?base=<url dir> shows another cast file (e.g. assets/models/staging/); ?rot=<deg> turns everyone (180 = back view);
-// ?t=<s> samples the clip at that time; ?clip=walk|idle|... (?clip=bind: the rest pose, no animation)
+// ?t=<s> samples the clip at that time; ?clip=walk|idle|... (?clip=bind: the rest pose, no animation); ?glow=<level> lights every
+// gadget at that level (default: each gadget's idle level)
 await loadCast(q.get('base') ? new URL(q.get('base'), location.href).href.replace(/\/?$/, '/') : undefined);
 const ids = q.get('ids') ? q.get('ids').split(',') : cast.ids;
 const cols = +(q.get('cols') || 11), sp = 0.75, face = q.get('face') !== null;
-const people = ids.map((id, i) => { const p = makePerson(id, { seed: 7 }); const c = i % cols, row = Math.floor(i / cols);
+const people = ids.map((id, i) => { const p = makePerson(id, { seed: 7, glow: q.get('glow') !== null ? +q.get('glow') : undefined }); const c = i % cols, row = Math.floor(i / cols);
   p.root.position.set((c - (cols - 1) / 2) * sp, 0, -row * 0.01); p.root.rotation.y = THREE.MathUtils.degToRad(+(q.get('rot') || 0)); p.root.userData.row = row; scene.add(p.root); if (q.get('clip') === 'bind') { p.mixer.stopAllAction(); p.root.traverse(o => { if (o.isSkinnedMesh) o.skeleton.pose(); }); return p; } p.play(q.get('clip') || 'idle', 0); const a = p.actions[p.current]; if (a) a.time = 0; p.update(+(q.get('t') || 0.7)); return p; });
 const rows = Math.ceil(ids.length / cols);
 const cams = [];
@@ -28,7 +29,9 @@ for (let row = 0; row < rows; row++) {
   const cam = new THREE.PerspectiveCamera(face ? 16 : 24, W / (H / rows), 0.1, 60);
   const span = cols * sp, d = face ? span / (2 * Math.tan(THREE.MathUtils.degToRad(8)) * (W / (H / rows))) : span / (2 * Math.tan(THREE.MathUtils.degToRad(12)) * (W / (H / rows))) + 0.5;
   const dd = q.get('d') ? +q.get('d') : d, ty = q.get('ty') ? +q.get('ty') : (face ? 1.5 : 0.85);   // ?d=<camera distance> ?ty=<look-at height>
-  cam.position.set(0, face ? 1.55 : ty + 0.1, dd); cam.lookAt(0, ty, 0); cams.push(cam);
+  const tx = +(q.get('tx') || 0), fov = q.get('fov');        // ?tx=<x> shifts the view sideways, ?fov=<deg> zooms (close-ups)
+  if (fov) { cam.fov = +fov; cam.updateProjectionMatrix(); }
+  cam.position.set(tx, face ? 1.55 : ty + 0.1, dd); cam.lookAt(tx, ty, 0); cams.push(cam);
 }
 r.setScissorTest(true);
 for (let row = 0; row < rows; row++) {

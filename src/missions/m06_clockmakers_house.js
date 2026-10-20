@@ -19,7 +19,7 @@ export default {
   async run(game) {
     const { ui, audio } = game, T = game.temporal, F = game.flags, pl = game.player;
     registerM6Cast(); registerM6Themes();
-    try {
+    if (!/m6np/.test(location.search)) try { // DBGTMP
       const need = ['oskar', 'oskar26', 'lotte'].filter(id => !ui.portraits[id] && CAST[id]?.look);
       if (need.length) Object.assign(ui.portraits, renderPortraits(Object.fromEntries(need.map(id => [id, CAST[id]]))));
     } catch (err) { console.warn('m6 portraits', err); }

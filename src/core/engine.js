@@ -4,12 +4,37 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { GTAOShader } from 'three/addons/shaders/GTAOShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// Final cinematic pass: temporal ripple, chromatic aberration, vignette, grain, freeze desaturation.
-// Defines (set per quality tier):
-//   FUSED_OUTPUT  the pass also does tone mapping + sRGB output, so the separate OutputPass is skipped
-//   CHEAP         single texture tap unless a switch / damage effect is running
+// ---------------------------------------------------------------------------------------------------------------
+// Post-processing chain (docs/RENDERING.md, "Post-processing"):
+//
+//   high    RenderPass -> scene target with depth -> AOPass (GTAO, half res, bilateral blur + upsample)
+//           -> ExposurePass (eye adaptation, 16x16 + 1x1) -> DofPass (cinematic shots only) -> bloom mips
+//           -> Cinema (bloom tap + tone mapping + sRGB + grade + effects) -> SMAA (3 passes) -> screen
+//   medium  RenderPass -> ExposurePass -> half-res bloom mips -> Cinema (fused FXAA + bloom tap, cheap effects) -> screen
+//   low     RenderPass -> Cinema (cheap effects; the grade is ALU in the same pass) -> screen
+//
+// Every pass is tier-gated in setQuality(); render() allocates nothing.
+// ---------------------------------------------------------------------------------------------------------------
+
+const LUMA_GLSL = 'const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);';
+const RAW_VS = `precision highp float;
+  uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix;
+  attribute vec3 position; attribute vec2 uv; varying vec2 vUv;
+  void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const QUAD_VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+
+// Final cinematic pass: tone mapping + sRGB output, colour grade, temporal ripple, chromatic aberration, vignette,
+// grain, freeze / residue / damage looks. A RawShaderMaterial so tone mapping happens here whether the pass draws to
+// the screen or into the SMAA input. Defines (set per quality tier):
+//   CHEAP          single texture tap unless a switch / damage effect is running (medium, low)
+//   FXAA           fast approximate anti-aliasing fused into that tap (medium)
+//   AUTO_EXPOSURE  eye adaptation from ExposurePass (high, medium)
+//   <tone mapping> + SRGB_TRANSFER, mirrored from the renderer like OutputPass does
 const CinemaShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -22,19 +47,114 @@ const CinemaShader = {
     uGrain: { value: 0.06 },
     uVignette: { value: 1.0 },
     uAspect: { value: 1 },
+    toneMappingExposure: { value: 1 },
+    uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
+    // grade (display space): lift / 1/gamma / gain, (saturation, contrast, pivot, shoulder), shadow + highlight balance
+    uLift: { value: new THREE.Vector3(0, 0, 0) },
+    uGammaInv: { value: new THREE.Vector3(1, 1, 1) },
+    uGain: { value: new THREE.Vector3(1, 1, 1) },
+    uGrade: { value: new THREE.Vector4(1, 1, 0.4, 0) },
+    uShadowBal: { value: new THREE.Vector3(1, 1, 1) },
+    uHighBal: { value: new THREE.Vector3(1, 1, 1) },
+    tBloom: { value: null },
+    tAdapt: { value: null },
+    uAE: { value: new THREE.Vector3(0.5, -0.5, 0.7) },   // strength, min EV, max EV
   },
-  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  vertexShader: RAW_VS,
   fragmentShader: `
+    precision highp float;
     uniform sampler2D tDiffuse; uniform float uTime,uShift,uFreeze,uResidue,uDamage,uGrain,uVignette,uAspect; uniform vec3 uTint;
+    uniform vec2 uTexel;
+    uniform vec3 uLift, uGammaInv, uGain, uShadowBal, uHighBal; uniform vec4 uGrade;
+    #ifdef AUTO_EXPOSURE
+    uniform sampler2D tAdapt; uniform vec3 uAE;
+    #endif
+    #ifdef BLOOM
+    uniform sampler2D tBloom;
+    #endif
+    #include <tonemapping_pars_fragment>
+    #include <colorspace_pars_fragment>
     varying vec2 vUv;
+    ${LUMA_GLSL}
     float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
     vec3 aberrated(vec2 uv, vec2 dir, float ca){
       return vec3(texture2D(tDiffuse, uv + dir*ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir*ca).b);
     }
+    vec3 toDisplay(vec3 c){
+      #if defined( LINEAR_TONE_MAPPING )
+        c = LinearToneMapping(c);
+      #elif defined( REINHARD_TONE_MAPPING )
+        c = ReinhardToneMapping(c);
+      #elif defined( CINEON_TONE_MAPPING )
+        c = CineonToneMapping(c);
+      #elif defined( ACES_FILMIC_TONE_MAPPING )
+        c = ACESFilmicToneMapping(c);
+      #elif defined( AGX_TONE_MAPPING )
+        c = AgXToneMapping(c);
+      #elif defined( NEUTRAL_TONE_MAPPING )
+        c = NeutralToneMapping(c);
+      #endif
+      #ifdef SRGB_TRANSFER
+        c = sRGBTransferOETF(vec4(c, 1.0)).rgb;
+      #endif
+      return c;
+    }
+    #ifdef FXAA
+    // FXAA (console variant) on the HDR input: luma is range-compressed for edge detection and taps are weighted by
+    // 1/(1+luma) so a bright neon pixel does not win the blend (the result is tone mapped afterwards).
+    float lumaOf(vec3 c){ float l = dot(c, LUMA); return sqrt(l / (1.0 + l)); }
+    vec4 tapW(vec2 uv){ vec3 c = texture2D(tDiffuse, uv).rgb; float w = 1.0 / (1.0 + dot(c, LUMA)); return vec4(c * w, w); }
+    vec3 fxaa(vec2 uv){
+      vec3 rgbM = texture2D(tDiffuse, uv).rgb;
+      float lM = lumaOf(rgbM);
+      float lNW = lumaOf(texture2D(tDiffuse, uv + vec2(-1.0, -1.0) * uTexel).rgb);
+      float lNE = lumaOf(texture2D(tDiffuse, uv + vec2( 1.0, -1.0) * uTexel).rgb);
+      float lSW = lumaOf(texture2D(tDiffuse, uv + vec2(-1.0,  1.0) * uTexel).rgb);
+      float lSE = lumaOf(texture2D(tDiffuse, uv + vec2( 1.0,  1.0) * uTexel).rgb);
+      float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE)));
+      float lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+      if (lMax - lMin < max(0.04, lMax * 0.16)) return rgbM;
+      vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), ((lNW + lSW) - (lNE + lSE)));
+      float red = max((lNW + lNE + lSW + lSE) * 0.03125, 1.0 / 128.0);
+      dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + red), -6.0, 6.0) * uTexel;
+      vec4 a = tapW(uv - dir * (1.0 / 6.0)) + tapW(uv + dir * (1.0 / 6.0));
+      vec4 b = a + tapW(uv - dir * 0.5) + tapW(uv + dir * 0.5);
+      vec3 rgbA = a.rgb / a.w, rgbB = b.rgb / b.w;
+      float lB = lumaOf(rgbB);
+      return (lB < lMin || lB > lMax) ? rgbA : rgbB;
+    }
+    #endif
+    // Colour grade in display space: lift / gamma / gain, saturation, soft shoulder (no hard clip of saturated
+    // highlights), contrast S-curve around a pivot (0 and 1 stay put), split-tone balance for shadows / highlights.
+    vec3 grade(vec3 c){
+      c = max(c * uGain + uLift * (1.0 - c), 0.0);
+      if (uGammaInv != vec3(1.0)) c = pow(c, uGammaInv);   // uniform branch: free when a grade has no gamma
+      float l = dot(c, LUMA);
+      c = max(mix(vec3(l), c, uGrade.x), 0.0);
+      float knee = 1.0 - 0.3 * uGrade.w, w = max(1.0 - knee, 1e-3);
+      float m = max(c.r, max(c.g, c.b)), x = max(m - knee, 0.0);
+      c *= (knee + w * x / (x + w)) / max(m, knee);
+      vec3 p = vec3(uGrade.z), hi = step(p, c);
+      // t^k approximated by t * (1 + (k-1)(t-1)): same slope k at the pivot, no pow (cheap on phone GPUs)
+      vec3 t = clamp(mix(c / p, (1.0 - c) / (1.0 - p), hi), 0.0, 1.0);
+      t *= 1.0 + (uGrade.y - 1.0) * (t - 1.0);
+      c = mix(p * t, 1.0 - (1.0 - p) * t, hi);
+      l = dot(c, LUMA);
+      c *= mix(uShadowBal, vec3(1.0), smoothstep(0.0, 0.5, l));
+      c *= mix(vec3(1.0), uHighBal, smoothstep(0.4, 1.0, l));
+      return clamp(c, 0.0, 1.0);
+    }
     void main(){
-      vec2 uv=vUv; vec2 c=uv-0.5; c.x*=uAspect; float r=length(c);
-      vec2 dir = normalize(c+1e-5)/vec2(uAspect,1.0);
+      vec2 uv=vUv; vec2 c=uv-0.5; c.x*=uAspect; float r2=dot(c,c);
+      // uniform branches: the switch / damage / freeze / residue effects cost nothing while they are off
+      float fxOn = uShift + uDamage;
+      vec2 dir = vec2(0.0);
+    #ifndef CHEAP
+      fxOn = 1.0;
+    #endif
+      if (fxOn > 0.001) dir = normalize(c+1e-5)/vec2(uAspect,1.0);
       if (uShift > 0.0) {
+        float r = sqrt(r2);
         // temporal ripple: concentric wave expanding from centre
         float wave = sin(r*38.0 - uTime*22.0) * uShift * 0.018 * smoothstep(0.9,0.0,r);
         uv += dir*wave;
@@ -44,34 +164,357 @@ const CinemaShader = {
       }
       vec3 col;
     #ifdef CHEAP
-      if (uShift + uDamage > 0.001) col = aberrated(uv, dir, uShift*0.012 + uDamage*0.006 + r*r*0.004);
-      else col = texture2D(tDiffuse, uv).rgb;
-    #else
-      col = aberrated(uv, dir, 0.0015 + uShift*0.012 + uDamage*0.006 + r*r*0.004);
-    #endif
-    #ifdef FUSED_OUTPUT
-      #ifdef TONE_MAPPING
-      col = toneMapping(col);
+      if (fxOn > 0.001) col = aberrated(uv, dir, uShift*0.012 + uDamage*0.006 + r2*0.004);
+      else {
+      #ifdef FXAA
+        col = fxaa(uv);
+      #else
+        col = texture2D(tDiffuse, uv).rgb;
       #endif
-      col = linearToOutputTexel(vec4(col, 1.0)).rgb;
+      }
+    #else
+      // lens aberration grows toward the frame edge only (the centre stays sharp)
+      col = aberrated(uv, dir, uShift*0.012 + uDamage*0.006 + r2*0.0055);
     #endif
-      // shift: flash toward cyan-white core
-      col = mix(col, col*vec3(0.8,1.15,1.3)+vec3(0.05,0.12,0.16), uShift*0.6);
-      // freeze: desaturate with cold tint
+    #ifdef BLOOM
+      col += texture2D(tBloom, uv).rgb;
+    #endif
+    #ifdef AUTO_EXPOSURE
+      vec2 ae = texture2D(tAdapt, vec2(0.5)).rg;
+      col *= exp2(clamp((ae.g - ae.r) * uAE.x, uAE.y, uAE.z));
+    #endif
+      col = toDisplay(col);
+    #ifndef NO_GRADE
+      col = grade(col);
+    #endif
       float l = dot(col, vec3(0.299,0.587,0.114));
-      col = mix(col, vec3(l)*vec3(0.85,0.95,1.1), uFreeze*0.85);
-      // residue vision: teal monochrome with edges preserved
-      col = mix(col, vec3(l*0.35, l*0.9, l*1.05) + vec3(0.0,0.03,0.05), uResidue*0.7);
-      col *= uTint;
-      // vignette
-      float v = smoothstep(1.05, 0.25, r*uVignette*1.15);
-      col *= mix(0.55, 1.0, v);
-      col = mix(col, col + vec3(0.5,0.0,0.03), uDamage*smoothstep(0.3,0.9,r));
-      // grain
-      col += (hash(vUv*vec2(1920.0,1080.0)+fract(uTime)*91.7)-0.5)*uGrain;
+      if (uShift + uFreeze + uResidue > 0.0) {
+        // shift: flash toward cyan-white core
+        col = mix(col, col*vec3(0.8,1.15,1.3)+vec3(0.05,0.12,0.16), uShift*0.6);
+        // freeze: desaturate with cold tint
+        col = mix(col, vec3(l)*vec3(0.85,0.95,1.1), uFreeze*0.85);
+        // residue vision: teal monochrome with edges preserved
+        col = mix(col, vec3(l*0.35, l*0.9, l*1.05) + vec3(0.0,0.03,0.05), uResidue*0.7);
+      }
+      // tint and vignette in one multiply
+      col *= uTint * mix(0.55, 1.0, smoothstep(1.05, 0.25, sqrt(r2)*uVignette*1.15));
+      if (uDamage > 0.0) col = mix(col, col + vec3(0.5,0.0,0.03), uDamage*smoothstep(0.3,0.9,sqrt(r2)));
+      // film grain (interleaved gradient noise): strongest in the shadows and mid-tones, fading out in highlights
+      vec2 gp = gl_FragCoord.xy + fract(uTime * 7.31) * vec2(47.0, 113.0);
+      float n = fract(52.9829189 * fract(dot(gp, vec2(0.06711056, 0.00583715))));
+      col += (n - 0.5)*uGrain*(1.0 - 0.65*clamp(l, 0.0, 1.0));
       gl_FragColor = vec4(col,1.0);
     }`,
 };
+
+// ---------- colour grades ----------
+// Display-space presets, each a richer, more filmic version of the era's existing palette (never a new palette).
+// lift / gamma / gain per channel; saturation; contrast (slope of the S-curve at the pivot); shoulder 0..1 (soft roll
+// off of saturated highlights); shadows / highlights = colour balance multipliers (normalised to unit luminance).
+export const GRADES = {
+  neutral: { lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], saturation: 1.04, contrast: 1.05, pivot: 0.4, shoulder: 0.35, shadows: [1, 1, 1], highlights: [1, 1, 1] },
+  // 2049 Rain City / present day: deeper blacks under the fog, cool teal shadows, warm skin and neon highlights
+  rain2049: { lift: [-0.006, -0.004, 0], gamma: [1, 1, 1], gain: [1.03, 1.03, 1.05], saturation: 1.1, contrast: 1.1, pivot: 0.2, shoulder: 0.5, shadows: [0.9, 1.0, 1.14], highlights: [1.05, 1.0, 0.95] },
+  // 2026 Helix / the past: warm amber, tungsten highlights, soft brown shadows
+  helix2026: { lift: [0.006, 0.002, -0.006], gamma: [1, 1, 1], gain: [1.04, 1.0, 0.93], saturation: 0.96, contrast: 1.08, pivot: 0.36, shoulder: 0.6, shadows: [1.06, 1.0, 0.9], highlights: [1.06, 1.0, 0.88] },
+  // 2196 devastated future: bleached, green-grey shadows, dusty warm highlights
+  ruin2196: { lift: [-0.002, 0.004, 0.002], gamma: [1, 1, 1], gain: [0.99, 1.02, 0.98], saturation: 0.86, contrast: 1.1, pivot: 0.36, shoulder: 0.5, shadows: [0.94, 1.05, 1.02], highlights: [1.04, 1.01, 0.92] },
+  // ancient valley at sunset: golden highlights, cooler blue shadows for depth
+  ancient: { lift: [-0.02, -0.018, -0.01], gamma: [1, 1, 1], gain: [1.0, 1.01, 1.03], saturation: 1.0, contrast: 1.12, pivot: 0.45, shoulder: 0.5, shadows: [0.88, 0.98, 1.2], highlights: [1.02, 1.0, 0.97] },
+};
+const GRADE_KEYS = ['lift', 'gamma', 'gain', 'shadows', 'highlights'];
+
+// Pick a preset from the scene when nothing set one: scene.userData.grade, else the hue of the fog (or the plain
+// background colour). Missions 1-4 need no change: Rain City fog is blue (rain2049), the 2026 era fog is amber
+// (helix2026), 2196 is green (ruin2196), the ancient valley is a bright warm haze (ancient), daylight skies neutral.
+export function gradeForScene(scene) {
+  if (!scene) return 'neutral';
+  const ud = scene.userData?.grade;
+  if (ud) return ud;
+  const c = scene.fog?.color || (scene.background?.isColor ? scene.background : null);
+  if (!c) return 'neutral';
+  const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b), v = max, s = max > 1e-5 ? (max - min) / max : 0;
+  let h = 0;
+  if (max - min > 1e-6) {
+    if (max === c.r) h = ((c.g - c.b) / (max - min) + 6) % 6; else if (max === c.g) h = (c.b - c.r) / (max - min) + 2; else h = (c.r - c.g) / (max - min) + 4;
+    h *= 60;
+  }
+  const sv = Math.pow(v, 1 / 2.2);   // display brightness of the (linear) fog colour
+  if (h >= 10 && h <= 60 && s > 0.25) return sv > 0.4 ? 'ancient' : 'helix2026';
+  if (h >= 90 && h <= 175 && s > 0.2) return 'ruin2196';
+  if (sv > 0.45) return 'neutral';
+  return 'rain2049';
+}
+
+function normBalance(src, out) {
+  const l = src[0] * 0.2126 + src[1] * 0.7152 + src[2] * 0.0722 || 1;
+  return out.set(src[0] / l, src[1] / l, src[2] / l);
+}
+
+// ---------- ambient occlusion (high tier) ----------
+// GTAO at half resolution from the scene pass's own depth buffer (normals are reconstructed from depth, so the
+// scene is not drawn a second time), a 4x4 depth-aware blur that cancels the 4x4 rotation noise, then a full-res
+// composite with a depth-aware upsample. The composite fades AO with fog and distance and keeps emissive / lit-up
+// pixels untouched, so neon, lamps and the sky never get dirty halos.
+const AOBlurShader = {
+  uniforms: { tAO: { value: null }, tDepth: { value: null }, cameraNear: { value: 0.1 }, cameraFar: { value: 900 } },
+  vertexShader: QUAD_VS,
+  fragmentShader: `
+    #include <packing>
+    uniform highp sampler2D tAO; uniform highp sampler2D tDepth; uniform float cameraNear, cameraFar;
+    varying vec2 vUv;
+    void main(){
+      ivec2 p = ivec2(gl_FragCoord.xy), sz = textureSize(tAO, 0) - 1;
+      vec2 c0 = texelFetch(tAO, p, 0).rg;
+      float zc = c0.g, sum = 0.0, ws = 0.0, tol = 0.03 + 0.04 * zc;
+      for (int y = -2; y < 2; y++) for (int x = -2; x < 2; x++) {
+        vec2 s = texelFetch(tAO, clamp(p + ivec2(x, y), ivec2(0), sz), 0).rg;
+        float w = exp(-abs(s.g - zc) / tol);
+        sum += s.r * w; ws += w;
+      }
+      gl_FragColor = vec4(sum / max(ws, 1e-4), zc, 0.0, 1.0);
+    }`,
+};
+const AOCompositeShader = {
+  uniforms: { tDiffuse: { value: null }, tAO: { value: null }, tDepth: { value: null }, cameraNear: { value: 0.1 }, cameraFar: { value: 900 },
+    uIntensity: { value: 1 }, uFog: { value: 0 }, uFade: { value: new THREE.Vector2(45, 110) }, uDebug: { value: 0 } },
+  vertexShader: QUAD_VS,
+  fragmentShader: `
+    #include <packing>
+    uniform sampler2D tDiffuse; uniform highp sampler2D tAO; uniform highp sampler2D tDepth;
+    uniform float cameraNear, cameraFar, uIntensity, uFog, uDebug; uniform vec2 uFade;
+    varying vec2 vUv;
+    ${LUMA_GLSL}
+    void main(){
+      vec4 col = texture2D(tDiffuse, vUv);
+      float d = texture2D(tDepth, vUv).x;
+      if (d >= 1.0) { gl_FragColor = col; return; }
+      float z = -perspectiveDepthToViewZ(d, cameraNear, cameraFar);
+      vec2 sz = vec2(textureSize(tAO, 0));
+      vec2 tc = vUv * sz - 0.5, f = fract(tc);
+      ivec2 b = ivec2(floor(tc)), mx = ivec2(sz) - 1;
+      float tol = 0.02 + 0.03 * z, sum = 0.0, ws = 0.0;
+      for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
+        vec2 s = texelFetch(tAO, clamp(b + ivec2(i, j), ivec2(0), mx), 0).rg;
+        float wb = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+        float w = wb * exp(-abs(s.g - z) / tol) + 1e-5;
+        sum += s.r * w; ws += w;
+      }
+      float ao = sum / ws;
+      float k = uIntensity * (1.0 - smoothstep(uFade.x, uFade.y, z)) * exp(-(uFog * z) * (uFog * z));
+      k *= 1.0 - smoothstep(0.9, 2.6, dot(col.rgb, LUMA));
+      col.rgb *= mix(1.0, ao, k);
+      if (uDebug > 0.5) col.rgb = vec3(mix(1.0, ao, k));
+      gl_FragColor = col;
+    }`,
+};
+
+function bayerNoise() {
+  // 4x4 rotation noise (Bayer order) so the 4x4 blur cancels it exactly; w = step jitter in a different order
+  const B = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], J = [5, 13, 7, 15, 9, 1, 11, 3, 6, 14, 4, 12, 10, 2, 8, 0];
+  const data = new Uint8Array(64);
+  for (let i = 0; i < 16; i++) {
+    const a = (B[i] + 0.5) / 16 * Math.PI;
+    data[i * 4] = Math.round((Math.cos(a) * 0.5 + 0.5) * 255); data[i * 4 + 1] = Math.round((Math.sin(a) * 0.5 + 0.5) * 255);
+    data[i * 4 + 2] = 127; data[i * 4 + 3] = Math.round((J[i] + 0.5) / 16 * 255);
+  }
+  const t = new THREE.DataTexture(data, 4, 4);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
+  return t;
+}
+
+const quadMat = (shader, defines) => new THREE.ShaderMaterial({ defines: { ...(shader.defines || {}), ...(defines || {}) }, uniforms: THREE.UniformsUtils.clone(shader.uniforms),
+  vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, depthTest: false, depthWrite: false });
+
+class AOPass extends Pass {
+  constructor(camera) {
+    super();
+    this.camera = camera; this.needsSwap = false; this.enabled = false;
+    this.scale = 0.5;   // AO resolution relative to the frame
+    this.sceneRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(2, 2) });
+    this.sceneRT.texture.name = 'Engine.scene';
+    const half = { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter };
+    this.aoRT = new THREE.WebGLRenderTarget(2, 2, half); this.blurRT = new THREE.WebGLRenderTarget(2, 2, half);
+    this.gtao = quadMat(GTAOShader, { NORMAL_VECTOR_TYPE: 0, SAMPLES: 12, FRAGMENT_OUTPUT: 'vec4(ao, -viewPos.z, 0., 1.)' });
+    const u = this.gtao.uniforms;
+    u.tNoise.value = bayerNoise(); u.tDepth.value = this.sceneRT.depthTexture;
+    u.radius.value = 0.55; u.thickness.value = 0.9; u.distanceExponent.value = 1.6; u.distanceFallOff.value = 1; u.scale.value = 1.15;
+    this.blur = quadMat(AOBlurShader); this.blur.uniforms.tAO.value = this.aoRT.texture;
+    this.comp = quadMat(AOCompositeShader);
+    this.comp.uniforms.tAO.value = this.blurRT.texture; this.comp.uniforms.tDepth.value = this.sceneRT.depthTexture; this.comp.uniforms.tDiffuse.value = this.sceneRT.texture;
+    this.quad = new FullScreenQuad(null);
+    this._cc = new THREE.Color(); this._clearAO = new THREE.Color(1, 1000, 0);
+    this.intensity = 0.8; this.fog = 0;
+  }
+  setSize(w, h) {
+    this.sceneRT.setSize(w, h);
+    const hw = Math.max(1, Math.round(w * this.scale)), hh = Math.max(1, Math.round(h * this.scale));
+    this.aoRT.setSize(hw, hh); this.blurRT.setSize(hw, hh);
+    this.gtao.uniforms.resolution.value.set(hw, hh);
+  }
+  release() { this.sceneRT.dispose(); this.aoRT.dispose(); this.blurRT.dispose(); }
+  render(renderer, writeBuffer, readBuffer) {
+    const cam = this.camera, u = this.gtao.uniforms;
+    u.cameraNear.value = cam.near; u.cameraFar.value = cam.far;
+    u.cameraProjectionMatrix.value.copy(cam.projectionMatrix); u.cameraProjectionMatrixInverse.value.copy(cam.projectionMatrixInverse);
+    this.blur.uniforms.cameraNear.value = cam.near; this.blur.uniforms.cameraFar.value = cam.far;
+    const cu = this.comp.uniforms;
+    cu.cameraNear.value = cam.near; cu.cameraFar.value = cam.far; cu.uIntensity.value = this.intensity; cu.uFog.value = this.fog;
+    renderer.getClearColor(this._cc); const ca = renderer.getClearAlpha();
+    renderer.setClearColor(this._clearAO, 1);
+    renderer.setRenderTarget(this.aoRT); renderer.clear(true, false, false);
+    this.quad.material = this.gtao; this.quad.render(renderer);
+    renderer.setClearColor(this._cc, ca);
+    renderer.setRenderTarget(this.blurRT); this.quad.material = this.blur; this.quad.render(renderer);
+    renderer.setRenderTarget(this.renderToScreen ? null : readBuffer); this.quad.material = this.comp; this.quad.render(renderer);
+  }
+}
+
+// ---------- eye adaptation (high, medium) ----------
+// Log-average luminance of the HDR frame (centre-weighted) on the GPU: 16x16 reduction, then a 1x1 ping-pong target
+// holding (adapted log2 luminance, reference log2 luminance). The Cinema pass exposes by (reference - adapted) *
+// strength, clamped to a small EV range: walking from a bright street into a dark room the image is dark first and
+// opens up over a second, and a bright exterior is reined in. The reference is the scene's own authored exposure:
+// it is re-taken after a scene change and an era / grade change and drifts very slowly, so missions keep their look.
+const LumShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: QUAD_VS,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; varying vec2 vUv;
+    ${LUMA_GLSL}
+    void main(){
+      float s = 0.0, ws = 0.0;
+      for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+        vec2 uv = vUv + (vec2(float(i), float(j)) - 1.5) * (1.0 / 64.0);
+        float l = dot(texture2D(tDiffuse, uv).rgb, LUMA);
+        vec2 c = uv - 0.5; float w = 1.0 - dot(c, c);   // centre-weighted metering (corners count half)
+        s += log2(clamp(l, 1e-4, 64.0)) * w; ws += w;
+      }
+      gl_FragColor = vec4(s, ws, 0.0, 1.0);
+    }`,
+};
+const AdaptShader = {
+  uniforms: { tLum: { value: null }, tPrev: { value: null }, uK: { value: 1 }, uKRef: { value: 0 } },
+  vertexShader: QUAD_VS,
+  fragmentShader: `
+    uniform sampler2D tLum; uniform sampler2D tPrev; uniform float uK, uKRef;
+    void main(){
+      vec2 acc = vec2(0.0);
+      for (int j = 0; j < 8; j++) for (int i = 0; i < 8; i++) acc += texture2D(tLum, (vec2(float(i), float(j)) * 2.0 + 1.0) / 16.0).rg;
+      float cur = acc.x / max(acc.y, 1e-4);
+      vec2 prev = texture2D(tPrev, vec2(0.5)).rg;
+      float a = mix(prev.r, cur, uK);
+      gl_FragColor = vec4(a, mix(prev.g, a, uKRef), 0.0, 1.0);
+    }`,
+};
+class ExposurePass extends Pass {
+  constructor() {
+    super();
+    this.needsSwap = false; this.enabled = false;
+    const o = { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+    this.lumRT = new THREE.WebGLRenderTarget(16, 16, o);
+    this.rt = [new THREE.WebGLRenderTarget(1, 1, o), new THREE.WebGLRenderTarget(1, 1, o)]; this.i = 0;
+    this.lum = quadMat(LumShader); this.adapt = quadMat(AdaptShader); this.adapt.uniforms.tLum.value = this.lumRT.texture;
+    this.quad = new FullScreenQuad(null);
+    this.k = 1; this.kRef = 1;   // set by the engine every frame
+  }
+  get texture() { return this.rt[this.i].texture; }
+  release() { this.lumRT.dispose(); this.rt[0].dispose(); this.rt[1].dispose(); }
+  render(renderer, writeBuffer, readBuffer) {
+    this.lum.uniforms.tDiffuse.value = readBuffer.texture;
+    renderer.setRenderTarget(this.lumRT); this.quad.material = this.lum; this.quad.render(renderer);
+    const prev = this.rt[this.i]; this.i ^= 1;
+    const a = this.adapt.uniforms; a.tPrev.value = prev.texture; a.uK.value = this.k; a.uKRef.value = this.kRef;
+    renderer.setRenderTarget(this.rt[this.i]); this.quad.material = this.adapt; this.quad.render(renderer);
+  }
+}
+
+// ---------- cinematic depth of field (high tier, only while engine.focus() holds a target) ----------
+// Thin-lens circle of confusion from the scene depth (coc ~ f^2 |1/zf - 1/z|, so long lenses and close focus blur
+// most and wide establishing shots barely at all) and a 24-tap spiral gather in HDR before bloom. A sample behind the
+// pixel may not blur over it by more than the pixel's own CoC, so in-focus silhouettes stay crisp over a soft
+// background while an out-of-focus foreground shoulder still spreads over them.
+const DOF_TAPS = 24;
+const DofShader = {
+  uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, cameraNear: { value: 0.1 }, cameraFar: { value: 900 }, uTexel: { value: new THREE.Vector2() },
+    uFocus: { value: 3 }, uScale: { value: 1 }, uMaxR: { value: 8 }, uKernel: { value: [] } },
+  vertexShader: QUAD_VS,
+  fragmentShader: `
+    #include <packing>
+    #define TAPS ${DOF_TAPS}
+    uniform sampler2D tDiffuse; uniform highp sampler2D tDepth; uniform float cameraNear, cameraFar, uFocus, uScale, uMaxR;
+    uniform vec2 uTexel; uniform vec2 uKernel[TAPS];
+    varying vec2 vUv;
+    float viewZ(vec2 uv){ return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, cameraNear, cameraFar); }
+    float coc(float z){ return min(abs(1.0 / uFocus - 1.0 / z) * uScale, uMaxR); }
+    void main(){
+      vec3 c0 = texture2D(tDiffuse, vUv).rgb;
+      float z0 = viewZ(vUv), k0 = coc(z0);
+      vec3 acc = c0; float ws = 1.0;
+      for (int i = 0; i < TAPS; i++) {
+        vec2 o = uKernel[i] * uMaxR;
+        float r = length(o);
+        vec2 uv = vUv + o * uTexel;
+        float z = viewZ(uv), k = coc(z);
+        if (z > z0) k = min(k, k0);
+        float w = smoothstep(r - 1.0, r + 0.5, k);
+        acc += texture2D(tDiffuse, uv).rgb * w; ws += w;
+      }
+      gl_FragColor = vec4(acc / ws, 1.0);
+    }`,
+};
+class DofPass extends Pass {
+  constructor() {
+    super();
+    this.enabled = false;
+    this.mat = quadMat(DofShader);
+    const k = this.mat.uniforms.uKernel.value;
+    for (let i = 0; i < DOF_TAPS; i++) { const r = Math.sqrt((i + 0.5) / DOF_TAPS), a = i * 2.39996323; k.push(new THREE.Vector2(Math.cos(a) * r, Math.sin(a) * r)); }
+    this.quad = new FullScreenQuad(this.mat);
+    this.height = 720;
+  }
+  setSize(w, h) { this.mat.uniforms.uTexel.value.set(1 / w, 1 / h); this.height = h; }
+  render(renderer, writeBuffer, readBuffer) {
+    this.mat.uniforms.tDiffuse.value = readBuffer.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); this.quad.render(renderer);
+  }
+}
+
+// ---------- bloom with its final full-screen blend fused into the Cinema pass ----------
+// UnrealBloomPass ends with a full-resolution additive blend of its result over the frame (a read-modify-write of the
+// whole frame buffer, the costliest part of bloom on tile-based phone GPUs). Here that step is skipped and the Cinema
+// pass adds the bloom texture with one bilinear tap instead. Same image, one full-screen pass fewer on every tier.
+class FusedBloomPass extends UnrealBloomPass {
+  get texture() { return this.renderTargetsHorizontal[0].texture; }
+  render(renderer, writeBuffer, readBuffer) {
+    renderer.getClearColor(this._oldClearColor);
+    this.oldClearAlpha = renderer.getClearAlpha();
+    const oldAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setClearColor(this.clearColor, 0);
+    this.highPassUniforms.tDiffuse.value = readBuffer.texture;
+    this.highPassUniforms.luminosityThreshold.value = this.threshold;
+    this.fsQuad.material = this.materialHighPassFilter;
+    renderer.setRenderTarget(this.renderTargetBright); renderer.clear(); this.fsQuad.render(renderer);
+    let input = this.renderTargetBright;
+    for (let i = 0; i < this.nMips; i++) {
+      const m = this.separableBlurMaterials[i];
+      this.fsQuad.material = m;
+      m.uniforms.colorTexture.value = input.texture; m.uniforms.direction.value = UnrealBloomPass.BlurDirectionX;
+      renderer.setRenderTarget(this.renderTargetsHorizontal[i]); renderer.clear(); this.fsQuad.render(renderer);
+      m.uniforms.colorTexture.value = this.renderTargetsHorizontal[i].texture; m.uniforms.direction.value = UnrealBloomPass.BlurDirectionY;
+      renderer.setRenderTarget(this.renderTargetsVertical[i]); renderer.clear(); this.fsQuad.render(renderer);
+      input = this.renderTargetsVertical[i];
+    }
+    this.fsQuad.material = this.compositeMaterial;
+    this.compositeMaterial.uniforms.bloomStrength.value = this.strength;
+    this.compositeMaterial.uniforms.bloomRadius.value = this.radius;
+    this.compositeMaterial.uniforms.bloomTintColors.value = this.bloomTintColors;
+    renderer.setRenderTarget(this.renderTargetsHorizontal[0]); renderer.clear(); this.fsQuad.render(renderer);
+    renderer.setClearColor(this._oldClearColor, this.oldClearAlpha);
+    renderer.autoClear = oldAutoClear;
+  }
+}
 
 // ---------- device profile ----------
 // GPUs that struggle with PBR + post at phone resolutions (old Adreno, Mali Bifrost entry parts,
@@ -97,20 +540,29 @@ export function detectDevice() {
 
 // Quality tiers. `high` is the desktop look and is never altered by the mobile work.
 // `hints` are advisory budgets world / character code can read through game.onQuality().
+// Post: ao = GTAO, aa = 'smaa' | 'fxaa' | null, dof = cinematic depth of field, autoExposure = eye adaptation.
 function tierSettings(q, device) {
   const m = device.mobile;
   const T = {
     high: { dprCap: 1.75, shadows: true, shadowMapMax: 4096, softShadows: true, bloom: true, bloomScale: 1, cheapPost: false, adaptive: false,
+      ao: true, aa: 'smaa', dof: true, autoExposure: true,
       hints: { characterDetail: 'high', crowd: 1, drawDistance: 1, maxLights: 12, particles: 1 } },
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
+      ao: false, aa: 'fxaa', dof: false, autoExposure: true,
       hints: { characterDetail: m ? 'low' : 'high', crowd: 0.6, drawDistance: 0.8, maxLights: 6, particles: 0.6 } },
     low: { dprCap: m ? 1 : 0.75, shadows: false, shadowMapMax: 512, softShadows: false, bloom: false, bloomScale: 0.5, cheapPost: true, adaptive: true,
+      ao: false, aa: null, dof: false, autoExposure: false,
       hints: { characterDetail: 'low', crowd: 0.35, drawDistance: 0.6, maxLights: 4, particles: 0.35 } },
   };
   return { quality: q, mobile: m, ...T[q] };
 }
 
 export const QUALITY_LEVELS = ['high', 'medium', 'low'];
+
+const TONE_DEFINES = {
+  [THREE.LinearToneMapping]: 'LINEAR_TONE_MAPPING', [THREE.ReinhardToneMapping]: 'REINHARD_TONE_MAPPING', [THREE.CineonToneMapping]: 'CINEON_TONE_MAPPING',
+  [THREE.ACESFilmicToneMapping]: 'ACES_FILMIC_TONE_MAPPING', [THREE.AgXToneMapping]: 'AGX_TONE_MAPPING', [THREE.NeutralToneMapping]: 'NEUTRAL_TONE_MAPPING',
+};
 
 export class Engine {
   constructor(container) {
@@ -139,28 +591,63 @@ export class Engine {
     this.envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
 
+    // Debug / A-B switches: ?post=noao,noaa,nodof,noae,nograde turn single post features off on every tier (aodebug shows
+    // the AO term). engine.postOff can be changed at runtime followed by applyPost().
+    const qp = new URLSearchParams(location.search);
+    this.postOff = new Set(String(qp.get('post') || '').split(',').filter(Boolean));
+
     this.composer = new EffectComposer(r);
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.5, 0.92);
+    this.aoPass = new AOPass(this.camera);
+    this.composer.addPass(this.aoPass);
+    this.exposurePass = new ExposurePass();
+    this.composer.addPass(this.exposurePass);
+    this.dofPass = new DofPass();
+    this.composer.addPass(this.dofPass);
+    this.bloom = new FusedBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.5, 0.92);
     this.bloomScale = 1;
     const bloomSetSize = this.bloom.setSize.bind(this.bloom);   // half-res bloom on cheaper tiers
+    this.bloom.needsSwap = false;   // it no longer writes the frame (Cinema adds this.bloom.texture)
     this.bloom.setSize = (w, h) => bloomSetSize(Math.max(2, Math.round(w * this.bloomScale)), Math.max(2, Math.round(h * this.bloomScale)));
     this.composer.addPass(this.bloom);
+    // tone mapping + sRGB now always happen in the Cinema pass; kept (disabled) for code that looks it up
     this.outputPass = new OutputPass();
+    this.outputPass.enabled = false;
     this.composer.addPass(this.outputPass);
-    this.cinema = new ShaderPass(CinemaShader);
+    this.cinema = new ShaderPass(new THREE.RawShaderMaterial({ name: 'CinemaShader', uniforms: THREE.UniformsUtils.clone(CinemaShader.uniforms),
+      vertexShader: CinemaShader.vertexShader, fragmentShader: CinemaShader.fragmentShader, depthTest: false, depthWrite: false }));
     this.composer.addPass(this.cinema);
+    this.smaa = new SMAAPass(2, 2);
+    this.smaa.clear = true;   // the edge pass discards non-edges: stale edges must not survive from the last frame
+    this.composer.addPass(this.smaa);
     this.fx = this.cinema.uniforms;
     this.fx.uAspect.value = window.innerWidth / window.innerHeight;
+    this.fx.tAdapt.value = this.exposurePass.texture;
+    this.fx.tBloom.value = this.bloom.texture;
+    // RenderPass draws into the AO pass's depth-textured target when AO is on (the AO composite writes the result to
+    // the composer's buffer), so AO and depth of field read the scene depth without drawing the scene twice.
+    this._toneKey = '';
 
     // Per-frame statistics: scene = shadow maps + main pass, total = including post-processing.
-    this.stats = { sceneCalls: 0, sceneTriangles: 0, calls: 0, triangles: 0, fps: 0, frameMs: 0, pixelRatio: 1, scale: 1 };
+    this.stats = { sceneCalls: 0, sceneTriangles: 0, calls: 0, triangles: 0, fps: 0, frameMs: 0, pixelRatio: 1, scale: 1, post: '' };
     const renderScene = this.renderPass.render.bind(this.renderPass);
-    this.renderPass.render = (...a) => { renderScene(...a); this.stats.sceneCalls = r.info.render.calls; this.stats.sceneTriangles = r.info.render.triangles; };
+    this.renderPass.render = (rr, wb, rb, dt, mask) => {
+      renderScene(rr, wb, this.aoPass.enabled ? this.aoPass.sceneRT : rb, dt, mask);
+      this.stats.sceneCalls = r.info.render.calls; this.stats.sceneTriangles = r.info.render.triangles;
+    };
+
+    // colour grade state: current values interpolate toward the target (no allocations per frame)
+    const g0 = GRADES.neutral;
+    const mk = () => ({ lift: [...g0.lift], gamma: [...g0.gamma], gain: [...g0.gain], shadows: [...g0.shadows], highlights: [...g0.highlights], saturation: g0.saturation, contrast: g0.contrast, pivot: g0.pivot, shoulder: g0.shoulder });
+    this._grade = { cur: mk(), target: mk(), name: 'neutral', explicit: null, check: 0, tmp: new THREE.Vector3() };
+    // focus / depth of field state
+    this._focus = { target: null, active: null, z: 3, amount: 0, enabled: true, v: new THREE.Vector3(), d: new THREE.Vector3() };
+    // eye adaptation state: snap = seconds of instant adaptation left, ref = seconds of reference re-take left
+    this._ae = { snap: 1, ref: 1.2 };
+    this._postT = 0;
 
     // Adaptive resolution: scales the render resolution between min and 1 to hold 30+ fps.
-    const qp = new URLSearchParams(location.search);
     this.adaptiveParam = qp.get('adaptive');   // '1' forces on, '0' forces off
     // ceiling: a scale that proved too slow right after a raise is not tried again for a while (no see-saw)
     this.adaptive = { enabled: false, scale: 1, min: 0.6, samples: [], windowStart: 0, good: 0, cooldown: 0, ceiling: 1, ceilingUntil: 0, raisedAt: 0, fails: 0 };
@@ -188,10 +675,7 @@ export class Engine {
     r.shadowMap.type = s.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     this.bloom.enabled = s.bloom;
     this.bloomScale = s.bloomScale;
-    this.outputPass.enabled = !s.cheapPost;
-    const defs = this.cinema.material.defines;
-    if (s.cheapPost) { defs.FUSED_OUTPUT = ''; defs.CHEAP = ''; } else { delete defs.FUSED_OUTPUT; delete defs.CHEAP; }
-    this.cinema.material.needsUpdate = true;
+    this.applyPost();
     // Automated runs (webdriver + CPU rasterizer) measure nothing real: keep their resolution fixed.
     const automated = !!window.navigator?.webdriver;
     const auto = this.adaptiveParam === '1' ? true : this.adaptiveParam === '0' ? false : (s.adaptive && !automated);
@@ -203,6 +687,27 @@ export class Engine {
     this.resize();
     if (!first && prev !== q) this.refreshMaterials();
     if (!opts.silent && prev !== q) this.emitQuality();
+  }
+
+  // Tier-gate the post passes (and free the GPU memory of the ones a tier does not use).
+  applyPost() {
+    const s = this.settings, off = this.postOff;
+    const ao = s.ao && !off.has('noao'), smaa = s.aa === 'smaa' && !off.has('noaa'), fxaa = s.aa === 'fxaa' && !off.has('noaa');
+    const ae = s.autoExposure && !off.has('noae');
+    if (this.aoPass.enabled && !ao) this.aoPass.release();
+    if (this.smaa.enabled && !smaa) { this.smaa.edgesRT.dispose(); this.smaa.weightsRT.dispose(); }
+    if (this.exposurePass.enabled && !ae) this.exposurePass.release();
+    this.aoPass.enabled = ao; this.smaa.enabled = smaa; this.exposurePass.enabled = ae;
+    this.dofAllowed = s.dof && ao && !off.has('nodof');
+    if (!this.dofAllowed) this.dofPass.enabled = false;
+    const defs = this.cinema.material.defines;
+    const set = (k, on) => { if (on) defs[k] = ''; else delete defs[k]; };
+    set('CHEAP', s.cheapPost); set('FXAA', fxaa); set('AUTO_EXPOSURE', ae); set('NO_GRADE', off.has('nograde')); set('BLOOM', s.bloom);
+    delete defs.FUSED_OUTPUT;
+    this._toneKey = '';   // tone-mapping defines are rebuilt on the next frame
+    this.cinema.material.needsUpdate = true;
+    this._ae.snap = 0.5; this._ae.ref = 0.6;
+    this.stats.post = [ao && 'gtao', ae && 'eye', this.dofAllowed && 'dof', s.bloom && 'bloom', fxaa && 'fxaa', smaa && 'smaa', !off.has('nograde') && 'grade'].filter(Boolean).join('+');
   }
 
   // Subscribe to quality changes: fn(quality, settings). Returns an unsubscribe function.
@@ -220,6 +725,135 @@ export class Engine {
     scene.environment = scene.environment || this.envTexture;
     this.renderPass.scene = scene;
     this._sweep = 0;
+    // a new place: its own grade at once, no focus, the eye adapts from scratch
+    this.focus(null); this._focus.amount = 0; this.dofPass.enabled = false;
+    this._grade.explicit = null; this._grade.check = 0;
+    this._ae.snap = 1; this._ae.ref = 1.2;
+    this.updateGrade(0, true);
+  }
+
+  // ---------- colour grade ----------
+  // setGrade('rain2049' | 'helix2026' | 'ruin2196' | 'ancient' | 'neutral' | { base?, ...fields } | null, { instant })
+  // An object overrides fields of its `base` preset (default neutral). null returns to the automatic choice
+  // (scene.userData.grade, else the scene's fog colour, see gradeForScene). Changes blend over ~1 s.
+  setGrade(g, opts = {}) {
+    this._grade.explicit = g ?? null;
+    this._grade.check = 0;
+    this.updateGrade(0, !!opts.instant);
+    return this._grade.name;
+  }
+  get grade() { return this._grade.name; }
+
+  _resolveGrade(g) {
+    if (typeof g === 'string') return GRADES[g] ? g : 'neutral';
+    return g && typeof g === 'object' ? g : 'neutral';
+  }
+  _setGradeTarget(g) {
+    const G = this._grade, t = G.target;
+    const base = typeof g === 'string' ? GRADES[g] : GRADES[g.base] || GRADES.neutral;
+    const src = typeof g === 'string' ? base : g;
+    for (const k of GRADE_KEYS) { const v = src[k] || base[k]; t[k][0] = v[0]; t[k][1] = v[1]; t[k][2] = v[2]; }
+    t.saturation = src.saturation ?? base.saturation; t.contrast = src.contrast ?? base.contrast;
+    t.pivot = src.pivot ?? base.pivot; t.shoulder = src.shoulder ?? base.shoulder;
+  }
+  updateGrade(dt, snap = false) {
+    const G = this._grade;
+    if ((G.check -= dt) <= 0 || snap) {
+      G.check = 0.5;
+      const g = this.postOff.has('nograde') ? 'off' : this._resolveGrade(G.explicit ?? gradeForScene(this.scene));
+      const key = typeof g === 'string' ? g : g === G.ref ? G.key : JSON.stringify(g);
+      G.ref = g;
+      if (key !== G.key) {
+        const had = G.key !== undefined; G.key = key;
+        G.name = typeof g === 'string' ? g : (g.name || 'custom');
+        this._setGradeTarget(g === 'off' ? IDENTITY_GRADE : g);
+        if (had) { this._ae.ref = Math.max(this._ae.ref, 1.4); }   // an era change re-takes the exposure reference
+      }
+    }
+    const c = G.cur, t = G.target, k = snap ? 1 : 1 - Math.exp(-dt / 0.45);
+    for (const key of GRADE_KEYS) { const a = c[key], b = t[key]; a[0] += (b[0] - a[0]) * k; a[1] += (b[1] - a[1]) * k; a[2] += (b[2] - a[2]) * k; }
+    c.saturation += (t.saturation - c.saturation) * k; c.contrast += (t.contrast - c.contrast) * k;
+    c.pivot += (t.pivot - c.pivot) * k; c.shoulder += (t.shoulder - c.shoulder) * k;
+    const u = this.fx;
+    u.uLift.value.set(c.lift[0], c.lift[1], c.lift[2]);
+    u.uGammaInv.value.set(1 / c.gamma[0], 1 / c.gamma[1], 1 / c.gamma[2]);
+    u.uGain.value.set(c.gain[0], c.gain[1], c.gain[2]);
+    u.uGrade.value.set(c.saturation, c.contrast, Math.min(0.9, Math.max(0.1, c.pivot)), c.shoulder);
+    normBalance(c.shadows, u.uShadowBal.value); normBalance(c.highlights, u.uHighBal.value);
+  }
+
+  // ---------- cinematic focus ----------
+  // focus(point | Object3D | null, { active?: () => bool, dof?: false }): while a target is held (and active() is true)
+  // the high tier renders depth of field focused on it; null / inactive releases it (the blur fades out).
+  // game.shot() holds the shot's look target and releases it with the shot.
+  focus(target, opts = {}) {
+    const F = this._focus;
+    F.target = target && opts.dof !== false ? target : null;
+    F.active = F.target ? opts.active || null : null;
+    return this;
+  }
+  _updateFocus(dt) {
+    const F = this._focus, cam = this.camera;
+    let on = !!(F.target && this.dofAllowed && (!F.active || F.active()));
+    if (F.target && !on && F.active && !F.active()) { F.target = null; F.active = null; }
+    if (on) {
+      const p = F.target.isObject3D ? F.target.getWorldPosition(F.v) : F.v.copy(F.target);
+      cam.getWorldDirection(F.d);
+      const z = Math.max(0.35, p.sub(cam.position).dot(F.d));
+      if (!(z < 1e5)) on = false;
+      else F.z = F.amount < 0.01 || dt === 0 ? z : F.z + (z - F.z) * (1 - Math.exp(-dt / 0.18));
+    }
+    const k = dt === 0 ? 1 : 1 - Math.exp(-dt / 0.3);
+    F.amount += ((on ? 1 : 0) - F.amount) * k;
+    if (F.amount < 0.01 && !on) F.amount = 0;
+    const dp = this.dofPass;
+    dp.enabled = this.dofAllowed && F.amount > 0.01;
+    if (dp.enabled) {
+      const u = dp.mat.uniforms, t = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+      u.cameraNear.value = cam.near; u.cameraFar.value = cam.far; u.uFocus.value = F.z;
+      u.tDepth.value = this.aoPass.sceneRT.depthTexture;
+      const px = dp.height / 720;
+      u.uScale.value = 1.9 * px / (t * t) * F.amount; u.uMaxR.value = 9 * px * F.amount;
+    }
+  }
+
+  // Jump every smoothed post value (grade, exposure, focus) to its target: deterministic captures and cuts.
+  settlePost() {
+    this.updateGrade(0, true);
+    this._ae.snap = Math.max(this._ae.snap, 1e-3); this._ae.ref = Math.max(this._ae.ref, 1e-3); this._ae.force = true;
+    this._updateFocus(0);
+  }
+
+  _updatePost(dt) {
+    const r = this.renderer, fx = this.fx;
+    // tone mapping defines follow the renderer (missions set exposure; tone mapping itself rarely changes)
+    const key = r.toneMapping + '|' + r.outputColorSpace;
+    if (key !== this._toneKey) {
+      this._toneKey = key;
+      const defs = this.cinema.material.defines;
+      for (const k in TONE_DEFINES) delete defs[TONE_DEFINES[k]];
+      if (TONE_DEFINES[r.toneMapping]) defs[TONE_DEFINES[r.toneMapping]] = '';
+      if (THREE.ColorManagement.getTransfer(r.outputColorSpace) === THREE.SRGBTransfer) defs.SRGB_TRANSFER = ''; else delete defs.SRGB_TRANSFER;
+      this.cinema.material.needsUpdate = true;
+    }
+    fx.toneMappingExposure.value = r.toneMappingExposure;
+    this.updateGrade(dt);
+    this._updateFocus(dt);
+    if (this.aoPass.enabled) {
+      const f = this.scene?.fog;
+      this.aoPass.fog = f?.isFogExp2 ? f.density : f?.isFog ? 1.2 / Math.max(1, f.far) : 0;
+      this.aoPass.comp.uniforms.uDebug.value = this.postOff.has('aodebug') ? 1 : 0;
+    }
+    const E = this.exposurePass;
+    if (E.enabled) {
+      const A = this._ae;
+      const snap = A.snap > 0 || A.force, ref = A.ref > 0 || A.force;
+      A.snap -= dt; A.ref -= dt; A.force = false;
+      E.k = snap ? 1 : 1 - Math.exp(-dt / 0.9);
+      E.kRef = ref ? 1 : 1 - Math.exp(-dt / 120);
+      fx.uAE.value.set(this.quality === 'high' ? 0.5 : 0.4, -0.5, 0.7);
+      fx.tAdapt.value = E.rt[E.i ^ 1].texture;   // the target this frame's adaptation writes
+    }
   }
 
   resize() {
@@ -230,6 +864,7 @@ export class Engine {
     this.composer.setPixelRatio(pr);   // also resizes every pass at the new pixel ratio
     this.composer.setSize(w, h);
     this.fx.uAspect.value = w / h;
+    this.fx.uTexel.value.set(1 / Math.max(1, Math.round(w * pr)), 1 / Math.max(1, Math.round(h * pr)));
     this.stats.pixelRatio = pr; this.stats.scale = this.adaptive.scale;
   }
 
@@ -294,8 +929,11 @@ export class Engine {
 
   render(t) {
     const now = performance.now();
+    const dt = this._postT ? Math.min(0.1, Math.max(0, (now - this._postT) / 1000)) : 0;
+    this._postT = now;
     this.adapt(now);
     if (this._sweep-- <= 0) { this._sweep = 45; this.clampShadows(); }
+    this._updatePost(dt);
     this.renderer.info.reset();
     this.fx.uTime.value = t;
     this.composer.render();
@@ -303,6 +941,9 @@ export class Engine {
     this.stats.triangles = this.renderer.info.render.triangles;
   }
 }
+
+// The grade with ?post=nograde: exactly the pre-grade image.
+const IDENTITY_GRADE = { lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], saturation: 1, contrast: 1, pivot: 0.4, shoulder: 0, shadows: [1, 1, 1], highlights: [1, 1, 1] };
 
 function gpuName(renderer) {
   try {

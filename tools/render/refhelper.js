@@ -8,6 +8,8 @@
 //                    The pose is held through game.cine (mission camera code cannot move it), the world is stepped
 //                    v.frames (default 6) times around it, then time stops and the pose is re-applied and drawn.
 //                    HUD / dialogue / letterbox DOM is hidden so only the 3D frame is captured.
+//                    Close-up views (fov <= 45) hold engine.focus() on the look target like game.shot() does, and
+//                    engine.settlePost() snaps the smoothed post values (grade, eye adaptation, focus) first.
 //   REF.measure(n)   times 3 full frames (composer) and 1 scene-pass-only frame, each fenced with readPixels, and
 //                    records renderer counts. Results are also pushed to window.REF_LOG.
 (() => {
@@ -40,6 +42,9 @@
       for (let i = 0; i < (v.frames || 6); i++) { g.step(1 / 30); await yieldNow(); }
       g.cine = null; g.shake = 0; REF.pose(v); E.fx.uShift.value = 0; E.fx.uDamage.value = 0;
       if (v.post) (0, eval)(v.post);
+      // close-up views (fov <= 45, the dialogue shots) focus like game.shot() does; others render as gameplay.
+      // settlePost() jumps grade / eye adaptation / focus to their targets so every capture is deterministic.
+      E.focus?.(v.fov && v.fov <= 45 ? b : null); E.settlePost?.();
       draw.call(E, g.time); await yieldNow();
       return 'view ' + v.name;
     },

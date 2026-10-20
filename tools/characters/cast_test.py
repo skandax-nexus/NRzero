@@ -12,23 +12,34 @@ CAST = [
          glow="5fe6ff", glowLevel=0.6, metalColor="8a9098", tris=16000,
          wear=[("mock_neck", "2a2c2f"), ("techshell", "16181c"), ("hood_down", None), ("chest_harness", "3a3f46"),
                ("tech_trousers", "2e3237"), ("tech_boots", "1b1611", dict(sole="6a6e74")), ("gloves", "1d1a17", dict(side="R", fingerless=True))]),
+    # ---- Kai (the player): the same kit plus every gadget of docs/COSTUMES.md (16k tris, 2048 atlas) ----
+    dict(id="kai", era="2049", macro=dict(gender=1.0, age=0.554, muscle=0.62, weight=0.45, height=0.47, caucasian=0.45, african=0.15, asian=0.4),
+         details={"head/head-square": 0.4, "chin/chin-prominent-decr|incr": 0.2, "nose/nose-scale-vert-decr|incr": 0.1, **sym(cheek_bones=0.35)},
+         skin="b98463", lip="9a5a4c", eyes="3a2a1c", hair="waves", hairColor="141110", stubble=0.85, browThick=0.8,
+         glow="5fe6ff", glowLevel=0.6, metalColor="8a9098", tris=16000,
+         wear=[("mock_neck", "2a2c2f"), ("techshell", "16181c"), ("hood_down", None), ("chest_harness", "3a3f46"),
+               ("tech_trousers", "2e3237"), ("tech_boots", "1b1611", dict(sole="6a6e74")), ("gloves", "1d1a17", dict(side="R", fingerless=True))],
+         gear=["chronolith_band", "ar_monocle", "earpiece", "belt_scanner", "shoulder_lamp", "echo_emitter", "harness_pouches", "chest_slate_pocket"]),
     # ---- 2049 woman in a long sealed coat (the off-shift nurse): oxblood longshell, LED belt line, leggings, ankle boots ----
     dict(id="t_coat", era="2049", macro=dict(gender=0.0, age=0.57, muscle=0.55, weight=0.42, height=0.62, african=0.9, caucasian=0.1, asian=0.0),
          details={"head/head-oval": 0.4, **sym(cheek_bones=0.4)},
          skin="6b4029", lip="6a3a34", eyes="2a1a10", hair="pony", hairColor="141010", glow="ffb347", glowLevel=0.35,
-         wear=[("turtleneck", "2a2c30"), ("longshell", "4a1f24", dict(det_add=["led:belt"])), ("leggings", "1a1d22"), ("ankle_boots", "141210")]),
+         wear=[("turtleneck", "2a2c30"), ("longshell", "4a1f24", dict(det_add=["led:belt"])), ("leggings", "1a1d22"), ("ankle_boots", "141210")],
+         gear=["wrist_device", ("keycard_reel", dict(header="d0d4d8")), ("led_umbrella", dict(color="2a1e24"))]),
     # ---- 2196 survivor: hooded poncho over layered knit and a scavenged plate, wrapped legs, knee pads, wrapped boots ----
     dict(id="t_surv", era="2196", macro=dict(gender=1.0, age=0.62, muscle=0.5, weight=0.35, height=0.55, caucasian=0.6, african=0.2, asian=0.2),
          details={"head/head-rectangular": 0.3, "nose/nose-hump-decr|incr": 0.3},
          skin="a77a5d", eyes="3a2a1c", hair="short", hairColor="2a1f19", stubble=1.0, glow="b6ff8a", glowLevel=0.4, wearLevel=0.9,
          wear=[("knit_sweater", "4a4238", dict(det_add=["wear"])), ("scav_plate", "4a4a3a"), ("poncho_hooded", "8a7458"),
                ("cargo_trousers", "5a4a38", dict(det_add=["wear", "patches"])), ("shin_wraps", "8a7a60"), ("knee_pads", "2a2a26"),
-               ("wrapped_boots", "2a2018"), ("forearm_wraps", "8a7a60")]),
+               ("wrapped_boots", "2a2018"), ("forearm_wraps", "8a7a60")],
+         gear=[("respirator", dict(worn="face")), ("goggles", dict(worn="brow")), "handheld_scanner", "salvage_backpack"]),
     # ---- ANCIENT settler (Niko): flax linen tunic, madder sash knotted at the left hip, leg wraps, sandals ----
     dict(id="t_anc", era="ancient", macro=dict(gender=1.0, age=0.47, muscle=0.5, weight=0.4, height=0.42, african=1.0, caucasian=0.0, asian=0.0),
          details={"head/head-round": 0.3, "nose/nose-scale-horiz-decr|incr": 0.3},
          skin="8c5a3a", lip="6a3a30", eyes="2a1a10", hair="curls", hairColor="141010",
-         wear=[("tunic", "cdb48a", dict(c2="9b3b24")), ("sash", "9b3b24"), ("leg_wraps", "7a6248"), ("sandals", "5a3e28")]),
+         wear=[("tunic", "cdb48a", dict(c2="9b3b24")), ("sash", "9b3b24"), ("leg_wraps", "7a6248"), ("sandals", "5a3e28")],
+         gear=["period:bronze_bracelets", "period:tally_cords", "period:leather_satchel", "period:staff"]),
 ]
 
 
@@ -100,6 +111,46 @@ COVERAGE = [
          wear=[("knit_sweater", "262c32"), ("techshell", "2a3038"), ("hood_up", None), ("cargo_trousers", "1c2026"), ("tech_boots", "141210"),
                ("forearm_guards", "22262c")]),
 ]
+GEAR = {   # TEST_ALL: the coverage set also wears every remaining gadget (era-correct)
+    "v_mira": ["gorget_resonance", "chronolith_cuff_thin"],
+    "v_hale": [("shoulder_radio", dict(glow="ff4d5e")), "stun_baton", "body_cam", "vest_flashlight", ("earpiece", dict(side="R"))],
+    "v_jun": ["transit_tablet", "signal_wand", "earpiece", ("shoulder_radio", dict(side="L", glow="ffd34a")), ("id_badge", dict(header="d4c21a", lanyard="d4c21a"))],
+    "v_iven": ["tool_belt", "diagnostic_probe", "forearm_tablet", "cap_headlamp", "headset_neck", ("keycard_reel", dict(side="R"))],
+    "v_rook": [("ar_glasses", dict(rimless=True, glow="f2f6ff")), ("id_badge", dict(mount="clip", edge="gold")), ("earpiece", dict(color="e6e8ea", small=True)), "wrist_slate"],
+    "v_resp": ["med_pack", ("shoulder_radio", dict(glow="f2f6ff")), "pen_light"],
+    "v_c26a": ["smartphone", "earbuds", "crossbody_bag"],
+    "v_c26b": ["smartwatch", "tote_bag"],
+    "v_c26c": ["fitness_band", "school_backpack"],
+    "v_c26d": [("smartphone", dict(mount="pocket")), "loupe_cord"],
+    "v_c26e": [("led_umbrella", dict(closed=True))],
+    "v_kid": ["kid_locator_band", ("led_umbrella", dict(color="e8b923"))],
+    "v_kid2": ["kid_locator_band", ("school_backpack", dict(color="2a7a6a", tablet=True))],
+    "v_c49a": ["ar_visor_clip", "cube_backpack", "wrist_device"],
+    "v_c49b": [("ar_glasses", dict(glow="38c8c0")), "sling_bag", "earbuds"],
+    "v_c49c": ["tablet_bag", "payment_terminal", ("rugged_slate", dict(hand=True))],
+    "v_c49d": ["earbuds", ("wrist_device", dict(color="e6e8ea")), ("headset_neck", dict(worn="head"))],
+    "v_sera": [("respirator", dict(worn="neck")), ("goggles", dict(worn="neck")), "wrist_scanner_scav", ("radio_chest_rig", dict(rig=False))],
+    "v_mara": ["shard_bandolier", ("crank_lamp", dict()), "magnifier_goggles", "rope_coil"],
+    "v_cont": ["continuum_chest_emitter", "continuum_forearm_emitter", "continuum_visor", "stabilizer_fins"],
+    "v_cofc": ["continuum_chest_emitter", ("continuum_forearm_emitter", dict(slate=True)), "continuum_visor", "rank_bar"],
+    "v_tala": ["period:bronze_armlet", ("period:bronze_bracelets", dict(sides="L", count=3)), "period:water_gourd", "period:bead_necklace", "period:clay_jar"],
+    "v_sentry": ["period:spear", "period:horn", "period:sling", "period:flint_knife"],
+    "v_elder": ["period:distaff", "period:bronze_pin", "period:leather_pouch"],
+    "v_hood": ["ar_half_visor", "restraint_cuffs", "recorder_spool", ("chronolith_band", dict(cracked=True, glow="ff6a4a")),
+               ("echo_emitter", dict(scorched=True, glow="ff6a4a"))],
+    "v_c26f": [("id_badge", dict(header="38c8c0"))],
+    "v_c26g": ["rugged_slate"],
+}
+COVERAGE.append(dict(id="v_anja", era="2196", macro=mix(F, age=0.6, caucasian=0.4, asian=0.6, african=0.0), skin="d8b090", hair="bun", hairColor="2a1f19",
+                     glow="b6ff8a", wearLevel=0.6, wear=[("knit_sweater", "4a4a40"), ("utility_vest", "4a4a3a"), ("canvas_trousers", "5a5040"), ("combat_boots", "2a2018")],
+                     gear=["sample_rig", ("handheld_scanner", dict(mount="vest")), ("goggles", dict(worn="eyes"))]))
+for _c in COVERAGE:
+    if _c["id"] in GEAR and GEAR[_c["id"]]:
+        _c["gear"] = GEAR[_c["id"]]
+    if _c["id"] == "v_mara":
+        _c["wear"] = [w for w in _c["wear"] if w[0] != "bandolier"]
+    if _c["id"] == "v_c49c":
+        _c["era"] = "2049"
 import os as _os
 if _os.environ.get("TEST_ALL"):
     CAST = CAST + COVERAGE

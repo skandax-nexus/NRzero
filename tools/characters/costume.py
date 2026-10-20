@@ -304,7 +304,8 @@ def f_over(g, B, LM, cov):
                 continue
             c = B.Jm["shoulder_" + s] + np.array([0.015 * sg, 0.045 * k, 0.0])
             d = np.linalg.norm((P - c) * np.array([1.0, 1.25, 1.1]), axis=1)
-            fs = (g.get("radius", 0.105) * k - d) * ((P[:, 0] * sg) > 0.1 * k) * (1 - B.hw)
+            # (outside its side the field must be negative, not 0: the painter takes every texel with f > -3 mm)
+            fs = np.where((P[:, 0] * sg) > 0.1 * k, (g.get("radius", 0.105) * k - d), -0.05) - B.hw * 0.3
             fs = np.minimum(fs, y - (LM["sh"] - 0.13 * k))
             f = np.maximum(f, fs)
         return f
@@ -322,7 +323,7 @@ def f_over(g, B, LM, cov):
             ab = b - a
             t = np.clip((P - a) @ ab / (ab @ ab), 0, 1)
             d = np.linalg.norm((P - (a[None] + t[:, None] * ab[None])) * np.array([1.0, 0.25, 1.0]), axis=1)
-            fs = (0.02 * k - d) * (B.N[:, 1] > 0.15)
+            fs = np.where(B.N[:, 1] > 0.15, 0.02 * k - d, -0.05)
             f = np.maximum(f, fs)
         return f - B.hw * 0.3
     if shape == "half_cape":
@@ -368,7 +369,7 @@ def f_plates(g, B, LM):
     for s, sg in (("L", 1), ("R", -1)):
         c = B.Jm["shoulder_" + s] + np.array([0.02 * sg, 0.04 * k, 0.0])
         d = np.linalg.norm((P - c) * np.array([1.0, 1.3, 1.05]), axis=1)
-        pa = np.minimum((0.1 * k - d) * ((P[:, 0] * sg) > 0.105 * k), y - (LM["sh"] - 0.12 * k))
+        pa = np.minimum(np.where((P[:, 0] * sg) > 0.105 * k, 0.1 * k - d, -0.05), y - (LM["sh"] - 0.12 * k))
         pa = np.minimum(pa, np.abs(y - (LM["sh"] - 0.035 * k)) - 0.004)      # two lames
         sa, aa, ra, cum = vc["arm" + s]
         br = B.aw[s] * np.minimum(np.minimum(sa - (cum[1] + 0.05), (cum[2] - 0.035) - sa), np.radians(100 - np.abs(aa - 50)) * ra) - (1 - B.aw[s]) * 0.2
@@ -483,6 +484,9 @@ def fields(c, B):
         stack.append((f"over{i}", g, f_over(g, B, LM, cov)))
         g.setdefault("hides", g.get("shape") in ("vest", "carrier", "cuirass"))
     stack.sort(key=lambda s: s[1].get("z", 50))
+    # an exact-zero plateau is a mask (field * condition), not a border: the painter takes texels with f > -3 mm,
+    # so it must read as uncovered or it paints the garment over the head / body
+    stack = [(key, g, np.where(f == 0.0, -0.02, f)) for key, g, f in stack]
     for key, g, f in stack:
         cov[key] = f
     cov["_stack"] = stack
@@ -520,6 +524,7 @@ def build_layers(c, B, cov):
     """Garment layers, inner to outer (dict key -> Layer); the skin / hair / hood layers are built by build_humans."""
     stack = cov["_stack"]
     LM = cov["_lm"]
+    cov["_lined"] = BH.budget(c) > 12000
     OFF = np.zeros(len(B.P))
     layers = {}
     band = 0.025
@@ -791,7 +796,8 @@ def tail_weights(pts_bl, J, H, top_z, long=False, split_front=False, split_back=
     t = np.clip((top_z - pts_bl[:, 2]) / (0.05 * H), 0, 1)
     py = J["pelvis"].y
     back = np.clip((pts_bl[:, 1] - py) / 0.06, 0, 1)        # the back panel stays a little more with the hips
-    lw = (t ** 0.7) * (1 - 0.18 * back) * 0.97
+    hang = np.clip((top_z - pts_bl[:, 2]) / (0.3 * H), 0, 1)     # lower down the panel hangs more than it follows
+    lw = (t ** 0.7) * (1 - 0.18 * back) * 0.97 * (1 - 0.22 * hang)
     sx = np.sin(np.clip(pts_bl[:, 0] / 0.085, -1, 1) * math.pi / 2)
     hard = np.zeros(len(pts_bl))
     if split_front:
@@ -969,6 +975,9 @@ def extend_tail(L, B, g, LM, cov, layers):
     nrm = normals_of(grid)
     nrmL = {c: nrm[:, c] for c in cutcols}
     thick = 0.0035
+    # a lining (3.5 mm inside) doubles the tail's triangles; the material is double-sided, so characters on the
+    # 11k budget skip it and keep those triangles for the body (unused lining vertices are not exported)
+    lined = bool(cov.get("_lined", True))
     lining = grid - nrm * thick
     liningL = {c: gridL[c] - nrmL[c] * thick for c in cutcols}
     lin_base = nv0 + nOut
@@ -1012,8 +1021,11 @@ def extend_tail(L, B, g, LM, cov, layers):
             uvq = [enc(r, m), enc(r + 1, m), enc(r + 1, cu), enc(r, cu)]
             ql = [lin_idx[r, m], l2a, l2b, lin_idx[r + 1, m]]
             uvl = [enc(r, m), enc(r, cu), enc(r + 1, cu), enc(r + 1, m)]
-            faces += [q, ql]
-            fuv += [np.array(uvq), np.array(uvl)]
+            faces.append(q)
+            fuv.append(np.array(uvq))
+            if lined:
+                faces.append(ql)
+                fuv.append(np.array(uvl))
     # orientation check on one quad: outer faces must face outward
     pos_all = np.concatenate([L.pos, newp, newpL, lining.reshape(-1, 3)] + [liningL[c] for c in cutcols])
     if faces:
@@ -2134,7 +2146,10 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         if g is None:
             g = dict(color=c.get("colorA", "444a55"), fab="cotton", det=[])
         f = fld(cov[key])
-        m = (f > -0.003) & ~taken
+        hard = g.get("fab") in ("ceramic", "polymer", "metal") or g.get("shape") in ("plates", "pauldron", "gorget")
+        # hard pieces stand off the suit with a real rim: their paint ends just inside the piece (a soft garment bleeds
+        # 3 mm past its border instead, so its own border texels never show what lies under it)
+        m = (f > (0.0015 if hard else -0.003)) & ~taken
         col_k = (g.get("collar") or {}).get("kind")
         if key.startswith("top") and col_k in ("stand", "funnel", "mandarin", "gorget", "rib", "turtle"):   # under the collar
             m |= (f > -0.012) & ~taken & (pos[:, 1] > B.Jm["chest"][1]) & (arm_f < 0.5)
@@ -2164,6 +2179,10 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
 def paint_aux(c, B, img, mask, himg, gimg, spx, res, seed):
     """Paint every aux piece (bilinear 3D positions of its grid -> garment painter)."""
     for pc in AUX:
+        if pc["flags"].get("palette") and "rect" in pc:      # gadget palette swatches (gadgets.py)
+            import gadgets
+            gadgets.paint_palette(pc, img, mask, himg, gimg, spx, res, seed)
+            continue
         if pc.get("grid") is None or "rect" not in pc:
             continue
         x0, y0, w, h = pc["rect"]

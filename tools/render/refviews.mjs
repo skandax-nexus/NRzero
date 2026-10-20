@@ -3,7 +3,7 @@
 //
 //   node tools/render/refviews.mjs <mission m1..m4> <gfx high|medium|low> <out dir> [W=1280] [H=720] [--mobile]
 //        [--base=http://localhost:8765/] [--views=name,name] [--noshot] [--ready-timeout=ms] [--emit-steps=dir]
-//        [--channel=chromium|chromium-headless-shell] [--resume]
+//        [--channel=chromium|chromium-headless-shell] [--resume] [--query=k=v&k2=v2 (extra URL parameters, e.g. post=noao)]
 //
 // Loading runs at quarter size (SwiftShader is fill-rate bound, so the mission intro plays much faster), then the
 // viewport is set to WxH before any view is taken. Writes <out>/<view>.png and <out>/<mission>_<gfx>[_mobile].json.
@@ -49,7 +49,7 @@ p.on('console', m => { const t = m.type() + ': ' + m.text(); if (['error', 'warn
 p.on('pageerror', e => console.log('PAGEERROR:', e.message));
 p.on('crash', () => { console.log('RENDERER CRASHED (out of memory?)'); process.exit(3); });
 const t0 = Date.now(), log = s => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s] ${s}`);
-await p.goto(`${base}index.html?m=${M.m}&dtcap=0.25&gfx=${gfx}&auto`);
+await p.goto(`${base}index.html?m=${M.m}&dtcap=0.25&gfx=${gfx}&auto${flag('query') ? '&' + flag('query') : ''}`);
 try { await p.waitForFunction(M.ready, null, { timeout: +(flag('ready-timeout') || 900000), polling: 1000 }); log('ready'); }
 catch { log('TIMEOUT waiting for ' + M.ready); await b.close(); process.exit(4); }
 await p.setViewportSize({ width: w, height: h });

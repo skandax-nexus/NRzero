@@ -36,12 +36,14 @@ import mh  # noqa: E402
 import build_characters as BC  # noqa: E402  (tube/shell helpers, clips, export)
 import costume  # noqa: E402  (the `wear=[...]` costume pipeline: garments.py catalogue + painters)
 import garments  # noqa: E402
+import gadgets  # noqa: E402  (hard-surface gadgets of `gear=[...]`, docs/COSTUMES.md)
 import importlib  # noqa: E402
 
 # CAST=<name> picks the cast module: cast_<name>.py (e.g. CAST=test -> cast_test.py, CAST=nrzero -> cast_nrzero.py);
 # default: AfterZero's cast_humans.py
 CAST = importlib.import_module("cast_" + os.environ["CAST"] if os.environ.get("CAST") else "cast_humans").CAST
 costume.bind(sys.modules[__name__])
+gadgets.bind(sys.modules[__name__])
 
 V = Vector
 OURS = {  # MakeHuman bone -> our game bone
@@ -2208,24 +2210,34 @@ def build(c, tex_dir):
                 layers[key] = Lx
     parts = [layer_object(Lr) for Lr in layers.values()]
     parts += eye_objects(B, c)
+    gk = None
     if costume_mode:
         ex = costume.extras(c, B, cov, layers)
         if os.environ.get("PIECES"):
             print("  pieces", sorted(o.name for o in ex))
+        if c.get("gear"):      # gadgets: built on the dressed body (rays hit the outermost layer)
+            gk = gadgets.build(c, B, cov, parts + ex)
+            ex += gk["body"]
     else:
         parts += shoe_objects(B, c, cov)
         ex = extras(c, B, cov, layers)
-    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet", "strap_"))]    # even quads / thin shells: no decimation
+    cloth = [o for o in ex if o.name.startswith(("skirt", "apron", "collar", "hood_roll", "helmet", "strap_", "gadget_"))]    # even quads / thin shells / hard surface: no decimation
+    gx = (gk["glow"] + gk["props"]) if gk else []      # separate skinned meshes: glow (gx_*) and hand props (gp_*)
     parts += [o for o in ex if o not in cloth]
     if costume_mode:      # aux pieces packed, their uvs mapped, then the atlas painted (it needs the pieces)
         costume.aux_pack()
-        costume.aux_remap(parts + cloth)
+        costume.aux_remap(parts + cloth + gx)
         tex = paint(c, B, cov, res, tex_path)
     # ---- rig + weights + one material ----
     arm = BC.build_armature(c["id"], B.J)
-    for o in parts + cloth:
+    for o in parts + cloth + gx:
         apply_weights(o, arm)
     mat = atlas_material(c, tex)
+    for o in (gk["props"] if gk else []):
+        o.data.materials.clear()
+        o.data.materials.append(mat)
+    if gk:
+        gadgets.armature_meta(arm, gk["meta"])
     for o in parts + cloth:
         o.data.materials.clear()
         o.data.materials.append(mat)
@@ -2244,7 +2256,7 @@ def build(c, tex_dir):
         return objs[0]
     mesh = join(parts)
     mesh.name = c["id"] + "_mesh"
-    cloth_tris = sum(len(p.vertices) - 2 for o in cloth for p in o.data.polygons)
+    cloth_tris = sum(len(p.vertices) - 2 for o in cloth + gx for p in o.data.polygons)
     decimate_protected(mesh, B, budget(c) - cloth_tris if costume_mode else budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0)
     if cloth:
         mesh = join([mesh] + cloth)
@@ -2339,12 +2351,12 @@ def decimate_protected(mesh, B, target, face_keep=1.0):
     total = sum(n.values())
     if total > target:
         head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
-        for _ in range(12):
+        for _ in range(24):      # the body (and its garments) must not drop below ~30 %: spikes and chords appear
             body_k = (target - n["face"] * face_keep - n["head"] * head_k) / max(n["body"], 1)
-            if body_k >= 0.2:
+            if body_k >= 0.3:
                 break
-            head_k = max(0.22, head_k * 0.85)
-            face_keep = max(0.6, face_keep * 0.95)
+            head_k = max(0.2, head_k * 0.88)
+            face_keep = max(0.4, face_keep * 0.94)
         body_k = max(body_k, 0.12)
         for which, ratio in (("body", body_k), ("head", head_k), ("face", face_keep)):
             if ratio >= 0.999:
@@ -2411,8 +2423,9 @@ def main():
         if only and c["id"] not in only.split(","):
             continue
         arm, mesh = build(c, tex_dir)
-        objs += [arm, mesh]
-        print("built", c["id"], sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris", flush=True)
+        more = [o for o in bpy.context.view_layer.objects if o.parent == arm and o is not mesh]
+        objs += [arm, mesh] + more
+        print("built", c["id"], sum(len(p.vertices) - 2 for o in [mesh] + more for p in o.data.polygons), "tris", flush=True)
     BC.export(os.path.join(out, "cast.glb"), set(objs), False, attributes=True)
     # reference rig + clips from an average body
     BC.clear()

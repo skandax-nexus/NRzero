@@ -184,21 +184,35 @@ const variant = (m, tag, fn) => {
 const lin = c => new THREE.Color(c);
 
 /**
- * Make a person from template `id`. opts: { seed, clothA, clothB, skin (hex, townsfolk only), shadow }.
- * Returns { root, bones, mixer, actions, meshes, height, play(name, fade, speed), move(speed, scale, {crouch}), update(dt) }.
+ * Make a person from template `id`. opts: { seed, clothA, clothB, skin (hex, townsfolk only), shadow, glow (force every gadget level) }.
+ * Returns { root, bones, mixer, actions, meshes, height, gadgets, setGadget(type, level), showProp(type, on),
+ *           play(name, fade, speed), move(speed, scale, {crouch}), update(dt) }.
+ * Gadgets (docs/COSTUMES.md): glow meshes `gx_<type>` (userData.gadget, slot 'glow', idle level, segs, `_gseg` attribute)
+ * get their own material clone per person so each one is driven alone; hand props `gp_<type>` (userData.prop 'hand').
  */
 export function makePerson(id, opts = {}) {
   const t = T[id] || T[cast.ids[0]];
   const root = SkeletonUtils.clone(t.root);
   root.position.set(0, 0, 0); root.rotation.set(0, 0, 0);
   const seed = opts.seed ?? Math.floor(Math.random() * 1e6);
-  const meshes = [], bones = {};
+  const meshes = [], bones = {}, gadgets = {};
   root.traverse(o => {
     if (o.isBone) bones[key(o.name)] = o;
     if (!o.isMesh) return;
     meshes.push(o);
+    const gt = o.userData.gadget;
+    if (gt) {
+      const g = gadgets[gt] || (gadgets[gt] = { type: gt, glow: [], props: [], level: 0, idle: 0 });
+      if (o.userData.prop) g.props.push(o);
+    }
     o.material = [].concat(o.material).map(m => {
       const slot = m.userData.slot;
+      if (slot === 'glow' && gt) {      // one clone per person and gadget: its intensity is driven on its own
+        const v = m.clone(), g = gadgets[gt];
+        g.idle = o.userData.idle ?? 1; g.level = opts.glow ?? g.idle;
+        v.emissiveIntensity = g.level; g.glow.push(v);
+        return v;
+      }
       if (slot === 'clothA' && opts.clothA != null) return variant(m, 'a' + opts.clothA, v => v.color.copy(lin(opts.clothA)));
       if (slot === 'clothB' && opts.clothB != null) return variant(m, 'b' + opts.clothB, v => v.color.copy(lin(opts.clothB)));
       if (slot === 'skin' && opts.skin != null && t.townsfolk) return variant(m, 's' + opts.skin, v => v.color.copy(lin(opts.skin)));
@@ -213,7 +227,9 @@ export function makePerson(id, opts = {}) {
   let cur = null;
   const rnd = k => ((Math.imul(seed + 1, 2654435761) ^ Math.imul(k + 7, 40503)) >>> 0) % 1000 / 1000;
   const pace = 0.93 + 0.14 * rnd(1);
-  const h = { root, bones, id: t.root.name, mixer, actions, meshes, current: null, height: t.height, speeds: t.speeds };
+  const h = { root, bones, id: t.root.name, mixer, actions, meshes, gadgets, current: null, height: t.height, speeds: t.speeds };
+  h.setGadget = (type, level) => { const g = gadgets[type]; if (!g) return; g.level = level; g.glow.forEach(m => { m.emissiveIntensity = level; }); };
+  h.showProp = (type, on) => { const g = gadgets[type]; if (g) g.props.forEach(o => { o.visible = on; }); };
   h.play = (name, fade = 0.25, speed = 1) => {
     if (!actions[name]) name = LOCO.has(name) && actions.walk ? 'walk' : 'idle';
     const a = actions[name];
