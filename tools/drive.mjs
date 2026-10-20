@@ -1,5 +1,5 @@
 // Scripted playthrough driver. Steps JSON: [{wait},{shot},{key},{down},{up},{eval},{until,timeout},{tap:[x,y]}]
-// node tools/drive.mjs "<url>" steps.json [width] [height] [--mobile] [--outdir=dir]
+// node tools/drive.mjs "<url>" steps.json [width] [height] [--mobile] [--outdir=dir] [--channel=chromium|chromium-headless-shell]
 // Use URL params ?m=<missionIndex>&dtcap=0.25&gfx=low&auto for fast automated runs.
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import fs from 'fs'; import path from 'path';
@@ -8,7 +8,10 @@ const [url, stepsFile, w = '960', h = '540'] = args.filter(a => !a.startsWith('-
 const mobile = args.includes('--mobile');
 const outdir = (args.find(a => a.startsWith('--outdir=')) || '--outdir=.').split('=')[1];
 const steps = JSON.parse(fs.readFileSync(stepsFile, 'utf8'));
-const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+// channel 'chromium' (full build, new headless): the default headless shell keeps growing by tens of MB per second
+// while the page is busy with multi-second software-rendered frames, until it is killed for memory.
+const channel = (args.find(a => a.startsWith('--channel=')) || '--channel=chromium').split('=')[1];
+const b = await chromium.launch({ channel, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--autoplay-policy=no-user-gesture-required'] });
 const ctx = await b.newContext({ viewport: { width: +w, height: +h }, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: 1 });
 const p = await ctx.newPage();
 const seen = new Set();
