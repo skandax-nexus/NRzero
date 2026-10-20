@@ -5,6 +5,7 @@
 //        [--base=http://localhost:8765/] [--views=name,name] [--noshot] [--ready-timeout=ms] [--emit-steps=dir]
 //        [--channel=chromium|chromium-headless-shell] [--resume] [--query=k=v&k2=v2 (extra URL parameters, e.g. post=noao)]
 //        [--ab (also capture + time every view with the pre-upgrade post chain into <out>/legacy/)]
+//        [--ab=light (the same A/B for the stage-2 scene lighting: env probe, height fog, wet, contact shadows, rig, shadow fixes)]
 //
 // Loading runs at quarter size (SwiftShader is fill-rate bound, so the mission intro plays much faster), then the
 // viewport is set to WxH before any view is taken. Writes <out>/<view>.png and <out>/<mission>_<gfx>[_mobile].json.
@@ -36,6 +37,7 @@ if (flag('emit-steps')) {
 const [mission, gfx = 'high', out = '.', W = '1280', H = '720'] = pos;
 const M = VIEWS[mission]; if (!M) { console.error('unknown mission', mission); process.exit(2); }
 const LEGACY = ['noao', 'noaa', 'nodof', 'noae', 'nograde'];   // the pre-upgrade post chain (engine ?post= switches)
+const LEGACY_LIGHT = ['noenv', 'nofog', 'nowet', 'nocontact', 'norig', 'noshadow', 'noshafts'];   // pre-stage-2 scene lighting (?light=)
 const mobile = !!flag('mobile'), base = flag('base') || 'http://localhost:8765/';
 const only = flag('views') ? String(flag('views')).split(',') : null;
 fs.mkdirSync(out, { recursive: true });
@@ -73,7 +75,8 @@ for (const v of M.views) {
   }
   // --ab: the same frame again with the pre-upgrade post chain (legacy) into <out>/legacy/, measured in the same page
   if (flag('ab')) {
-    log('legacy: ' + await p.evaluate(`REF.postOff(${JSON.stringify(LEGACY)})`));
+    const abLight = flag('ab') === 'light';
+    log('legacy: ' + await p.evaluate(abLight ? `REF.lightOff(${JSON.stringify(LEGACY_LIGHT)})` : `REF.postOff(${JSON.stringify(LEGACY)})`));
     const rl = await p.evaluate(`REF.measure(${JSON.stringify(v.name)})`);
     log('legacy ' + JSON.stringify(rl));
     r.legacy = { calls: rl.calls, tris: rl.tris, frameMs: rl.frameMs, frameMinMs: rl.frameMinMs, sceneMinMs: rl.sceneMinMs, post: rl.post };
@@ -82,7 +85,7 @@ for (const v of M.views) {
       const data = await p.evaluate('REF.grab()');
       fs.writeFileSync(path.join(out, 'legacy', v.name + '.png'), Buffer.from(data.split(',')[1], 'base64'));
     }
-    await p.evaluate('REF.postOff(null)');
+    await p.evaluate(abLight ? 'REF.lightOff(null)' : 'REF.postOff(null)');
   }
   results = results.filter(x => x.view !== v.name).concat([r]);
   fs.writeFileSync(file, JSON.stringify(results, null, 1));

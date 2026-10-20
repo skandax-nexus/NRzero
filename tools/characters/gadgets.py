@@ -1028,8 +1028,8 @@ def g_monocle(g):
     M = lens_frame(K, sd, fwd=0.026, dz=0.002, dx=0.004)
     M = rot(M, "Y", s * 0.25)
     col = o.get("color", GRAPH)
-    lw, lh = 0.036 * K.k, 0.026 * K.k
-    rim, rt = 0.0032, 0.0046
+    lw, lh = 0.033 * K.k, 0.022 * K.k        # a lens, not a patch: the lower lid and the eye corner stay visible
+    rim, rt = 0.0028, 0.0042
     g.part(box(lw + 0.002, lh + 0.002, 0.0026, bev=0.001, M=M), col, 0.65)                     # lens seat
     for sy in (1, -1):                                                                          # raised bezel
         g.part(box(lw + 2 * rim, rim, rt, bev=0.0012, M=local(M, 0, sy * (lh + rim) / 2, 0)), col, 0.7)
@@ -2406,7 +2406,7 @@ def g_staff(g):
     """Carved wooden staff (hand prop) with a carved knob and a leather grip wrap."""
     K, o = g.K, g.o
     sd = opt_side(o, "R")
-    below = K.hand(sd)["grip"].z * 0.97
+    below = K.hand(sd)["grip"].z * 0.9      # the hand axis leans out in the rest pose: shorter so the foot stays on the floor
     p0, p1, ax, k = stick(g, sd, below, o.get("above", 0.8) * K.k, 0.017 * K.k, o.get("color", WOOD))
     g.part(lathe([(0.0, 0.0), (0.024 * k, 0.012), (0.026 * k, 0.03), (0.018 * k, 0.05), (0.0, 0.06)], n=8, M=frame(p1, -ax, UP)), o.get("color", WOOD), 0.3, smooth=True)
     g.part(cyl(0.0195 * k, 0.12 * k, n=8, M=frame(K.hand(sd)["grip"] + ax * 0.06 * k, -ax, UP)), LEATHER2, 0.15, smooth="auto")
@@ -2556,14 +2556,14 @@ def g_umbrella(g):
     col = o.get("color", "1d2430")
     led = o.get("led", K.era == "2049")
     if o.get("closed"):
-        below = h["grip"].z * 0.97
+        below = 0.62 * k        # a furled umbrella carried in the fist: its tip swings clear of the floor in every pose
         p0, p1, ax, _ = stick(g, sd, below, 0.03 * k, 0.008 * k, GRAPH, gloss=0.6)
-        fm = frame(p0 - ax * 0.12 * k, -ax, UP)
-        g.part(lathe([(0.0, 0.0), (0.012 * k, 0.04 * k), (0.022 * k, 0.25 * k), (0.016 * k, 0.5 * k), (0.009 * k, 0.6 * k)], n=8, M=rot(fm, "X", math.pi)), col, 0.3, smooth=True)
+        fm = frame(p0 - ax * 0.08 * k, -ax, UP)
+        g.part(lathe([(0.0, 0.0), (0.012 * k, 0.03 * k), (0.024 * k, 0.17 * k), (0.017 * k, 0.36 * k), (0.009 * k, 0.43 * k)], n=8, M=rot(fm, "X", math.pi)), col, 0.3, smooth=True)
         hook = [p1, p1 - ax * 0.04 * k + h["palm"] * 0.02, p1 - ax * 0.05 * k + h["palm"] * 0.05, p1 - ax * 0.03 * k + h["palm"] * 0.07]
         g.part(tube(hook, 0.011 * k, n=6), BLACK, 0.4, smooth=True)
         if led:
-            g.light(torus(0.0125 * k, 0.0015, n=8, m=3, M=frame(p0 - ax * 0.69 * k, ax, UP)), smooth=True)
+            g.light(torus(0.0135 * k, 0.0015, n=8, m=3, M=frame(p0 - ax * 0.5 * k, ax, UP)), smooth=True)
         g.glow_hex = (o.get("glow") or "8ad8ff").lstrip("#")
         g.idle = float(o.get("idle", 0.6 if led else 0.0))
         return

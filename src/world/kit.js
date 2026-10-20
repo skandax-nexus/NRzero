@@ -162,6 +162,8 @@ export class Rain {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     this.mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.38, depthWrite: false }));
     this.mesh.frustumCulled = false; this.center = new THREE.Vector3();
+    // the engine makes the scene wet while rain is visible; env-probe captures skip the streaks
+    this.mesh.userData.rzRain = true; this.mesh.userData.noCapture = true;
   }
   update(dt, cam) {
     const p = this.mesh.geometry.attributes.position.array, A = this.area, cx = cam.position.x, cz = cam.position.z, cy = cam.position.y;

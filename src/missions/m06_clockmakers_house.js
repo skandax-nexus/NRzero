@@ -699,7 +699,7 @@ export default {
     cine(true); lockMusic('m6-witness');
     pl.place(P.shaft[0] + 1.25, TY, P.shaft[1] + 0.35, -Math.PI / 2);
     kai.pose = 'work';
-    await game.shot([P.shaft[0] + 1.8, TY + 1.25, P.shaft[1] - 1.6], [P.shaft[0] + 0.6, TY + 0.75, P.shaft[1]], 1.4, { fov: 38 });
+    await game.shot([P.shaft[0] + 2.3, TY + 1.55, P.shaft[1] + 2.1], [P.shaft[0] + 0.45, TY + 0.8, P.shaft[1] - 0.1], 1.4, { fov: 40 });
     kai.pose = null; audio.sfxPlay('rewind');
     await game.wait(0.6);
     await game.talk([

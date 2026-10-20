@@ -472,7 +472,7 @@ def fields(c, B):
             over.append(dict(G.O(shape="plates", thick=0.0085, fab="ceramic", gloss=0.85, rim=0.0075, det=["plate_bevel"], z=66), type="continuum_plates",
                              color=tg.get("c2", "e6e8ea"), c3=tg.get("c3", "d9a441"), glow=tg.get("glow"), glow_level=tg.get("glow_level", 0.5), wear=0.0))
         if tg.get("gorget"):
-            over.append(dict(G.GARMENTS["gorget"], type="gorget", color=tg.get("gorget_color", "8a9098"), glow=tg.get("glow"),
+            over.append(dict(G.GARMENTS["gorget"], type="gorget", color=tg.get("gorget_color", "666c74"), glow=tg.get("glow"),
                              glow_level=tg.get("glow_level", 0.5), wear=0.0, det=["gorget_lines"]))
         if tg.get("shoulder_caps"):
             over.append(dict(G.O(shape="pauldron", side="both", radius=0.085, thick=0.0055, fab="softshell", gloss=0.25, rim=0.005, det=["lames"], z=64),

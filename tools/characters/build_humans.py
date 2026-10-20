@@ -814,9 +814,11 @@ def inflate(L, B, amount):
     """Loosen a garment: push torso vertices out toward a smooth elliptical shell (hides anatomy under coats)."""
     P = B.P
     tsel = np.isin(np.array(B.vb), ["hips", "spine", "chest"]) & np.isin(np.arange(len(P)), B.bodyv)
+    tsel &= (B.aw["L"] + B.aw["R"]) < 0.05      # deltoid / armpit vertices labelled "chest" would widen the shell into a web
     T = P[tsel]
     y0, y1 = B.Jm["hip_L"][1] - 0.2, B.Jm["shoulder_L"][1] - 0.02
     torso = (B.tw[L.base] > 0.6) & (L.pos[:, 1] > y0) & (L.pos[:, 1] < y1)
+    old = L.pos.copy()
     for i in np.nonzero(torso)[0]:
         p = L.pos[i]
         m = T[np.abs(T[:, 1] - p[1]) < 0.015]
@@ -835,6 +837,20 @@ def inflate(L, B, amount):
             nr = nr * (1 - 0.5 * amount) + target * 0.5 * amount
         L.pos[i, 0] = cx + dx / r * nr
         L.pos[i, 2] = cz + dz / r * nr
+    # smooth the displacement over the surface: per-vertex targets follow the anatomy under the cloth, and the
+    # painted lines (seams, LED piping, stripes) would zigzag with them
+    d = L.pos - old
+    ii, jj = [], []
+    for (i, j) in L.edges():
+        ii += [i, j]
+        jj += [j, i]
+    ii, jj = np.array(ii), np.array(jj)
+    cnt = np.maximum(np.bincount(ii, minlength=len(d)), 1).astype(float)[:, None]
+    for _ in range(10):
+        acc = np.zeros_like(d)
+        np.add.at(acc, ii, d[jj])
+        d = 0.5 * d + 0.5 * acc / cnt
+    L.pos = old + d
 
 
 # ----------------------------------------------------------------------------------------------------------------
@@ -2287,7 +2303,8 @@ def build(c, tex_dir):
     mesh = join(parts)
     mesh.name = c["id"] + "_mesh"
     cloth_tris = sum(len(p.vertices) - 2 for o in cloth + gx for p in o.data.polygons)
-    decimate_protected(mesh, B, budget(c) - cloth_tris if costume_mode else budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0)
+    decimate_protected(mesh, B, budget(c) - cloth_tris if costume_mode else budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0,
+                       tex=tex["base"] if costume_mode and tex else None)
     if cloth:
         mesh = join([mesh] + cloth)
         print("  + cloth", cloth_tris, "tris", flush=True)
@@ -2301,8 +2318,17 @@ def select_class(mesh, cls, which):
     collapse never touches them (they keep their smooth snapped shape)."""
     bm = bmesh.from_edit_mesh(mesh.data)
     keep = bm.verts.layers.float.get("_keep")
+    # a garment border carries a rim strip (hem thickness): the visible edge is then one ring inside the open
+    # boundary, so the boundary vertices, their face ring and that ring's vertices all stay (no ragged hems)
+    ring = set()
+    for e in bm.edges:
+        if e.is_boundary:
+            for v in e.verts:
+                for f in v.link_faces:
+                    ring.update(f.verts)
     for f in bm.faces:
-        f.select_set(cls(f.calc_center_median()) == which and not (keep is not None and any(v[keep] > 0.5 for v in f.verts)))
+        f.select_set(cls(f.calc_center_median()) == which and not (keep is not None and any(v[keep] > 0.5 for v in f.verts))
+                     and not any(v in ring for v in f.verts))
     bm.select_flush_mode()
     for e in bm.edges:
         if e.is_boundary:
@@ -2350,8 +2376,54 @@ def fix_uv_stretch(mesh):
     return fixed
 
 
-def decimate_protected(mesh, B, target, face_keep=1.0):
+def feature_group(mesh, tex_path):
+    """Vertex group 'feat': 1 on vertices whose edges cross a painted feature of the atlas (stripes, panels, LED
+    piping, seams, hems). The collapse slides texture coordinates along the surface, so plain cloth is decimated
+    first and printed detail keeps its triangles (no zigzag stripes, no torn panel edges)."""
+    from PIL import Image
+    img = np.asarray(Image.open(tex_path).convert("RGB")).astype(np.float32) / 255.0
+    res = img.shape[0]
+    me = mesh.data
+    nl = len(me.loops)
+    if not me.uv_layers or nl == 0:
+        return None
+    uv = np.zeros(nl * 2)
+    me.uv_layers.active.data.foreach_get("uv", uv)
+    uv = uv.reshape(-1, 2)
+    lv = np.zeros(nl, int)
+    me.loops.foreach_get("vertex_index", lv)
+    ls = np.zeros(len(me.polygons), int)
+    lt = np.zeros(len(me.polygons), int)
+    me.polygons.foreach_get("loop_start", ls)
+    me.polygons.foreach_get("loop_total", lt)
+    a = np.concatenate([ls + i for i in range(4)])
+    tot = np.concatenate([lt for _ in range(4)])
+    st = np.concatenate([ls for _ in range(4)])
+    idx = np.concatenate([np.full(len(ls), i) for i in range(4)])
+    ok = idx < tot
+    a, st, tot, idx = a[ok], st[ok], tot[ok], idx[ok]
+    b = st + (idx + 1) % tot
+    ts = np.linspace(0, 1, 7)
+    U = uv[a][:, None, :] * (1 - ts[None, :, None]) + uv[b][:, None, :] * ts[None, :, None]
+    px = np.clip((U[..., 0] * res).astype(int), 0, res - 1)
+    py = np.clip(((1 - U[..., 1]) * res).astype(int), 0, res - 1)
+    C = img[py, px]                                   # edges x samples x rgb
+    d = np.abs(np.diff(C, axis=1)).sum(2).max(1)      # strongest step along the edge
+    w = np.clip((d - 0.08) / 0.17, 0, 1)
+    wv = np.zeros(len(me.vertices), np.float32)
+    np.maximum.at(wv, lv[a], w)
+    np.maximum.at(wv, lv[b], w)
+    vg = mesh.vertex_groups.new(name="feat")
+    for v in np.nonzero(wv > 0.01)[0]:
+        vg.add([int(v)], float(wv[v]), "REPLACE")
+    mesh.vertex_groups.active_index = vg.index
+    return float((wv > 0.5).mean())
+
+
+def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest."""
+    feat = feature_group(mesh, tex) if tex else None
+    vgk = dict(use_vertex_group=True, invert_vertex_group=True, vertex_group_factor=float(os.environ.get("FEATF", "2.5"))) if feat is not None else {}
     e = to_bl(B.L.eye)
     hc = to_bl(B.L.eye + np.array([0, 0.02, -0.08]))
 
@@ -2392,12 +2464,12 @@ def decimate_protected(mesh, B, target, face_keep=1.0):
             if ratio >= 0.999:
                 continue
             select_class(mesh, cls, which)
-            bpy.ops.mesh.decimate(ratio=float(np.clip(ratio, 0.05, 1.0)))
+            bpy.ops.mesh.decimate(ratio=float(np.clip(ratio, 0.05, 1.0)), **(vgk if which == "body" else {}))
         n2, _ = counts()
         tot2 = sum(n2.values())
         if tot2 > target * 1.01:   # land on the budget: the body takes the overshoot
             select_class(mesh, cls, "body")
-            bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)))
+            bpy.ops.mesh.decimate(ratio=float(np.clip((n2["body"] - (tot2 - target)) / max(n2["body"], 1), 0.3, 1.0)), **vgk)
     bpy.ops.mesh.select_all(action="DESELECT")
     bpy.ops.object.mode_set(mode="OBJECT")
     nfix = fix_uv_stretch(mesh)
@@ -2405,6 +2477,9 @@ def decimate_protected(mesh, B, target, face_keep=1.0):
         print("  uv seam faces repaired:", nfix, flush=True)
     if mesh.data.attributes.get("_keep"):
         mesh.data.attributes.remove(mesh.data.attributes["_keep"])
+    if feat is not None:
+        mesh.vertex_groups.remove(mesh.vertex_groups["feat"])
+        print("  feature-protected vertices %.0f %%" % (feat * 100), flush=True)
     print("  decimate", c_id(mesh), n, "->", sum(len(p.vertices) - 2 for p in mesh.data.polygons), "tris (target", target, ")", flush=True)
 
 

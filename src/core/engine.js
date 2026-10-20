@@ -8,6 +8,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOShader } from 'three/addons/shaders/GTAOShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import * as RZ from '../world/realism.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Post-processing chain (docs/RENDERING.md, "Post-processing"):
@@ -546,12 +547,15 @@ function tierSettings(q, device) {
   const T = {
     high: { dprCap: 1.75, shadows: true, shadowMapMax: 4096, softShadows: true, bloom: true, bloomScale: 1, cheapPost: false, adaptive: false,
       ao: true, aa: 'smaa', dof: true, autoExposure: true,
+      light: { probe: 256, probeMove: 25, puddles: 1, wetDetail: 1, contact: 0.3, rig: 2, pcfRadius: 1, shafts: 1 },
       hints: { characterDetail: 'high', crowd: 1, drawDistance: 1, maxLights: 12, particles: 1 } },
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
+      light: { probe: 128, probeMove: 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
       hints: { characterDetail: m ? 'low' : 'high', crowd: 0.6, drawDistance: 0.8, maxLights: 6, particles: 0.6 } },
     low: { dprCap: m ? 1 : 0.75, shadows: false, shadowMapMax: 512, softShadows: false, bloom: false, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: null, dof: false, autoExposure: false,
+      light: { probe: 64, probeMove: 0, puddles: 0, wetDetail: 0, contact: 0.5, rig: 1, pcfRadius: 1, shafts: 0 },
       hints: { characterDetail: 'low', crowd: 0.35, drawDistance: 0.6, maxLights: 4, particles: 0.35 } },
   };
   return { quality: q, mobile: m, ...T[q] };
@@ -587,14 +591,16 @@ export class Engine {
     this.camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.08, 900);
     this.scene = new THREE.Scene();
 
-    const pmrem = new THREE.PMREMGenerator(r);
-    this.envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
+    // Height fog, horizon specular occlusion and wet-weather code go into three's shared chunks before anything compiles.
+    RZ.installFogChunks(); RZ.installLightingChunks();
 
     // Debug / A-B switches: ?post=noao,noaa,nodof,noae,nograde turn single post features off on every tier (aodebug shows
     // the AO term). engine.postOff can be changed at runtime followed by applyPost().
     const qp = new URLSearchParams(location.search);
     this.postOff = new Set(String(qp.get('post') || '').split(',').filter(Boolean));
+    // Scene-lighting A/B switches: ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts (engine.lightOff + applyLighting()).
+    this.lightOff = new Set(String(qp.get('light') || '').split(',').filter(Boolean));
+    this._initLighting();
 
     this.composer = new EffectComposer(r);
     this.renderPass = new RenderPass(this.scene, this.camera);
@@ -630,7 +636,7 @@ export class Engine {
     this._toneKey = -1; this._toneSpace = '';
 
     // Per-frame statistics: scene = shadow maps + main pass, total = including post-processing.
-    this.stats = { sceneCalls: 0, sceneTriangles: 0, calls: 0, triangles: 0, fps: 0, frameMs: 0, pixelRatio: 1, scale: 1, post: '' };
+    this.stats = { sceneCalls: 0, sceneTriangles: 0, calls: 0, triangles: 0, fps: 0, frameMs: 0, pixelRatio: 1, scale: 1, post: '', probeMs: 0, probes: 0 };
     const renderScene = this.renderPass.render.bind(this.renderPass);
     this.renderPass.render = (rr, wb, rb, dt, mask) => {
       renderScene(rr, wb, this.aoPass.enabled ? this.aoPass.sceneRT : rb, dt, mask);
@@ -676,6 +682,7 @@ export class Engine {
     this.bloom.enabled = s.bloom;
     this.bloomScale = s.bloomScale;
     this.applyPost();
+    this._lightingTier();
     // Automated runs (webdriver + CPU rasterizer) measure nothing real: keep their resolution fixed.
     const automated = !!window.navigator?.webdriver;
     const auto = this.adaptiveParam === '1' ? true : this.adaptiveParam === '0' ? false : (s.adaptive && !automated);
@@ -724,6 +731,7 @@ export class Engine {
     this.scene = scene;
     scene.environment = scene.environment || this.envTexture;
     this.renderPass.scene = scene;
+    this._lightScene(scene);
     this._sweep = 0;
     // a new place: its own grade at once, no focus, the eye adapts from scratch
     this.focus(null); this._focus.amount = 0; this.dofPass.enabled = false;
@@ -790,6 +798,10 @@ export class Engine {
     const F = this._focus;
     F.target = target && opts.dof !== false ? target : null;
     F.active = F.target ? opts.active || null : null;
+    // the dialogue light rig follows the same target (every tier; opts.rig: false opts a shot out)
+    const G = this._light.rig;
+    G.target = target && opts.rig !== false ? target : null;
+    G.active = G.target ? opts.active || null : null;
     return this;
   }
   _updateFocus(dt) {
@@ -819,6 +831,7 @@ export class Engine {
 
   // Jump every smoothed post value (grade, exposure, focus) to its target: deterministic captures and cuts.
   settlePost() {
+    this.settleLighting();
     this.updateGrade(0, true);
     this._ae.snap = Math.max(this._ae.snap, 1e-3); this._ae.ref = Math.max(this._ae.ref, 1e-3); this._ae.force = true;
     this._updateFocus(0);
@@ -853,6 +866,236 @@ export class Engine {
       fx.uAE.value.set(this.quality === 'high' ? 0.5 : 0.4, -0.5, 0.7);
       fx.tAdapt.value = E.rt[E.i ^ 1].texture;   // the target this frame's adaptation writes
     }
+  }
+
+  // ---------- scene lighting (docs/RENDERING.md, stage 2) ----------
+  // Applied to every scene the engine shows; each part is tier-gated and can be switched off for A/B captures with
+  // ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts (or engine.lightOff + applyLighting()):
+  //   env      the scene's own image-based light: an EnvProbe captured at the camera ~8 frames after setScene
+  //            (characters, rain and particles hidden), scaled to the mean brightness of the studio light the scene
+  //            was authored with (so authored exposure and envIntensity still hold) with 20 % of it spread evenly as
+  //            bounce light, re-captured when the place changes (era switch, blackout: fog / background / visible
+  //            lights) and, on high / medium, when the camera has moved 25 / 40 m. A re-capture renders one cube face
+  //            per frame. Missions that set scene.environment themselves are left alone.
+  //   fog      FogExp2 becomes height fog with the same colour, density and near-field curve (falloff per era).
+  //   wet      visible rain -> wet materials (realism.setWetness): low = darker + glossier tops, medium + puddles,
+  //            high + raindrop ripples and water streaks on walls / glass.
+  //   contact  soft contact shadows under every character (one instanced draw, all tiers).
+  //   shadow   texel-snapped directional shadows (no shimmer), normalBias / PCF radius defaults for untuned lights.
+  //   rig      dialogue key + rim lights (no shadows) around the focus target while a close cinematic shot holds
+  //            it; added to the scene only during the shot (2 lights on high / medium, a rim on low).
+  //   shafts   additive light cones under shadow-casting spot lights, scaled by haze and era (high / medium).
+  _initLighting() {
+    // spot lights aimed at the subject whose range ends just past it: the wall behind a speaker is never lit (a key from
+    // the camera side stops ~0.8 m behind the head; the rim sits behind the subject and shines toward the camera)
+    const key = new THREE.SpotLight(0xfff0e2, 0, 3, 0.5, 1, 2); key.name = 'rigKey';
+    const rim = new THREE.SpotLight(0xdbe8ff, 0, 3, 0.55, 1, 2); rim.name = 'rigRim';
+    key.userData.noCapture = rim.userData.noCapture = true;
+    this._light = {
+      probe: null, roomLum: 0.5, legacyEnv: null, contact: RZ.contactShadows({ max: 48 }),
+      rig: { key, rim, target: null, active: null, amount: 0, added: 0, v: new THREE.Vector3(), d: new THREE.Vector3(), r: new THREE.Vector3(), warm: new WeakSet() },
+      wet: 0, wetTarget: 0, casters: [], chars: [], shafts: [], sig: '', sigT: 0, frames: 0, lastCap: -1e9, captured: false, scene: null,
+    };
+  }
+  get envTexture() { return this._light?.probe?.texture || null; }
+  lightOn(k) { return !this.lightOff.has('no' + k); }
+
+  // Tier change: probe resolution (the studio placeholder is re-filled; a scene using the old probe moves over).
+  _lightingTier() {
+    const L = this._light, size = this.settings.light.probe;
+    if (L.probe && L.probe.size === size) return;
+    const old = L.probe, oldTex = old?.texture;
+    L.probe = new RZ.EnvProbe(this.renderer, { size });
+    const room = new RoomEnvironment();
+    L.probe.fill(room, [0, 0, 0], { measure: true });
+    room.dispose?.();
+    L.roomLum = L.probe.luminance || 0.5;
+    if (this.scene && oldTex && this.scene.environment === oldTex) { this.scene.environment = L.probe.texture; L.frames = 0; L.sig = ''; L.captured = false; }
+    old?.dispose();
+  }
+  _lightScene(scene) {
+    const L = this._light;
+    L.scene = scene; L.frames = 0; L.sig = ''; L.lastCap = -1e9; L.casters = []; L.chars = []; L.shafts = [];
+    L.probe.job = null;
+    // a new place starts from the studio placeholder until its own capture is ready (same texture object)
+    if (scene.environment === L.probe.texture && L.captured) { const room = new RoomEnvironment(); L.probe.fill(room, [0, 0, 0]); room.dispose?.(); }
+    L.captured = false;
+    this._envSwitch();
+    L.contact.track([]);
+    if (L.contact.mesh.parent !== scene) scene.add(L.contact.mesh);
+    const G = L.rig; G.target = null; G.active = null; G.amount = 0; this._rigAttach(false);
+    L.wet = L.wetTarget = 0;
+    this._upgradeFog(scene);
+  }
+  // FogExp2 -> realism HeightFog (same Color object, density linked both ways, same curve at the ground).
+  _upgradeFog(scene) {
+    const f = scene.fog;
+    if (!f || !f.isFogExp2 || f.isHeightFog) return;
+    const h = RZ.heightFogFrom(f, { falloff: this._fogFalloff(scene) });
+    Object.defineProperty(h, 'density', { get: () => f.density, set: v => { f.density = v; }, configurable: true });
+    h.userData = { falloff: h.falloff };
+    if (!this.lightOn('fog')) h.falloff = 1e-4;
+    scene.fog = h;
+  }
+  // Height falloff per era (1/m): open valley haze thins slowly, the rainy street lets towers rise out of it.
+  _fogFalloff(scene) {
+    if (scene.userData.fogFalloff !== undefined) return scene.userData.fogFalloff;
+    return { rain2049: 0.05, helix2026: 0.06, ruin2196: 0.04, ancient: 0.022, neutral: 0.04 }[gradeForScene(scene)] ?? 0.04;
+  }
+  // What the probe depends on: a change re-captures it (era switch, blackout, lights switched on / off).
+  _lightSig(scene) {
+    const q = c => (c && c.isColor ? Math.round(c.r * 64) + ',' + Math.round(c.g * 64) + ',' + Math.round(c.b * 64) : '-');
+    let n = 0;
+    const vis = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
+    for (const l of this._sigLights || []) if (l.parent && vis(l) && l !== this._light.rig.key && l !== this._light.rig.rim) n++;
+    const f = scene.fog;
+    return [q(f?.color), f ? Math.round(Math.log(Math.max(1e-5, f.density ?? f.far ?? 1)) * 8) : 0, q(scene.background), Math.round((scene.environmentIntensity ?? 1) * 20), n].join('|');
+  }
+  // Every 45 frames: lights (shadow tuning + snapping list, probe signature), characters (contact shadows), rain (wet).
+  _lightSweep() {
+    const L = this._light, scene = this.scene; if (!scene || L.scene !== scene) return;
+    const lights = [], chars = []; let rain = false;
+    scene.traverse(o => {
+      if (o.isLight) lights.push(o);
+      else if (o.userData.character) chars.push(o);
+      if (o.userData.rzRain && o.visible) rain = true;
+    });
+    this._sigLights = lights;
+    const shadowFix = this.lightOn('shadow');
+    L.casters = [];
+    for (const l of lights) {
+      if (!l.castShadow || !l.shadow) continue;
+      if (shadowFix) { RZ.tuneShadow(l, { radius: this.settings.light.pcfRadius }); if (l.isDirectionalLight) L.casters.push(l); }
+      else if (l.userData.rzAuthoredNB !== undefined) { l.shadow.normalBias = l.userData.rzAuthoredNB; l.shadow.radius = l.userData.rzAuthoredRadius; }
+    }
+    L.chars = chars; L.contact.track(chars);
+    // light shafts: a soft additive cone under each shadow-casting spot light (the key lights of interiors and the
+    // moonlight through the 2196 roof), brightness from the haze density and the era; high / medium only
+    if (this.settings.light.shafts > 0 && this.lightOn('shafts')) for (const l of lights) {
+      if (!l.isSpotLight || !l.castShadow || l.userData.rzShaft || !l.parent || l.userData.noShaft) continue;
+      const from = l.position, to = l.target.parent === l.parent ? l.target.position : l.target.position.clone();
+      const len = from.distanceTo(to); if (!(len > 1.5)) continue;
+      const r1 = Math.min(len * 0.9, Math.tan(Math.min(l.angle, 1.2)) * len * 0.75);
+      const sh = RZ.lightShaft({ from: from.toArray(), to: to.toArray(), radius: [0.12, r1], color: l.color.getHex(), intensity: 0, floorY: to.y, dust: 0.8 });
+      sh.userData.light = l; l.userData.rzShaft = sh; l.parent.add(sh); L.shafts.push(sh);
+    }
+    L.wetTarget = scene.userData.wet ?? (rain ? 1 : 0);
+  }
+  _updateLighting(dt, t) {
+    const L = this._light, scene = this.scene, s = this.settings.light;
+    if (!scene || L.scene !== scene) return;
+    if (scene.fog && scene.fog.isFogExp2 && !scene.fog.isHeightFog) this._upgradeFog(scene);
+    // env probe: first capture once the scene is built, re-captures on change, one face per frame
+    const P = L.probe, auto = scene.environment === P.texture && this.lightOn('env') && scene.userData.autoEnv !== false;
+    L.frames++;
+    if (auto) {
+      if (P.busy) { P.step(1); if (!P.busy) this._probeDone(); }
+      else if (L.frames >= 8 && (L.sigT -= dt) <= 0) {
+        L.sigT = 0.5;
+        const sig = this._lightSig(scene), moved = s.probeMove > 0 && L.captured && this.camera.position.distanceTo(P.position) > s.probeMove;
+        if (!L.sig || ((sig !== L.sig || moved) && t - L.lastCap > 2)) { L.sig = sig; this._startProbe(t); }
+      }
+    }
+    // wet weather (global shader state): eases over ~2 s
+    const wt = this.lightOn('wet') ? L.wetTarget : 0;
+    L.wet += (wt - L.wet) * (dt > 0 ? 1 - Math.exp(-dt / 0.7) : 1);
+    if (Math.abs(L.wet - wt) < 1e-3) L.wet = wt;
+    RZ.setWetness({ amount: L.wet, time: t, puddles: s.puddles, detail: s.wetDetail, ground: scene.userData.wetGround ?? 0 });
+    // contact shadows
+    const C = L.contact; C.strength = this.lightOn('contact') ? s.contact : 0;
+    if (C.mesh.parent !== scene) scene.add(C.mesh);
+    C.update(this.camera);
+    // shadow snapping (after the mission moved its sun / moon this frame)
+    if (this.lightOn('shadow')) for (const l of L.casters) RZ.stabilizeShadow(l);
+    if (L.shafts.length) {
+      const f = scene.fog, haze = f ? Math.min(1, Math.max(0.2, (f.density ?? 0.02) * 30)) : 0.35;
+      const era = { ruin2196: 1.25, helix2026: 1, rain2049: 0.8, ancient: 0.6, neutral: 0.8 }[this.grade] ?? 0.8;
+      const on = this.lightOn('shafts') ? s.shafts : 0;
+      for (const sh of L.shafts) {
+        const l = sh.userData.light, k = on * haze * era * Math.min(1, l.intensity / 120);
+        sh.visible = k > 0.01 && l.visible; sh.material.uniforms.uCol.value.copy(l.color).multiplyScalar(0.55 * k);
+      }
+    }
+    this._updateRig(dt);
+  }
+  _startProbe(t) {
+    const L = this._light;
+    L.probe.start(this.scene, this.camera.position, {
+      hide: o => !!(o.userData.character || o.userData.rzRain || o.isPoints || o.isLineSegments || o.isSprite),
+      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: 0.2 },
+    });
+    L.lastCap = t;
+  }
+  _probeDone() {
+    const L = this._light;
+    L.captured = true; this.stats.probeMs = +L.probe.ms.toFixed(1); this.stats.probes++;
+    this.stats.probeLum = +(L.probe.luminance ?? 0).toFixed(4); this.stats.probeScale = +L.probe.scale.toFixed(2); this.stats.roomLum = +L.roomLum.toFixed(3);
+    // the rig's program variants (light count + 1 / + 2) compile in the background now, not at the first close-up
+    // (without KHR_parallel_shader_compile this is a plain compile at scene start, under the mission intro)
+    if (!L.rig.warm.has(this.scene) && this.settings.light.rig > 0) {
+      L.rig.warm.add(this.scene);
+      const r = this.renderer, par = r.extensions?.has?.('KHR_parallel_shader_compile');
+      try { this._rigAttach(true); if (par) r.compileAsync(this.scene, this.camera).catch(() => {}); else r.compile(this.scene, this.camera); } catch { /* optional */ } finally { this._rigAttach(false); }
+    }
+  }
+  _rigAttach(on) {
+    const L = this._light, G = L.rig, scene = this.scene, n = on ? this.settings.light.rig : 0;
+    for (const [i, l] of [[1, G.rim], [2, G.key]]) {
+      const want = n >= i && scene;
+      if (want && l.parent !== scene) scene.add(l, l.target); else if (!want && l.parent) { l.parent.remove(l); l.target.parent?.remove(l.target); }
+    }
+    G.added = n;
+  }
+  _updateRig(dt) {
+    const G = this._light.rig, cam = this.camera;
+    let on = !!(G.target && this.lightOn('rig') && this.settings.light.rig > 0 && (!G.active || G.active()));
+    if (G.target && G.active && !G.active()) { G.target = null; G.active = null; }
+    let p = null;
+    if (on) {
+      p = G.target.isObject3D ? G.target.getWorldPosition(G.v) : G.v.copy(G.target);
+      if (!(p.distanceTo(cam.position) < 7) || cam.fov > 50) on = false;   // close shots only
+    }
+    const k = dt === 0 ? 1 : 1 - Math.exp(-dt / 0.35);
+    G.amount += ((on ? 1 : 0) - G.amount) * k;
+    if (!on && G.amount < 0.01) G.amount = 0;
+    if (G.amount <= 0) { if (G.added) this._rigAttach(false); return; }
+    if (G.added !== this.settings.light.rig) this._rigAttach(true);
+    if (p) {
+      // camera-relative placement: key from the camera side, 45 degrees off axis and above; rim behind the subject
+      const d = G.d.subVectors(p, cam.position); d.y = 0; if (d.lengthSq() < 1e-6) d.set(0, 0, -1); d.normalize();
+      const r = G.r.set(-d.z, 0, d.x);
+      G.key.position.copy(p).addScaledVector(d, -1.0).addScaledVector(r, 1.0).y += 0.5;
+      G.rim.position.copy(p).addScaledVector(d, 1.1).addScaledVector(r, -0.6).y += 0.7;
+      for (const l of [G.key, G.rim]) { l.target.position.copy(p); l.target.position.y -= 0.25; l.distance = l.position.distanceTo(p) + 0.75; }
+    }
+    const scale = this.scene.userData.rigIntensity ?? 1;
+    G.key.intensity = 3 * G.amount * scale; G.rim.intensity = 5 * G.amount * scale;
+  }
+  // Snap the lighting state for a deterministic frame (captures, hard cuts): finish the probe, wet + rig at target.
+  settleLighting() {
+    const L = this._light, scene = this.scene;
+    if (!scene || L.scene !== scene) return;
+    this._lightSweep();
+    L.frames = Math.max(L.frames, 8); L.sigT = 0; L.lastCap = -1e9;   // no re-capture throttle for a settled frame
+    this._updateLighting(0, this.fx.uTime.value);
+    if (L.probe.busy) { L.probe.finish(); this._probeDone(); }
+    L.wet = this.lightOn('wet') ? L.wetTarget : 0;
+    this._updateLighting(0, this.fx.uTime.value);
+  }
+  // noenv: the pre-upgrade studio environment (three's RoomEnvironment PMREM) instead of the scene probe.
+  _envSwitch() {
+    const L = this._light, scene = this.scene; if (!scene) return;
+    if (!this.lightOn('env') && scene.environment === L.probe.texture) {
+      if (!L.legacyEnv) { const pm = new THREE.PMREMGenerator(this.renderer); const room = new RoomEnvironment(); L.legacyEnv = pm.fromScene(room, 0.04).texture; pm.dispose(); room.dispose?.(); }
+      scene.environment = L.legacyEnv;
+    } else if (this.lightOn('env') && L.legacyEnv && scene.environment === L.legacyEnv) scene.environment = L.probe.texture;
+  }
+  // Re-apply the ?light= switches at runtime (A/B captures).
+  applyLighting() {
+    const scene = this.scene; if (!scene) return;
+    this._envSwitch();
+    if (scene.fog?.isHeightFog && scene.fog.userData?.falloff !== undefined) scene.fog.falloff = this.lightOn('fog') ? scene.fog.userData.falloff : 1e-4;
+    this._lightSweep(); this.settleLighting();
   }
 
   resize() {
@@ -931,8 +1174,9 @@ export class Engine {
     const dt = this._postT ? Math.min(0.1, Math.max(0, (now - this._postT) / 1000)) : 0;
     this._postT = now;
     this.adapt(now);
-    if (this._sweep-- <= 0) { this._sweep = 45; this.clampShadows(); }
+    if (this._sweep-- <= 0) { this._sweep = 45; this.clampShadows(); this._lightSweep(); }
     this._updatePost(dt);
+    this._updateLighting(dt, t);
     this.renderer.info.reset();
     this.fx.uTime.value = t;
     this.composer.render();

@@ -5,8 +5,9 @@
 //   node tools/render/postbench.mjs <mission m1..m4> <view name> <out.json> [W=1280] [H=720] [--mobile] [--rounds=4]
 //        [--configs=high,high:legacy,medium,medium:legacy,low,low:legacy] [--base=http://localhost:8765/]
 //
-// A configuration is <tier>[:legacy|:<comma-free list of post switches joined by +>]. `legacy` = the pre-upgrade
-// chain on that tier (no AO / AA / DOF / eye adaptation / grade). Each pass is timed with a readPixels fence after it;
+// A configuration is <tier>[:legacy|:nolight|:<comma-free list of post / light switches joined by +>]. `legacy` = the
+// pre-upgrade chain on that tier (no AO / AA / DOF / eye adaptation / grade); `nolight` = the pre-stage-2 scene lighting
+// (no probe, height fog, wet, contact shadows, rig, shadow fixes, shafts; engine ?light= switches). Each pass is timed with a readPixels fence after it;
 // the result is the minimum over the rounds per pass, plus the minimum whole frame.
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import fs from 'fs'; import path from 'path'; import url from 'url';
@@ -47,10 +48,14 @@ const res = await p.evaluate(async ({ configs, rounds }) => {
     pass.render = function (...a) { const t = performance.now(); orig.apply(this, a); fence(); T[name] = (T[name] || 0) + performance.now() - t; };
   }
   const LEGACY = ['noao', 'noaa', 'nodof', 'noae', 'nograde'];
+  const LIGHT = ['noenv', 'nofog', 'nowet', 'nocontact', 'norig', 'noshadow', 'noshafts'];
   const apply = c => {
     const [tier, mod] = c.split(':');
     if (E.quality !== tier) E.setQuality(tier);
-    E.postOff = new Set(mod === 'legacy' ? LEGACY : mod ? mod.split('+') : []);
+    // nolight = the pre-stage-2 scene lighting with the current post chain; light switches (noenv, ...) mix with post ones
+    const list = mod === 'legacy' ? LEGACY : mod === 'nolight' ? LIGHT : mod ? mod.split('+') : [];
+    E.postOff = new Set(list.filter(x => !LIGHT.includes(x)));
+    if (E.lightOff) { E.lightOff = new Set(list.filter(x => LIGHT.includes(x))); E.applyLighting(); }
     E.applyPost(); E.settlePost();
   };
   const best = {};

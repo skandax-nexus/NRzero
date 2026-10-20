@@ -11,6 +11,7 @@
 //                    Close-up views (fov <= 45) hold engine.focus() on the look target like game.shot() does, and
 //                    engine.settlePost() snaps the smoothed post values (grade, eye adaptation, focus) first.
 //   REF.postOff(list) switches post features off for an A/B capture (null restores them).
+//   REF.lightOff(list) the same for the scene-lighting features (engine ?light= switches).
 //   REF.measure(n)   times 3 full frames (composer) and 1 scene-pass-only frame, each fenced with readPixels, and
 //                    records renderer counts. Results are also pushed to window.REF_LOG.
 (() => {
@@ -75,7 +76,7 @@
           calls: st.calls, tris: st.triangles, sceneCalls: st.sceneCalls, sceneTris: st.sceneTriangles,
           frameMs: +med(full).toFixed(1), frameMinMs: +Math.min(...full).toFixed(1), sceneMinMs: +Math.min(...sc).toFixed(1),
           lights: L, objects, instanced, transparent, materials: mats.size, programs: r.info.programs.length,
-          textures: r.info.memory.textures, geometries: r.info.memory.geometries, era: g.temporal.current, post: st.post, grade: E.grade };
+          textures: r.info.memory.textures, geometries: r.info.memory.geometries, era: g.temporal.current, post: st.post, grade: E.grade, probeMs: st.probeMs, probes: st.probes, probeLum: st.probeLum, probeScale: st.probeScale, roomLum: st.roomLum };
         const mem = performance.memory; if (mem) res.jsHeapMB = Math.round(mem.usedJSHeapSize / 1048576);
         (window.REF_LOG = window.REF_LOG || []).push(res); return res;
       }
@@ -86,6 +87,14 @@
       else if (REF._postSave) { E.postOff = REF._postSave; REF._postSave = null; }
       E.applyPost(); E.settlePost(); draw.call(E, g.time);
       return E.stats.post;
+    },
+    // A/B for the scene lighting (engine ?light= switches): `off` = ['noenv', 'nofog', ...], null restores them.
+    lightOff(off) {
+      if (!E.lightOff) return 'no lighting switches';
+      if (off) { if (!REF._lightSave) REF._lightSave = new Set(E.lightOff); E.lightOff = new Set(off); }
+      else if (REF._lightSave) { E.lightOff = REF._lightSave; REF._lightSave = null; }
+      E.applyLighting(); E.settlePost(); draw.call(E, g.time);
+      return [...E.lightOff].join(',') || 'all on';
     },
     // PNG data URL of the current frame (canvas only: cheaper and steadier than a page screenshot).
     grab() { draw.call(E, g.time); return E.renderer.domElement.toDataURL('image/png'); },

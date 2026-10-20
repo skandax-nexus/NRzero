@@ -71,7 +71,7 @@ CAST = [
          glow="5fe6ff", glowLevel=0.6, metalColor="8a9098", tris=16000,
          wear=[("mock_neck", "2a2c2f"), ("techshell", "16181c"), ("hood_down", None), ("chest_harness", "3a3f46"),
                ("tech_trousers", "2e3237"), ("tech_boots", "1b1611", dict(sole="6a6e74")), ("gloves", "1d1a17", dict(side="R", fingerless=True))],
-         gear=["chronolith_band", "ar_monocle", "earpiece", "belt_scanner", "shoulder_lamp", "echo_emitter", "harness_pouches", "chest_slate_pocket"]),
+         gear=["chronolith_band", ("ar_monocle", dict(idle=0.12)), "earpiece", "belt_scanner", "shoulder_lamp", "echo_emitter", "harness_pouches", "chest_slate_pocket"]),
     # ---- Mira Varen: armoured softshell with gorget and shoulder caps; carries nothing ----
     dict(id="mira", group="Principals", era="2049", role="Mira Varen, the impossible sister", years=29, metres=1.69,
          macro=F(muscle=0.52, weight=0.4, caucasian=0.9, asian=0.1),
@@ -91,7 +91,7 @@ CAST = [
          glow="ff6a4a", glowLevel=0.5, wearLevel=0.6,
          wear=[("mock_neck", "1c1c1e"), ("longshell", "2a2724", dict(det_add=["wear"], c2="4a3a2c")),   # his patched harness is under the sealed coat
                ("tech_trousers", "202020"), ("tech_boots", "141210", dict(sole="4a4844")), ("gloves", "111111")],
-         gear=[("chronolith_band", dict(cracked=True, glow="ff6a4a")), ("ar_monocle", dict(cracked=True)), ("echo_emitter", dict(scorched=True, glow="ff6a4a")),
+         gear=[("chronolith_band", dict(cracked=True, glow="ff6a4a")), ("ar_monocle", dict(cracked=True, idle=0.06)), ("echo_emitter", dict(scorched=True, glow="ff6a4a")),
                "recorder_spool"]),
     # ---- Sera Voss: patched field jacket, scavenged plate, left pauldron, rifle sling (2196) ----
     dict(id="sera", group="Principals", era="2196", role="Sera Voss, resistance leader", years=34, metres=1.72,
@@ -99,7 +99,7 @@ CAST = [
          details={"head/head-oval": 0.3, "chin/chin-prominent-decr|incr": 0.25, "eyebrows/eyebrows-angle-down|up": -0.2, **sym(cheek_bones=0.4)},
          skin="8a5b3c", lip="7a4a3c", eyes="5d6e58", hair="pony", hairColor="2a1f19", blush=0.12, scars=[((0.035, 0.06), (0.045, -0.055))],
          glow="b6ff8a", wearLevel=0.85,
-         wear=[("field_jacket_worn", "4a3a28", dict(c2="6a5a44")), ("scav_plate", "3a3a2c", dict(c3="26303c", c4="7a7448")), ("pauldron", "4a4a3a", dict(side="L")),
+         wear=[("field_jacket_worn", "4a3a28", dict(c2="6a5a44")), ("scav_plate", "3a3a2c", dict(c3="2e3540", c4="5e5c40")), ("pauldron", "4a4a3a", dict(side="L")),
                ("sling_strap", "2a2620", dict(side="R")), ("cargo_trousers", "3a3a30", dict(det_add=["wear"])), ("knee_pads", "1e1e1c"),
                ("forearm_wraps", "8a7a60"), ("combat_boots", "2a2018")],
          gear=[("respirator", dict(worn="neck")), ("goggles", dict(worn="neck")), "wrist_scanner_scav", ("radio_chest_rig", dict(rig=False)),

@@ -166,7 +166,7 @@ GARMENTS = {
     "jerkin": I(neck=(0.02, 0.03), collar=STAND(0.02), thick=0.009, fab="nylon", det=["quilt_h:0.05", "placket"], sleeve="none", hem=-0.05),
     "wipe_shell": T(neck=(0.03, 0.02), collar=STAND(0.04), hem=-0.06, cuff="band", thick=0.010, fab="shell", gloss=0.5, det=["zip", "sleeve_guards"]),
     # ---------------- over layers ----------------
-    "smart_vest": O(shape="vest", thick=0.0045, fab="hivis", gloss=0.2, det=["reflective:vest", "led:edges", "back_panel"], c3="c8ccd0", hem=-0.04),
+    "smart_vest": O(shape="vest", thick=0.0065, fab="hivis", gloss=0.2, det=["reflective:vest", "led:edges", "back_panel"], c3="c8ccd0", hem=-0.04),
     "plate_carrier": O(shape="carrier", thick=0.016, fab="cordura", gloss=0.05, rim=0.014, det=["molle", "chest_panel", "edge_bind"], pouches=True, c3="c8ccd0"),
     "chest_harness": O(shape="harness", thick=0.0035, fab="webbing", gloss=0.1, rim=0.003, det=["webbing", "edge_bind"], buckles=True, z=65),
     "scav_plate": O(shape="carrier", thick=0.015, fab="polymer", gloss=0.2, rim=0.012, det=["scav_plates", "wear", "scratches"], wear=0.9, pouches=False,
@@ -177,7 +177,7 @@ GARMENTS = {
     "vendor_vest": O(shape="vest", thick=0.005, fab="shell", gloss=0.45, rim=0.004, det=["pocket:vest", "edge_bind"], hem=-0.05),
     "leather_cuirass": O(shape="cuirass", thick=0.008, fab="hard_leather", gloss=0.3, rim=0.006, det=["stitch_edges", "tooling"], hem=0.02),
     "leather_hipwrap": dict(cat="skirt", shape="hipwrap", fab="leather", gloss=0.25, length=0.17, det=["stitch_edges", "clay"], z=72),
-    "gorget": O(shape="gorget", thick=0.009, fab="metal", gloss=0.85, rim=0.006, det=["gorget_lines"], z=72),
+    "gorget": O(shape="gorget", thick=0.009, fab="metal", gloss=0.6, rim=0.006, det=["gorget_lines"], z=72),
     "half_cape": O(shape="half_cape", side="L", thick=0.014, loose=10, fab="satin", gloss=0.3, rim=0.003, det=["cape_trim"], z=75),
     "mantle_wrap": O(shape="mantle", side="L", thick=0.009, loose=10, fab="linen", gloss=0.0, rim=0.0, det=["dye", "border", "fold_lines"], z=70, roll=True),
     "sash": O(shape="sash", thick=0.007, loose=4, fab="linen", gloss=0.0, rim=0.0, det=["dye", "fold_lines"], z=74, knot="L", width=0.085),
@@ -701,13 +701,28 @@ def paint(g, X, seed):
                 x0, x1, y0, y1 = -0.075, 0.075, ch + 0.06, ch + 0.11
             m = box(X.x, x0, x1, y, y0, y1, 0.0015) * sel
             mix(m * 0.9, base * 0.25 if name == "back_panel" else base * 0.5)
-            # block letters: a row of glyph cells
-            cw = 0.018
-            cx = np.floor((X.x - x0) / cw)
-            lx = (X.x - x0) / cw - cx
+            # block lettering: one row of stroke glyphs (I H E L T U N, two words), crisp enough to read as text
+            cw = 0.021 if name == "back_panel" else 0.013
+            ncell = int((x1 - x0 - 0.02) / cw)
+            xs = x0 + 0.01 + (x1 - x0 - 0.02 - ncell * cw) / 2
+            cx = np.floor((X.x - xs) / cw)
+            lx = (X.x - xs) / cw - cx
             ly = (y - y0) / (y1 - y0)
-            hb = hash01(np.stack([cx, np.floor(ly * 5), np.zeros(n)], 1), 1.0, seed + 3.3)
-            letter = (hb > 0.35) * box(lx, 0.15, 0.85, ly, 0.25, 0.75, 0.01) * (cx < np.floor((x1 - x0) / cw) - 0.5)
+            sw, sh_ = 0.2, 0.13           # stroke width (cell fraction), bar height (panel fraction)
+            vL = box(lx, 0.12, 0.12 + sw, ly, 0.28, 0.72, 0.004)
+            vR = box(lx, 0.88 - sw, 0.88, ly, 0.28, 0.72, 0.004)
+            vC = box(lx, 0.5 - sw / 2, 0.5 + sw / 2, ly, 0.28, 0.72, 0.004)
+            hT = box(lx, 0.12, 0.88, ly, 0.72 - sh_, 0.72, 0.004)
+            hM = box(lx, 0.12, 0.8, ly, 0.5 - sh_ / 2, 0.5 + sh_ / 2, 0.004)
+            hB = box(lx, 0.12, 0.88, ly, 0.28, 0.28 + sh_, 0.004)
+            glyphs = [vL + vR + hM, vL + hT + hM + hB, vL + hB, vC + hT, vL + vR + hB, vC, vL + vR + hT, vL + hT + hM]
+            hb = hash01(np.stack([cx, np.zeros(n), np.zeros(n)], 1), 1.0, seed + 3.3)
+            gi = np.clip((hb * len(glyphs)).astype(int), 0, len(glyphs) - 1)
+            letter = np.zeros(n)
+            for i, gl_ in enumerate(glyphs):
+                letter = np.where(gi == i, np.clip(gl_, 0, 1), letter)
+            gap = ncell // 2 + (1 if ncell > 6 else 0)
+            letter = letter * (cx >= 0) * (cx < ncell) * (cx != gap - 1)
             mix(letter * m * 0.95, c3)
         elif name == "patches":
             pts = [("torso", (0.06, J["chest"][1] + 0.05), (0.07, 0.05)), ("torso", (-0.09, J["spine"][1] - 0.02), (0.06, 0.07)),
@@ -810,11 +825,13 @@ def paint(g, X, seed):
         elif name == "guard_lines":
             seam(line(X.f - 0.007, 0.0015) + line(X.sa - X.armcum[1] - 0.12, 0.0015), 0.0005, 0.7)
         elif name == "gorget_lines":
-            ph = (X.y - X.J["shoulder_L"][1]) / 0.022
+            ph = (X.y - X.J["shoulder_L"][1]) / 0.03
             fr = ph - np.floor(ph)
             seam(ss(0.9, 0.98, fr), 0.0008, 0.7)
-            lit(line(fr - 0.45, 0.07 * 0.022 / 0.022, 0.03) * (np.abs(X.x) < 0.06) * 0.0 + line((fr - 0.5) * 0.022, 0.0016, 0.0008) * (np.abs(X.x) < 0.07))
-            k = k * (1 + 0.12 * (X.ny if X.ny is not None else 0))
+            h = h + 0.0008 * fr
+            two = (np.floor(ph) >= -2) & (np.floor(ph) <= -1)        # the resonance lines: two lames over the collarbones
+            lit(line((fr - 0.5) * 0.03, 0.0016, 0.0008) * (np.abs(X.x) < 0.075) * two)
+            k = k * (0.92 + 0.12 * fr)
         elif name == "wraps":
             if X.leg is not None and np.any(X.leg > 0.5):
                 ph = (X.sl / 0.034 + X.la / 360.0)

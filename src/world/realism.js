@@ -1532,16 +1532,16 @@ export function captureEnvironment(renderer, scene, position, opts = {}) {
 
 // Copy a captured cube into a fresh cube target with NaN / inf / negative texels removed, radiance clamped and scaled.
 let sanitizeState = null;
-function sanitizeCube(r, srcRT, maxRadiance, scale = 1) {
+function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0) {
   if (!sanitizeState) {
     const mat = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 } },
+      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 }, uAdd: { value: 0 } },
       vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform samplerCube tSrc; uniform float uMax, uScale; varying vec3 vDir;
+      fragmentShader: `uniform samplerCube tSrc; uniform float uMax, uScale, uAdd; varying vec3 vDir;
         void main(){ vec3 c = textureCube(tSrc, normalize(vDir)).rgb;
           bvec3 bad = bvec3(isnan(c.r) || isinf(c.r), isnan(c.g) || isinf(c.g), isnan(c.b) || isinf(c.b));
           c = mix(c, vec3(0.0), bad);
-          c = clamp(c, 0.0, uMax) * uScale; gl_FragColor = vec4(c, 1.0); }`,
+          c = clamp(c, 0.0, uMax) * uScale + uAdd; gl_FragColor = vec4(c, 1.0); }`,
       side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false,
     });
     const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat); box.frustumCulled = false;
@@ -1549,8 +1549,8 @@ function sanitizeCube(r, srcRT, maxRadiance, scale = 1) {
     sanitizeState = { mat, sc };
   }
   const size = srcRT.width;
-  const out = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false });
-  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale;
+  if (!out) out = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false });
+  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale; sanitizeState.mat.uniforms.uAdd.value = add;
   new THREE.CubeCamera(0.1, 10, out).update(r, sanitizeState.sc);
   sanitizeState.mat.uniforms.tSrc.value = null;
   return out;
@@ -1678,7 +1678,8 @@ export function localLights(list, opts = {}) {
 // 10a. Height fog (installed into three's fog chunks; stock FogExp2 / Fog keep their exact behavior)
 // =====================================================================================
 let fogInstalled = false;
-function installFogChunks() {
+/** Install the height-fog aware fog chunks (idempotent). Call before any fogged material compiles (the engine does). */
+export function installFogChunks() {
   if (fogInstalled) return; fogInstalled = true;
   const C = THREE.ShaderChunk;
   C.fog_pars_vertex = '#ifdef USE_FOG\n\tvarying float vFogDepth;\n\tvarying vec3 vFogWorld;\n#endif';
@@ -1726,6 +1727,7 @@ export function installLightingChunks() {
 			float rzHz = clamp( 1.0 + 1.2 * dot( rzRv, nonPerturbedNormal ), 0.0, 1.0 );
 			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz );
 		}`);
+  installWetChunks();
 }
 
 /**
@@ -3309,7 +3311,7 @@ export function particles(o = {}) {
         #include <fog_fragment>
       }`,
   }));
-  m.frustumCulled = false; m.renderOrder = 6; m.userData.noCapture = true; m.name = kind;
+  m.frustumCulled = false; m.renderOrder = 6; m.userData.noCapture = true; m.name = kind; if (rain) m.userData.rzRain = true;
   return m;
 }
 
@@ -3535,4 +3537,268 @@ export function roadPaint(o = {}) {
   const mat = new THREE.MeshStandardMaterial({ map: c(set.map), normalMap: c(set.normalMap), roughnessMap: c(set.ormMap), roughness: 1, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   const mesh = new THREE.Mesh(g, mat); mesh.receiveShadow = true; mesh.name = 'roadPaint';
   return mesh;
+}
+
+// =====================================================================================
+// 12. Scene lighting services: wet weather, environment probes, contact shadows, stable shadows
+//     The engine applies these to every scene (docs/RENDERING.md, stage 2); each is usable on its own.
+// =====================================================================================
+
+// Wet weather for every MeshStandard / MeshPhysical material (characters included) through three's shared shader
+// chunks: soaked up-facing surfaces (shoulders, heads, kerbs, car roofs) turn darker and glossy, walls get damp,
+// puddles form on flat ground near `ground` and reflect the environment (neon in Rain City), and on the detail tier
+// raindrop ripples run in the puddles and water streaks run down walls and glass. The state lives in two plain
+// {x,y,z,w} objects shared by reference with every program (three clones uniform values only for Vector / Color
+// types), so setWetness() is a global switch with no recompiles. Dry (amount 0) costs one uniform branch.
+const WET_A = { x: 0, y: 0, z: 0, w: 0 };          // amount, time (s), puddles, detail (ripples + streaks)
+const WET_B = { x: 0, y: 0.4, z: 0.22, w: 0.56 };  // ground y, puddle max height above ground, puddle scale (1/m), coverage threshold
+/**
+ * Global wet-weather state: setWetness({ amount: 0..1, puddles: 0..1, detail: 0..1, ground: y, height: m, scale: 1/m,
+ * coverage: 0..1 (fraction of flat ground under water, default ~0.3), time: s }). Missing fields keep their value.
+ * Returns the current state. The engine drives it from rain in the scene (kit Rain / particles({ kind: 'rain' })).
+ */
+export function setWetness(o = {}) {
+  if (o.amount !== undefined) WET_A.x = Math.max(0, Math.min(1, o.amount));
+  if (o.time !== undefined) WET_A.y = o.time % 4096;
+  if (o.puddles !== undefined) WET_A.z = Math.max(0, Math.min(1, o.puddles));
+  if (o.detail !== undefined) WET_A.w = Math.max(0, Math.min(1, o.detail));
+  if (o.ground !== undefined) WET_B.x = o.ground;
+  if (o.height !== undefined) WET_B.y = Math.max(0.01, o.height);
+  if (o.scale !== undefined) WET_B.z = o.scale;
+  if (o.coverage !== undefined) WET_B.w = 0.72 - Math.max(0, Math.min(1, o.coverage)) * 0.53;
+  return getWetness();
+}
+export function getWetness() { return { amount: WET_A.x, time: WET_A.y, puddles: WET_A.z, detail: WET_A.w, ground: WET_B.x, height: WET_B.y, scale: WET_B.z }; }
+
+let wetInstalled = false;
+function installWetChunks() {
+  if (wetInstalled) return; wetInstalled = true;
+  const C = THREE.ShaderChunk, L = THREE.ShaderLib;
+  for (const id of ['standard', 'physical']) if (L[id] && !L[id].uniforms.rzWetA) Object.assign(L[id].uniforms, { rzWetA: { value: WET_A }, rzWetB: { value: WET_B } });
+  C.lights_physical_pars_fragment = `uniform vec4 rzWetA; uniform vec4 rzWetB;
+float rzwHash( vec2 p ) { p = fract( p * vec2( 123.34, 456.21 ) ); p += dot( p, p + 45.32 ); return fract( p.x * p.y ); }
+float rzwNoise( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( rzwHash( i ), rzwHash( i + vec2( 1.0, 0.0 ) ), f.x ), mix( rzwHash( i + vec2( 0.0, 1.0 ) ), rzwHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); }
+` + C.lights_physical_pars_fragment;
+  C.lights_physical_fragment += `
+if ( rzWetA.x > 0.001 ) {
+	vec3 rzwP = cameraPosition + ( - vViewPosition ) * mat3( viewMatrix );
+	vec3 rzwN = inverseTransformDirection( nonPerturbedNormal, viewMatrix );
+	float rzwTop = smoothstep( 0.3, 0.9, rzwN.y );
+	float rzwG = rzWetA.x * ( 0.12 + 0.88 * rzwTop );
+	float rzwPud = 0.0;
+	if ( rzWetA.z > 0.0 ) {
+		float rzwH = rzwP.y - rzWetB.x;
+		float rzwFlat = smoothstep( 0.93, 0.985, rzwN.y ) * ( 1.0 - smoothstep( rzWetB.y * 0.6, rzWetB.y, rzwH ) ) * step( -0.6, rzwH );
+		if ( rzwFlat > 0.0 ) {
+			vec2 rzwQ = rzwP.xz * rzWetB.z;
+			float rzwNz = rzwNoise( rzwQ ) * 0.62 + rzwNoise( rzwQ * 3.3 + 5.2 ) * 0.38;
+			rzwPud = smoothstep( rzWetB.w, rzWetB.w + 0.07, rzwNz ) * rzwFlat * rzWetA.z * rzWetA.x;
+		}
+	}
+	if ( rzWetA.w > 0.0 ) {
+		float rzwV = ( 1.0 - rzwTop ) * ( 1.0 - smoothstep( 0.0, 0.3, abs( rzwN.y ) ) );
+		if ( rzwV > 0.0 ) {
+			// water running down walls / glass: thin columns, each with its own speed and phase
+			float rzwU = ( abs( rzwN.x ) > abs( rzwN.z ) ? rzwP.z : rzwP.x ) * 11.0;
+			float rzwC = floor( rzwU ), rzwR = rzwHash( vec2( rzwC, 3.7 ) );
+			float rzwF = fract( rzwP.y * ( 0.35 + 0.3 * rzwR ) + rzWetA.y * ( 0.25 + 0.5 * rzwR ) + rzwR * 13.0 );
+			float rzwS = smoothstep( 0.55, 1.0, 1.0 - abs( fract( rzwU ) - 0.5 ) * 2.0 ) * smoothstep( 0.0, 0.05, rzwF ) * ( 1.0 - smoothstep( 0.05, 0.7, rzwF ) );
+			rzwG = max( rzwG, rzwS * rzwV * rzWetA.w * rzWetA.x * step( 0.35, rzwR ) );
+		}
+		if ( rzwPud > 0.01 ) {
+			// raindrop rings in the puddles
+			vec2 rzwRq = rzwP.xz * 2.4; vec2 rzwRc = floor( rzwRq ), rzwRf = fract( rzwRq );
+			float rzwRh = rzwHash( rzwRc ), rzwAge = fract( rzWetA.y * ( 0.7 + 0.6 * rzwRh ) + rzwRh * 7.0 );
+			vec2 rzwDv = rzwRf - ( 0.25 + 0.5 * vec2( rzwRh, rzwHash( rzwRc + 9.1 ) ) ); float rzwD = length( rzwDv ) + 1e-4;
+			float rzwX = ( rzwD - rzwAge * 0.42 ) * 34.0;
+			vec2 rzwRg = rzwDv / rzwD * sin( rzwX * 3.14159 ) * exp( - rzwX * rzwX * 0.9 ) * ( 1.0 - rzwAge ) * ( 1.0 - rzwAge );
+			vec3 rzwRn = normalize( vec3( rzwRg.x * 0.3, 1.0, rzwRg.y * 0.3 ) );
+			normal = normalize( mix( normal, ( viewMatrix * vec4( rzwRn, 0.0 ) ).xyz, rzwPud * rzWetA.w ) );
+		}
+	}
+	material.diffuseColor *= 1.0 - 0.2 * rzwG - 0.25 * rzwPud;
+	material.roughness = mix( material.roughness, max( material.roughness * 0.32, 0.08 ), rzwG * 0.65 );
+	material.roughness = max( mix( material.roughness, 0.05, rzwPud ), min( geometryRoughness, 0.25 ) );
+	if ( rzWetA.w <= 0.0 ) normal = normalize( mix( normal, nonPerturbedNormal, rzwPud ) );
+}
+`;
+}
+
+/**
+ * Incremental environment probe: a cube capture of a scene that can be spread over frames (one face per step()), then
+ * sanitized (NaN / inf / clamp), optionally normalized to a reference luminance, and prefiltered into a PMREM target
+ * that is reused in place: the texture object never changes, so materials using it never recompile.
+ *   const probe = new EnvProbe(renderer, { size: 128 });
+ *   probe.fill(new RoomEnvironment());                   // placeholder content (captured at the origin)
+ *   scene.environment = probe.texture;
+ *   probe.start(scene, camera.position, { hide: o => !!o.userData.character, normalize: { luminance: 0.6, strength: 0.5 } });
+ *   each frame: probe.step(1)  (true when done), or probe.finish() to complete at once
+ * start() options: hide(o) -> bool, normalize (see captureEnvironment, plus fill: 0..0.9 = share of the mean radiance
+ * spread evenly as bounce light), measure, scale, clamp (max radiance, 32),
+ * shadows: true re-renders shadow maps per face (default false: the current maps are reused, the probe sees the
+ * frame's shadows). Objects with userData.noCapture are always hidden. probe.ms = cost of the last capture.
+ */
+export class EnvProbe {
+  constructor(renderer, opts = {}) {
+    if (renderer) R = renderer;
+    this.renderer = gl(); this.size = opts.size || Q.capture;
+    this.rt = new THREE.WebGLCubeRenderTarget(this.size, { type: THREE.HalfFloatType, generateMipmaps: false });
+    this.clean = new THREE.WebGLCubeRenderTarget(this.size, { type: THREE.HalfFloatType, generateMipmaps: false });
+    this.cube = new THREE.CubeCamera(opts.near ?? 0.05, opts.far ?? 1000, this.rt);
+    this.pm = new THREE.PMREMGenerator(this.renderer);
+    this.target = null; this.job = null;
+    this.position = new THREE.Vector3(); this.luminance = null; this.scale = 1; this.version = 0; this.ms = 0;
+    installLightingChunks();
+  }
+  get texture() { return this.target ? this.target.texture : null; }
+  get busy() { return !!this.job; }
+  start(scene, position, opts = {}) {
+    const hide = [];
+    scene.traverse(o => { if (o.userData.noCapture || (opts.hide && opts.hide(o))) hide.push(o); });
+    this.job = { scene, pos: v3(position).clone(), opts, face: 0, ms: 0, hide };
+    return this;
+  }
+  /** Render up to `faces` cube faces of the pending capture (prefiltering after the sixth). Returns true when idle. */
+  step(faces = 1) {
+    const J = this.job; if (!J) return true;
+    const r = this.renderer, t0 = performance.now(), cube = this.cube, sc = J.scene;
+    if (cube.coordinateSystem !== r.coordinateSystem) { cube.coordinateSystem = r.coordinateSystem; cube.updateCoordinateSystem(); }
+    cube.position.copy(J.pos); cube.updateMatrixWorld(true);
+    const prevRT = r.getRenderTarget(), prevFace = r.getActiveCubeFace(), prevMip = r.getActiveMipmapLevel();
+    const prevAuto = r.shadowMap.autoUpdate, prevNeeds = r.shadowMap.needsUpdate, prevXr = r.xr.enabled, prevBg = sc.background;
+    const hidden = [];
+    for (const o of J.hide) if (o.visible) { o.visible = false; hidden.push(o); }
+    if (prevBg && prevBg.userData && prevBg.userData.rzNoDisc) sc.background = prevBg.userData.rzNoDisc;
+    if (!J.opts.shadows) { r.shadowMap.autoUpdate = false; r.shadowMap.needsUpdate = false; }
+    r.xr.enabled = false;
+    try {
+      for (let n = 0; n < faces && J.face < 6; n++, J.face++) { r.setRenderTarget(this.rt, J.face); r.render(sc, cube.children[J.face]); }
+    } finally {
+      for (const o of hidden) o.visible = true;
+      sc.background = prevBg; r.shadowMap.autoUpdate = prevAuto; r.shadowMap.needsUpdate = prevNeeds; r.xr.enabled = prevXr;
+      r.setRenderTarget(prevRT, prevFace, prevMip);
+    }
+    if (J.face >= 6) {
+      const clamp = J.opts.clamp ?? 32;
+      let scale = J.opts.scale ?? 1, lum = null, add = 0;
+      if (J.opts.normalize || J.opts.measure) {
+        lum = cubeLuminance(r, this.rt, clamp);
+        const N = J.opts.normalize;
+        if (N && N.luminance > 0) {
+          scale *= Math.min(N.max ?? 6, Math.max(N.min ?? 0.25, Math.pow(N.luminance / Math.max(lum, 1e-5), N.strength ?? 0.5)));
+          // fill: part of the mean radiance spread evenly (bounce light), so faces turned away from every light
+          // (a floor under a dark ceiling) keep some ambient instead of going black; the mean is unchanged
+          const fill = Math.max(0, Math.min(0.9, N.fill ?? 0));
+          if (fill > 0) { add = lum * scale * fill; scale *= 1 - fill; }
+        }
+      }
+      sanitizeCube(r, this.rt, clamp, scale, this.clean, add);
+      this.target = this.pm.fromCubemap(this.clean.texture, this.target);
+      r.setRenderTarget(prevRT, prevFace, prevMip);
+      this.luminance = lum; this.scale = scale; this.position.copy(J.pos); this.version++;
+      this.job = null;
+    }
+    J.ms += performance.now() - t0;
+    if (!this.job) this.ms = J.ms;
+    return !this.job;
+  }
+  /** Complete the pending capture now. */
+  finish() { while (this.job) this.step(6); return this; }
+  /** Capture `scene` (e.g. three's RoomEnvironment) at `position` (default origin) right away. */
+  fill(scene, position = [0, 0, 0], opts = {}) { this.start(scene, position, opts); return this.finish(); }
+  dispose() { this.rt.dispose(); this.clean.dispose(); this.target?.dispose(); this.pm.dispose(); this.job = null; }
+}
+
+/**
+ * Soft contact shadows (ambient-occlusion blobs) under many moving objects in ONE draw call: an instanced quad that
+ * multiplies the frame below each tracked object's feet. Cheap enough for every tier; fades out with distance.
+ *   const cs = contactShadows({ max: 48, strength: 0.5 }); scene.add(cs.mesh);
+ *   cs.track([kai.root, ...walkers.map(w => w.c.root)]);   each frame: cs.update(camera)
+ * track() entries are Object3Ds (radius = opts.radius, default 0.45 m) or { object, radius, strength }.
+ */
+export function contactShadows(o = {}) {
+  const max = o.max ?? 48;
+  const geo = new THREE.PlaneGeometry(2, 2); geo.rotateX(-Math.PI / 2);
+  const aK = new THREE.InstancedBufferAttribute(new Float32Array(max), 1); aK.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('aK', aK);
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: 'attribute float aK; varying vec2 vUv; varying float vK; void main(){ vUv = uv; vK = aK; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }',
+    // a tight core under the feet plus a wide soft skirt; output multiplies the frame (1 = no change)
+    fragmentShader: 'varying vec2 vUv; varying float vK; void main(){ vec2 p = vUv * 2.0 - 1.0; float d = dot(p, p); float a = (0.62 * exp(-d * 10.0) + 0.38 * exp(-d * 3.2)) * (1.0 - smoothstep(0.55, 1.0, d)); gl_FragColor = vec4(vec3(1.0 - clamp(vK * a, 0.0, 0.95)), 1.0); }',
+    transparent: true, depthWrite: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true, toneMapped: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+  });
+  const mesh = new THREE.InstancedMesh(geo, mat, max);
+  mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 1; mesh.name = 'contactShadows';
+  mesh.userData.noCapture = true; mesh.castShadow = false; mesh.receiveShadow = false;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  let list = [];
+  const P = new THREE.Vector3(), S = new THREE.Vector3(), Qi = new THREE.Quaternion(), M = new THREE.Matrix4();
+  const shown = x => { for (; x; x = x.parent) if (!x.visible) return false; return true; };
+  const api = {
+    mesh, strength: o.strength ?? 0.5, radius: o.radius ?? 0.45, fade: o.fade || [16, 30], lift: o.lift ?? 0.025,
+    track(objs) { list = (objs || []).map(e => (e.isObject3D ? { object: e } : e)).filter(e => e && e.object); return api; },
+    get tracked() { return list.length; },
+    update(camera) {
+      let n = 0;
+      if (api.strength > 0) for (const e of list) {
+        if (n >= max) break;
+        const ob = e.object; if (!ob.parent || !shown(ob)) continue;
+        ob.getWorldPosition(P);
+        const dist = camera ? P.distanceTo(camera.position) : 0;
+        const k = (e.strength ?? api.strength) * (1 - THREE.MathUtils.smoothstep(dist, api.fade[0], api.fade[1]));
+        if (k <= 0.005) continue;
+        const rr = e.radius ?? api.radius;
+        P.y += api.lift; S.set(rr, 1, rr);
+        mesh.setMatrixAt(n, M.compose(P, Qi, S)); aK.array[n] = k; n++;
+      }
+      mesh.count = n; mesh.visible = n > 0;
+      if (n) { mesh.instanceMatrix.needsUpdate = true; aK.needsUpdate = true; }
+      return n;
+    },
+    dispose() { geo.dispose(); mat.dispose(); mesh.dispose?.(); },
+  };
+  return api;
+}
+
+const _sb = { m: new THREE.Matrix4(), r: new THREE.Vector3(), u: new THREE.Vector3(), f: new THREE.Vector3(), d: new THREE.Vector3() };
+/**
+ * Stop a following directional shadow from shimmering: moves the light and its target (together, so the direction
+ * is unchanged) by less than one shadow texel so the shadow camera only ever moves in whole texels. Call every frame
+ * after the light was positioned (the engine does this for every shadow-casting DirectionalLight whose parents are
+ * the scene). Idempotent. Returns true when the light was snapped.
+ */
+export function stabilizeShadow(light) {
+  if (!light || !light.isDirectionalLight || !light.castShadow || !light.shadow) return false;
+  const t = light.target, cam = light.shadow.camera, ms = light.shadow.mapSize;
+  if ((light.parent && !light.parent.isScene) || (t.parent && !t.parent.isScene)) return false;
+  const d = _sb.d.subVectors(light.position, t.position); const len = d.length();
+  if (len < 1e-4 || Math.abs(d.y) > len * 0.999) return false;
+  const z = cam.zoom || 1, tx = (cam.right - cam.left) / z / ms.x, ty = (cam.top - cam.bottom) / z / ms.y;
+  if (!(tx > 0 && ty > 0)) return false;
+  _sb.m.lookAt(light.position, t.position, cam.up); _sb.m.extractBasis(_sb.r, _sb.u, _sb.f);
+  const px = t.position.dot(_sb.r), py = t.position.dot(_sb.u);
+  const dx = Math.round(px / tx) * tx - px, dy = Math.round(py / ty) * ty - py;
+  if (dx === 0 && dy === 0) return true;
+  light.position.addScaledVector(_sb.r, dx).addScaledVector(_sb.u, dy);
+  t.position.addScaledVector(_sb.r, dx).addScaledVector(_sb.u, dy);
+  return true;
+}
+/**
+ * Sensible shadow defaults for a light the author did not tune: normalBias of ~1.3 shadow texels (no acne on round
+ * shapes, no peter-panning), PCF kernel radius (softer edges on PCFShadowMap tiers; PCFSoft ignores it). Values the
+ * author set (normalBias != 0, radius != 1) are kept. Safe to call repeatedly (re-derives from the current map size).
+ */
+export function tuneShadow(light, { radius = 2 } = {}) {
+  if (!light || !light.castShadow || !light.shadow) return light;
+  const s = light.shadow, ud = light.userData;
+  if (ud.rzAuthoredNB === undefined) { ud.rzAuthoredNB = s.normalBias; ud.rzAuthoredRadius = s.radius; }
+  if (ud.rzAuthoredNB === 0) {
+    const c = s.camera, ms = s.mapSize.x || 1024;
+    const texel = light.isDirectionalLight ? (c.right - c.left) / (c.zoom || 1) / ms : 0.02 * 1024 / ms;
+    s.normalBias = Math.min(0.08, Math.max(0.006, texel * 1.3));
+  }
+  if (ud.rzAuthoredRadius === 1) s.radius = radius;
+  return light;
 }

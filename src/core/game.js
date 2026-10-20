@@ -132,8 +132,9 @@ export class Game {
     if (!this.cine) { const d = new THREE.Vector3(); cam.getWorldDirection(d); from.l = cam.position.clone().addScaledVector(d, 5); }
     const to = { p: new THREE.Vector3(...pos), l: new THREE.Vector3(...look) };
     this.cine = { from, to, t: 0, dur: Math.max(0.001, dur), look: from.l.clone(), fov: opts.fov, follow: opts.follow };
-    // cinematic depth of field (high tier) on the live look target while this shot holds the camera; opts.dof: false skips it
-    const shotCine = this.cine; this.engine.focus?.(shotCine.look, { active: () => this.cine === shotCine, dof: opts.dof });
+    // cinematic depth of field (high tier) and the dialogue light rig (close shots, every tier) on the live look target
+    // while this shot holds the camera; opts.dof: false / opts.rig: false skip them
+    const shotCine = this.cine; this.engine.focus?.(shotCine.look, { active: () => this.cine === shotCine, dof: opts.dof, rig: opts.rig });
     return this.wait(dur);
   }
   releaseCam() { this.cine = null; this.engine.focus?.(null); this.player.first = true; this.engine.camera.fov = 58; this.engine.camera.updateProjectionMatrix(); }
