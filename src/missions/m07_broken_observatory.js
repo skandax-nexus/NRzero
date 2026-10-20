@@ -119,7 +119,7 @@ export default {
         sun.color.copy(y.sunCol ? new THREE.Color(y.sunCol) : s.sunColor); hemi.color.copy(s.hemi.sky); hemi.groundColor.copy(s.hemi.ground);
         scene.fog.color.copy(s.hazeColor);
       }
-      sun.intensity = inHall ? 0 : y.sun; hemi.intensity = inHall ? 0.12 : y.hemi; lightDir = y.dir; scene.fog.density = inHall ? 0.02 : y.fog;
+      sun.intensity = inHall ? 0 : y.sun; hemi.intensity = inHall ? 0.38 : y.hemi; lightDir = y.dir; scene.fog.density = inHall ? 0.006 : y.fog;
       renderer.toneMappingExposure = y.exposure;
     };
     // three point lights follow the nearest light sources of the state (constant light count)
@@ -128,10 +128,10 @@ export default {
       '2049': () => [...(W.floods || []).map(([x, y, z]) => ({ p: [x, y + 6.6, z], c: 0xf0f4ff, i: 320, d: 44 })), { p: [-11, 2.5, 62], c: 0x9fd8ff, i: 6, d: 8 }, { p: [P.poleSight[0], RING + 2.6, P.poleSight[2] + 1], c: 0xd0e4ff, i: 30, d: 14 }, { p: [17.5, R2 + 3.2, -3.5], c: 0xffe8c0, i: 26, d: 14 }],
       '2196': () => [{ p: [W.barrel[0], C + 1.3, W.barrel[2]], c: 0xff8a3a, i: 16, d: 14 }, ...scavs.filter(s => s.state !== 'down').map(s => ({ p: [s.c.root.position.x, s.c.root.position.y + 1.6, s.c.root.position.z], c: 0xb6ff8a, i: 3, d: 5 })), { p: [0, TOP + 2.5, -16], c: 0xffb080, i: 6, d: 12 }],
     };
-    const HALL_SRC = { past: { c: 0xff9a40, i: 9 }, '2049': { c: 0x8aa0d0, i: 3 }, '2196': { c: 0x9ab09a, i: 4 } };
+    const HALL_SRC = { past: { c: 0xff9a40, i: 60 }, '2049': { c: 0x8aa0d0, i: 26 }, '2196': { c: 0x9ab09a, i: 32 } };
     let lightT = 0;
     const rigLights = (force) => {
-      if (inHall) { W.hallLights.forEach((p, k) => { const h = HALL_SRC[T.current]; pts[k].position.set(...p); pts[k].color.set(k === 2 ? 0x7fe8ff : h.c); pts[k].intensity = k === 2 ? 5 : h.i; pts[k].distance = 16; }); return; }
+      if (inHall) { W.hallLights.forEach((p, k) => { const h = HALL_SRC[T.current]; pts[k].position.set(...p); pts[k].color.set(k === 2 ? 0x7fe8ff : h.c); pts[k].intensity = k === 2 ? 40 : h.i; pts[k].distance = 22; }); return; }
       if (!SOURCES[T.current]) return;
       const list = SOURCES[T.current]().map(s => ({ ...s, dd: (s.p[0] - pl.pos.x) ** 2 + (s.p[1] - pl.pos.y) ** 2 + (s.p[2] - pl.pos.z) ** 2 })).sort((a, b) => a.dd - b.dd);
       pts.forEach((l, k) => { const s = list[k]; if (!s) { l.intensity = 0; return; } l.position.set(...s.p); l.color.set(s.c); l.intensity = s.i; l.distance = s.d; });
@@ -291,7 +291,7 @@ export default {
         const hand = this.c.arms?.[0]?.hand; (hand || this.c.root).add(this.glow); if (!hand) this.glow.position.set(0.3, 1.1, 0.2);
         this.ip = new THREE.Vector3();
         this.it = game.interact({ pos: this.ip, radius: 2.3, once: false, states: ['2196'], prompt: o.prompt || 'Take down the scavenger',
-          enabled: () => this.active && this.state === 'vent' && !S.taking, onUse: () => takedown(this) });
+          enabled: () => this.active && (this.state === 'vent' || this.state === 'idle') && !S.taking, onUse: () => takedown(this) });
         scavs.push(this);
       }
       update(dt) {
@@ -307,7 +307,7 @@ export default {
         if (this.state === 'idle') {
           m.emissive.set(0xb6ff8a); m.emissiveIntensity = 1;
           c.pose = null;
-          if (this.aware && this.t > (this.boss ? 1.2 : 1.8)) { this.state = 'aim'; this.t = 0; audio.sfxPlay('drone'); c.pose = 'look'; if (once('aimBark')) ui.subtitle('kai', 'The gauntlet is charging — get out of its line!', 2400); }
+          if (this.aware && this.t > (d < 4 ? 0.6 : this.boss ? 1.2 : 1.8)) { this.state = 'aim'; this.t = 0; audio.sfxPlay('drone'); c.pose = 'look'; if (once('aimBark')) ui.subtitle('kai', 'The gauntlet is charging — get out of its line!', 2400); }
         } else if (this.state === 'aim') {
           m.emissive.set(0xb6ff8a); m.emissiveIntensity = 2 + this.t * 6;
           if (this.t > 1.3) { this.fire(); this.state = 'vent'; this.t = 0; c.pose = 'work'; }
@@ -730,7 +730,7 @@ export default {
     game.objective('Climb the star stair to the summit');
     game.onUpdate(() => { if (game.control && T.current === '2049' && pl.pos.y > TOP - 0.5 && pl.pos.x < -6 && once('canopy')) ui.subtitle('kai', 'Helix sealed the summit under a canopy. In 2196 there\'s no canopy left.', 3400); });
     hint(() => !S.fight2 && pl.pos.y > RING + 3, 70, () => ui.subtitle('kai', 'The summit is sealed in 2049. Try the ruin.', 2800));
-    await game.waitFor(() => T.current === '2196' && pl.pos.y > TOP - 0.4 && pl.pos.x < -5 && pl.pos.z < -18);
+    await game.waitFor(() => T.current === '2196' && pl.pos.y > TOP - 0.4 && (Math.hypot(pl.pos.x - DC[0], pl.pos.z - DC[1]) < 7.4 || (pl.pos.x < -5 && pl.pos.z < -18)));
 
     // ---------- the summit: Dace's crew and the turning floor ----------
     cine(true);
@@ -902,7 +902,8 @@ export default {
     S.ended = true;
     cine(true); lockMusic(null); audio.setTheme(null, 0.6);
     pl.place(s17.pos[0] + 0.2, C, s17.pos[2] + 0.5, Math.PI); kai.pose = 'work';
-    await game.shot([s17.pos[0] + 1.3, C + 1.1, s17.pos[2] + 0.4], [2.95, C + 0.55, -26.6], 1.4, { fov: 34 });
+    await game.shot([s17.pos[0] + 1.2, C + 1.3, s17.pos[2] + 0.9], [2.95, C + 0.6, -25.9], 1.4, { fov: 34 });
+    await tween(0.8, u => { W.recorder.position.set(2.95, C + 0.53 + Math.sin(u * Math.PI) * 0.12, -26.62 + u * 0.7); });
     W.recLed.material.emissiveIntensity = 8; audio.sfxPlay('pickup');
     await game.say('kai', 'A recorder. Wedged behind the stone. "REC 14.08.2041 · M. VAREN."');
     kai.pose = null;

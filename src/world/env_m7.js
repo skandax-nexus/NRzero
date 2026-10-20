@@ -560,7 +560,7 @@ export function buildObservatory(game, T, scene) {
   };
 
   // ---------- build batches ----------
-  for (const k of ['all', ...ERAS, 'hall']) B[k].build(groups[k], { blockers: k !== 'hall', game, name: 'm7' + k });
+  for (const k of ['all', ...ERAS, 'hall']) B[k].build(groups[k], { blockers: true, game, name: 'm7' + k });
   world.update = (dt, t) => { for (const f of world.updaters) f(dt, t); };
   return world;
 }
