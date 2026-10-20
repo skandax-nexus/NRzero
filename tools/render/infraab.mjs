@@ -5,13 +5,16 @@
 //   node tools/render/infraab.mjs <mission m1..m4> <view> <gfx> W H [--mobile] <reps> <frames> <cfg>...
 //   cfg: new | legacy (everything as before stage 4) | nobatch (upgrade without batching) | batchonly (legacy kit, batched)
 //        | plainmat (upgrade, but batched facades drawn with a plain material: geometry cost only)
+//        | probe1 / probe2 (facade shader cut short: plumbing only / wall without windows) | aniso1 (facade walls without anisotropic filtering)
 //   node tools/render/infraab.mjs m1 m1a_establishing low 844 390 --mobile 6 2 new legacy
+//   --shots=<dir> also saves the first frame of every cfg as <dir>/<view>_<gfx>_<cfg>.png (same frame, same page)
 /* global window */
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import fs from 'fs'; import path from 'path'; import url from 'url';
 const R = path.dirname(url.fileURLToPath(import.meta.url));
 const a = process.argv.slice(2); const mobile = a.includes('--mobile'); const pos = a.filter(x => !x.startsWith('--'));
 const base = (a.find(x => x.startsWith('--base=')) || '--base=http://localhost:8765/').slice(7);
+const shots = (a.find(x => x.startsWith('--shots=')) || '').slice(8);
 const [mission, viewName, gfx, W, H, reps, frames, ...cfgs] = pos;
 const VIEWS = JSON.parse(fs.readFileSync(path.join(R, 'views.json'), 'utf8')); const M = VIEWS[mission]; const view = M.views.find(v => v.name === viewName);
 const b = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--mute-audio', '--disable-audio-output'] });
@@ -36,6 +39,14 @@ for (let k = 0; k < +reps; k++) for (const c of cfgs) {
   const st = await p.evaluate(cfg => {
     const g = window.__game, E = g.engine;
     E.setInfraLegacy(cfg === 'legacy' || cfg === 'batchonly');
+    // probeN: facade shader cut short (realism RZ_FACADE_PROBE: 1 = plumbing only, 2 = wall without windows)
+    const pr = /^probe(\d)$/.exec(cfg);
+    // aniso1: the facade wall texture array without anisotropic filtering (re-uploaded; restored by the other cfgs)
+    g.scene.traverse(o => { const m = o.material, U = m?.userData?.facade?.uniforms; if (!U) return;
+      for (const k of ['rzWA', 'rzWN', 'rzWO']) { const t = U[k].value; if (!t) continue; if (t.userData.an0 === undefined) t.userData.an0 = t.anisotropy;
+        const want = cfg === 'aniso1' ? 1 : t.userData.an0; if (t.anisotropy !== want) { t.anisotropy = want; t.needsUpdate = true; } } });
+    g.scene.traverse(o => { const m = o.material; if (!m || !m.userData?.facade) return; const want = pr ? +pr[1] : undefined;
+      if ((m.defines.RZ_FACADE_PROBE) !== want) { if (want) m.defines.RZ_FACADE_PROBE = want; else delete m.defines.RZ_FACADE_PROBE; m.needsUpdate = true; } });
     if (cfg === 'nobatch') { E._batch.reset(); E.batchOn = false; }
     if (cfg === 'batchonly') { E.batchOn = true; E._batch.scan(g.scene); E._batch.update(g.scene, E.camera, 1); }
     if (cfg === 'plainmat') {   // upgraded geometry with a plain material: separates geometry cost from facade-shader cost
@@ -45,6 +56,7 @@ for (let k = 0; k < +reps; k++) for (const c of cfgs) {
     return { calls: E.stats.calls, tris: E.stats.triangles };
   }, c);
   out[c].calls = st.calls; out[c].tris = st.tris;
+  if (shots && k === 0) { fs.mkdirSync(shots, { recursive: true }); const d = await p.evaluate('REF.grab()'); fs.writeFileSync(path.join(shots, `${viewName}_${gfx}${mobile ? '_mobile' : ''}_${c}.png`), Buffer.from(d.split(',')[1], 'base64')); }
   const g0 = cpu(GPU), r0 = rcpu(), t0 = Date.now();
   await p.evaluate(n => { const g = window.__game, E = g.engine, gl = E.renderer.getContext(); for (let i = 0; i < n; i++) { E._refRender.call(E, g.time); gl.readPixels(0, 0, 1, 1, 6408, 5121, new Uint8Array(4)); } }, +frames);
   out[c].gpu.push((cpu(GPU) - g0) / +frames * 1000); out[c].cpu.push((rcpu() - r0) / +frames * 1000); out[c].wall.push((Date.now() - t0) / +frames);

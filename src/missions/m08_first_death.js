@@ -555,6 +555,8 @@ export default {
       ['kai', 'Rain. Concrete. Helix.'],
       ['kai', 'Home. Three thousand years and one switch later.'],
     ]);
+    // bridge from M7: Mira's recorder behind the seventeenth stone
+    if (F.m7miraRecording) await game.say('kai', 'Mira\'s voice is still in my ear. 2041. "Come and find me."');
     await game.shot([4.2, 1.8, 11.8], [P.memorial[0], 1.2, P.memorial[2]], 1.8, { fov: 40 });
     await game.say('kai', 'Candles. Somebody died here.');
     cine(false);
@@ -990,7 +992,7 @@ export default {
       h.lookTarget = kai.head;
       await game.talk([
         ['hale', 'Kai. Rook\'s people are on the lift, and Brandt\'s with them.'],
-        ['hale', 'I buried you on Sunday. I\'m not doing it twice. Service passage. Now.'],
+        ['hale', 'I lost you on Sunday. I\'m not doing it twice. Service passage. Now.'],
       ]);
     } else {
       await game.talk([

@@ -2105,6 +2105,9 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
 // windows keep their frames, mullions, sills, lit / unlit rooms with a lamp gradient and Fresnel glass, so the
 // buildings read the same from gameplay distance at about the cost of the textured boxes they replace.
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
+#if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 1   // cost probes for tools/render/infraab.mjs (never set in the game)
+  alb = vec3(0.3); orm = vec3(1.0, 0.8, 0.0); nW = rzSafeN(vRzWN); emi = vec3(0.0); return;
+#endif
   vec3 N = rzSafeN(vRzWN);
   bool horiz = abs(N.y) > 0.7;
   vec3 T = horiz ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), N));
@@ -2132,11 +2135,20 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     if (region > 3.5) alb *= 1.0 - step(0.55, fract(P.y * 22.0)) * 0.35;
     alb = mix(alb, vec3(0.2, 0.09, 0.035), ruin * 0.5); orm = vec3(1.0, 0.55 + ruin * 0.3, 0.55 * (1.0 - ruin)); return;
   }
+#if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 3
+  vec3 wall = vec3(0.4, 0.35, 0.3); o4 = vec4(1.0, 0.85, 0.0, 0.5); nW = N;
+#else
   vec3 wall = rzWall(region > 4.5 ? 4.0 : layer, P, T, B, N, o4, nW);
+#endif
+#if !defined(RZ_FACADE_PROBE) || RZ_FACADE_PROBE != 4
   wall *= mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), vFac.w) * (0.88 + 0.24 * rzH12(vec2(bseed * 91.0, 3.0)));
   wall *= 1.0 - (1.0 - smoothstep(0.0, 1.5, P.y)) * 0.35;
+#endif
   if (ruin > 0.0) { wall = mix(wall, vec3(dot(wall, vec3(0.3, 0.5, 0.2))), 0.4 * ruin) * (1.0 - 0.3 * ruin); wall = mix(wall, vec3(0.085, 0.13, 0.045), moss * 0.35 * (1.0 - smoothstep(0.0, 4.0, P.y))); }
   alb = wall; orm = o4.rgb;
+#if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 2
+  return;
+#endif
   if (region > 0.5) return;
   float bay = vWin.x, flH = vWin.y, ww = vWin.z, wh = vWin.w, gH = vWin2.x, sill = vWin2.y, topY = vWin2.z;
   float st = mod(vWin2.w, 10.0); float wflag = floor(vWin2.w / 10.0 + 0.01); bool shopFace = wflag > 0.5 && wflag < 1.5;
@@ -2149,14 +2161,18 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   else { float fy = (P.y - gH) / flH; cid = vec2(floor(P.x / bay), floor(fy)); cl = vec2(P.x - cid.x * bay, (fy - cid.y) * flH); ch = flH;
     wmin = vec2((bay - ww) * 0.5, sill); wmax = wmin + vec2(ww, wh); }
   float zone = 1.0 - smoothstep(topY - aa.y, topY + aa.y, P.y);
-  float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone * (shop ? 0.0 : 1.0);
-  alb = mix(alb, vec3(0.40, 0.38, 0.35), sillM);
-  float open = rzBoxM(cl, wmin, wmax, aa) * zone;
+  // far away (a window under ~2 px) only the averaged facade below is drawn: skip the per-window work there
   float farW = smoothstep(0.16, 0.55, max(aa.x, aa.y));
-  vec3 hS = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
-  if (open > 0.001 && farW < 0.999) {
+  float open = 0.0;
+  if (farW < 0.999) {
+    float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone * (shop ? 0.0 : 1.0);
+    alb = mix(alb, vec3(0.40, 0.38, 0.35), sillM);
+    open = rzBoxM(cl, wmin, wmax, aa) * zone;
+  }
+  if (open > 0.001) {
+    vec3 hS = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
     vec3 V = normalize(vRzWP - cameraPosition);
-    float cosv = max(dot(-V, N), 0.0), F = 0.04 + 0.96 * pow(1.0 - cosv, 5.0);
+    float cosv = max(dot(-V, N), 0.0), fr1 = 1.0 - cosv, fr2 = fr1 * fr1, F = 0.04 + 0.96 * fr2 * fr2 * fr1;
     vec2 de = min(cl - wmin, wmax - cl); float fwid = shop ? 0.07 : 0.05;
     float frameM = 1.0 - smoothstep(fwid - aa.x, fwid + aa.x, min(de.x, de.y));
     float mx = (wmin.x + wmax.x) * 0.5, my = wmin.y + (wmax.y - wmin.y) * 0.68;

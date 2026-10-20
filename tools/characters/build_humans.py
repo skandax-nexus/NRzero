@@ -581,10 +581,14 @@ def hairline(rel, style, male, old):
             "locs": -0.086, "undercut": -0.058, "fade": -0.055, "pixie": -0.078}.get(style, -0.08)
     ks = [0, 28, 48, 66, 78, 88, 100, 114, 132, 152, 180]
     hs = [hf, hf - 0.003, temple, 0.026, sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
-    if style == "waves":            # messy: strand tips of different lengths along the fringe and over the ears
-        ar = np.radians(th)
-        jag = 0.5 + 0.5 * np.sin(ar * 11 + 0.7) * np.sin(ar * 5 + 2.1)
-        return np.interp(th, ks, hs) - (0.016 * ss(75, 20, th) + 0.008 * ((th >= 70) & (th < 125))) * jag + 0.006 * ss(30, 0, th) * (rel[:, 0] > 0)
+    if style == "waves":            # a few tapered fringe clumps over the brow and two over the ears (no sawtooth)
+        ths = np.degrees(np.arctan2(rel[:, 0], rel[:, 2] + 0.085))
+        clumps = np.zeros(len(ths))
+        for cth, w, dep in ((-46, 10, 0.011), (-21, 12, 0.016), (4, 11, 0.012), (27, 12, 0.017), (52, 10, 0.01),
+                            (-96, 9, 0.006), (98, 9, 0.006)):
+            d = ((ths - cth + 180) % 360) - 180
+            clumps = np.maximum(clumps, dep * np.clip(1 - np.abs(d) / w, 0, 1) ** 1.6)
+        return np.interp(th, ks, hs) - clumps - 0.004 * ss(75, 20, th) + 0.006 * ss(30, 0, th) * (rel[:, 0] > 0)
     if style == "pixie":            # side-swept: the fringe dips on one side only
         return np.interp(th, ks, hs) - 0.008 * np.clip(rel[:, 0] / 0.05, 0, 1) * (np.abs(rel[:, 0]) < 0.06)
     return np.interp(th, ks, hs)
@@ -657,7 +661,7 @@ def fields(c, B):
     return cov
 
 
-SHELL = {"crop": 0.0015, "short": 0.0065, "swept": 0.009, "bob": 0.008, "long": 0.007, "bun": 0.005, "braid": 0.005, "pony": 0.005,
+SHELL = {"crop": 0.0015, "short": 0.0065, "swept": 0.009, "bob": 0.008, "long": 0.007, "bun": 0.0075, "braid": 0.0075, "pony": 0.0075,
          "waves": 0.012, "curls": 0.008, "puffs": 0.004, "locs": 0.006, "undercut": 0.009, "fade": 0.0025, "pixie": 0.0075}
 
 
@@ -1259,6 +1263,8 @@ def paint(c, B, cov, res, path_out):
         fa = (u ** 1.3 * ss(0.8 - 0.22 * u, 0.86 - 0.22 * u, st2) * 0.75 + 0.1 * u ** 3) * band   # sparse fine hairs
         over(fa, hair_c * 0.9 + skin * 0.1)
         under = (hcov >= 0) & ~ears
+        # inside the hairline the density fades in over ~8 mm: short strokes along the growth direction, skin between
+        fade_in = ss(0.0, 0.008, hcov) * ss(0.35, 0.65, st2 + 0.5 * ss(0.0, 0.008, hcov))
         st3 = hair_strands(c, rel, style, seed + 4.1, fine=2.2)
         k = 0.6 + 0.32 * st ** 1.2 + 0.16 * st3 - 0.06
         roots = 1 - 0.1 * ss(0.012, 0.0, hcov)
@@ -1267,10 +1273,14 @@ def paint(c, B, cov, res, path_out):
         hcol = hcol * sheen[:, None]
         if style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
             hcol = hcol * 0.75 + col * 0.25 * (0.6 + 0.4 * st[:, None])
+        if style in ("bun", "braid", "pony"):   # tied-back hair: a centre part from the hairline toward the crown
+            pl = g2(rel[:, 0] ** 2, 0.0018 ** 2) * ss(-0.02, 0.03, rel[:, 2] + 0.06) * ss(0.04, 0.07, rel[:, 1])
+            hcol = hcol * (1 - 0.55 * pl[:, None]) + col * 0.55 * pl[:, None]
         if style in ("undercut", "fade"):   # shaved sides: the scalp shows through, fading toward the top
             sh_ = ss(0.075, 0.04, rel[:, 1])[:, None] * (0.55 if style == "undercut" else 0.45)
             hcol = hcol * (1 - sh_) + col * sh_
-        col[under] = hcol[under]
+        fa_ = np.clip(0.25 + 0.75 * fade_in, 0, 1)[:, None]
+        col[under] = (hcol * fa_ + col * (1 - fa_))[under]
     # ---------------- garments (outermost layer wins) ----------------
     costume_mode = "_costume" in cov
     taken = np.zeros(len(px), bool)
@@ -1628,14 +1638,18 @@ def hair_sheet(B, c, ref, a0, a1, y_top, y_bot, clear=0.004, flare=0.03, seg=30,
         for k in range(seg):
             u = k / (seg - 1)
             yb = y_bot + tip * abs(2 * u - 1) ** 1.5          # longer at the centre of the back, shorter at the sides
-            yy = y_top + (yb - y_top) * t
-            a = lo + (hi - lo) * u
-            m = (np.abs(((th_v - a + 180) % 360) - 180) < 9) & (np.abs(ref[:, 1] - yy) < 0.018)
-            base_r = rad_v[m].max() if m.any() else 0.08
             edge = min(u, 1 - u)
-            # starts inside the hair shell (hidden) and grows through it: a layered edge, not a visible seam
-            rr = base_r + clear + (vol + 0.006) * ss(0.0, 0.4, t) + flare * ss(0.4, 1.0, t) ** 1.4 - 0.004 * ss(0.15, 0.0, edge) * ss(0.2, 0.5, t)
-            rr += 0.0028 * (0.6 * math.sin(math.radians(a) * 23 + 1.3) + 0.4 * math.sin(math.radians(a) * 47)) * ss(0.15, 0.5, t)
+            # the top row follows the skull: it starts lower toward the side ends (no flaps rising above the crown)
+            yt = y_top - 0.035 * ss(0.32, 0.0, edge)
+            yy = yt + (yb - yt) * t
+            a = lo + (hi - lo) * u
+            m = (np.abs(((th_v - a + 180) % 360) - 180) < 9) & (np.abs(ref[:, 1] - yy) < (0.008 if t < 0.3 else 0.018))
+            base_r = rad_v[m].max() if m.any() else 0.08
+            # starts inside the hair shell (hidden) and grows through it: a layered edge, not a visible seam; the ends
+            # curl in a little
+            rr = (base_r + clear + (vol + 0.006) * ss(0.12, 0.45, t) + flare * ss(0.4, 1.0, t) ** 1.4 - 0.004 * ss(0.15, 0.0, edge) * ss(0.2, 0.5, t)
+                  - 0.006 * ss(0.15, 0.0, t) - 0.005 * ss(0.82, 1.0, t))
+            rr += 0.0022 * (0.6 * math.sin(math.radians(a) * 17 + 1.3) + 0.4 * math.sin(math.radians(a) * 31)) * ss(0.15, 0.5, t)
             ar = math.radians(a)
             verts.append([math.sin(ar) * rr, yy, cz + math.cos(ar) * rr])
             uvs_v.append((u, 1 - t))
@@ -2027,20 +2041,40 @@ def hair_pieces(c, B, cov, layers):
         o.data.transform(Matrix.Translation(hc + V((0, hry * 0.86 + vol, hrx * 0.5))))
         hp.append((o, "head"))
     if style in ("braid", "pony"):
-        if style == "braid":
-            for i in range(6):
-                r = 0.018 - i * 0.002
-                bm = bmesh.new()
-                bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=8, radius=1.0)
-                for v in bm.verts:
-                    v.co = V((v.co.x * r, v.co.y * r, v.co.z * r * 1.5))
-                o = BC.mesh_obj("braid", bm)
-                o.data.transform(Matrix.Translation(hc + V((0, hry * 0.98 + i * 0.008 + vol, -0.03 - i * 0.032))))
-                hp.append((o, "head" if i < 2 else "neck"))
-        else:
-            pts = [hc + V((0, hry * 0.95, 0.03)), hc + V((0, hry * 1.1 + 0.01, -0.03)), hc + V((0, hry * 1.12 + 0.02, -0.1)), hc + V((0, hry * 1.05 + 0.03, -0.17))]
-            o = BC.tube("pony", pts, [(0.022, 0.02), (0.02, 0.018), (0.016, 0.014), (0.006, 0.005)], seg=12)
-            hp.append((o, "head"))
+        # gathered at the back of the head, then hanging with gravity down the nape (it follows the back of the head,
+        # neck and garments at a small clearance): a tapered tube (a braid: lobed), a tie band at the gather
+        ref = [head_frame(B), B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["neck", "chest", "clavicle_L", "clavicle_R", "spine"])]]
+        ref += [Lt.pos for k_, Lt in layers.items() if (k_.startswith("top") or k_ == "hair") and Lt is not None]
+        R_ = to_bl_np(np.concatenate(ref))
+        R_ = R_[np.abs(R_[:, 0]) < 0.035]
+        braid = style == "braid"
+        drop = float(c.get("hairDrop", 0.27 if braid else 0.2)) * B.H / 1.75
+        g0 = hc + V((0, hry * 0.9 + vol, -0.012))
+        nseg = 16 if braid else 11
+        pts, radii = [], []
+        yprev = None
+        for i in range(nseg):
+            t = i / (nseg - 1)
+            z = g0.z - drop * t ** 1.05
+            m = np.abs(R_[:, 2] - z) < 0.012
+            surf = R_[m, 1].max() if m.any() else g0.y
+            r = (0.0145 if braid else 0.019) * (1 - 0.72 * t ** 1.3) + 0.003
+            if braid:
+                r *= 1 + 0.16 * abs(math.sin(t * math.pi * 7.5))
+            y = max(surf + r + 0.004, g0.y + 0.012 * math.sin(min(t * 3, 1) * math.pi / 2))
+            if yprev is not None:
+                y = max(y, yprev - 0.006)          # it hangs: never tucks back in sharply
+            yprev = y
+            pts.append(V((g0.x + 0.004 * math.sin(t * 5.0), y, z)))
+            radii.append(r)
+        o = hair_tube("braid" if braid else "pony", pts, radii, seg=10 if braid else 12)
+        hp.append((o, "head"))
+        tie = bmesh.new()
+        bmesh.ops.create_cone(tie, cap_ends=False, segments=12, radius1=radii[0] * 0.95 + 0.002, radius2=radii[0] * 0.95 + 0.002, depth=0.008)
+        ot = BC.mesh_obj("hair_tie", tie)
+        d0 = (pts[1] - pts[0]).normalized()
+        ot.data.transform(Matrix.Translation(pts[0] + d0 * 0.004) @ d0.to_track_quat("Z", "Y").to_matrix().to_4x4())
+        hp.append((ot, "head"))
     for o, bone in hp:
         BC.smooth(o)
         piece(o, "hair", (0, 0, 1), "xz", bone=bone)
@@ -2050,10 +2084,42 @@ def hair_pieces(c, B, cov, layers):
         ref += [Lt.pos for k_, Lt in layers.items() if k_.startswith("top") and Lt is not None]
         ref = np.concatenate(ref)
         if style == "long":
-            out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.105, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.02, narrow=36, rows=15, tip=0.07, seg=34, vol=vol))
+            out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.085, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.016, narrow=36, rows=20, tip=0.07, seg=44, vol=vol))
         else:
-            out.append(hair_sheet(B, c, ref, 70, 290, L.eye[1] + 0.105, L.eye[1] - 0.078, clear=0.003, flare=0.012, rows=12, tip=0.012, vol=vol))
+            out.append(hair_sheet(B, c, ref, 70, 290, L.eye[1] + 0.085, L.eye[1] - 0.078, clear=0.003, flare=0.01, rows=16, tip=0.012, seg=42, vol=vol))
     return out
+
+
+def hair_tube(name, pts, radii, seg=10):
+    """Tapered hair tube through pts (BL coords) with parallel-transport frames (no twist where the path turns from
+    backward to downward) and a closed rounded tip."""
+    bm = bmesh.new()
+    rings = []
+    prev = None
+    for i, (p, r) in enumerate(zip(pts, radii)):
+        d = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+        if prev is None:
+            a = d.cross(V((1, 0, 0)))
+            a = a.normalized() if a.length > 1e-6 else d.orthogonal().normalized()
+        else:
+            a = (prev - d * prev.dot(d)).normalized()
+        prev = a
+        b2 = d.cross(a).normalized()
+        rings.append([bm.verts.new(V(p) + (a * math.cos(2 * math.pi * k / seg) + b2 * math.sin(2 * math.pi * k / seg)) * r) for k in range(seg)])
+    for i in range(len(rings) - 1):
+        for k in range(seg):
+            bm.faces.new((rings[i][k], rings[i][(k + 1) % seg], rings[i + 1][(k + 1) % seg], rings[i + 1][k]))
+    d_end = (pts[-1] - pts[-2]).normalized()
+    tip = bm.verts.new(V(pts[-1]) + d_end * radii[-1] * 1.6)
+    for k in range(seg):
+        bm.faces.new((rings[-1][k], rings[-1][(k + 1) % seg], tip))
+    d_0 = (pts[0] - pts[1]).normalized()
+    cap = bm.verts.new(V(pts[0]) + d_0 * radii[0] * 0.5)
+    for k in range(seg):
+        bm.faces.new((rings[0][(k + 1) % seg], rings[0][k], cap))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    o = BC.mesh_obj(name, bm)
+    return o
 
 
 def loft(name, rings, n=36, cap_top=False, front=None):

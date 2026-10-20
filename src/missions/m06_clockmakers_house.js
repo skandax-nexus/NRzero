@@ -305,11 +305,11 @@ export default {
     // bridge from M5: the survey tag under Niko's valley carried the same pencilled note
     if (F.m5complete) await game.say('kai', 'Niko stayed with his valley. I came back to the city with a survey tag and two words in pencil.');
     await game.talk([
-      ['kai', 'Every Helix site survey from 2031 has the same pencil note in the margin. "Ask Hensel."'],
+      ['kai', 'Every Helix site survey I can find, from 2029 to 2031, has the same pencil note in the margin. "Ask Hensel."'],
       ['kai', 'Hensel fixes clocks. And every clock in this city stopped at eight-fourteen.'],
     ]);
     kai.lookTarget = null;
-    ui.addEvidence('"Ask Hensel"', 'Every Helix site survey from 2031 carries the same pencilled note in the margin. Hensel is a clockmaker in Rain City\'s old quarter. His tower clock still reads 8:14.', 'CLOCK QUARTER · 2049');
+    ui.addEvidence('"Ask Hensel"', 'Every Helix site survey from 2029 to 2031, the Site Zero tag included, carries the same pencilled note in the margin. Hensel is a clockmaker in Rain City\'s old quarter. His tower clock still reads 8:14.', 'CLOCK QUARTER · 2049');
     cine(false);
     game.objective('Find Hensel\'s clock shop at the end of the lane');
     // street barks + optional anomaly
@@ -700,7 +700,7 @@ export default {
 
     // ---------- the recording ----------
     cine(true); lockMusic('m6-witness');
-    pl.place(P.shaft[0] + 1.25, TY, P.shaft[1] + 0.35, -Math.PI / 2);
+    pl.place(P.shaft[0] + 1.5, TY, P.shaft[1] + 0.35, -Math.PI / 2); // clear of the lowest collar while he leans in
     kai.pose = 'work';
     await game.shot([P.shaft[0] + 3.4, TY + 2.0, P.shaft[1] + 2.9], [P.shaft[0] + 0.5, TY + 0.9, P.shaft[1] - 0.2], 1.4, { fov: 44 });
     kai.pose = null; audio.sfxPlay('rewind');

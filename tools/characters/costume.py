@@ -266,12 +266,13 @@ def f_over(g, B, LM, cov):
     shape = g["shape"]
     tor = B.tw - B.hw - B.W[:, BH.BI["neck"]] * 0.5
     if shape in ("vest", "cuirass"):
-        neck_y = neck_line(B, 0.0 if shape == "vest" else 0.01, 0.12 if shape == "vest" else 0.05, LM)
+        neck_y = neck_line(B, 0.0 if shape == "vest" else 0.01, (0.095 if g.get("yoke") else 0.12) if shape == "vest" else 0.05, LM)
         hem = LM["hip"] + g.get("hem", -0.04) * k
         top_lim = neck_y - y
         if shape == "vest":    # the trapezius rises above the neck-base line: shoulder straps 7-11 cm out from the centre
             ax_ = np.abs(P[:, 0])
-            strap_ = np.minimum(np.minimum(ax_ - 0.064 * k, 0.118 * k - ax_), LM["nb"] + 0.075 * k - y) - B.hw * 0.3
+            x_in, x_out = (0.05, 0.135) if g.get("yoke") else (0.064, 0.118)     # yoked vests: wide shoulder panels
+            strap_ = np.minimum(np.minimum(ax_ - x_in * k, x_out * k - ax_), LM["nb"] + 0.075 * k - y) - B.hw * 0.3
             top_lim = np.maximum(top_lim, strap_)
         f = B.tw * np.minimum(top_lim, y - hem) + B.legs * (y - hem)
         for s in "LR":
@@ -279,7 +280,7 @@ def f_over(g, B, LM, cov):
             f = f + B.aw[s] * ((-0.035 if shape == "vest" else -0.02) - sa)
         if shape == "vest":    # armholes cut a little deeper into the side; the shoulder straps run over the top of the shoulder
             side_cut = np.abs(np.abs(th) - 90) * 0.0175 * r - 0.03
-            straps = (0.112 * k - np.abs(P[:, 0])) * ss(LM["sh"] - 0.17, LM["sh"] - 0.11, y)
+            straps = ((0.13 if g.get("yoke") else 0.112) * k - np.abs(P[:, 0])) * ss(LM["sh"] - 0.17, LM["sh"] - 0.11, y)
             f = np.minimum(f, np.maximum(side_cut, straps) + ss(LM["sh"] - 0.13, LM["sh"] - 0.17, y))
         return f
     if shape == "carrier":
@@ -555,6 +556,8 @@ def build_layers(c, B, cov):
             BH.inflate(L, B, g["inflate"])
             BH.taubin(L, 2)
         shape_layer(L, B, g, LM, cov)
+        if g.get("cat") in ("top", "over", "bottom") and g.get("drape", True) and g.get("shape") not in ("pauldron", "plates", "gorget", "leg_wraps", "leggings"):
+            drape_torso(L, B, g, LM)
         if g.get("cat") in ("top", "over"):
             smooth_shoulder_weights(L, B)
         need = below + 0.0014
@@ -583,6 +586,82 @@ def build_layers(c, B, cov):
         if L.g.get("rim", 0) > 0:
             add_rims(L, B, L.g["rim"])
     return layers
+
+
+def drape_torso(L, B, g, LM):
+    """Cloth bridges the body instead of shrink-wrapping it. Around the torso axis, the layer's radius per height row
+    and angle bin is closed over the anatomy's concavities and small bumps (a grey dilation about 4.5 cm wide and 4 cm
+    tall, then a blur): the shell spans the intermammary and gluteal clefts, the spine groove and the hollows beside
+    the scapulae, and a nipple becomes the apex of a smooth dome instead of a point. Vertices only move outward.
+    Garments with a tail (coats, dresses, tunics) also hang straight down from the widest hip / buttock ring below the
+    hip: the back no longer follows the buttocks into the leg split."""
+    k = LM["k"]
+    P = L.pos
+    aw = (B.aw["L"] + B.aw["R"])[L.base]
+    y = P[:, 1]
+    top_y = LM["sh"] - 0.035 * k
+    lo_y = LM["crotch"] + (0.0 if g.get("cat") != "bottom" else 0.015 * k)
+    sel = (aw < 0.3) & (y > lo_y - 0.01) & (y < top_y + 0.02)
+    idx = np.nonzero(sel)[0]
+    if len(idx) < 30:
+        return
+    Q = P[idx]
+    zc = zc_at(B, Q[:, 1])
+    th = np.arctan2(Q[:, 0], Q[:, 2] - zc)
+    r = np.hypot(Q[:, 0], Q[:, 2] - zc)
+    nb, dy = 96, 0.01
+    y0 = lo_y - 0.02
+    ny_ = int(np.ceil((top_y + 0.03 - y0) / dy)) + 1
+    bi = ((th + np.pi) / (2 * np.pi) * nb).astype(int) % nb
+    yi = np.clip(((Q[:, 1] - y0) / dy).astype(int), 0, ny_ - 1)
+    R = np.zeros((ny_, nb))
+    np.maximum.at(R, (yi, bi), r)
+    for row in range(ny_):                       # fill empty bins round the ring
+        good = np.nonzero(R[row] > 0)[0]
+        if len(good) == 0:
+            continue
+        R[row] = np.interp(np.arange(nb), np.r_[good - nb, good, good + nb], np.r_[R[row, good], R[row, good], R[row, good]])
+    filled = R.any(1)
+    if not filled.any():
+        return
+    rows = np.nonzero(filled)[0]
+    for row in range(ny_):                       # empty rows: nearest filled row
+        if not filled[row]:
+            R[row] = R[rows[np.argmin(np.abs(rows - row))]]
+    rmean = float(np.median(r))
+    wb = max(1, int(round(0.0225 * k / (rmean * 2 * np.pi / nb))))      # +-2.25 cm of arc
+    wy = 2                                                              # +-2 cm of height
+    D = R.copy()
+    for d in range(1, wb + 1):
+        D = np.maximum(D, np.maximum(np.roll(R, d, 1), np.roll(R, -d, 1)))
+    D2 = D.copy()
+    for d in range(1, wy + 1):
+        D2[d:] = np.maximum(D2[d:], D[:-d])
+        D2[:-d] = np.maximum(D2[:-d], D[d:])
+    S = D2
+    for _ in range(3):                           # blur (stays above the closing almost everywhere)
+        S = (np.roll(S, 1, 1) + 2 * S + np.roll(S, -1, 1)) / 4
+        S[1:-1] = (S[:-2] + 2 * S[1:-1] + S[2:]) / 4
+    if g.get("tail") and g.get("cat") == "top":  # hang straight down from the widest ring below the hip
+        hip_row = int(np.clip((LM["hip"] + 0.02 * k - y0) / dy, 0, ny_ - 1))
+        for row in range(hip_row - 1, -1, -1):
+            S[row] = np.maximum(S[row], S[row + 1] * 0.997)
+    # bilinear lookup
+    fy = np.clip((Q[:, 1] - y0) / dy - 0.5, 0, ny_ - 1.001)
+    fb = (th + np.pi) / (2 * np.pi) * nb - 0.5
+    y_a = np.floor(fy).astype(int)
+    ty = fy - y_a
+    b_a = np.floor(fb).astype(int)
+    tb = fb - b_a
+    b_a %= nb
+    b_b = (b_a + 1) % nb
+    y_b = np.minimum(y_a + 1, ny_ - 1)
+    St = (S[y_a, b_a] * (1 - tb) + S[y_a, b_b] * tb) * (1 - ty) + (S[y_b, b_a] * (1 - tb) + S[y_b, b_b] * tb) * ty
+    wv = ss(lo_y - 0.005, lo_y + 0.03 * k, Q[:, 1]) * ss(top_y + 0.01, top_y - 0.05 * k, Q[:, 1]) * np.clip((0.3 - aw[idx]) / 0.15, 0, 1)
+    nr = r + np.clip(St - r, 0, 0.045 * k) * wv
+    sc = nr / np.maximum(r, 1e-6)
+    L.pos[idx, 0] = Q[:, 0] * sc
+    L.pos[idx, 2] = zc + (Q[:, 2] - zc) * sc
 
 
 def bridge_bust(L, B, reach):
@@ -848,7 +927,7 @@ def garment_loops(L):
 # ----------------------------------------------------------------------------------------------------------------
 # cloth tails: lofted from the layer's own hem loop
 # ----------------------------------------------------------------------------------------------------------------
-def tail_weights(pts_bl, J, H, top_z, long=False, split_front=False, split_back=False):
+def tail_weights(pts_bl, J, H, top_z, long=False, split_front=False, split_back=False, panel=None):
     """Skin weights of cloth tails / skirts (Blender coords: z up, -y forward). Like build_humans.skirt_weights, but the
     thigh takes over within ~9 cm below top_z (the hem loop, or the hip for tails that start higher) and carries up to
     97 % of the cloth in front of it, so a striding leg swings its panel along instead of pushing through it. A solid
@@ -869,6 +948,10 @@ def tail_weights(pts_bl, J, H, top_z, long=False, split_front=False, split_back=
     sx = sx * (1 - hard) + np.clip(pts_bl[:, 0] / 0.012, -1, 1) * hard
     kz = J["knee_L"].z
     below = np.clip((kz + 0.02 - pts_bl[:, 2]) / 0.25, 0, 1) * (0.6 if long else 0.4)
+    if panel:     # a coat skirt that swings as one panel: `panel` of it stays with the hips, the rest blends both thighs
+        lw = np.minimum(lw, (1 - panel) * (t ** 0.7))
+        sx = sx * 0.45 * (1 - hard) + sx * hard
+        below = below * 0.5
     W[:, BH.BI["hips"]] = 1 - lw
     for s_, side in (("L", 0.5 + 0.5 * sx), ("R", 0.5 - 0.5 * sx)):
         W[:, BH.BI["thigh_" + s_]] = lw * side * (1 - below)
@@ -1050,7 +1133,7 @@ def extend_tail(L, B, g, LM, cov, layers):
     top_z = min(float(P0[:, 1].mean()), LM["hip"] + 0.05 * k)     # tails that start above the hip keep the torso's weights down to it
     Wsk = tail_weights(BH.to_bl_np(grid.reshape(-1, 3)), B.J, H, top_z, long=(end.mean() < LM["knee"] + 0.05),
                        split_front=bool(tl.get("split") is not None and tl.get("split") > 0 or (po and po.get("open"))),
-                       split_back=bool(tl.get("vent"))).reshape(rows, M, -1)
+                       split_back=bool(tl.get("vent")), panel=tl.get("panel")).reshape(rows, M, -1)
     blend = ss(0.0, 0.07, top_z - grid[..., 1])[..., None]
     Wt = Wl[None] * (1 - blend) + Wsk * blend
     Wt /= np.maximum(Wt.sum(-1, keepdims=True), 1e-9)
@@ -1066,7 +1149,7 @@ def extend_tail(L, B, g, LM, cov, layers):
     legb = [BH.BI[b] for b in ("thigh_L", "thigh_R", "shin_L", "shin_R")]
     th_b, th_t = Wb[..., legb].sum(-1), Wt[..., legb].sum(-1)
     depth_ = top_z - grid[..., 1]
-    alpha = np.clip((th_b - th_t) / np.maximum(th_b, 1e-3), 0, 1) * ss(0.2, 0.1, depth_)
+    alpha = np.clip((th_b - th_t) / np.maximum(th_b, 1e-3), 0, 1) * (ss(0.2, 0.1, depth_) if not tl.get("panel") else ss(0.09, 0.03, depth_))
     Wt = Wt * (1 - alpha[..., None]) + Wb * alpha[..., None]
     Wt /= np.maximum(Wt.sum(-1, keepdims=True), 1e-9)
     # aux uv: u = arc along the loop (column), v = down the tail
@@ -1387,12 +1470,14 @@ def hood_roll(L, B, g, LM):
     for ri, v in enumerate(vs):
         for ci, u in enumerate(us):
             ve = max(v, 0.0) * (1 - 0.3 * u * u)              # rounded lower edge
-            A = 64 - 24 * ve ** 1.4                            # half width (deg around the torso): narrower lower down
+            wrap = float(g.get("hood_wrap", 64))
+            A = 64 - 24 * ve ** 1.4 + (wrap - 64) * (1 - min(ve / 0.45, 1.0)) ** 1.5   # half width (deg): narrower lower down; a cowl wraps to the front
             ang = 180 + u * A
             if v < 0:          # the curl under the collar root: rises at the neckline radius
                 p, n_ = surf(ang, y_top)
                 t = (v + 0.16) / 0.16                          # 0 at the collar, 1 at the fold
-                th = T * math.sin(t * math.pi / 2) * (1 - u * u) ** 0.5 * 0.9
+                uu = abs(u) ** (4 if wrap > 64 else 2)
+                th = T * math.sin(t * math.pi / 2) * (1 - uu) ** 0.5 * 0.9
                 p = p + np.array([0, 0.016 * k * (1 - t), 0])
             elif v > 1.0:      # the lower edge: a short wall back onto the garment (a crisp lip that catches light)
                 p, n_ = surf(ang, y_top - (1 - 0.3 * u * u) * D * v)
@@ -1400,7 +1485,8 @@ def hood_roll(L, B, g, LM):
             else:
                 p, n_ = surf(ang, y_top - ve * D)
                 prof = 0.85 * math.exp(-((v - 0.05) / 0.3) ** 2) + 0.3 * (1 - v) + 0.12    # full at the fold, thin below
-                th = T * prof * max(1 - u * u, 0) ** 0.5 * (1 - ss(0.8, 1.0, v) * 0.45)
+                uu = abs(u) ** (4 if wrap > 64 and v < 0.4 else 2)
+                th = T * prof * max(1 - uu, 0) ** 0.5 * (1 - ss(0.8, 1.0, v) * 0.45)
                 th *= 1 + 0.2 * math.cos(u * math.pi * 2.6 + 0.4) * ss(0.15, 0.6, v)           # soft drape folds
             grid[ri, ci] = p + n_ * (th + 0.0018)
             edge[ri, ci] = min(1 - abs(u), 1 - max(v, 0)) * 0.12
@@ -1973,16 +2059,23 @@ def helmet(c, B, h, hp, LM):
     neckp = BH.to_bl_np(B.P[B.bodyv][np.isin(np.array(B.vb)[B.bodyv], ["neck", "head"])])
     pts = np.concatenate([hp, neckp])
     top = hp[:, 2].max()
-    zs = [eye_z - 0.115 * k, eye_z - 0.09 * k, eye_z - 0.06 * k, eye_z - 0.03 * k, eye_z, eye_z + 0.03 * k, eye_z + 0.06 * k, eye_z + 0.085 * k, top - 0.01, top + 0.004]
+    open_face = h.get("visor") == "open"
+    # rings every ~1.5 cm (a smooth, rounded face opening); an enclosed helmet continues down as a chin / neck seal
+    # that tucks inside the gorget collar, so no skin shows between helmet and gorget
+    seal = [] if open_face else [eye_z - 0.185 * k, eye_z - 0.16 * k, eye_z - 0.135 * k]
+    zs = seal + [eye_z - 0.115 * k + i * 0.0155 * k for i in range(14)] + [top - 0.01, top + 0.004]
+    zs = sorted(z for z in zs if z < top - 0.012) + [top - 0.01, top + 0.004]
     rings = []
-    n = 40
+    n = 56
     for i, z in enumerate(zs):
         cc, R = BH.ring_fit(pts, min(z, top - 0.006), 0.012)
-        f = i / (len(zs) - 1)
-        pad = 0.016 + 0.004 * math.sin(f * math.pi)
+        f = max(0.0, (z - (eye_z - 0.115 * k))) / max(top - (eye_z - 0.115 * k), 1e-3)
+        pad = 0.016 + 0.004 * math.sin(min(f, 1.0) * math.pi)
+        if z < eye_z - 0.12 * k:                       # the seal: snug round the neck, a little out from the skin
+            pad = 0.006 + 0.01 * (z - (eye_z - 0.185 * k)) / (0.07 * k)
         if i == len(zs) - 1:
             R = R * 0.35
-        if i == 0:
+        if abs(z - (eye_z - 0.115 * k)) < 1e-6:
             R = R * 1.06
         rings.append((z, cc, R, pad))
     # grid in MH coords for the aux painter
@@ -2000,12 +2093,13 @@ def helmet(c, B, h, hp, LM):
     hg = dict(h, color=h.get("color") or "e6e8ea")
     enc = grid_piece("helmet", gridc, edge, hg, dict(helmet=1.0, visor=h.get("visor", "slit"), eye=B.L.eye.copy()))
     faces, uvs = [], []
-    open_face = h.get("visor") == "open"
+    oz, ohz, oha = eye_z - 0.022 * k, 0.07 * k, 0.78        # the face opening: an ellipse (centre height, half height, half angle)
     for r in range(len(zs) - 1):
         for m in range(n):
             m2 = (m + 1) % n
             a = -math.pi + (m + 0.5) * 2 * math.pi / n
-            if open_face and 1 <= r <= 5 and abs(a + math.pi / 2) < 0.75:
+            zm = (zs[r] + zs[r + 1]) / 2
+            if open_face and ((zm - oz) / ohz) ** 2 + ((a + math.pi / 2) / oha) ** 2 < 1.0:
                 continue
             faces.append([r * n + m, r * n + m2, (r + 1) * n + m2, (r + 1) * n + m])
             uvs.append([enc(r, m), enc(r, m + 1), enc(r + 1, m + 1), enc(r + 1, m)])
@@ -2027,8 +2121,10 @@ def helmet(c, B, h, hp, LM):
     pts_bl = BH.obj_world_verts(o)
     W = np.zeros((len(pts_bl), len(BH.BONE_NAMES)))
     t = np.clip((pts_bl[:, 2] - (eye_z - 0.1 * k)) / (0.06 * k), 0, 1)
-    W[:, BH.BI["head"]] = 0.4 + 0.6 * t
-    W[:, BH.BI["neck"]] = 0.6 * (1 - t)
+    tl = np.clip((pts_bl[:, 2] - (eye_z - 0.18 * k)) / (0.06 * k), 0, 1)     # the seal's lower rim follows the neck / chest
+    W[:, BH.BI["head"]] = (0.4 + 0.6 * t) * tl
+    W[:, BH.BI["neck"]] = 0.6 * (1 - t) * tl + 0.7 * (1 - tl)
+    W[:, BH.BI["chest"]] = 0.3 * (1 - tl)
     BH.WSTORE[o.name] = W
     return o
 
@@ -2115,6 +2211,12 @@ def hair_relief(style, rel, seed):
     if style == "waves":
         a = np.arctan2(rel[:, 0], rel[:, 1] + 0.03)
         return 0.0028 * np.sin(rel[:, 1] * 2 * math.pi / 0.03 + a * 6 + np.sin(a * 13 + seed)) + 0.0015 * np.sin(a * 41 + seed)
+    if style in ("bun", "braid", "pony"):    # tied back: a centre part and soft combed-back ridges (not a slick cap)
+        a = np.arctan2(rel[:, 0], rel[:, 1] + 0.03)
+        part = -0.0022 * np.exp(-(rel[:, 0] / 0.005) ** 2) * ss(-0.02, 0.03, rel[:, 2] + 0.06) * ss(0.04, 0.07, rel[:, 1])
+        ridges = 0.0016 * np.sin(a * 38 + 2.0 * np.sin(rel[:, 1] * 60 + seed)) * ss(0.0, 0.05, rel[:, 1])
+        side = 0.0025 * ss(0.03, 0.06, np.abs(rel[:, 0])) * ss(-0.01, 0.04, rel[:, 1])        # a little fullness over the sides
+        return part + ridges + side
     if style in ("curls", "puffs", "locs"):
         q = rel * (1 / 0.011)
         v = np.sin(q[:, 0] * 2.1 + np.sin(q[:, 1] * 1.7)) * np.sin(q[:, 1] * 2.3 + np.sin(q[:, 2] * 1.9)) * np.sin(q[:, 2] * 1.9 + np.sin(q[:, 0] * 2.2))
@@ -2166,14 +2268,27 @@ def hair_extra(c, B, cov, layers, LM):
         hc = BH.to_bl(L.eye)
         rng = np.random.default_rng(sum(map(ord, c["id"])))
         n_locs = c.get("locs", 16)
+        # roots on the scalp outline from temple to temple round the BACK (azimuth 0 = back of the head); the side
+        # locs route back behind the ears as they fall; only the outermost one or two sit near a temple
+        refb = BH.to_bl_np(ref)
+        hb = BH.to_bl_np(BH.head_frame(B))
+        hc2 = Vector(((hb[:, 0].max() + hb[:, 0].min()) / 2, (hb[:, 1].max() + hb[:, 1].min()) / 2, hc.z))
         for i in range(n_locs):
-            a = math.radians(70 + 220 * (i + 0.5) / n_locs + rng.normal(0, 4))
-            r0 = 0.085
-            start = hc + Vector((math.sin(a) * r0 * 0.95, math.cos(a) * r0 + 0.075, 0.075 + rng.normal(0, 0.008)))
+            a = math.radians(-112 + 224 * (i + 0.5) / n_locs + rng.normal(0, 3))
+            zr = hc.z + 0.072 - 0.035 * (abs(math.degrees(a)) / 112) ** 2 + rng.normal(0, 0.005)
+            dirh = Vector((math.sin(a), math.cos(a), 0))
+            m = (np.abs(refb[:, 2] - zr) < 0.012)
+            rel_ = refb[m] - np.array([hc2.x, hc2.y, 0])
+            pa = np.arctan2(rel_[:, 0], rel_[:, 1])
+            sel = np.abs(((pa - a + math.pi) % (2 * math.pi)) - math.pi) < 0.2
+            r0 = float(np.hypot(rel_[sel, 0], rel_[sel, 1]).max()) if sel.any() else 0.085
+            start = Vector((hc2.x, hc2.y, zr)) + dirh * (r0 - 0.002)
             drop = c.get("locLen", 0.16) * (0.8 + 0.4 * rng.random())
-            out_dir = Vector((math.sin(a), math.cos(a), 0)) * 0.02
-            pts = [start, start + out_dir * 1.2 + Vector((0, 0, -drop * 0.35)), start + out_dir * 1.8 + Vector((0, 0.005, -drop * 0.7)), start + out_dir * 2.0 + Vector((0, 0.01, -drop))]
-            o = BH.BC.tube("loc", pts, [(0.0065, 0.0065), (0.006, 0.006), (0.0055, 0.0055), (0.004, 0.004)], seg=6)
+            back = Vector((0, 1, 0)) * (0.03 * abs(math.sin(a)))        # side locs swing back behind the ear
+            out_dir = dirh * 0.02
+            pts = [start, start + out_dir * 1.0 + back * 0.4 + Vector((0, 0, -drop * 0.35)), start + out_dir * 1.5 + back * 0.8 + Vector((0, 0.005, -drop * 0.7)),
+                   start + out_dir * 1.7 + back + Vector((0, 0.01, -drop))]
+            o = BH.hair_tube("loc", pts, [0.0065, 0.006, 0.0055, 0.004], seg=6)
             BH.piece(o, "hair", (0, 0, 1), proj="xz", bone="head")
             W = np.zeros((len(o.data.vertices), len(BH.BONE_NAMES)))
             zz = np.array([v.co.z for v in o.data.vertices])
@@ -2324,10 +2439,16 @@ def paint_helmet(g, X, fl, seed):
     rel = X.q - eye
     front = (rel[:, 2] > -0.02).astype(float)
     # panel lines: a crest line over the top, a jaw line, a brow line
-    crest = G.line(X.x, 0.004) * (rel[:, 1] > 0.02)
-    jaw = G.line(rel[:, 1] + 0.055 - 0.15 * np.clip(-rel[:, 2], 0, 1), 0.003) * (np.abs(X.x) > 0.02)
-    k = k * (1 - 0.35 * np.clip(crest + jaw, 0, 1))
-    h = h - 0.0006 * np.clip(crest + jaw, 0, 1)
+    # crisp, thin panel seams: a crest line over the top, a jaw line, each with a light edge beside the groove
+    crest = G.line(X.x, 0.0016, 0.0005) * (rel[:, 1] > 0.03)
+    jl = rel[:, 1] + 0.055 - 0.12 * np.clip(-rel[:, 2] - 0.02, 0, 1)
+    jaw = G.line(jl, 0.0014, 0.0005) * (np.abs(X.x) > 0.03) * (rel[:, 2] < 0.0)
+    grooves = np.clip(crest + jaw, 0, 1)
+    col = col * (1 - 0.55 * grooves[:, None]) + G.hexc("34373d") * 0.55 * grooves[:, None]
+    h = h - 0.0005 * grooves
+    seal = G.ss(-0.118, -0.124, rel[:, 1])                    # the neck seal under the shell: matte graphite
+    col = col * (1 - seal[:, None]) + G.hexc("23262b") * seal[:, None]
+    k = k * (1 - 0.1 * seal)
     if fl.get("visor") == "slit":
         slit = G.box(rel[:, 1], -0.012, 0.012, np.abs(X.x), 0.0, 0.07, 0.003) * front
         col = col * (1 - slit[:, None]) + np.array([0.05, 0.05, 0.06]) * slit[:, None]
@@ -2336,7 +2457,7 @@ def paint_helmet(g, X, fl, seed):
         ln = G.line(rel[:, 1], 0.0035, 0.001) * G.box(np.abs(X.x), 0.0, 0.06, rel[:, 1], -1, 1) * front
         glow = np.maximum(glow, ln[:, None] * gold[None] * float(g.get("glow_level", 0.6)))
         col = col * (1 - 0.6 * ln[:, None]) + gold * 0.9 * 0.6 * ln[:, None]
-    trim = G.line(rel[:, 1] + 0.11, 0.008) * 1.0
+    trim = G.line(rel[:, 1] + 0.112, 0.006, 0.0008) * 1.0
     col = col * (1 - trim[:, None]) + G.hexc("8a9098") * trim[:, None]
     col = np.clip(col * k[:, None], 0, 1)
     return col, h, glow

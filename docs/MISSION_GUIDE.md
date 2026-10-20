@@ -57,3 +57,74 @@ The runner calls missions in order; when `run` returns, the next mission starts.
 - Phones: <= 250 draw calls, <= 700k triangles, <= 6 dynamic lights, 1 shadow caster at gfx=low/medium; quick scene build.
 - Comfort: no full-screen white flashes or strobing; use soft fades.
 - Proof: `node tools/drive.mjs "http://localhost:8765/index.html?m=<index>&dtcap=0.25&gfx=low&auto" tools/tests/mNN.json 960 540 --outdir=<dir>` must complete your mission; lint must be clean.
+
+
+## Infrastructure kit
+Buildings, streets and street furniture with real depth, built by code and kept inside the phone budget. Missions
+1-4 get the automatic part for free (kit `box()` buildings, stone houses, `lampPost`); new missions call the builders
+below. Everything is opt-in or a pure quality upgrade; nothing here changes collision (add your own boxes, or use
+`k.collide(game)` for street props). Review scenes: `tools/render/infra-lab.html?era=2049|2026|2196|ancient&view=0|1|2`.
+
+**Automatic (no code change)**
+- `box(w, h, d, mat, …)` with a `facadeTextures(seed, style, era = '2049')` material and h ≥ 8 m becomes a real
+  building on the first frame its scene renders: interior-mapped windows with frames, sills and lit rooms, cornices,
+  ledges, fire escapes, balconies, AC units, pipes, rooftop plant, and the era's retrofits. It keeps clear of what the
+  scene put around it (signs, awnings, lamps, neighbours): faces against a neighbour become party walls, a ground
+  floor you dressed yourself (shopfront plane, awning) stays plain wall, other street faces get shops. Camera blockers
+  still ray-test the plain box. `box(..., { detail: false })` keeps a plain box.
+- `box(...)` with a `stoneMaterial()` and house size (2.4-12 m tall, ≥ 2.5 m wide) gets a plinth course, corner
+  quoins, a timber wall plate and beam ends.
+- `lampPost(color, h, { era })` is a real street light (base, tapered pole, bracket, luminaire, lit lens, glow card
+  that reads without bloom on low); `era: '2049'` adds a cyan LED strip.
+- The engine merges static meshes that share a material (or an equal plain material, or a static canvas texture
+  such as `neonSign`) into a few draws per 50 m cell on every tier. Anything you move, re-material, hide or remove
+  later draws itself again automatically. Opt out: `mesh.userData.noBatch = true`, `scene.userData.batch = false`.
+
+**Buildings (src/world/realism.js)**
+```js
+const block = RZ.cityBlock([
+  { width: 14, depth: 16, height: 38, position: [-19, 0, -20], yaw: Math.PI / 2, seed: 3, wall: 'brick',
+    faces: ['shop', 'blank', 'windows', 'blank'] },          // front, right, back, left
+], { era: '2049', lit: 0.4, daylight: 0 });                 // one mesh, one draw for the whole block
+scene.add(block.mesh);
+```
+- `era`: `'2026'` contemporary (clean walls, aluminium fins, glass balcony fronts, solar roofs), `'2049'` Rain City
+  retrofit (cladding patches, LED strips, LED / holo sign panels, metal canopies with LED edges, AC units, cable runs,
+  dishes, aviation lights, rooftop screens), `'2196'` ruin (blown-out / boarded windows, soot, cracks, moss, broken
+  parapet, collapsed corner with exposed slabs and rebar, hanging vines, rust, rubble). Without `era` a block looks as
+  before.
+- Per building: `ruin`, `moss` (0..1), `led` (0..1), `ledColors`, `holo` (sign panel count), `awnings`, `signBand`,
+  `fins`, `cables`, `collapse`, `groundBlank: true | [f, r, b, l]`, `roof: { solar, dish, billboard, tank, hvac,
+  antenna, bulkhead, parapet }`, `detail: 'low'`, `avoid(min, max) -> true` (drop protruding items that would hit your
+  props; world AABBs). Block-wide defaults: `cityBlock(list, { era, avoid, detail })`.
+- `RZ.facadeGeometry(o)` one building's geometry for your own mesh (use `RZ.windowInteriorMaterial()`).
+- Ancient: `RZ.settlement([{ position, yaw, width, depth, height, wall: 'stone'|'mud'|'timber', roof: 'thatch'|'flat'|'none',
+  door, windows, seed }, { position, round: true, radius, wall: 'mud' }], { colors: { stone, mud, wood, thatch } })`
+  → `{ group }` (five draws for any number of houses: stone, mud render, timber, thatch, dark openings);
+  `RZ.ancientHouse(o)` for one; `RZ.pbrMaterial('thatch')` is a new surface.
+
+**Streets (src/world/props.js)**
+```js
+import { streetKit } from '../world/props.js';
+const k = streetKit({ era: '2049', seed: 4 });             // '2026' | '2049' | '2196' | 'ancient'
+k.kerb([[-6, 15], [-6, -95]]).kerb([[6, -95], [6, 15]])   // left side of the path is the raised pavement
+ .markings({ lanes: [{ from: [0, 15], to: [0, -95] }], crossings: [{ at: [0, -30], yaw: Math.PI / 2, width: 11 }],
+             stops: [{ from: [0.2, -27.6], to: [5.2, -27.6] }], arrows: [{ at: [2.7, -20], yaw: Math.PI }] })
+ .scatter('lamp', [[6.6, 12], [6.6, -90]], { spacing: 14, turn: Math.PI / 2, y: 0.15 })
+ .trafficLight([6.5, 0.15, -27], 0).shelter([8.6, 0.15, -12], -Math.PI / 2)
+ .car([-4.4, 0, -4], 0).scooter([-7.4, 0.15, -21, 0.5]).puddles([[-2, -9, 1.6]])
+ .rails([[3, 15], [3, -95]], { embedded: true }).cables([[[-11, 9, -2], [11, 8.5, -3]]]);
+scene.add(k.build()); k.collide(game);                     // or use k.colliders yourself
+```
+- Props (`k.add(kind, [x, y, z], yaw, opts)` or the shorthands): `lamp`, `bollard`, `bin`, `bench`, `drain`,
+  `manhole`, `trafficLight` (cycles by itself), `shelter` (bus / tram stop), `kiosk` (vending / holo kiosk), `railing`,
+  `car`, `van`, `wreck`, `scooter`, `cone`, `barrier`, `rubble`; ancient: `fence`, `well`, `cart`, `stall`, `pot`,
+  `barrel`, `crate`. Merged runs: `kerb`, `markings`, `puddles`, `cables`, `catenary`, `rails`, `railing(path)`.
+  `scatter(kind, path | { area: [x0, z0, x1, z1] }, { spacing, count, offset, jitter, turn, y })`.
+- `prop(kind, { era, color })` one prop as a plain Group (one-off placement).
+- Cost: one InstancedMesh per prop part per 48 m cell (a 100 m street of the lab: ~40 draws for all furniture);
+  small props are distance-culled by the engine (45-120 m per kind, x1.5 on high, x0.67 on low). 2196 tilts posts, rusts metal and turns
+  cars into wrecks; parked 2049 cars have LED light bars and underglow.
+- Debug / A/B: `?infra=off` builds the kit exactly as before the upgrade; `?infra=nofacade,nomasonry,nolamp,nobatch`
+  switches single parts off; `game.engine.setInfraLegacy(true|false)` flips a running scene; `engine.stats.batches`,
+  `engine.stats.batched` report the merge.

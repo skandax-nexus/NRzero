@@ -58,6 +58,7 @@ ERA = {  # allowed eras for technology (default: 2049 and 2196)
     "led_umbrella": {"2026", "2049"}, "id_badge": {"2026", "2049"}, "keycard_reel": {"2026", "2049"}, "ar_glasses": {"2049", "2196"},
     "respirator": {"2196"}, "goggles": {"2196"}, "magnifier_goggles": {"2196"}, "wrist_scanner_scav": {"2196"}, "handheld_scanner": {"2196"},
     "radio_chest_rig": {"2196"}, "salvage_backpack": {"2196"}, "rope_coil": {"2196"}, "crank_lamp": {"2196"}, "shard_bandolier": {"2196"},
+    "archive_reader": {"2196"}, "micro_drivers": {"2049"}, "coat_tech_panel": {"2049"}, "continuum_armor": {"2196"},
     "sample_rig": {"2196"}, "continuum_chest_emitter": {"2196"}, "continuum_forearm_emitter": {"2196"}, "continuum_visor": {"2196"},
     "stabilizer_fins": {"2196"}, "rank_bar": {"2196"}, "cube_backpack": {"2049"}, "payment_terminal": {"2049"}, "kid_locator_band": {"2049"},
 }
@@ -452,7 +453,7 @@ class Kit:
         ac = np.cross(a, pn)
         th = abs((P - P.mean(0)) @ pn).max()
         grip = w + a * (0.62 * L) + pn * (th * 0.6 + 0.004)
-        s.hands[sd] = dict(wrist=V(w), axis=V(a), palm=V(pn), across=V(ac), grip=V(grip), len=L)
+        s.hands[sd] = dict(wrist=V(w), axis=V(a), palm=V(pn), across=V(ac), grip=V(grip), len=L, th=float(th))
         return s.hands[sd]
 
     def limb_ring(s, sd, j0, j1, t, n=16, fams=None, along=0.0, inner=False):
@@ -489,7 +490,7 @@ class Gad:
 
     def __init__(s, K, typ, bone, o):
         s.K, s.typ, s.bone, s.o = K, typ, bone, o
-        s.body, s.glow = Geo(), Geo()
+        s.body, s.glow, s.glass = Geo(), Geo(), Geo()
         s.prop = None
         s.idle = float(o.get("idle", 0.0))
         s.segs = 0
@@ -503,6 +504,13 @@ class Gad:
         elif smooth == "auto":
             smooth = False
         s.body.add(verts, faces, col.lstrip("#"), gloss, smooth, wt or s.bone, recalc=recalc)
+
+    def lens(s, geo_vf, smooth=True, wt=None):
+        """Smoked glass (a see-through lens plane): its own skinned mesh `gl_<type>` with the character's shared
+        alpha-blended glass material. Crowds (baked glow, one draw call) leave it out: the frame carries the read."""
+        if s.K.bake:
+            return
+        s.glass.add(geo_vf[0], geo_vf[1], "glass", 0.95, smooth, wt or s.bone, recalc=False)
 
     def light(s, geo_vf, seg=0.0, smooth=False, wt=None, recalc=True):
         verts, faces = geo_vf[0], geo_vf[1]
@@ -1021,7 +1029,9 @@ def lens_frame(K, sd, fwd=0.024, dz=0.0, dx=0.0):
 
 @gadget("ar_monocle", "head")
 def g_monocle(g):
-    """Smoked AR lens before the right eye on a slim arm from the right ear (lights cyan in Residue Vision)."""
+    """Smoked AR lens before the right eye on a slim arm from the right ear: a graphite bezel round a slightly curved
+    smoked glass lens (dark at rest); only a thin HUD edge lights (top edge, a corner tick and a faint scan line), cyan
+    in Residue Vision."""
     K, o = g.K, g.o
     sd = opt_side(o, "R")
     s = 1 if sd == "L" else -1
@@ -1029,18 +1039,49 @@ def g_monocle(g):
     M = rot(M, "Y", s * 0.25)
     col = o.get("color", GRAPH)
     lw, lh = 0.033 * K.k, 0.022 * K.k        # a lens, not a patch: the lower lid and the eye corner stay visible
-    rim, rt = 0.0028, 0.0042
-    g.part(box(lw + 0.002, lh + 0.002, 0.0026, bev=0.001, M=M), col, 0.65)                     # lens seat
-    for sy in (1, -1):                                                                          # raised bezel
-        g.part(box(lw + 2 * rim, rim, rt, bev=0.0012, M=local(M, 0, sy * (lh + rim) / 2, 0)), col, 0.7)
-    for sx in (1, -1):
-        g.part(box(rim, lh, rt, bev=0.0012, M=local(M, sx * (lw + rim) / 2, 0, 0)), col, 0.7)
-    g.part(box(0.009, 0.006, 0.006, bev=0.0018, M=local(M, s * (lw / 2 - 0.004), lh / 2 + rim + 0.002, 0.0)), GUN, 0.6)  # sensor pod
-    g.part(cyl(0.0018, 0.0012, n=8, M=local(M, s * (lw / 2 - 0.004), lh / 2 + rim + 0.002, 0.006)), GLASS, 0.9, smooth="auto")
-    g.light(box(lw, lh, 0.0006, M=local(M, 0, 0, 0.0027)))
-    if o.get("cracked"):
-        g.part(box(0.0012, lh * 0.9, 0.0004, M=rot(local(M, -0.004, 0, 0.0036), "Z", 0.5)), "2a2522", 0.2)
-    tip = M @ V((s * (lw / 2 + 0.002), 0.004, 0.0015))
+    rim, rt = 0.0026, 0.0040
+    curv = 0.006                               # the lens wraps toward the temple: z falls off with x^2
+
+    def zc(x):
+        return -curv * (2 * x / lw) ** 2
+
+    # bezel: a rounded-rectangle ring following the curved lens
+    nseg = 20 if K.lod else 14
+    outl = []
+    for i in range(nseg):
+        t = 2 * math.pi * i / nseg
+        cx, cy = math.cos(t), math.sin(t)
+        x = math.copysign(abs(cx) ** 0.45, cx) * (lw / 2 + rim * 0.5)
+        y = math.copysign(abs(cy) ** 0.45, cy) * (lh / 2 + rim * 0.5)
+        outl.append((x, y))
+    ring = [M @ V((x, y, zc(x) + rt * 0.35)) for x, y in outl]
+    g.part(tube(ring + [ring[0]], rim * 0.62, n=5, caps=False), col, 0.7, smooth=True)
+    # smoked glass (see-through), a 4 x 3 curved grid
+    nx, ny = 5, 3
+    gv = [M @ V((lw * (i / (nx - 1) - 0.5) * 0.98, lh * (j / (ny - 1) - 0.5) * 0.98, zc(lw * (i / (nx - 1) - 0.5)) + 0.0012))
+          for j in range(ny) for i in range(nx)]
+    gf = [[j * nx + i, j * nx + i + 1, (j + 1) * nx + i + 1, (j + 1) * nx + i] for j in range(ny - 1) for i in range(nx - 1)]
+    g.lens((gv, gf))
+    if K.bake:      # no glass mesh: a dark lens rim reads instead
+        g.part(box(lw, lh, 0.0008, M=local(M, 0, 0, 0.0008)), GLASS, 0.95)
+    # sensor pod on the outer top corner, its lens
+    pod = local(M, s * (lw / 2 - 0.003), lh / 2 + rim + 0.0018, zc(lw / 2) - 0.001)
+    g.part(box(0.011, 0.0055, 0.0065, bev=0.0018, M=pod), GUN, 0.6)
+    g.part(cyl(0.0016, 0.001, n=8, M=local(pod, -s * 0.002, 0, 0.0065)), GLASS, 0.9, smooth="auto")
+    # HUD edge light: a thin line along the top of the lens, a corner tick at the lower inner corner, a faint scan line
+    top = [M @ V((lw * f, lh / 2 - 0.0012, zc(lw * f) + 0.0022)) for f in (-0.42, -0.21, 0.0, 0.21, 0.42)]
+    g.light(tube(top, 0.00045, n=4), smooth=True)
+    xi, yb = -s * (lw / 2 - 0.0022), -lh / 2 + 0.0022
+    tick = [M @ V((xi, yb + 0.005, zc(xi) + 0.0022)), M @ V((xi, yb, zc(xi) + 0.0022)), M @ V((xi + s * 0.005, yb, zc(xi + s * 0.005) + 0.0022))]
+    g.light(tube(tick, 0.0004, n=4), smooth=True)
+    if not o.get("cracked"):
+        scan = [M @ V((lw * f, -lh * 0.12, zc(lw * f) + 0.0021)) for f in (-0.3, 0.0, 0.3)]
+        g.light(tube(scan, 0.00025, n=3), smooth=True)
+    else:          # the Witness's cracked lens: a dark crack across the glass and a chipped bezel
+        crack = [M @ V((-0.009, lh * 0.45, zc(0.009) + 0.0024)), M @ V((-0.002, lh * 0.05, 0.0024)), M @ V((0.003, -lh * 0.1, 0.0024)),
+                 M @ V((0.011, -lh * 0.45, zc(0.011) + 0.0024))]
+        g.part(tube(crack, 0.00035, n=3), "c8ccd0", 0.9, smooth=True)
+    tip = M @ V((s * (lw / 2 + rim), 0.004, zc(lw / 2) + 0.001))
     p0 = arm_from_ear(g, sd, tip, col)
     g.part(box(0.009, 0.016, 0.007, bev=0.002, M=frame(p0, V((s, 0, 0)), V((0, -1, 0.3)))), col, 0.5)
     g.idle = float(o.get("idle", 0.0))
@@ -1061,50 +1102,97 @@ def g_visor_clip(g):
     g.idle = float(o.get("idle", 0.5))
 
 
+def _squircle(lw, lh, n, e_top=0.35, e_bot=0.55):
+    """Rounded-rectangle lens outline (superellipse: a flatter top than bottom), counter-clockwise, (x, y) pairs."""
+    pts = []
+    for i in range(n):
+        t = 2 * math.pi * i / n
+        cx, cy = math.cos(t), math.sin(t)
+        e = e_top if cy > 0 else e_bot
+        pts.append((math.copysign(abs(cx) ** e, cx) * lw / 2, math.copysign(abs(cy) ** e, cy) * lh / 2))
+    return pts
+
+
 @gadget("ar_glasses", "head")
 def g_ar_glasses(g):
-    """AR glasses: thin frames (or rimless=True: lens edges only) with a HUD edge glow along the top of each lens."""
+    """2049 AR glasses: rounded-rectangle smoked lenses under a solid browline bar (about 4 mm) with the HUD glow
+    strip set flush into its lower edge, a thin lower rim (rimless=True: none), a compute pod at each temple hinge
+    with a status pin-light, and a faintly smoked lens plane. loupe=True (Oskar): a flip-down amber loupe hinged on
+    the right brow bar, its rim lit."""
     K, o = g.K, g.o
     k = K.k
     col = o.get("color", "1e1f22")
     rimless = o.get("rimless", False)
-    nseg = 12 if K.lod else 8
-    lw, lh = 0.05 * k, 0.032 * k
+    nseg = 24 if K.lod else 16
+    lw, lh = 0.052 * k, 0.031 * k
+    bar_h = 0.0042 if not rimless else 0.0032
+    bar_d = 0.0048
+    inner = {}
     for sd in "LR":
         s = 1 if sd == "L" else -1
         M = rot(lens_frame(K, sd, fwd=0.023, dz=-0.002, dx=0.002), "Y", -s * 0.12)
-        pts = []
-        for i in range(nseg):
-            t = 2 * math.pi * i / nseg
-            x, y = math.cos(t), math.sin(t)
-            sx = math.copysign(abs(x) ** 0.6, x) * lw / 2
-            sy = math.copysign(abs(y) ** 0.75, y) * lh / 2
-            pts.append(M @ V((sx, sy, 0)))
-        if not rimless:
-            g.part(tube(pts + [pts[0]], 0.0013, n=4, caps=False), col, 0.6, smooth=True)
-        if o.get("plain"):
-            if o.get("clip") and sd == "R":   # repaired glasses: a clip-on magnifier lens over the right eye
-                g.part(cyl(lh * 0.42, 0.003, n=10, bev=0.0008, M=local(M, 0, 0.002, 0.005)), "2a2620", 0.4, smooth="auto")
-                g.part(cyl(lh * 0.34, 0.0015, n=10, M=local(M, 0, 0.002, 0.0075)), GLASS, 0.95, smooth="auto")
-            continue
-        top = [M @ V((lw / 2 * f, lh / 2 + 0.0004, 0.0008)) for f in (-0.75, -0.25, 0.25, 0.75)]
-        g.light(tube(top, 0.0008, n=4), seg=0.0, smooth=True)
-    eL, eR = K.eye["L"], K.eye["R"]
-    br = [V(((eL.x + eR.x) / 2 + dx, eL.y - 0.025, eL.z + 0.004)) for dx in (-0.007, 0.0, 0.007)]
-    g.part(tube(br, 0.0014, n=4), col, 0.6, smooth=True)
-    for sd in "LR":
-        s = 1 if sd == "L" else -1
-        tip = V((K.eye[sd].x + s * (lw / 2 + 0.004), K.eye[sd].y - 0.02, K.eye[sd].z + 0.006))
-        arm_from_ear(g, sd, tip, col, w=0.0035)
+        outl = _squircle(lw, lh, nseg)
+        if not rimless:      # thin lower rim (the browline carries the top)
+            low = [M @ V((x, y, 0.0)) for x, y in outl if y <= lh * 0.18]
+            low.sort(key=lambda p: (M.inverted() @ p).x)
+            g.part(tube(low, 0.00085, n=4, caps=True), col, 0.6, smooth=True)
+        # browline bar along the flat top of the lens, its ends rounded down into the rim
+        bar = local(M, 0, lh / 2 - bar_h * 0.35, -bar_d * 0.45)
+        g.part(box(lw + 0.004, bar_h, bar_d, bev=0.0012, M=bar), col, 0.55)
+        # HUD strip flush in the bar's front face, along its lower edge
+        g.light(box(lw * 0.66, 0.0011, 0.0004, M=local(bar, -s * 0.002, -bar_h * 0.18, bar_d - 0.0002)))
+        # compute pod at the temple hinge, a status pin-light on its outer face
+        pod_c = M @ V((s * (lw / 2 + 0.0038), lh / 2 - 0.0045, -0.006))
+        Mp = frame(pod_c, V((s, 0, 0)), UP)
+        g.part(box(0.0175, 0.0085, 0.0058, bev=0.0019, M=local(Mp, 0, 0, -0.0035)), col if rimless else "2a2c30", 0.5)
+        g.light(cyl(0.0011, 0.0005, n=6, M=local(Mp, (0.004 if s > 0 else -0.004), 0.001, 0.0024)))
+        # smoked lens (see-through): a fan over the outline
+        cen = M @ V((0, 0, 0.0004))
+        lv = [cen] + [M @ V((x * 0.97, y * 0.97, 0.0004 - 0.0018 * (2 * x / lw) ** 2)) for x, y in outl]
+        lf = [[0, 1 + i, 1 + (i + 1) % nseg] for i in range(nseg)]
+        g.lens((lv, lf))
+        inner[sd] = M @ V((-s * (lw / 2 + 0.0015), lh / 2 - bar_h * 0.35, -bar_d * 0.05))
+        tip = M @ V((s * (lw / 2 + 0.0038), lh / 2 - 0.0045, -0.0145))
+        arm_from_ear(g, sd, tip, col, w=0.0042)
+        if sd == "R" and o.get("loupe"):     # flip-down loupe: hinge on the outer brow bar, lens swung down before the eye
+            hinge = M @ V((s * 0.016, lh / 2 + 0.0015, 0.003))
+            Ml = frame(M @ V((s * 0.012, -0.003, 0.012)), M.to_3x3() @ V((0, 0, 1)), UP)
+            g.part(tube([hinge, M @ V((s * 0.016, lh / 2 - 0.002, 0.011)), Ml @ V((0, 0.0095, 0.002))], 0.0011, n=4), col, 0.6, smooth=True)
+            g.part(cyl(0.0092 * k, 0.014, n=14, bev=0.0015, M=local(Ml, 0, 0, -0.004), r2=0.0082 * k), "1c1c1e", 0.55, smooth="auto")   # loupe barrel
+            g.part(cyl(0.0068 * k, 0.0012, n=14, M=local(Ml, 0, 0, 0.0085)), "4a2c0c", 0.95, smooth="auto")                        # amber lens, recessed
+            g.light(torus(0.0076 * k, 0.0006, n=16, m=3, M=local(Ml, 0, 0, 0.0098)), smooth=True)                              # lit rim
+    # bridge between the brow bars
+    b0, b1 = inner["L"], inner["R"]
+    mid = (b0 + b1) / 2 + V((0, -0.002, 0.0015))
+    g.part(tube([b0, mid, b1], 0.0016 if not rimless else 0.0013, n=5), col, 0.6, smooth=True)
     g.glow_hex = (o.get("glow") or g.glow_hex).lstrip("#")
     g.idle = float(o.get("idle", 0.45))
 
 
 @gadget("glasses", "head")
 def g_glasses(g):
-    """Plain glasses (any modern era): the AR glasses frame without the HUD light; clip=True adds a clip-on magnifier."""
-    g.o = dict(g.o, plain=True)
-    g_ar_glasses(g)
+    """Plain glasses (2026 / 2196): thin round wire frames, a keyhole bridge and wire temples; no HUD, no pods, no
+    lens plane. clip=True adds a clip-on magnifier over the right lens (Mara's repaired pair)."""
+    K, o = g.K, g.o
+    k = K.k
+    col = o.get("color", "2a2620")
+    nseg = 18 if K.lod else 12
+    lw, lh = 0.044 * k, 0.037 * k
+    inner = {}
+    for sd in "LR":
+        s = 1 if sd == "L" else -1
+        M = rot(lens_frame(K, sd, fwd=0.022, dz=-0.001, dx=0.001), "Y", -s * 0.1)
+        pts = [M @ V((math.cos(2 * math.pi * i / nseg) * lw / 2, math.sin(2 * math.pi * i / nseg) * lh / 2, 0)) for i in range(nseg)]
+        g.part(tube(pts + [pts[0]], 0.0010, n=4, caps=False), col, 0.65, smooth=True)
+        if o.get("clip") and sd == "R":   # repaired glasses: a clip-on magnifier lens over the right eye
+            g.part(cyl(lh * 0.42, 0.003, n=10, bev=0.0008, M=local(M, 0, 0.002, 0.005)), "2a2620", 0.4, smooth="auto")
+            g.part(cyl(lh * 0.34, 0.0015, n=10, M=local(M, 0, 0.002, 0.0075)), GLASS, 0.95, smooth="auto")
+            g.part(box(0.004, 0.006, 0.003, M=local(M, 0, lh / 2 + 0.001, 0.002)), "2a2620", 0.4)
+        inner[sd] = M @ V((-s * lw / 2, lh * 0.12, 0.0))
+        tip = M @ V((s * (lw / 2 + 0.001), lh * 0.25, -0.002))
+        arm_from_ear(g, sd, tip, col, w=0.0026)
+    b0, b1 = inner["L"], inner["R"]
+    g.part(tube([b0, (b0 + b1) / 2 + V((0, -0.002, 0.004)), b1], 0.0011, n=4), col, 0.65, smooth=True)
     g.idle = 0.0
 
 
@@ -1169,9 +1257,12 @@ def g_cont_visor(g):
     k = K.k
     c = K.eyec
     z = c.z
+    parked = bool(o.get("parked"))
+    if parked:       # the officer's retracted visor: the scan line parked on the helmet rim above the brow
+        z = c.z + 0.075 * k
     P, N = [], []
     for i in range(9):
-        a = -0.95 + 1.9 * i / 8
+        a = (-0.95 + 1.9 * i / 8) * (0.8 if parked else 1.0)
         d = V((math.sin(a), -math.cos(a), 0))
         h = K.toward(V((c.x, c.y + 0.03, z)), d, HEADH | {"torso"}, 0.3)
         p = h[0] if h else V((c.x, c.y + 0.03, z)) + d * 0.1
@@ -1789,17 +1880,181 @@ def g_sample_rig(g):
 
 @gadget("continuum_chest_emitter", "chest")
 def g_cont_chest(g):
-    """Continuum chest emitter: a circular gold ring on a ceramic housing (pulses before a temporal attack)."""
+    """Continuum chest emitter: a recessed hex emitter set flush into the chest plate (a graphite hex well, a dark
+    glass core, a thin gold ring that pulses before a temporal attack)."""
     K, o = g.K, g.o
     k = K.k
     p, n = K.front(0.0, K.J["chest"].z + 0.05 * k, r=0.03)
-    M = frame(p - n * 0.003, n, UP)
-    g.part(cyl(0.052 * k, 0.012, n=16 if K.lod else 12, bev=0.004, M=M, r2=0.048 * k), o.get("color", "dfe1e3"), 0.8, smooth="auto")
-    g.part(cyl(0.03 * k, 0.004, n=16 if K.lod else 12, bev=0.001, M=local(M, 0, 0, 0.012)), GRAPH, 0.8, smooth="auto")
-    g.part(cyl(0.014 * k, 0.002, n=12, M=local(M, 0, 0, 0.016)), GLASS, 0.95, smooth="auto")
-    g.light(torus(0.039 * k, 0.0035, n=20 if K.lod else 14, m=4, M=local(M, 0, 0, 0.0125)), smooth=True)
+    M = rot(frame(p, n, UP), "Z", math.pi / 6)
+    top = 0.0076                                   # the chest plate's top surface over the suit
+    g.part(cyl(0.031 * k, top + 0.0004, n=6, bev=0.0012, M=local(M, 0, 0, -0.001)), "2a2d32", 0.7, smooth=False)        # hex well rim
+    g.part(cyl(0.024 * k, 0.001, n=6, M=local(M, 0, 0, top - 0.0016)), "121418", 0.85, smooth=False)                  # recessed floor
+    g.part(cyl(0.012 * k, 0.0012, n=6, M=local(M, 0, 0, top - 0.0012)), GLASS, 0.95, smooth=False)                    # core
+    g.light(torus(0.0275 * k, 0.0011, n=6, m=3, M=local(M, 0, 0, top + 0.0003)), smooth=False)                        # thin hex ring
+    for i in range(3):     # three slot vents below the emitter
+        g.part(box(0.022 * k, 0.0028, 0.0012, bev=0.0004, M=local(frame(p, n, UP), 0, -(0.042 + 0.008 * i) * k, top - 0.0008)), "1a1c20", 0.6)
     g.glow_hex = (o.get("glow") or "ffd27a").lstrip("#")
     g.idle = float(o.get("idle", 0.4))
+
+
+# ---------------- Continuum armour: rigid ceramic plates ----------------
+PEARL, PEARL_EDGE, PLATE_GAP = "e6e8ea", "b9bdc2", "34373d"
+
+
+def _squircle_map(u, v, e=4.0):
+    """Map a square parameter (u, v in -1..1) onto a rounded rectangle (superellipse |u|^e + |v|^e <= 1)."""
+    m = max(abs(u), abs(v))
+    if m < 1e-9:
+        return u, v
+    q = (abs(u) ** e + abs(v) ** e) ** (1.0 / e)
+    return u * m / q, v * m / q
+
+
+def rigid_plate(g, P, N, thick=0.005, inset=0.0026, bone=None, col=PEARL, edge=PEARL_EDGE, side=PLATE_GAP, gloss=0.76):
+    """A rigid ceramic plate from a rows x cols grid of lifted surface points P (Vectors) and normals N: a smooth top
+    (pearl), a chamfer ring (a darker edge, reads as edge wear / AO), a short graphite side wall down into the suit.
+    Weighted 100 % to `bone` (it never bends at a joint)."""
+    R, C = len(P), len(P[0])
+    cen = sum((P[r][c] for r in range(R) for c in range(C)), V((0, 0, 0))) / (R * C)
+    border = [(0, c) for c in range(C)] + [(r, C - 1) for r in range(1, R)] + [(R - 1, c) for c in range(C - 2, -1, -1)] + [(r, 0) for r in range(R - 2, 0, -1)]
+    bset = set(border)
+    verts, idx = [], {}
+    for r in range(R):
+        for c in range(C):
+            p, n = P[r][c], N[r][c].normalized()
+            if (r, c) in bset:
+                d = cen - p
+                d = (d - n * d.dot(n))
+                d = d.normalized() if d.length > 1e-9 else V((0, 0, 0))
+                p = p + d * inset
+            idx[("t", r, c)] = len(verts)
+            verts.append(tuple(p + n * thick))
+    for (r, c) in border:
+        p, n = P[r][c], N[r][c].normalized()
+        idx[("m", r, c)] = len(verts)
+        verts.append(tuple(p + n * thick * 0.42))
+        idx[("b", r, c)] = len(verts)
+        verts.append(tuple(p - n * 0.0015))
+    faces, cols, smooth, want = [], [], [], []
+    for r in range(R - 1):
+        for c in range(C - 1):
+            q = [idx[("t", r, c)], idx[("t", r + 1, c)], idx[("t", r + 1, c + 1)], idx[("t", r, c + 1)]]
+            faces.append(q)
+            cols.append(col)
+            smooth.append(True)
+            want.append((N[r][c] + N[r + 1][c + 1]).normalized())
+    nb = len(border)
+    for i in range(nb):
+        a, b = border[i], border[(i + 1) % nb]
+        na = N[a[0]][a[1]].normalized()
+        out = P[a[0]][a[1]] - cen
+        out = (out - na * out.dot(na)).normalized()
+        faces.append([idx[("t",) + a], idx[("m",) + a], idx[("m",) + b], idx[("t",) + b]])
+        cols.append(edge)
+        smooth.append(False)
+        want.append((na + out).normalized())
+        faces.append([idx[("m",) + a], idx[("b",) + a], idx[("b",) + b], idx[("m",) + b]])
+        cols.append(side)
+        smooth.append(False)
+        want.append(out)
+    for fi, f in enumerate(faces):
+        a_, b_, c_ = (V(verts[f[0]]), V(verts[f[1]]), V(verts[f[2]]))
+        if (b_ - a_).cross(c_ - a_).dot(want[fi]) < 0:
+            faces[fi] = f[::-1]
+    by = {}
+    for f, cl, sm in zip(faces, cols, smooth):
+        by.setdefault((cl, sm), []).append(f)
+    for (cl, sm), fs in by.items():
+        used = sorted({i for f in fs for i in f})
+        rm = {v: j for j, v in enumerate(used)}
+        g.part(([verts[v] for v in used], [[rm[i] for i in f] for f in fs]), cl, gloss if cl == col else (0.5 if cl == edge else 0.3),
+               smooth=sm, wt=bone, recalc=False)
+
+
+def _torso_plate(g, x_half, z0, z1, back=False, rows=7, cols=7, bone="chest", lift=0.0025, e=4.0, thick=0.005, x_off=0.0):
+    """A torso plate: x half-width (a number, or a function of z) round x_off, from height z0 to z1 (Blender z up), on
+    the front (or back) of the dressed body."""
+    K = g.K
+    P, N = [], []
+    out = V((0, 1, 0)) if back else V((0, -1, 0))
+    for r in range(rows):
+        rowP, rowN = [], []
+        for c in range(cols):
+            u, v = -1 + 2 * c / (cols - 1), -1 + 2 * r / (rows - 1)
+            u, v = _squircle_map(u, v, e)
+            z = z0 + (z1 - z0) * (v + 1) / 2
+            hw = x_half(z) if callable(x_half) else x_half
+            x = x_off + u * hw
+            yc = -float(BH.costume.zc_at(K.B, z))
+            h = K.toward(V((x, yc, z)), out, TORSO, 0.5)
+            if h is None:
+                return None
+            rowP.append(h[0] + h[1] * lift)
+            rowN.append(h[1])
+        P.append(rowP)
+        N.append(rowN)
+    rigid_plate(g, P, N, thick=thick, bone=bone)
+    return P, N
+
+
+def _limb_plate(g, j0, j1, t0, t1, a0, a1, front, fams, bone, rows=5, cols=7, lift=0.0025, thick=0.0048, e=5.0):
+    """A plate wrapping part of a limb: rows along the bone (t0..t1 between joints j0, j1), cols round it (angles a0..a1
+    radians from the `front` direction)."""
+    K = g.K
+    a, b = K.J[j0], K.J[j1]
+    ax = (b - a).normalized()
+    e1 = (front - ax * front.dot(ax)).normalized()
+    e2 = ax.cross(e1)
+    P, N = [], []
+    for r in range(rows):
+        rowP, rowN = [], []
+        for c in range(cols):
+            u, v = -1 + 2 * c / (cols - 1), -1 + 2 * r / (rows - 1)
+            u, v = _squircle_map(u, v, e)
+            t = t0 + (t1 - t0) * (v + 1) / 2
+            th = a0 + (a1 - a0) * (u + 1) / 2
+            cc = a.lerp(b, t)
+            d = e1 * math.cos(th) + e2 * math.sin(th)
+            h = K.ray(cc + d * 0.25, -d, fams, 0.5)
+            if h is None:
+                return None
+            nn = (h[1] * 0.5 + d * 0.5).normalized()
+            rowP.append(h[0] + nn * lift)
+            rowN.append(nn)
+        P.append(rowP)
+        N.append(rowN)
+    rigid_plate(g, P, N, thick=thick, bone=bone)
+    return P, N
+
+
+@gadget("continuum_armor", "chest")
+def g_cont_armor(g):
+    """Continuum ceramic armour as separate rigid plates (pearl, chamfered, graphite gaps between them): chest plate,
+    two abdomen lames, a split back plate, pauldrons, a left bracer (the right forearm carries the emitter bracer),
+    thigh and shin plates and knee cops. Each plate is weighted 100 % to one bone. pauldrons='R' leaves the left one
+    off (under the officer's half-cape)."""
+    K, o = g.K, g.o
+    k = K.k
+    J = K.J
+    ch, sp, sh = J["chest"].z, J["spine"].z, J["shoulder_L"].z
+    _torso_plate(g, lambda z: (0.118 - 0.03 * max(0.0, (ch + 0.02 * k - z) / (0.1 * k))) * k, ch - 0.055 * k, sh - 0.045 * k, bone="chest", rows=8, cols=8)
+    for i, (z0, z1) in enumerate(((sp + 0.035 * k, ch - 0.068 * k), (sp - 0.03 * k, sp + 0.027 * k))):
+        _torso_plate(g, (0.082 - 0.008 * i) * k, z0, z1, bone="spine" if i == 0 else "hips", rows=4, cols=7, e=6.0, thick=0.0045)
+    for s in (1, -1):        # the back plate is split down the spine (the stabilizer mount sits in the gap)
+        _torso_plate(g, 0.058 * k, ch - 0.07 * k, sh - 0.03 * k, back=True, bone="chest", rows=6, cols=5, x_off=s * 0.07 * k)
+    sides = o.get("pauldrons", "LR")
+    for sd in "LR":
+        s = 1 if sd == "L" else -1
+        fa = frozenset(("arm" + sd, "torso"))
+        if sd in sides:      # pauldron: a cap over the deltoid, rigid on the upper arm
+            _limb_plate(g, "shoulder_" + sd, "elbow_" + sd, -0.12, 0.42, -1.25, 1.25, V((s, 0, 0.35)), fa, "upperarm_" + sd, rows=6, cols=7, thick=0.0055)
+        if sd in o.get("bracers", "L"):
+            _limb_plate(g, "elbow_" + sd, "wrist_" + sd, 0.2, 0.8, -1.5, 1.5, -K.hand(sd)["palm"], frozenset(("arm" + sd,)), "forearm_" + sd, rows=5, cols=7)
+        fl = frozenset(("leg" + sd,))
+        _limb_plate(g, "hip_" + sd, "knee_" + sd, 0.2, 0.82, -0.95, 0.95, V((s * 0.25, -1, 0)), fl, "thigh_" + sd, rows=6, cols=7)
+        _limb_plate(g, "knee_" + sd, "ankle_" + sd, 0.13, 0.74, -0.9, 0.9, V((0, -1, 0)), fl, "shin_" + sd, rows=6, cols=7)
+        _limb_plate(g, "knee_" + sd, "ankle_" + sd, -0.07, 0.07, -0.75, 0.75, V((0, -1, 0)), fl, "shin_" + sd, rows=3, cols=5, lift=0.004, thick=0.006)  # knee cop
+    g.idle = 0.0
 
 
 @gadget("rank_bar", "chest")
@@ -1808,7 +2063,7 @@ def g_rank(g):
     K, o = g.K, g.o
     k = K.k
     p, n = K.front(0.085 * k, K.J["chest"].z + 0.1 * k, r=0.01)
-    M = frame(p - n * 0.001, n, UP)
+    M = frame(p + n * 0.0068, n, UP)          # on the ceramic chest plate
     g.part(box(0.07 * k, 0.016 * k, 0.004, bev=0.0012, M=M), GRAPH, 0.7)
     for i in range(int(o.get("pips", 3))):
         g.light(box(0.012 * k, 0.007 * k, 0.0012, bev=0.0004, M=local(M, (-0.02 + 0.02 * i) * k, 0, 0.004)), seg=float(i))
@@ -2234,32 +2489,139 @@ def g_tally(g):
 
 @gadget("shard_bandolier", "chest")
 def g_shards(g):
-    """Data-shard bandolier (right shoulder to left hip) holding recovered memory shards, each with a faint green
-    index light (`_gseg` = shard index)."""
+    """Data-shard bandolier (right shoulder to left hip): a webbing strap carrying a row of 8 to 10 separate shard
+    slots, each an elastic loop round a recovered memory shard with a green index dot (`_gseg` = shard index)."""
     K, o = g.K, g.o
     k = K.k
     sd = opt_side(o, "R")
     p_hi, p_lo = ensure_diag(K, sd)
-    P, N = torso_loop(K, p_hi, p_lo, n=32, lift=0.004)
-    g.part(ribbon(P, N, 0.045 * k, 0.004, closed=True), o.get("color", "4a3a28"), 0.12, smooth=True, wt="soft")
-    front = [(p, n, i) for i, (p, n) in enumerate(zip(P, N)) if p.y < K.J["chest"].y - 0.02 and K.J["spine"].z - 0.04 < p.z < K.J["shoulder_L"].z - 0.02]
-    front.sort(key=lambda t: -t[0].z)
-    slots = 6 if K.lod else 4
-    if len(front) > slots:
-        front = [front[int(round(j * (len(front) - 1) / (slots - 1)))] for j in range(slots)]
-    cnt = 0
-    for j, (p, n, i) in enumerate(front):
-        d = (P[(i + 1) % len(P)] - P[i - 1]).normalized()
-        M = frame(p + n * 0.004, n, d)
-        g.part(box(0.034 * k, 0.012 * k, 0.003, M=local(M, 0, -0.012 * k, 0)), "2e2418", 0.2)          # the loop strap
-        for dx in (-0.011, 0.011):
-            sm = local(M, dx * k, 0, 0)
-            g.part(box(0.009 * k, 0.034 * k, 0.006, taper=0.25, M=sm), "2a2c2e", 0.6)
-            g.light(box(0.004 * k, 0.004 * k, 0.0008, M=local(sm, 0, 0.009 * k, 0.006)), seg=float(cnt))
-            cnt += 1
-    g.segs = cnt
+    P, N = torso_loop(K, p_hi, p_lo, n=40, lift=0.004)
+    g.part(ribbon(P, N, 0.046 * k, 0.0035, closed=True), o.get("color", "3c3a30"), 0.12, smooth=True, wt="soft")
+    idx = [i for i, p in enumerate(P) if p.y < K.J["chest"].y - 0.02 and K.J["spine"].z - 0.06 < p.z < K.J["shoulder_L"].z - 0.01]
+    if len(idx) < 3:
+        return
+    # the front run in path order (it may wrap round the loop's start)
+    idx.sort()
+    gaps = [j for j in range(1, len(idx)) if idx[j] - idx[j - 1] > 1]
+    if gaps:
+        idx = idx[gaps[0]:] + idx[:gaps[0]]
+    F = [P[i] for i in idx]
+    FN = [N[i] for i in idx]
+    cum = [0.0]
+    for a_, b_ in zip(F[:-1], F[1:]):
+        cum.append(cum[-1] + (b_ - a_).length)
+    total = cum[-1]
+    slots = 10 if K.lod >= 2 else 9 if K.lod else 8
+    pitch = min(0.03 * k, total * 0.8 / slots)
+    s0 = total / 2 - pitch * (slots - 1) / 2
+    for j in range(slots):
+        t = s0 + j * pitch
+        m = max(1, min(len(cum) - 1, int(np.searchsorted(cum, t))))
+        f = (t - cum[m - 1]) / max(cum[m] - cum[m - 1], 1e-9)
+        p = F[m - 1].lerp(F[m], f)
+        n = FN[m - 1].lerp(FN[m], f).normalized()
+        d = (F[m] - F[m - 1]).normalized()
+        M = frame(p + n * 0.0035, n, d)            # local y along the strap, x across it
+        g.part(box(0.026 * k, 0.012 * k, 0.0034, bev=0.0008, M=local(M, 0, 0, 0.0)), "2a2822", 0.15)        # elastic loop
+        sm = local(M, 0, 0, 0.0012)
+        g.part(box(0.038 * k, 0.0085 * k, 0.0042, bev=0.001, taper=0.15, M=sm), "2c3034" if j % 3 else "3a3530", 0.65)   # the shard
+        g.part(box(0.006 * k, 0.0088 * k, 0.0046, bev=0.0008, M=local(sm, 0.018 * k, 0, 0)), "6a6e74", 0.6)    # its contact cap
+        g.light(box(0.0036 * k, 0.0036 * k, 0.0006, M=local(sm, 0.0115 * k, 0, 0.0043)), seg=float(j))
+    g.segs = slots
     g.glow_hex = (o.get("glow") or "b6ff8a").lstrip("#")
     g.idle = float(o.get("idle", 0.3))
+
+
+@gadget("coat_tech_panel", "chest")
+def g_coat_tech_panel(g):
+    """Helix lab coat tech panel: a dark inset strip on the left breast (real geometry, crisp edges) with a lit
+    status ring near its top, a thin readout line along its inner edge and two contact studs."""
+    K, o = g.K, g.o
+    k = K.k
+    sd = opt_side(o, "L")
+    s = 1 if sd == "L" else -1
+    zc0, zc1 = K.J["chest"].z - 0.005 * k, K.J["chest"].z + 0.15 * k
+    x = s * 0.074 * k
+    P, N = [], []
+    for i in range(9):
+        z = zc0 + (zc1 - zc0) * i / 8
+        p, n = K.front(x, z, r=0.008)
+        P.append(p + n * 0.0012)
+        N.append(n)
+    P, N = _smooth_open(P, N)
+    side = [V((1, 0, 0))] * len(P)
+    w = 0.042 * k
+    g.part(ribbon(P, N, w + 0.004, 0.0012, side=side), o.get("trim", "8a9098"), 0.55, smooth=True, wt="soft")   # bevelled trim
+    g.part(ribbon(P, [n for n in N], w, 0.0022, side=side), o.get("color", "1a1e24"), 0.5, smooth=True, wt="soft")
+    top = len(P) - 2
+    Mr = frame(P[top] + N[top] * 0.0024, N[top], UP)
+    g.light(torus(0.0095 * k, 0.0011, n=16, m=3, M=Mr), smooth=True)
+    g.light(box(0.0018, 0.012 * k, 0.0005, M=local(Mr, 0, 0, 0.0)))
+    Pl = [p + n * 0.0024 + V((-s * (w / 2 - 0.004), 0, 0)) for p, n in zip(P[1:top - 1], N[1:top - 1])]
+    if len(Pl) >= 2:
+        g.light(tube(Pl, 0.0006, n=3), smooth=True)
+    for f in (0.25, 0.45):
+        i = int(f * (len(P) - 1))
+        g.part(cyl(0.0026, 0.0012, n=8, M=frame(P[i] + N[i] * 0.0022 + V((s * 0.008 * k, 0, 0)), N[i], UP)), "8a9098", 0.7, smooth="auto")
+    g.glow_hex = (o.get("glow") or "38c8c0").lstrip("#")
+    g.idle = float(o.get("idle", 0.55))
+
+
+@gadget("archive_reader", "hips")
+def g_archive_reader(g):
+    """Hand-crank archive reader (a palm slate) hanging at the front hip on a cord from the belt: a rugged olive
+    case, a small dim green screen, a shard slot and a fold-out crank on its side."""
+    K, o = g.K, g.o
+    k = K.k
+    sd = opt_side(o, "R")
+    s = 1 if sd == "L" else -1
+    p, n = K.front(s * 0.115 * k, K.belt_z - 0.085 * k, r=0.015)
+    M = frame(p + n * 0.003, n, UP)
+    M = rot(M, "Z", s * 0.12)
+    col = o.get("color", "4a4636")
+    w, h, t = 0.072 * k, 0.11 * k, 0.017
+    g.part(box(w, h, t, bev=0.005, M=M), col, 0.3)
+    g.part(box(w - 0.012, h * 0.48, 0.0012, M=local(M, 0, h * 0.14, t)), "141614", 0.7)
+    g.light(box(w - 0.018, h * 0.42, 0.0005, M=local(M, 0, h * 0.14, t + 0.0012)))
+    for dx in (-0.016, 0.0, 0.016):      # three worn buttons
+        g.part(cyl(0.0042, 0.0022, n=8, M=local(M, dx * k, -h * 0.25, t)), "2a2a26", 0.3, smooth="auto")
+    g.part(box(0.03 * k, 0.004, 0.006, M=local(M, 0, -h / 2 + 0.002, t * 0.3)), "1a1a18", 0.4)      # shard slot
+    # the crank: a hub on the outer side, an arm and a knob
+    Mc = frame(M @ V((s * (w / 2 + 0.001), 0.0, t / 2)), M.to_3x3() @ V((s, 0, 0)), M.to_3x3() @ V((0, 1, 0)))
+    g.part(cyl(0.009, 0.006, n=10, bev=0.0015, M=Mc), STEEL, 0.6, smooth="auto")
+    g.part(box(0.006, 0.032 * k, 0.003, bev=0.001, M=local(Mc, 0, -0.012 * k, 0.006)), STEEL, 0.6)
+    g.part(cyl(0.0035, 0.012, n=8, bev=0.001, M=local(Mc, 0, -0.026 * k, 0.009)), "3a2a1c", 0.3, smooth="auto")
+    # cord from the belt to the top of the case
+    top = M @ V((0, h / 2, t / 2))
+    pb, nb = K.front(s * 0.1 * k, K.belt_z, r=0.012)
+    g.part(tube([pb + nb * 0.004, (pb + top) / 2 + nb * 0.012, top], 0.0016, n=4), "2a2420", 0.2, smooth=True, wt="soft")
+    g.glow_hex = (o.get("glow") or "b6ff8a").lstrip("#")
+    g.idle = float(o.get("idle", 0.25))
+
+
+@gadget("micro_drivers", "chest")
+def g_micro_drivers(g):
+    """A clockmaker's micro-driver roll in the left chest pocket of the vest: four slim drivers standing out of the
+    pocket, the front one with a lit amber tip-light, and a pocket clip."""
+    K, o = g.K, g.o
+    k = K.k
+    sd = opt_side(o, "L")
+    s = 1 if sd == "L" else -1
+    p, n = K.front(s * 0.085 * k, K.J["chest"].z - 0.005 * k, r=0.012)
+    M = frame(p + n * 0.003, n, UP)
+    g.part(box(0.06 * k, 0.05 * k, 0.008, bev=0.0025, M=local(M, 0, -0.012 * k, 0)), o.get("roll", "2e3034"), 0.2)   # the roll in the pocket
+    cols = [o.get("color", "8a9098"), "c9a050", "8a9098", "3a3f46"]
+    for i, dx in enumerate((-0.019, -0.006, 0.007, 0.019)):
+        base = local(M, dx * k, 0.01 * k, 0.004)
+        L = (0.045 + 0.008 * ((i * 5) % 3)) * k
+        Md = frame(base.to_translation(), M.to_3x3() @ V((0.06 * (i - 1.5), 1, 0.08)), M.to_3x3() @ V((0, 0, 1)))
+        g.part(cyl(0.0034, L * 0.55, n=8, bev=0.0008, M=Md), "1c1c1e" if i % 2 else "3a2f2a", 0.4, smooth="auto")     # handle
+        g.part(cyl(0.0012, L * 0.45, n=6, M=local(Md, 0, 0, L * 0.55)), cols[i], 0.85, smooth="auto")                    # shaft
+        if i == 1:
+            g.light(cyl(0.0036, 0.004, n=8, M=local(Md, 0, 0, L * 0.55 - 0.002)))
+    g.part(box(0.006, 0.03 * k, 0.0025, bev=0.0008, M=local(M, 0.024 * k, 0.004 * k, 0.009)), "8a9098", 0.75)       # clip
+    g.glow_hex = (o.get("glow") or "ffc070").lstrip("#")
+    g.idle = float(o.get("idle", 0.45))
 
 
 @gadget("rope_coil", "chest")
@@ -2277,20 +2639,45 @@ def g_rope(g):
 
 @gadget("leather_satchel", "hips")
 def g_satchel(g):
-    """Small leather satchel at the back right hip (clay tablets) on a strap over the left shoulder."""
+    """Soft leather pouch-bag at the back hip (clay tablets) on a strap over the shoulder: a rounded, gathered shape
+    closed by a drawstring with a bone toggle (no flap, no metal)."""
     K, o = g.K, g.o
     k = K.k
     sd = opt_side(o, "L")
     s = 1 if sd == "L" else -1
     p_hi, p_lo = ensure_diag(K, sd)
     P, N = torso_loop(K, p_hi, p_lo, lift=0.004)
-    g.part(ribbon(P, N, 0.022 * k, 0.003, closed=True), o.get("strap", LEATHER2), 0.15, smooth=True, wt="soft")
-    p, n = K.front(-s * 0.08 * k, K.belt_z - 0.05 * k, back=True, r=0.02)
-    M = frame(p - n * 0.004, n, UP)
+    g.part(ribbon(P, N, 0.02 * k, 0.003, closed=True), o.get("strap", LEATHER2), 0.15, smooth=True, wt="soft")
+    p, n = K.front(-s * 0.08 * k, K.belt_z - 0.06 * k, back=True, r=0.02)
     col = o.get("color", LEATHER)
-    g.part(box(0.17 * k, 0.13 * k, 0.05, bev=0.015, M=M, taper=0.1), col, 0.25)
-    g.part(box(0.172 * k, 0.08 * k, 0.005, bev=0.002, M=local(M, 0, 0.03 * k, 0.048)), LEATHER2, 0.3)
-    g.part(cyl(0.005, 0.006, n=6, M=local(M, 0, 0.0, 0.052)), BRONZE, 0.8, smooth="auto")
+    up = V((0, 0, 1))
+    nh = (n - up * n.dot(up)).normalized()
+    side = up.cross(nh).normalized()
+    sc = 1.0 * k
+    prof = [(0.0, -0.075), (0.035, -0.072), (0.06, -0.055), (0.072, -0.025), (0.07, 0.01), (0.055, 0.04), (0.032, 0.06),
+            (0.022, 0.07), (0.026, 0.078), (0.018, 0.085), (0.0, 0.083)]
+    prof = [(r * sc, z * sc) for r, z in prof]
+    flat = 0.42                                  # squashed against the hip
+    c = p + nh * (0.072 * sc * flat + 0.002)
+    M = mat_axes(side, nh * flat, up, c)
+    nr = 12 if K.lod else 9
+    verts, faces = lathe(prof, n=nr, M=None)
+    # soft sag: the bottom bellies out a little and the sides get a few irregular creases
+    vv = []
+    for (x, y, z) in verts:
+        r = math.hypot(x, y)
+        a = math.atan2(y, x)
+        crease = 1.0 + 0.04 * math.sin(5 * a + 1.3) * max(0.0, 0.03 * sc - abs(z - 0.02 * sc)) / (0.03 * sc)
+        sag = 1.0 + 0.06 * max(0.0, -z) / (0.075 * sc)
+        vv.append((x * crease * sag, y * crease * sag, z))
+    g.part((_xf(vv, M), faces), col, 0.22, smooth=True)
+    # drawstring round the gathered neck and a bone toggle on its two tails
+    neck = M @ V((0, 0, 0.068 * sc))
+    g.part(torus(0.0235 * sc, 0.0022, n=10, m=4, M=mat_axes(side, nh * flat, up, neck)), o.get("cord", "3a2a1a"), 0.1, smooth=True)
+    t0 = M @ V((0.004, 0.024 * sc, 0.066 * sc))
+    t1 = t0 + up * -0.03 * sc + nh * 0.006
+    g.part(tube([t0, (t0 + t1) / 2 + nh * 0.004, t1], 0.0016, n=4), o.get("cord", "3a2a1a"), 0.1, smooth=True)
+    g.part(cyl(0.0035, 0.022 * sc, n=6, bev=0.0012, M=frame(t1 + nh * 0.003 - side * 0.011 * sc, side, up)), o.get("toggle", "e0d6c0"), 0.35, smooth="auto")
 
 
 @gadget("leather_pouch", "hips")
@@ -2462,18 +2849,22 @@ def g_jar(g):
     g.part(torus(0.105 * k, 0.003, n=14, m=3, M=local(M, 0, 0, -0.14 * k)), "6a3a2a", 0.2, smooth=True)
 
 
-def _hand_slate(g, sd, size, col, bumper=None, screen=True):
+def _hand_slate(g, sd, size, col, bumper=None, screen=True, palm=False):
     h = hand_prop(g, sd)
     k = g.K.k
     w, l, t = size
-    M = mat_axes(h["across"], h["axis"], h["palm"], h["grip"] + h["palm"] * 0.004 + h["axis"] * (l * 0.15))
+    if palm:      # a phone lies in the palm, inside the hand's length, its lit screen facing out of the palm
+        c = h["wrist"] + h["axis"] * (0.52 * h["len"]) + h["palm"] * (0.25 * h["th"])
+        M = mat_axes(h["across"], h["axis"], h["palm"], c)
+    else:
+        M = mat_axes(h["across"], h["axis"], h["palm"], h["grip"] + h["palm"] * 0.004 + h["axis"] * (l * 0.15))
     if bumper:
         g.part(box(w, l, t, bev=0.004, M=M), bumper, 0.3)
         g.part(box(w - 0.01, l - 0.01, t + 0.0008, bev=0.0015, M=M), col, 0.6)
     else:
         g.part(box(w, l, t, bev=min(0.004, t * 0.45), M=M), col, 0.7)
     if screen:
-        g.light(box(w - 0.016, l - 0.02, 0.0006, M=local(M, 0, 0, t + 0.0008)))
+        g.light(box(w - (0.016 if bumper else 0.006), l - (0.02 if bumper else 0.012), 0.0006, M=local(M, 0, 0, t + 0.0003)))
     _ = k
 
 
@@ -2489,7 +2880,7 @@ def g_phone(g):
         g.part(box(0.07 * k, 0.15 * k, 0.008, bev=0.003, M=local(M, 0, 0.02 * k, 0)), o.get("color", "1c1d20"), 0.75)
         g.idle = 0.0
         return
-    _hand_slate(g, opt_side(o, "R"), (0.072 * k, 0.15 * k, 0.008), o.get("color", "1c1d20"))
+    _hand_slate(g, opt_side(o, "R"), (0.071 * k, 0.148 * k, 0.0085), o.get("color", "1c1d20"), palm=True)
     g.glow_hex = (o.get("glow") or "cfe6ff").lstrip("#")
     g.idle = float(o.get("idle", 0.5))
 
@@ -2560,8 +2951,13 @@ def g_umbrella(g):
         p0, p1, ax, _ = stick(g, sd, below, 0.03 * k, 0.008 * k, GRAPH, gloss=0.6)
         fm = frame(p0 - ax * 0.08 * k, -ax, UP)
         g.part(lathe([(0.0, 0.0), (0.012 * k, 0.03 * k), (0.024 * k, 0.17 * k), (0.017 * k, 0.36 * k), (0.009 * k, 0.43 * k)], n=8, M=rot(fm, "X", math.pi)), col, 0.3, smooth=True)
-        hook = [p1, p1 - ax * 0.04 * k + h["palm"] * 0.02, p1 - ax * 0.05 * k + h["palm"] * 0.05, p1 - ax * 0.03 * k + h["palm"] * 0.07]
-        g.part(tube(hook, 0.011 * k, n=6), BLACK, 0.4, smooth=True)
+        if led:     # 2049: a straight telescopic grip ending in a lit ring cap (no crook: it read as a pistol grip)
+            g.part(cyl(0.0125 * k, 0.1 * k, n=8, bev=0.002, M=frame(p1 + ax * 0.075 * k, -ax, UP)), BLACK, 0.35, smooth="auto")
+            g.part(cyl(0.0105 * k, 0.006, n=8, bev=0.0015, M=frame(p1, -ax, UP)), GRAPH, 0.6, smooth="auto")
+            g.light(torus(0.0118 * k, 0.0013, n=10, m=3, M=frame(p1 + ax * 0.0005, -ax, UP)), smooth=True)
+        else:       # 2026: a short crook, kept inside the fist
+            hook = [p1 + ax * 0.02 * k, p1 - ax * 0.005 * k + h["palm"] * 0.012, p1 - ax * 0.01 * k + h["palm"] * 0.03]
+            g.part(tube(hook, 0.010 * k, n=6), BLACK, 0.4, smooth=True)
         if led:
             g.light(torus(0.0135 * k, 0.0015, n=8, m=3, M=frame(p0 - ax * 0.5 * k, ax, UP)), smooth=True)
         g.glow_hex = (o.get("glow") or "8ad8ff").lstrip("#")
@@ -2575,8 +2971,13 @@ def g_umbrella(g):
     R = 0.5 * k if not kid else 0.36
     c = h["grip"]
     top = c + up_dir * L
-    g.part(tube([c + ax * 0.06 * k, top + up_dir * 0.03], 0.0065 * k, n=6), GRAPH, 0.6, smooth=True)
-    g.part(cyl(0.014 * k, 0.11 * k, n=8, bev=0.003, M=frame(c + ax * 0.06 * k, up_dir, UP)), BLACK, 0.3, smooth="auto")
+    # a straight telescopic handle: it ends just below the fist in a small cap (2049: a lit LED ring), no crook
+    hb = c + ax * 0.04 * k
+    g.part(tube([hb, top + up_dir * 0.03], 0.0065 * k, n=6), GRAPH, 0.6, smooth=True)
+    g.part(cyl(0.0125 * k, 0.1 * k, n=8, bev=0.003, M=frame(hb, up_dir, UP)), BLACK, 0.3, smooth="auto")
+    g.part(cyl(0.0108 * k, 0.006, n=8, bev=0.0015, M=frame(hb - up_dir * 0.005, up_dir, UP)), GRAPH, 0.6, smooth="auto")
+    if led:
+        g.light(torus(0.0118 * k, 0.0013, n=10, m=3, M=frame(hb - up_dir * 0.0045, up_dir, UP)), smooth=True)
     Mt = frame(top, up_dir, V((0, -1, 0)))
     nr = 16 if K.lod else 12
     rings = [(R, -0.16 * R), (R * 0.82, 0.04 * R), (R * 0.45, 0.2 * R), (0.0, 0.26 * R)]
@@ -2705,6 +3106,16 @@ def finish(K):
             out["glow"].append(og)
             out["tris"] += g.glow.tris()
             node = og.name
+        if g.glass.f:
+            ol = make_obj(K, "gl_" + g.typ, g.glass, g, None)
+            ol["gadget"] = g.typ
+            ol["slot"] = "glass"
+            if "glass" not in glow_mats:
+                glow_mats["glass"] = glass_material(c)
+            ol.data.materials.clear()
+            ol.data.materials.append(glow_mats["glass"])
+            out["glow"].append(ol)
+            out["tris"] += g.glass.tris()
         out["meta"].append(dict(type=g.typ, bone=g.bone, glow=bool(node) or (K.bake and any(isinstance(cc, tuple) for cc in body.col)),
                                 idle=float(g.idle), segs=int(g.segs), seg_mode=g.seg_mode, prop=g.prop or "", node=node or "",
                                 color=g.glow_hex, baked=bool(K.bake)))
@@ -2764,6 +3175,25 @@ def glow_material(c, hx):
     bsdf.inputs["Emission Strength"].default_value = 1.0
     m["slot"] = "glow"
     m["glow"] = hx
+    return m
+
+
+def glass_material(c):
+    """Smoked lens glass: dark, glossy, alpha-blended (glTF alphaMode BLEND)."""
+    import bpy
+    m = bpy.data.materials.new("%s_glass" % c["id"])
+    m.use_nodes = True
+    bsdf = m.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Base Color"].default_value = (0.006, 0.009, 0.014, 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.05
+    bsdf.inputs["Metallic"].default_value = 0.0
+    bsdf.inputs["Alpha"].default_value = 0.34
+    for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
+        try:
+            setattr(m, attr, val)
+        except (AttributeError, TypeError):
+            pass
+    m["slot"] = "glass"
     return m
 
 

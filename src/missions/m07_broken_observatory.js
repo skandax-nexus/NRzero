@@ -855,7 +855,9 @@ export default {
       game.interact({ pos: [s.pos[0], C + 1.2, s.pos[2]], radius: 1.9, once: false, enabled: () => !S.ended && !S.inHallScene, prompt: `Read stone ${i + 1}`, onUse: async () => {
         cine(true);
         await game.shot([s.pos[0] + s.n.x * 1.3, C + 1.8, s.pos[2] + s.n.z * 1.3], s.face, 0.8, { fov: 40 });
-        await game.say('kai', T.current === '2196' && i % 4 === 1 ? `Half the count is under moss… ${kaiLine}` : kaiLine);
+        // stone 10 names Hensel's ledger only if Kai read it in M6 (optional); otherwise what Hensel told him at the door
+        const line = i !== 9 || F.varenLedger ? kaiLine : F.metHensel ? 'Fourteenth of June, 2026. A clockmaker\'s door, two children. Hensel said I came to him in 2026.' : 'Fourteenth of June, 2026. A clockmaker\'s door. Two children.';
+        await game.say('kai', T.current === '2196' && i % 4 === 1 ? `Half the count is under moss… ${line}` : line);
         if (i === 1 && F.m5_riverDiverted) await game.say('kai', 'Tala\'s river. I did that.');
         if (!S.read.has(i)) { S.read.add(i); ui.addEvidence(`Stone ${i + 1} · ${date}`, `"${carved}" — counted in sunrises from the first fire.`, 'THE HALL OF DATES'); }
         F.m7datesRead = S.read.size;

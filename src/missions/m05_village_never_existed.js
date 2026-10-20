@@ -1235,7 +1235,7 @@ export default {
       await game.talk([['kai', 'This isn\'t stone. Ceramic matrix, superconducting seams. Nothing in 2049 is made like this.'], ['kai', 'And the socket in the middle is empty. Someone cut the core out with clamps.']]);
       await game.shot([MX + 1.6, MY - 1.0, MZ + 2.4], [tag.position.x, tag.position.y, tag.position.z], 1.4, { fov: 30 });
       await game.say('kai', 'Helix survey. Site zero, fourteenth of March 2029. Core recovered, sent to Helix Lab 1. Site to be flooded. Authorised: E. Rook.');
-      await game.say('kai', F.trustedHale === false ? 'Security escort: Brandt. The man I trusted in the lift.' : 'Security escort: Brandt. Hale was right about him.');
+      await game.say('kai', F.trustedHale === false ? 'Security escort: Brandt. The voice I trusted at the service lift.' : 'Security escort: Brandt. Hale was right about him.');
       await game.say('kai', 'And in pencil, in the margin, someone else\'s hand: "Ask Hensel."');
       ui.addEvidence('Survey tag SZ-0', 'Helix surveyed "Site Zero" on 14.03.2029, removed the machine\'s core to Helix Lab 1, and flooded the valley in 2031. Authorised: E. Rook. Security escort: Brandt. Helix says it built the Chronolith in 2031. Pencilled in the margin: "Ask Hensel."', 'THE CHAMBER · 2049');
       leave(); objective(mainObjective());
