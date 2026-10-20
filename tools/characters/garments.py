@@ -586,7 +586,7 @@ def paint(g, X, seed):
             if "torso" in parts:
                 m = m + (line(y - (ch + 0.0), 0.035, 0.001) + line(y - (sp - 0.06), 0.035, 0.001)) * tor
             if "vest" in parts:
-                m = m + (line(y - (ch - 0.02), 0.04, 0.001) + line(y - (sp - 0.08), 0.04, 0.001)) * tor
+                m = m + (line(y - (ch - 0.02), 0.04, 0.001) + line(y - (sp + 0.045), 0.04, 0.001)) * tor     # lower band above the belt line (at sp - 0.08 it sat under tool belts as a ragged fringe)
             if "arms" in parts:
                 m = m + line(X.sa - X.armcum[1] - 0.07, 0.03, 0.001) * arm + line(X.sa - 0.11, 0.03, 0.001) * arm
             if "ankles" in parts:
@@ -628,7 +628,7 @@ def paint(g, X, seed):
             elif arg == "princess":
                 lit(line(np.abs(X.x) - princess_x(X), 0.0035, 0.0015) * tor * (y < J["shoulder_L"][1] - 0.03))
             elif arg == "edges":
-                lit(line(X.f - 0.006, 0.0045, 0.0015))
+                lit(line(X.f - 0.005, 0.003, 0.001))
             elif arg == "hem":
                 lit(line(X.f - 0.008, 0.004, 0.0015) * (y < J["chest"][1]))
             elif arg == "belt":

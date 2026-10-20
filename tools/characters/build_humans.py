@@ -2331,7 +2331,7 @@ def build(c, tex_dir):
     mesh.name = c["id"] + "_mesh"
     cloth_tris = sum(len(p.vertices) - 2 for o in cloth + gx for p in o.data.polygons)
     decimate_protected(mesh, B, budget(c) - cloth_tris if costume_mode else budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0,
-                       tex=tex["base"] if costume_mode and tex else None)
+                       tex=tex["base"] if costume_mode and tex else None, hero=budget(c) >= 16000)
     if cloth:
         mesh = join([mesh] + cloth)
         print("  + cloth", cloth_tris, "tris", flush=True)
@@ -2519,7 +2519,7 @@ def join_uv_seams(mesh):
     bm.free()
 
 
-def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
+def decimate_protected(mesh, B, target, face_keep=1.0, tex=None, hero=False):
     """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest."""
     feat = feature_group(mesh, tex) if tex else None
     vgk = dict(use_vertex_group=True, invert_vertex_group=True, vertex_group_factor=float(os.environ.get("FEATF", "2.5"))) if feat is not None else {}
@@ -2559,16 +2559,16 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None):
     target = max(target - kept, 2000)          # protected cloth tails are not decimated
     total = sum(n.values())
     if total > target:
-        face_min = 0.27 if face_keep < 1.0 else (0.4 if target >= 8000 else 0.34)    # crowds / children are seen from further away
+        face_min = 0.27 if face_keep < 1.0 else (0.4 if hero else 0.34)    # crowds / children are seen from further away
         head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
-        hand_k = 0.36 if target >= 8000 else (0.3 if face_keep >= 1.0 else 0.25)     # fingers stay fingers (they are seen in every gesture)
+        hand_k = 0.36 if hero else (0.3 if face_keep >= 1.0 else 0.25)     # fingers stay fingers (they are seen in every gesture)
         for _ in range(24):      # the body (and its garments) must not drop below ~30 %: spikes and chords appear
             body_k = (target - n["face"] * face_keep - n["head"] * head_k - n["hand"] * hand_k) / max(n["body"], 1)
             if body_k >= 0.3:
                 break
             head_k = max(0.2, head_k * 0.88)
             face_keep = max(face_min, face_keep * 0.94)
-        body_k = max(body_k, 0.42)     # below this the collapse folds and smears the cloth (holes, stretched texels)
+        body_k = max(body_k, float(os.environ.get("BODYK", "0.42")))     # below this the collapse folds and smears the cloth (holes, stretched texels)
         hand_k = min(hand_k, 0.5)
         for which, ratio in (("body", body_k), ("hand", hand_k), ("head", head_k), ("face", face_keep)):
             if ratio >= 0.999:

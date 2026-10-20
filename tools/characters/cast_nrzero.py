@@ -12,8 +12,10 @@ Bodies: `macro` (MakeHuman gender / muscle / weight / ancestry mix), `years` (ag
 `metres` (standing height; the MakeHuman height parameter is solved for it once and cached in
 cast_nrzero_heights.json). Faces come from softened detail modifiers (see the end of the file), so every face is
 distinct and pleasant without extremes. Painted face extras: stubble, beard, freckles, scars (build_humans.paint).
-Budgets: Kai 16 000 triangles (2048 atlas); named NPCs 11 000 (gadget glow meshes); crowds and children 9 000
-(gadget glow baked into the atlas emissive, no extra draw calls).
+Budgets (decimation targets): Kai 16 000 triangles (2048 atlas); named NPCs 11 000 (gadget glow meshes); crowds and
+children 9 000 (gadget glow baked into the atlas emissive, no extra draw calls). The decimator keeps the body and its
+garments at 42 % or more and the hands / face at fixed ratios, so the built counts land above the targets (about 12 k
+to 20 k; kai 19.6 k, sera 20.3 k) rather than tearing cloth; a low-LOD pass is the place to cut further.
 """
 import json
 import os

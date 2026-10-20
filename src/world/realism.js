@@ -839,6 +839,29 @@ RECIPES.grime = {
       s.col = uC0 * (0.7 + 0.6 * fbm(uv, vec2(24.0), 3)); s.rough = 0.75 - dr * 0.25; s.mask = m;
     }`,
 };
+// Thatch: overlapping courses of straw bundles (uv.y runs down the roof slope), weathered grey-brown with age, moss.
+RECIPES.thatch = {
+  tile: 1.6, range: 0.05,
+  defaults: { color: 0xa58552, dark: 0x4b3c26, age: 0.45, moss: 0.25, courses: 6 },
+  uniforms: p => ({ uC0: lin(p.color), uC1: lin(p.dark), uP0: [p.age, p.moss, Math.round(p.courses), 0] }),
+  glsl: /* glsl */`
+    float rowsN(){ return max(2.0, uP0.z); }
+    float strands(vec2 uv, float row){ float sh = rzH12(vec2(row, 3.0)) * 37.0; return rzVN(vec2(uv.x * 260.0 + sh, uv.y * 10.0), vec2(260.0, 10.0)); }
+    float height(vec2 uv){
+      float n = rowsN(); float row = floor(uv.y * n); float c = fract(uv.y * n);
+      float bundle = rzVN(vec2(uv.x * 34.0 + rzH12(vec2(row, 5.0)) * 11.0, row), vec2(34.0, n));
+      return (c * 0.55 + strands(uv, row) * 0.25 + bundle * 0.2) * 0.045;
+    }
+    void shade(vec2 uv, float h, inout Surf s){
+      float n = rowsN(); float row = floor(uv.y * n); float c = fract(uv.y * n);
+      float st = strands(uv, row), tone = fbm(uv, vec2(4.0), 4);
+      vec3 col = mix(uC1, uC0, 0.3 + 0.7 * c) * (0.72 + 0.56 * st) * (0.8 + 0.4 * tone);
+      col = mix(col, vec3(dot(col, vec3(0.33))) * 0.75, uP0.x * smoothstep(0.35, 0.8, fbm(uv + 0.3, vec2(3.0), 4)));
+      float mz = uP0.y * smoothstep(0.55, 0.8, fbm(uv + 0.7, vec2(5.0), 4)) * (0.5 + 0.5 * c);
+      col = mix(col, vec3(0.10, 0.14, 0.05), mz);
+      s.col = col; s.rough = 0.92; s.metal = 0.0; s.ao = 0.45 + 0.55 * smoothstep(0.0, 0.6, c); s.mask = 0.0;
+    }`,
+};
 /** Names of all procedural surfaces available to textureSet() / pbrMaterial(). */
 export const SURFACES = Object.keys(RECIPES);
 
@@ -1826,16 +1849,6 @@ float rzFurn(vec2 q, float kind, float cx){
 vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, float bseed){
   vec3 h = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
   vec3 h2 = rzH32(cid.yx * 1.37 + vec2(bseed * 57.0, 5.0));
-#if RZ_INTERIOR == 0
-  { // lite: the back wall seen through the window (parallax), one lamp gradient, no ray-box
-    bool lit0 = h.x < rzLit * (shop ? 1.8 : 1.0);
-    vec3 lc0 = h.y < 0.5 ? vec3(1.0, 0.66, 0.38) : (h.y < 0.8 ? vec3(1.0, 0.84, 0.66) : vec3(0.72, 0.86, 1.0));
-    float li0 = lit0 ? (0.3 + 0.55 * h.z) * rzIntI * (shop ? 1.5 : 1.0) : 0.0;
-    float yb = clamp((g.y + vt.y / max(vt.z, 0.05) * rD * 0.5) / ch, 0.0, 1.0);
-    vec3 a0 = rzPal(h2.x);
-    return a0 * lc0 * li0 * (0.35 + 0.75 * yb) * (shop ? 1.3 : 0.9) + lc0 * li0 * 0.5 * smoothstep(0.8, 1.0, yb) + a0 * (rzDay * 0.3 + 0.006);
-  }
-#endif
   vec3 d = normalize(vt);
   float x0 = 0.06, x1 = bw - 0.06, y1 = ch - 0.3;
   vec3 o = vec3(g, 0.0);
@@ -1895,6 +1908,7 @@ vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, 
 #endif
   return col;
 }
+#if RZ_INTERIOR > 0
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   vec3 N = rzSafeN(vRzWN);
   bool horiz = abs(N.y) > 0.7;
@@ -1904,6 +1918,57 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   vec3 tint = mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), vFac.w) * (0.88 + 0.24 * rzH12(vec2(bseed * 91.0, 3.0)));
   vec4 o4; vec3 n0; emi = vec3(0.0);
   vec2 aa = max(fwidth(P), vec2(1e-4)) * 0.8;
+  float era = vRz.x, ruin = vRz.y, moss = vRz.z;
+  if (region > 5.5) {
+    nW = N;
+    if (region < 6.5) {   // LED strip / beacon: colour vWin.rgb x intensity vWin.w (steady in Comfort Mode)
+      float pulse = 1.0 - (1.0 - rzComfort) * 0.2 * (0.5 + 0.5 * sin(rzTime * 1.7 + bseed * 40.0 + vRzWP.y * 0.3));
+      alb = vec3(0.04); orm = vec3(1.0, 0.3, 0.0); emi = vWin.rgb * vWin.w * pulse; return;
+    }
+    if (region < 7.5) {   // LED / holo sign panel: 'local' uv in meters, size vWin2.xy, seed vWin2.z, kind vWin2.w
+      vec2 dim = max(vWin2.xy, vec2(0.1)); vec2 q = clamp(P / dim, 0.0, 1.0);
+      float kind = vWin2.w, sd = vWin2.z, tt = rzTime * (1.0 - 0.8 * rzComfort);
+      float edge = min(min(q.x, 1.0 - q.x) * dim.x, min(q.y, 1.0 - q.y) * dim.y);
+      float frame = 1.0 - smoothstep(0.035, 0.07, edge);
+      float g = 0.0; vec2 c;
+      if (kind < 0.5) {          // vertical glyph column (blade sign)
+        float rows = max(2.0, floor(dim.y / max(dim.x * 0.85, 0.25)));
+        c = vec2(q.x, q.y * rows); vec2 id = floor(c), f = fract(c), sub = floor(vec2(f.x * 4.0, f.y * 4.0)), inr = abs(f - 0.5);
+        g = step(0.42, rzH12(id * 7.1 + sub * 1.7 + sd * 13.0)) * step(inr.x, 0.34) * step(inr.y, 0.36);
+      } else if (kind < 1.5) {   // ad screen: picture blocks and a text line, changes slowly
+        float page = floor(tt * 0.12 + sd * 3.0);
+        c = q * vec2(9.0, 5.0); vec2 id = floor(c);
+        float pic = smoothstep(0.2, 0.9, rzN2(q * vec2(3.0, 2.0) + page * 1.7 + sd)) * step(0.35, q.y);
+        float txt = step(q.y, 0.28) * step(0.08, q.y) * step(0.4, rzH12(floor(vec2(q.x * 26.0, q.y * 7.0)) + page)) * step(0.06, q.x) * step(q.x, 0.94);
+        g = max(pic * (0.55 + 0.45 * rzH12(id + page)), txt);
+      } else {                   // ring logo (the Helix mark and its imitators)
+        c = (q - 0.5) * dim / min(dim.x, dim.y); float r = length(c), a = atan(c.y, c.x);
+        g = smoothstep(0.035, 0.0, abs(r - 0.34)) * step(-0.6, sin(a * 2.0 + tt * 0.6)) + smoothstep(0.03, 0.0, abs(r - 0.22)) * step(0.0, sin(a * 3.0 - tt * 0.9));
+      }
+      float fwg = max(fwidth(c.x), fwidth(c.y));
+      g = mix(g, 0.33, smoothstep(0.12, 0.45, fwg));
+      float scan = 0.84 + 0.16 * sin(q.y * dim.y * 70.0 - tt * 5.0) * (1.0 - smoothstep(0.3, 1.0, fwidth(q.y * dim.y * 70.0)));
+      alb = vec3(0.02); orm = vec3(1.0, 0.2, 0.0);
+      emi = vWin.rgb * vWin.w * (g * scan + 0.07 + frame * 0.5); return;
+    }
+    if (region < 8.5) {   // painted metal / fabric: colour vWin.rgb, roughness vWin.w, stripes every vWin2.x m (vWin2.y: 1 = white)
+      float sn = rzN2(P * 4.0 + bseed * 9.0);
+      vec3 c8 = vWin.rgb * (0.86 + 0.28 * sn);
+      if (vWin2.x > 0.0) { float sx = P.x / vWin2.x; float st8 = smoothstep(0.47, 0.53, abs(fract(sx) - 0.5) * 2.0 * (1.0 - smoothstep(0.4, 1.2, fwidth(sx) * 2.0)));
+        c8 = mix(c8, vWin2.y > 0.5 ? vec3(0.78, 0.76, 0.72) : c8 * 0.45, st8); }
+      float rs = smoothstep(0.55, 0.85, rzFbm2(vRzWP.xz * 2.0 + vRzWP.y * 1.3)) * max(ruin, 0.15);
+      alb = mix(c8, vec3(0.18, 0.08, 0.03), rs * 0.7); orm = vec3(1.0, mix(vWin.w, 0.9, rs), 0.0);
+      if (moss > 0.0 && N.y > 0.5) alb = mix(alb, vec3(0.09, 0.14, 0.04), moss * smoothstep(0.35, 0.6, rzN2(P * 1.5)));
+      return;
+    }
+    {   // glass / solar panel: colour vWin.rgb, cell grid every vWin2.x m
+      vec2 cells = P / max(vWin2.x, 0.05); vec2 fr = abs(fract(cells) - 0.5) * 2.0; float fwc = max(fwidth(cells.x), fwidth(cells.y));
+      float line = smoothstep(0.86, 0.94, max(fr.x, fr.y)) * (1.0 - smoothstep(0.2, 0.6, fwc));
+      alb = mix(vWin.rgb, vec3(0.5, 0.52, 0.55), line); orm = vec3(1.0, mix(0.08, 0.5, line), mix(0.2, 0.8, line));
+      if (ruin > 0.0) { float cr = smoothstep(0.62, 0.7, rzN2(P * 2.3 + bseed)); alb = mix(alb, vec3(0.05), cr * ruin); orm.g = mix(orm.g, 0.7, cr * ruin); }
+      return;
+    }
+  }
   if (region > 1.5 && region < 2.5) { alb = rzWall(6.0, vRzWP.xz, vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, -1.0), N, o4, nW) * 0.85; orm = o4.rgb; return; }
   if (region > 2.5 && region < 4.5) {
     vec3 mc = mix(vec3(0.045, 0.05, 0.055), vec3(0.2, 0.19, 0.17), rzH12(vec2(bseed * 31.0, 7.0)));
@@ -1917,7 +1982,7 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
       mc *= 1.0 - fan * 0.75 + bars * 0.4 - louv * 0.35; ao = 1.0 - fan * 0.5;
       nn = normalize(N + B * (louv - 0.3) * 0.5);
     }
-    float rust = smoothstep(0.6, 0.9, rzFbm2(vRzWP.xz * 3.0 + vRzWP.y * 2.0)) * (1.0 - smoothstep(0.0, 0.3, N.y));
+    float rust = smoothstep(0.6 - ruin * 0.35, 0.9 - ruin * 0.2, rzFbm2(vRzWP.xz * 3.0 + vRzWP.y * 2.0)) * (1.0 - smoothstep(0.0, 0.3, N.y) * (1.0 - ruin));
     alb = mix(mc, vec3(0.2, 0.09, 0.035), rust * 0.6); orm = vec3(ao, 0.55 + rust * 0.3, 0.55 * (1.0 - rust)); nW = nn; return;
   }
   float wl = region > 4.5 ? 4.0 : layer;
@@ -1930,12 +1995,30 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   wall *= 1.0 - dirt * 0.35;
   float topSoot = smoothstep(vWin2.z - 1.0, vWin2.z + 2.0, P.y) * 0.25;
   wall *= 1.0 - topSoot * smoothstep(0.3, 0.7, rzN2(vec2(P.x * 3.0, P.y * 0.3)));
+  if (era > 0.5 && era < 1.5) wall *= 1.0 + dirt * 0.18 + topSoot * 0.15;   // 2026: kept clean
+  if (era > 1.5 && era < 2.5 && region < 4.5) {   // 2049 retrofit: newer cladding patches bolted over the old wall, cooler grime
+    vec2 pc = floor(P / vec2(vWin.x * 2.0, vWin.y * 3.0) + vec2(0.0, 0.37));
+    float ph = rzH12(pc + bseed * 31.0);
+    if (ph < 0.2 && P.y > vWin2.x) { vec4 o5; vec3 n5; vec3 pw = rzWall(5.0, P, T, B, N, o5, n5) * mix(vec3(0.75, 0.8, 0.86), vec3(1.15), rzH12(pc + 4.0));
+      vec2 lp = fract(P / vec2(vWin.x * 2.0, vWin.y * 3.0) + vec2(0.0, 0.37)); float inr = rzBoxM(lp, vec2(0.02), vec2(0.98), aa / vec2(vWin.x * 2.0, vWin.y * 3.0));
+      wall = mix(wall, pw, inr); o4 = mix(o4, o5, inr); n0 = normalize(mix(n0, n5, inr)); }
+    wall *= vec3(0.9, 0.93, 1.0);
+  }
+  if (ruin > 0.0) {   // 2196: desaturated, sooted, cracked, moss and lichen climbing from the ground and the ledges
+    wall = mix(wall, vec3(dot(wall, vec3(0.3, 0.5, 0.2))), 0.4 * ruin);
+    float sootR = smoothstep(0.45, 0.85, rzN2(vec2(P.x * 0.7, P.y * 0.09) + bseed * 3.0)) * ruin; wall *= 1.0 - sootR * 0.55;
+    float crk = (1.0 - smoothstep(0.0, 0.02 + aa.x * 0.5, abs(rzN2(P * 0.55 + bseed * 7.0) - 0.5))) * smoothstep(0.4, 0.7, rzN2(P * 0.21 + 2.0)); wall *= 1.0 - crk * 0.6 * ruin;
+    float mz = moss * smoothstep(0.52, 0.78, rzFbm2(P * vec2(0.35, 0.28) + bseed * 5.0) + (1.0 - smoothstep(0.0, 3.5, P.y)) * 0.35 + max(N.y, 0.0) * 0.45);
+    wall = mix(wall, vec3(0.085, 0.13, 0.045) * (0.7 + 0.6 * rzN2(P * 7.0)), mz * 0.9);
+    o4.g = mix(o4.g, 0.95, mz);
+  }
   alb = wall; orm = o4.rgb; orm.g = min(1.0, orm.g + dirt * 0.05); nW = n0;
   if (region > 0.5) return;
   // ---- windows
   float bay = vWin.x, flH = vWin.y, ww = vWin.z, wh = vWin.w, gH = vWin2.x, sill = vWin2.y, topY = vWin2.z;
-  float st = mod(vWin2.w, 10.0); bool shopFace = vWin2.w > 9.5;
+  float st = mod(vWin2.w, 10.0); float wflag = floor(vWin2.w / 10.0 + 0.01); bool shopFace = wflag > 0.5 && wflag < 1.5;
   bool gf = P.y < gH; bool shop = gf && shopFace;
+  if (gf && wflag > 1.5) return;   // ground floor left blank: the scene dresses it (shopfronts, doors, signs)
   vec2 cid, cl, wmin, wmax; float ch, rD;
   if (gf) { cid = vec2(floor(P.x / bay), -1.0); cl = vec2(P.x - cid.x * bay, P.y); ch = gH;
     if (shop) { wmin = vec2(0.14, 0.4); wmax = vec2(bay - 0.14, gH - 0.95); rD = 7.0; }
@@ -1987,10 +2070,121 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     vec3 wN = normalize(mix(gN, N, frameM));
     vec3 wEmi = roomC * (1.0 - F) * (1.0 - frameM);
     if (shutter) { float gr = fract(g.y * 12.0); wAlb = vec3(0.32, 0.33, 0.34) * (0.8 + 0.2 * rzN2(g * 4.0)); wOrm = vec3(0.8 + 0.2 * gr, 0.5, 0.7); wN = normalize(N + B * (gr - 0.5) * 0.8); wEmi = vec3(0.0); }
+    if (ruin > 0.0) {
+      float hb = rzH12(cid * 1.91 + vec2(bseed * 23.0, 0.7));
+      if (hb < ruin * 0.7) {          // blown out: no glass, a dark sooty room, a few shards left in the frame
+        vec2 lq = (g - wmin) / max(wmax - wmin, vec2(0.01));
+        float shard = step(lq.x + lq.y * (0.6 + hb), 0.22 + 0.2 * rzH12(cid + 9.0)) + step(2.0 - lq.x - lq.y, 0.18 * rzH12(cid + 3.0));
+        frameM *= step(0.35, rzH12(cid + 5.0));
+        wAlb = mix(vec3(0.014, 0.012, 0.011) * (0.6 + 0.6 * rzN2(g * 4.0 + cid)), fc * 0.6, frameM);
+        wOrm = mix(vec3(0.6, 0.95, 0.0), vec3(1.0, 0.6, 0.3), frameM);
+        wN = normalize(mix(N, gN, rzSat(shard)));
+        if (shard > 0.5) { wAlb = vec3(0.0); wOrm = vec3(1.0, 0.05, 0.0); }
+        wEmi = roomC * 0.04 * step(0.93, hb / max(ruin * 0.7, 1e-3));
+      } else if (hb < ruin * 0.88) {  // boarded up
+        float pl = fract(g.y * 4.2 + rzH12(cid) * 3.0), ed = smoothstep(0.0, 0.08, pl);
+        wAlb = vec3(0.30, 0.23, 0.15) * (0.6 + 0.5 * rzN2(vec2(g.x * 9.0, floor(g.y * 4.2)))) * (0.75 + 0.25 * ed);
+        wOrm = vec3(1.0, 0.9, 0.0); wN = normalize(N + B * (ed - 0.5) * 0.3); wEmi = vec3(0.0);
+      } else { wEmi *= step(0.9, rzH12(cid + 13.0)) * 0.6; wOrm.g += 0.15 * ruin; wAlb += vec3(0.02) * ruin; }   // dusty glass, rare survivor lights
+    }
     wAlb = mix(rAlb, wAlb, glassM); wOrm = mix(vec3(0.45, 0.9, 0.0), wOrm, glassM); wN = normalize(mix(rN, wN, glassM)); wEmi *= glassM;
     alb = mix(alb, wAlb, open); orm = mix(orm, wOrm, open); nW = normalize(mix(nW, wN, open)); emi = wEmi * open;
   }
+  // distant facades: once a window spans only a few pixels, blend to the grid's average (no shimmer or moire)
+  float farW = smoothstep(0.16, 0.55, max(aa.x, aa.y));
+  if (farW > 0.0) {
+    float cov = clamp((wmax.x - wmin.x) * (wmax.y - wmin.y) / max(bay * ch, 0.1), 0.0, 0.9) * zone;
+    vec3 avgE = vec3(0.30, 0.24, 0.17) * rzLit * rzIntI * cov * (shop ? 1.6 : 1.0) * (1.0 - ruin * 0.9);
+    alb = mix(alb, mix(wall, vec3(0.025), cov), farW); orm = mix(orm, mix(o4.rgb, vec3(1.0, 0.12, 0.0), cov), farW);
+    nW = normalize(mix(nW, N, farW)); emi = mix(emi, avgE, farW);
+  }
 }
+#else
+// Lite facade for the 'low' tier: one wall texture tap and plain arithmetic (no noise octaves, no room ray-box);
+// windows keep their frames, mullions, sills, lit / unlit rooms with a lamp gradient and Fresnel glass, so the
+// buildings read the same from gameplay distance at about the cost of the textured boxes they replace.
+void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
+  vec3 N = rzSafeN(vRzWN);
+  bool horiz = abs(N.y) > 0.7;
+  vec3 T = horiz ? vec3(1.0, 0.0, 0.0) : normalize(cross(vec3(0.0, 1.0, 0.0), N));
+  vec3 B = horiz ? normalize(cross(N, T)) : vec3(0.0, 1.0, 0.0);
+  vec2 P = vFUV; float region = vFac.x; float bseed = vFac.y; float layer = vFac.z;
+  float ruin = vRz.y, moss = vRz.z;
+  vec4 o4; emi = vec3(0.0); nW = N;
+  vec2 aa = max(fwidth(P), vec2(1e-4)) * 0.8;
+  if (region > 5.5) {
+    if (region < 6.5) { alb = vec3(0.04); orm = vec3(1.0, 0.3, 0.0); emi = vWin.rgb * vWin.w; return; }
+    if (region < 7.5) {
+      vec2 dim = max(vWin2.xy, vec2(0.1)); vec2 q = clamp(P / dim, 0.0, 1.0);
+      vec2 c = vWin2.w < 0.5 ? vec2(q.x * 2.0, q.y * max(2.0, floor(dim.y / max(dim.x * 0.85, 0.25))) * 2.0) : q * vec2(9.0, 5.0);
+      float g = step(0.45, rzH12(floor(c) + vWin2.z * 13.0));
+      g = mix(g, 0.4, smoothstep(0.12, 0.45, max(fwidth(c.x), fwidth(c.y))));
+      alb = vec3(0.02); orm = vec3(1.0, 0.2, 0.0); emi = vWin.rgb * vWin.w * (g * 0.9 + 0.08); return;
+    }
+    if (region < 8.5) { alb = vWin.rgb; if (vWin2.x > 0.0) alb = mix(alb, vWin2.y > 0.5 ? vec3(0.78, 0.76, 0.72) : alb * 0.45, step(0.5, fract(P.x / vWin2.x))); orm = vec3(1.0, vWin.w, 0.0); return; }
+    alb = vWin.rgb; orm = vec3(1.0, 0.1, 0.25); return;
+  }
+  if (region > 1.5 && region < 2.5) { alb = rzWall(6.0, vRzWP.xz, T, B, N, o4, nW) * 0.85; orm = o4.rgb; return; }
+  if (region > 2.5 && region < 4.5) {
+    float h = rzH12(vec2(bseed * 31.0, 7.0));
+    alb = mix(vec3(0.045, 0.05, 0.055), vec3(0.2, 0.19, 0.17), h);
+    if (region > 3.5) alb *= 1.0 - step(0.55, fract(P.y * 22.0)) * 0.35;
+    alb = mix(alb, vec3(0.2, 0.09, 0.035), ruin * 0.5); orm = vec3(1.0, 0.55 + ruin * 0.3, 0.55 * (1.0 - ruin)); return;
+  }
+  vec3 wall = rzWall(region > 4.5 ? 4.0 : layer, P, T, B, N, o4, nW);
+  wall *= mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), vFac.w) * (0.88 + 0.24 * rzH12(vec2(bseed * 91.0, 3.0)));
+  wall *= 1.0 - (1.0 - smoothstep(0.0, 1.5, P.y)) * 0.35;
+  if (ruin > 0.0) { wall = mix(wall, vec3(dot(wall, vec3(0.3, 0.5, 0.2))), 0.4 * ruin) * (1.0 - 0.3 * ruin); wall = mix(wall, vec3(0.085, 0.13, 0.045), moss * 0.35 * (1.0 - smoothstep(0.0, 4.0, P.y))); }
+  alb = wall; orm = o4.rgb;
+  if (region > 0.5) return;
+  float bay = vWin.x, flH = vWin.y, ww = vWin.z, wh = vWin.w, gH = vWin2.x, sill = vWin2.y, topY = vWin2.z;
+  float st = mod(vWin2.w, 10.0); float wflag = floor(vWin2.w / 10.0 + 0.01); bool shopFace = wflag > 0.5 && wflag < 1.5;
+  bool gf = P.y < gH; bool shop = gf && shopFace;
+  if (gf && wflag > 1.5) return;
+  vec2 cid, cl, wmin, wmax; float ch;
+  if (gf) { cid = vec2(floor(P.x / bay), -1.0); cl = vec2(P.x - cid.x * bay, P.y); ch = gH;
+    if (shop) { wmin = vec2(0.14, 0.4); wmax = vec2(bay - 0.14, gH - 0.95); }
+    else { wmin = vec2((bay - ww) * 0.5, sill + (gH - flH) * 0.6); wmax = wmin + vec2(ww, wh); } }
+  else { float fy = (P.y - gH) / flH; cid = vec2(floor(P.x / bay), floor(fy)); cl = vec2(P.x - cid.x * bay, (fy - cid.y) * flH); ch = flH;
+    wmin = vec2((bay - ww) * 0.5, sill); wmax = wmin + vec2(ww, wh); }
+  float zone = 1.0 - smoothstep(topY - aa.y, topY + aa.y, P.y);
+  float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone * (shop ? 0.0 : 1.0);
+  alb = mix(alb, vec3(0.40, 0.38, 0.35), sillM);
+  float open = rzBoxM(cl, wmin, wmax, aa) * zone;
+  float farW = smoothstep(0.16, 0.55, max(aa.x, aa.y));
+  vec3 hS = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
+  if (open > 0.001 && farW < 0.999) {
+    vec3 V = normalize(vRzWP - cameraPosition);
+    float cosv = max(dot(-V, N), 0.0), F = 0.04 + 0.96 * pow(1.0 - cosv, 5.0);
+    vec2 de = min(cl - wmin, wmax - cl); float fwid = shop ? 0.07 : 0.05;
+    float frameM = 1.0 - smoothstep(fwid - aa.x, fwid + aa.x, min(de.x, de.y));
+    float mx = (wmin.x + wmax.x) * 0.5, my = wmin.y + (wmax.y - wmin.y) * 0.68;
+    if (!shop) {
+      if (st > 0.5 && st < 2.5) frameM = max(frameM, 1.0 - smoothstep(fwid * 0.5 - aa.x, fwid * 0.5 + aa.x, abs(cl.x - mx)));
+      if (st > 1.5) frameM = max(frameM, 1.0 - smoothstep(fwid * 0.5 - aa.y, fwid * 0.5 + aa.y, abs(cl.y - my)));
+    }
+    float fh = rzH12(vec2(bseed * 7.0, 1.0));
+    vec3 fc = fh < 0.4 ? vec3(0.7, 0.7, 0.68) : (fh < 0.75 ? vec3(0.03, 0.03, 0.032) : vec3(0.16, 0.1, 0.06));
+    // room behind the glass: lit or dark, warm / neutral / cool lamp, brighter toward the ceiling, darker at the sill
+    bool lit = hS.x < rzLit * (shop ? 1.8 : 1.0) * (1.0 - ruin * 0.95);
+    vec3 lc = hS.y < 0.5 ? vec3(1.0, 0.66, 0.38) : (hS.y < 0.8 ? vec3(1.0, 0.84, 0.66) : vec3(0.72, 0.86, 1.0));
+    float yb = clamp((cl.y - wmin.y) / max(wmax.y - wmin.y, 0.1) + V.y * 0.25, 0.0, 1.0);
+    float xb = 1.0 - abs((cl.x - mx) / max(wmax.x - wmin.x, 0.1)) * 0.8;
+    vec3 room = lit ? lc * rzIntI * (0.3 + 0.55 * hS.z) * (shop ? 1.35 : 0.8) * (0.25 + 0.75 * yb * yb) * xb : vec3(0.004);
+    room += rzPal(hS.z) * rzDay * 0.25;
+    bool broke = ruin > 0.0 && rzH12(cid * 1.91 + vec2(bseed * 23.0, 0.7)) < ruin * 0.75;
+    vec3 wAlb = mix(vec3(0.0), fc, frameM), wOrm = mix(vec3(1.0, broke ? 0.95 : 0.04, 0.0), vec3(1.0, 0.45, 0.25), frameM);
+    vec3 wEmi = room * (1.0 - F) * (1.0 - frameM);
+    if (broke) { wAlb = mix(vec3(0.012), fc * 0.6, frameM); wEmi = vec3(0.0); }
+    alb = mix(alb, wAlb, open); orm = mix(orm, wOrm, open); emi = wEmi * open;
+  }
+  if (farW > 0.0) {
+    float cov = clamp((wmax.x - wmin.x) * (wmax.y - wmin.y) / max(bay * ch, 0.1), 0.0, 0.9) * zone;
+    vec3 avgE = vec3(0.30, 0.24, 0.17) * rzLit * rzIntI * cov * (shop ? 1.6 : 1.0) * (1.0 - ruin * 0.9);
+    alb = mix(alb, mix(wall, vec3(0.025), cov), farW); orm = mix(orm, mix(o4.rgb, vec3(1.0, 0.12, 0.0), cov), farW); emi = mix(emi, avgE, farW);
+  }
+}
+#endif
 `;
 
 const facadeCache = new Map();
@@ -2009,10 +2203,12 @@ export function windowInteriorMaterial(opts = {}) {
     rzLit: { value: opts.lit ?? 0.35 }, rzDay: { value: opts.daylight ?? 0 }, rzIntI: { value: opts.interior ?? 1 }, rzComfort: shared.comfort,
   };
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 1, envMapIntensity: opts.envMapIntensity ?? 1 });
+  const lite = (opts.interiorDetail ?? Q.interior) === 0;
   addMod(mat, 'facade', shader => {
     ensureWorld(shader);
-    patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2;');
-    patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2;');
+    if (lite) shader.uniforms.rzSpecAAOn = { value: 0 };   // the lite facade's normals are flat: no specular AA needed
+    patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz;');
+    patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;');
     decl(shader, FACADE_GLSL);
     patch(shader, 'f', '#include <map_fragment>', `vec3 fAlb, fOrm, fN, fEmi; rzFacade(fAlb, fOrm, fN, fEmi);
       diffuseColor.rgb *= fAlb; rzORM = vec4(fOrm, 0.5); rzNW = fN; rzHasN = true;`, 'replace');
@@ -2023,6 +2219,8 @@ export function windowInteriorMaterial(opts = {}) {
     patch(shader, 'f', '#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= rzORM.r; reflectedLight.indirectSpecular *= mix(1.0, rzORM.r, 0.6);', 'replace');
   }, U);
   mat.emissive.set(0x000000);
+  mat.defines = { RZ_INTERIOR: opts.interiorDetail ?? Q.interior };
+  mat.userData.rzBatchSafe = true;   // world-space shading only: the engine may merge meshes that share it
   mat.userData.facade = { uniforms: U, set lit(v) { U.rzLit.value = v; }, set daylight(v) { U.rzDay.value = v; }, set interior(v) { U.rzIntI.value = v; } };
   facadeCache.set(key, mat);
   return mat;
@@ -2030,12 +2228,12 @@ export function windowInteriorMaterial(opts = {}) {
 
 // Geometry builder that writes the facade attributes for every primitive.
 class MassingBuilder {
-  constructor() { this.P = []; this.N = []; this.U = []; this.F = []; this.W = []; this.W2 = []; this.I = []; this.n = 0; this.M = new THREE.Matrix4(); this.base = 0; this.attr(1, 0, 0, 0.5); this.win = [3, 3.2, 1.4, 1.8]; this.win2 = [0, 0.9, 1e4, 0]; }
+  constructor() { this.P = []; this.N = []; this.U = []; this.F = []; this.W = []; this.W2 = []; this.R = []; this.I = []; this.n = 0; this.M = new THREE.Matrix4(); this.base = 0; this.attr(1, 0, 0, 0.5); this.win = [3, 3.2, 1.4, 1.8]; this.win2 = [0, 0.9, 1e4, 0]; this.rz = [0, 0, 0, 0]; }
   attr(region, seed = this.fac?.[1] ?? 0, layer = this.fac?.[2] ?? 0, tintV = this.fac?.[3] ?? 0.5) { this.fac = [region, seed, layer, tintV]; return this; }
   region(r) { this.fac = [r, this.fac[1], this.fac[2], this.fac[3]]; return this; }
   _push(p, n, uv) {
     this.P.push(p.x, p.y, p.z); this.N.push(n.x, n.y, n.z); this.U.push(uv[0], uv[1]);
-    this.F.push(...this.fac); this.W.push(...this.win); this.W2.push(...this.win2); return this.n++;
+    this.F.push(...this.fac); this.W.push(...this.win); this.W2.push(...this.win2); this.R.push(...this.rz); return this.n++;
   }
   // corners in local space, CCW seen from outside. uvMode: array of 4 uvs | 'auto' | 'local'
   quad(a, b, c, d, uvMode = 'auto') {
@@ -2102,6 +2300,7 @@ class MassingBuilder {
     g.setAttribute('aFac', new THREE.Float32BufferAttribute(this.F, 4));
     g.setAttribute('aWin', new THREE.Float32BufferAttribute(this.W, 4));
     g.setAttribute('aWin2', new THREE.Float32BufferAttribute(this.W2, 4));
+    g.setAttribute('aRz', new THREE.Float32BufferAttribute(this.R, 4));
     g.setIndex(this.n > 65535 ? new THREE.Uint32BufferAttribute(this.I, 1) : new THREE.Uint16BufferAttribute(this.I, 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
     return g;
@@ -2115,26 +2314,63 @@ class MassingBuilder {
  *   floorHeight, groundFloor, bay, windowWidth, windowHeight, sill, mullion (0 none, 1 vertical, 2 cross, 3 transom)
  *   faces: [front, right, back, left] each 'windows' | 'shop' | 'blank' | 'none' (default front shop, others windows)
  *   cornice, ledges (every n floors, 0 = none), balconies (0..1), ac (0..1), fireEscape (bool), pipes (count),
- *   roof: { parapet, tank, hvac, bulkhead, antenna } booleans / counts
+ *   roof: { parapet, tank, hvac, bulkhead, antenna, solar, dish, billboard } booleans / counts
+ * Era variants (opt-in; without `era` a building looks exactly as before):
+ *   era: '2026' (contemporary: clean walls, aluminium fins on panel / concrete faces, glass balcony fronts, solar roofs)
+ *        '2049' (retrofitted Rain City: cladding patches, LED strips, LED / holo sign panels, metal canopies with LED
+ *                edges, more AC units, cable runs, dishes, aviation lights, rooftop screens)
+ *        '2196' (ruined, overgrown: blown-out and boarded windows, soot, cracks, moss, a broken parapet line, a
+ *                collapsed corner with exposed slabs and rebar, hanging vines, rusted metal, rubble at the base)
+ *   ruin 0..1, moss 0..1 (2196 defaults 0.75 / 0.65), led 0..1, ledColors [hex], holo (count of sign panels),
+ *   awnings (bool, shop faces), signBand (bool), fins (bool), cables (count)
+ *   groundBlank: true | [front, right, back, left]  ground floor left as plain wall (the scene dresses it)
+ *   detail: 'low' skips balusters, stair treads, ladder rungs and halves vines / cables
+ *   avoid(min, max) -> true: called with the world AABB of every protruding item (fire escapes, balconies, AC units,
+ *        sign panels, awnings, fins, rubble, rooftop units); returning true drops the item (keeps clear of props
+ *        a scene placed itself: signs, lamps, awnings)
  */
+const ERA = { contemporary: 1, 2026: 1, retrofit: 2, 2049: 2, ruin: 3, ruined: 3, 2196: 3 };
+export const LED_COLORS = [0xff2a8a, 0x2ae6ff, 0xffa040, 0x9a5aff, 0x3aff9a, 0xff4060];
+const _R3 = new THREE.Matrix3();
+function oboxAABB(M, c, ax, ay, az) {
+  _R3.setFromMatrix4(M);
+  const w = c.clone().applyMatrix4(M), e = new THREE.Vector3(), t = new THREE.Vector3();
+  for (const a of [ax, ay, az]) { t.copy(a).applyMatrix3(_R3); e.x += Math.abs(t.x); e.y += Math.abs(t.y); e.z += Math.abs(t.z); }
+  return [w.clone().sub(e), w.add(e)];
+}
+const lin3 = hex => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
 function addBuilding(B, o) {
   const r = rng(o.seed ?? 1), seed01 = ((o.seed ?? 1) * 0.618034) % 1;
+  const r2 = rng((o.seed ?? 1) * 7 + 3);   // era details draw from their own stream: the classic layout stays the same
   const W = o.width, D = o.depth, Ht = o.height;
+  const era = ERA[o.era] ?? 0;
+  const ruin = o.ruin ?? (era === 3 ? 0.75 : 0), moss = o.moss ?? (era === 3 ? 0.65 : 0);
+  const fine = o.detail !== 'low';
   const wallName = o.wall ?? ['brick', 'darkBrick', 'concrete', 'plaster', 'stone', 'brick'][Math.floor(r() * 6)];
   const layer = WALLS[wallName] ?? 0;
   const modern = wallName === 'panel' || wallName === 'concrete';
   const gH = o.groundFloor ?? (4.2 + r() * 0.6), flH = o.floorHeight ?? (3.0 + r() * 0.35);
+  const broken = ruin >= 0.4 && Ht > 6;
   const parapet = o.roof?.parapet ?? (modern ? 0.6 : 1.0);
   const nF = Math.max(0, Math.floor((Ht - gH - parapet - 0.6) / flH)), topY = gH + nF * flH;
   const bayT = o.bay ?? (modern ? 3.4 + r() * 0.8 : 2.6 + r() * 0.9);
   const mull = o.mullion ?? Math.floor(r() * 4);
   const tintV = r();
   const faces = o.faces || ['shop', 'windows', 'windows', 'windows'];
+  const blankG = f => (Array.isArray(o.groundBlank) ? !!o.groundBlank[f] : !!o.groundBlank);
   B.M.makeRotationY(o.yaw || 0).setPosition(...(o.position || [0, 0, 0]));
   B.base = (o.position || [0, 0, 0])[1];
+  B.rz = [era, ruin, moss, 0];
   const hw = W / 2, hd = D / 2;
+  const avoid = o.avoid || null;
+  const blocked = (c, ax, ay, az) => (avoid ? avoid(...oboxAABB(B.M, c, ax, ay, az)) : false);
+  // collapsed corner of a ruin (front-right corner, top floors): the walls and roof are built as an L around it
+  const notch = broken && W > 6 && D > 6 && nF >= 3 && (o.collapse ?? r2() < 0.7)
+    ? { x0: hw - W * (0.25 + r2() * 0.15), z0: hd - D * (0.25 + r2() * 0.15), y0: gH + flH * Math.max(1, Math.floor(nF * (0.35 + r2() * 0.3))) } : null;
   const corners = [[-hw, hd], [hw, hd], [hw, -hd], [-hw, -hd]]; // front, right, back, left start points (CCW from above)
   const faceInfo = [];
+  const jag = broken ? Math.min(2.2, flH * 0.7) : 0;   // the parapet line of a ruin is broken down by up to this much
+  const wallTop = Ht - jag;
   for (let f = 0; f < 4; f++) {
     const [x0, z0] = corners[f], [x1, z1] = corners[(f + 1) % 4];
     const len = Math.hypot(x1 - x0, z1 - z0);
@@ -2145,47 +2381,102 @@ function addBuilding(B, o) {
     const wh = o.windowHeight ?? flH * (modern ? 0.62 : 0.55);
     const sill = o.sill ?? (flH - wh) * (modern ? 0.45 : 0.6);
     B.attr(kind === 'blank' ? 1 : 0, seed01, layer, tintV);
-    B.win = [bay, flH, ww, wh]; B.win2 = [gH, sill, topY, mull + (kind === 'shop' ? 10 : 0)];
+    B.win = [bay, flH, ww, wh]; B.win2 = [gH, sill, topY, mull + (blankG(f) ? 20 : kind === 'shop' ? 10 : 0)];
     const p0 = new THREE.Vector3(x0, 0, z0), p1 = new THREE.Vector3(x1, 0, z1);
-    if (o.shell !== false) B.quad(p0, p1, p1.clone().setY(Ht), p0.clone().setY(Ht), [[0, 0], [len, 0], [len, Ht], [0, Ht]]);
+    if (o.shell !== false) {
+      if (notch && (f === 0 || f === 1)) {   // front / right walls stop under the collapsed corner
+        const cut = f === 0 ? notch.x0 + hw : hd - notch.z0;   // distance along the face where the notch starts / ends
+        if (f === 0) {
+          B.quad(p0, p0.clone().setX(notch.x0), p0.clone().setX(notch.x0).setY(wallTop), p0.clone().setY(wallTop), [[0, 0], [cut, 0], [cut, wallTop], [0, wallTop]]);
+          B.quad(p0.clone().setX(notch.x0), p1, p1.clone().setY(notch.y0), p0.clone().setX(notch.x0).setY(notch.y0), [[cut, 0], [len, 0], [len, notch.y0], [cut, notch.y0]]);
+        } else {
+          B.quad(p0, p0.clone().setZ(notch.z0), p0.clone().setZ(notch.z0).setY(notch.y0), p0.clone().setY(notch.y0), [[0, 0], [cut, 0], [cut, notch.y0], [0, notch.y0]]);
+          B.quad(p0.clone().setZ(notch.z0), p1, p1.clone().setY(wallTop), p0.clone().setZ(notch.z0).setY(wallTop), [[cut, 0], [len, 0], [len, wallTop], [cut, wallTop]]);
+        }
+      } else B.quad(p0, p1, p1.clone().setY(wallTop), p0.clone().setY(wallTop), [[0, 0], [len, 0], [len, wallTop], [0, wallTop]]);
+    }
     const T = new THREE.Vector3(x1 - x0, 0, z1 - z0).normalize(), Nf = new THREE.Vector3(-T.z, 0, T.x); // cross(T, up)
-    faceInfo.push({ p0, T, N: Nf, len, nb, bay, ww, wh, sill, kind });
+    faceInfo.push({ p0, T, N: Nf, len, nb, bay, ww, wh, sill, kind, f });
   }
   // roof, parapet, cornice
   B.attr(2, seed01, layer, tintV);
   const rY = Ht - parapet, t = 0.25;
   if (o.shell !== false) {
-    B.quad(new THREE.Vector3(-hw, rY, hd), new THREE.Vector3(hw, rY, hd), new THREE.Vector3(hw, rY, -hd), new THREE.Vector3(-hw, rY, -hd));
+    const roofY = broken ? wallTop - 0.4 : rY;
+    if (notch) {   // L-shaped roof around the collapsed corner, plus the inner faces of the collapse
+      B.quad(new THREE.Vector3(-hw, roofY, hd), new THREE.Vector3(notch.x0, roofY, hd), new THREE.Vector3(notch.x0, roofY, -hd), new THREE.Vector3(-hw, roofY, -hd));
+      B.quad(new THREE.Vector3(notch.x0, roofY, notch.z0), new THREE.Vector3(hw, roofY, notch.z0), new THREE.Vector3(hw, roofY, -hd), new THREE.Vector3(notch.x0, roofY, -hd));
+      B.attr(1, seed01, 3, tintV);   // exposed interior walls (plaster)
+      B.quad(new THREE.Vector3(notch.x0, notch.y0, hd), new THREE.Vector3(notch.x0, notch.y0, notch.z0), new THREE.Vector3(notch.x0, wallTop, notch.z0), new THREE.Vector3(notch.x0, wallTop, hd), 'local');
+      B.quad(new THREE.Vector3(notch.x0, notch.y0, notch.z0), new THREE.Vector3(hw, notch.y0, notch.z0), new THREE.Vector3(hw, wallTop, notch.z0), new THREE.Vector3(notch.x0, wallTop, notch.z0), 'local');
+      B.attr(2, seed01, layer, tintV);   // rubble-strewn slab at the bottom of the collapse
+      B.quad(new THREE.Vector3(notch.x0, notch.y0, hd), new THREE.Vector3(hw, notch.y0, hd), new THREE.Vector3(hw, notch.y0, notch.z0), new THREE.Vector3(notch.x0, notch.y0, notch.z0));
+      // slab edges of the floors that went down with it, rebar sticking out of them
+      B.attr(5, seed01, layer, tintV);
+      for (let y = notch.y0 + flH; y < roofY - 0.5; y += flH) {
+        const lx = (hw - notch.x0) * (0.25 + r2() * 0.4), lz = (hd - notch.z0) * (0.25 + r2() * 0.4);
+        B.box(notch.x0 + lx / 2, y - 0.12, (notch.z0 + hd) / 2, lx, 0.24, hd - notch.z0, { skip: [1] });
+        B.box((notch.x0 + hw) / 2, y - 0.12, notch.z0 + lz / 2, hw - notch.x0, 0.24, lz, { skip: [5] });
+        B.attr(3, seed01, layer, tintV);
+        if (fine) for (let k = 0; k < 5; k++) { const a = new THREE.Vector3(notch.x0 + lx, y - 0.1, notch.z0 + (hd - notch.z0) * r2()); B.beam(a, a.clone().add(new THREE.Vector3(0.3 + r2() * 0.5, -0.1 - r2() * 0.5, (r2() - 0.5) * 0.3)), 0.016, 0.016); }
+        B.attr(5, seed01, layer, tintV);
+      }
+      B.attr(2, seed01, layer, tintV);
+    } else B.quad(new THREE.Vector3(-hw, roofY, hd), new THREE.Vector3(hw, roofY, hd), new THREE.Vector3(hw, roofY, -hd), new THREE.Vector3(-hw, roofY, -hd));
     B.attr(1, seed01, layer, tintV);
-    B.quad(new THREE.Vector3(hw - t, rY, hd - t), new THREE.Vector3(-hw + t, rY, hd - t), new THREE.Vector3(-hw + t, Ht, hd - t), new THREE.Vector3(hw - t, Ht, hd - t));
-    B.quad(new THREE.Vector3(-hw + t, rY, -hd + t), new THREE.Vector3(hw - t, rY, -hd + t), new THREE.Vector3(hw - t, Ht, -hd + t), new THREE.Vector3(-hw + t, Ht, -hd + t));
-    B.quad(new THREE.Vector3(-hw + t, rY, hd - t), new THREE.Vector3(-hw + t, rY, -hd + t), new THREE.Vector3(-hw + t, Ht, -hd + t), new THREE.Vector3(-hw + t, Ht, hd - t));
-    B.quad(new THREE.Vector3(hw - t, rY, -hd + t), new THREE.Vector3(hw - t, rY, hd - t), new THREE.Vector3(hw - t, Ht, hd - t), new THREE.Vector3(hw - t, Ht, -hd + t));
+    if (broken) {   // broken parapet: wall stubs of random height along the edge instead of a straight line
+      const edge = (ax, az, bx, bz) => {
+        const L = Math.hypot(bx - ax, bz - az), n = Math.max(2, Math.round(L / 1.1));
+        const ux = (bx - ax) / L, uz = (bz - az) / L;
+        for (let i = 0; i < n; i++) {
+          const s0 = L * i / n, s1 = L * (i + 1) / n, hgt = jag * Math.pow(r2(), 0.7) + (r2() < 0.3 ? parapet * r2() : 0);
+          const cx = ax + ux * (s0 + s1) / 2, cz = az + uz * (s0 + s1) / 2;
+          if (notch && cx > notch.x0 - 0.3 && cz > notch.z0 - 0.3) continue;
+          if (hgt < 0.08) continue;
+          B.obox(new THREE.Vector3(cx + uz * t * 0.5, wallTop + hgt / 2, cz - ux * t * 0.5), new THREE.Vector3(ux * (s1 - s0) / 2, 0, uz * (s1 - s0) / 2), new THREE.Vector3(0, hgt / 2, 0), new THREE.Vector3(-uz * t / 2, 0, ux * t / 2), { skip: [3] });
+        }
+      };
+      edge(-hw, hd, hw, hd); edge(hw, hd, hw, -hd); edge(hw, -hd, -hw, -hd); edge(-hw, -hd, -hw, hd);
+    } else {
+      B.quad(new THREE.Vector3(hw - t, rY, hd - t), new THREE.Vector3(-hw + t, rY, hd - t), new THREE.Vector3(-hw + t, Ht, hd - t), new THREE.Vector3(hw - t, Ht, hd - t));
+      B.quad(new THREE.Vector3(-hw + t, rY, -hd + t), new THREE.Vector3(hw - t, rY, -hd + t), new THREE.Vector3(hw - t, Ht, -hd + t), new THREE.Vector3(-hw + t, Ht, -hd + t));
+      B.quad(new THREE.Vector3(-hw + t, rY, hd - t), new THREE.Vector3(-hw + t, rY, -hd + t), new THREE.Vector3(-hw + t, Ht, -hd + t), new THREE.Vector3(-hw + t, Ht, hd - t));
+      B.quad(new THREE.Vector3(hw - t, rY, -hd + t), new THREE.Vector3(hw - t, rY, hd - t), new THREE.Vector3(hw - t, Ht, hd - t), new THREE.Vector3(hw - t, Ht, -hd + t));
+    }
   }
   B.attr(5, seed01, layer, tintV);
-  if (o.cornice ?? !modern) {
+  if (broken) {
+    // the cornice fell with the parapet
+  } else if (o.cornice ?? !modern) {
     B.box(0, Ht - 0.2, 0, W + 0.5, 0.4, D + 0.5, { skip: [3] });
     B.box(0, Ht - 0.55, 0, W + 0.3, 0.3, D + 0.3, { skip: [2] });
     B.box(0, Ht - 0.8, 0, W + 0.16, 0.2, D + 0.16, { skip: [2] });
   } else B.box(0, Ht + 0.04, 0, W + 0.08, 0.08, D + 0.08, { skip: [3] });
   // ground-floor sign band ledge and string courses
-  B.box(0, gH - 0.05, 0, W + 0.24, 0.22, D + 0.24, { skip: [] });
+  if (o.groundLedge !== false) B.box(0, gH - 0.05, 0, W + 0.24, 0.22, D + 0.24, { skip: [] });
   const ledges = o.ledges ?? (modern ? 0 : 3);
-  if (ledges) for (let j = ledges; j < nF; j += ledges) B.box(0, gH + j * flH + 0.04, 0, W + 0.12, 0.16, D + 0.12);
+  if (ledges) for (let j = ledges; j < nF; j += ledges) { const y = gH + j * flH + 0.04; if (notch && y > notch.y0) continue; B.box(0, y, 0, W + 0.12, 0.16, D + 0.12); }
   // per-face details
   const detailRegion = (rg) => B.attr(rg, seed01, layer, tintV);
+  const special = (rg, win, win2, fn) => { const pw = B.win, pw2 = B.win2; B.attr(rg, seed01, layer, tintV); B.win = win; B.win2 = win2; fn(); B.win = pw; B.win2 = pw2; };
+  const ledCols = o.ledColors || LED_COLORS;
+  const ledC = lin3(ledCols[Math.floor(r2() * ledCols.length)]);
   faceInfo.forEach((F, fi) => {
     if (!F || F.kind === 'blank') return;
     const at = (u, y, out) => F.p0.clone().addScaledVector(F.T, u).setY(y).addScaledVector(F.N, out);
+    const axes = (sx, sy, sz) => [F.T.clone().multiplyScalar(sx / 2), new THREE.Vector3(0, sy / 2, 0), F.N.clone().multiplyScalar(sz / 2)];
     const placeBox = (u, y, out, sx, sy, sz, opts) => { // box aligned to the face frame (sx along T, sz along N)
       const c = at(u, y, out);
-      B.obox(c, F.T.clone().multiplyScalar(sx / 2), new THREE.Vector3(0, sy / 2, 0), F.N.clone().multiplyScalar(sz / 2), opts);
+      B.obox(c, ...axes(sx, sy, sz), opts);
     };
+    const free = (u, y, out, sx, sy, sz) => !blocked(at(u, y, out), ...axes(sx, sy, sz));
+    const inNotch = (u, y) => { if (!notch || y < notch.y0 - 0.3) return false; const p = at(u, y, 0); return p.x > notch.x0 - 0.4 && p.z > notch.z0 - 0.4; };
     // AC units under windows
-    const acP = o.ac ?? (modern ? 0.04 : 0.16);
+    const acP = o.ac ?? (era === 2 ? 0.22 : modern ? 0.04 : 0.16);
     for (let i = 0; i < F.nb; i++) for (let j = 0; j < nF; j++) {
       if (r() > acP) continue;
       const u = (i + 0.5) * F.bay + (r() - 0.5) * 0.3, y = gH + j * flH + F.sill - 0.42;
+      if ((!fine && r2() > 0.6) || inNotch(u, y) || !free(u, y, 0.27, 0.8, 0.55, 0.55)) continue;   // 'low': 60 % of them
       detailRegion(3);
       placeBox(u, y, 0.27, 0.76, 0.5, 0.52, { faceRegion: { 4: 4 }, faceUV: { 4: 'local' } });
       placeBox(u - 0.3, y - 0.3, 0.2, 0.05, 0.05, 0.4); placeBox(u + 0.3, y - 0.3, 0.2, 0.05, 0.05, 0.4);
@@ -2193,67 +2484,220 @@ function addBuilding(B, o) {
     // balconies (front and back only), stacked in chosen columns
     const balP = o.balconies ?? (wallName === 'plaster' || wallName === 'concrete' ? 0.35 : 0.0);
     if ((fi === 0 || fi === 2) && balP > 0) for (let i = 0; i < F.nb; i++) {
-      if (r() > balP) continue;
+      if (r() > balP || (!fine && r2() > 0.5)) continue;   // 'low': half of the balcony stacks
       const u = (i + 0.5) * F.bay, bw = Math.min(F.bay * 0.92, 3.2), bd = 1.15;
+      if (!free(u, (gH + flH + topY) / 2, bd / 2, bw, topY - gH - flH + 1.2, bd)) continue;
       for (let j = 1; j < nF; j++) {
         const y = gH + j * flH;
+        if (inNotch(u, y)) continue;
+        if (ruin > 0 && r2() < ruin * 0.35) continue;   // fallen
         detailRegion(5); placeBox(u, y - 0.08, bd / 2, bw, 0.16, bd);
+        if (era === 1) {   // contemporary: glass balcony front on a steel top rail
+          special(9, [0.03, 0.045, 0.05, 0], [0.9, 0, 0, 0], () => { placeBox(u, y + 0.52, bd - 0.03, bw - 0.06, 0.9, 0.02); placeBox(u - bw / 2 + 0.03, y + 0.52, bd / 2, 0.02, 0.9, bd - 0.06); placeBox(u + bw / 2 - 0.03, y + 0.52, bd / 2, 0.02, 0.9, bd - 0.06); });
+          detailRegion(3); placeBox(u, y + 1.0, bd - 0.03, bw, 0.04, 0.05);
+          continue;
+        }
         detailRegion(3);
         placeBox(u, y + 1.0, bd - 0.03, bw, 0.05, 0.05);
         placeBox(u - bw / 2 + 0.03, y + 1.0, bd / 2, 0.05, 0.05, bd); placeBox(u + bw / 2 - 0.03, y + 1.0, bd / 2, 0.05, 0.05, bd);
-        const nb = Math.floor(bw / 0.14);
+        const nb = fine ? Math.floor(bw / 0.14) : Math.floor(bw / 0.45);
         for (let k = 0; k <= nb; k++) placeBox(u - bw / 2 + 0.03 + k * (bw - 0.06) / nb, y + 0.5, bd - 0.03, 0.022, 1.0, 0.022, { skip: [2, 3] });
       }
     }
     // fire escape on the front face of older buildings
     if (fi === (o.fireEscapeFace ?? 0) && (o.fireEscape ?? (!modern && r() < 0.5)) && F.nb >= 3 && nF >= 2) {
       const c0 = Math.max(1, Math.floor(F.nb / 2) - 1), u0 = c0 * F.bay + 0.2, u1 = (c0 + 2) * F.bay - 0.2, dep = 1.25;
-      detailRegion(3);
-      for (let j = 1; j <= nF - 1; j++) {
-        const py = gH + (j - 1) * flH + 0.1;
-        placeBox((u0 + u1) / 2, py, dep / 2, u1 - u0, 0.06, dep);
-        placeBox((u0 + u1) / 2, py + 0.95, dep - 0.02, u1 - u0, 0.04, 0.04);
-        placeBox((u0 + u1) / 2, py + 0.5, dep - 0.02, u1 - u0, 0.03, 0.03);
-        placeBox(u0 + 0.02, py + 0.48, dep / 2, 0.04, 0.96, dep - 0.02, { skip: [] });
-        placeBox(u1 - 0.02, py + 0.48, dep / 2, 0.04, 0.04, dep);
-        for (let k = 0; k <= 6; k++) placeBox(u0 + (u1 - u0) * k / 6, py + 0.5, dep - 0.02, 0.03, 0.95, 0.03, { skip: [2, 3] });
-        if (j < nF - 1) { // stair flight to the next platform
-          const a = at(u0 + 0.35, py + 0.05, dep * 0.45), b = at(u0 + 0.35 + flH * 0.95, py + flH + 0.05, dep * 0.45);
-          B.beam(a.clone().addScaledVector(F.N, -0.28), b.clone().addScaledVector(F.N, -0.28), 0.04, 0.16);
-          B.beam(a.clone().addScaledVector(F.N, 0.28), b.clone().addScaledVector(F.N, 0.28), 0.04, 0.16);
-          for (let k = 1; k < 9; k++) { const p = a.clone().lerp(b, k / 9); B.obox(p, F.T.clone().multiplyScalar(0.11), new THREE.Vector3(0, 0.015, 0), F.N.clone().multiplyScalar(0.28)); }
+      const feTop = gH + (nF - 1) * flH + 1.2, feBot = gH - 2.0;
+      if (!inNotch(u0, gH + flH * 2) && free((u0 + u1) / 2, (feTop + feBot) / 2, dep / 2, u1 - u0 + 0.2, feTop - feBot, dep + 0.1)) {
+        detailRegion(3);
+        for (let j = 1; j <= nF - 1; j++) {
+          const py = gH + (j - 1) * flH + 0.1;
+          if (inNotch(u1, py)) break;
+          placeBox((u0 + u1) / 2, py, dep / 2, u1 - u0, 0.06, dep);
+          placeBox((u0 + u1) / 2, py + 0.95, dep - 0.02, u1 - u0, 0.04, 0.04);
+          placeBox((u0 + u1) / 2, py + 0.5, dep - 0.02, u1 - u0, 0.03, 0.03);
+          placeBox(u0 + 0.02, py + 0.48, dep / 2, 0.04, 0.96, dep - 0.02, { skip: [] });
+          placeBox(u1 - 0.02, py + 0.48, dep / 2, 0.04, 0.04, dep);
+          if (fine) for (let k = 0; k <= 6; k++) placeBox(u0 + (u1 - u0) * k / 6, py + 0.5, dep - 0.02, 0.03, 0.95, 0.03, { skip: [2, 3] });
+          if (j < nF - 1) { // stair flight to the next platform
+            const a = at(u0 + 0.35, py + 0.05, dep * 0.45), b = at(u0 + 0.35 + flH * 0.95, py + flH + 0.05, dep * 0.45);
+            B.beam(a.clone().addScaledVector(F.N, -0.28), b.clone().addScaledVector(F.N, -0.28), 0.04, 0.16);
+            B.beam(a.clone().addScaledVector(F.N, 0.28), b.clone().addScaledVector(F.N, 0.28), 0.04, 0.16);
+            if (fine) for (let k = 1; k < 9; k++) { const p = a.clone().lerp(b, k / 9); B.obox(p, F.T.clone().multiplyScalar(0.11), new THREE.Vector3(0, 0.015, 0), F.N.clone().multiplyScalar(0.28)); }
+          }
         }
+        // drop ladder
+        const lx = u1 - 0.5, ly0 = gH - 2.0, ly1 = gH + 0.1;
+        placeBox(lx - 0.2, (ly0 + ly1) / 2, dep - 0.15, 0.04, ly1 - ly0, 0.04); placeBox(lx + 0.2, (ly0 + ly1) / 2, dep - 0.15, 0.04, ly1 - ly0, 0.04);
+        if (fine) for (let y = ly0 + 0.15; y < ly1; y += 0.3) placeBox(lx, y, dep - 0.15, 0.4, 0.03, 0.03, { skip: [2, 3] });
       }
-      // drop ladder
-      const lx = u1 - 0.5, ly0 = gH - 2.0, ly1 = gH + 0.1;
-      placeBox(lx - 0.2, (ly0 + ly1) / 2, dep - 0.15, 0.04, ly1 - ly0, 0.04); placeBox(lx + 0.2, (ly0 + ly1) / 2, dep - 0.15, 0.04, ly1 - ly0, 0.04);
-      for (let y = ly0 + 0.15; y < ly1; y += 0.3) placeBox(lx, y, dep - 0.15, 0.4, 0.03, 0.03, { skip: [2, 3] });
     }
-    // drain pipes
+    // drain pipes (with a hopper head under the roof edge and a shoe at the bottom)
     const nPipes = o.pipes ?? (r() < 0.6 ? 1 : 0);
     if (fi === 0 || fi === 1) for (let k = 0; k < nPipes; k++) {
       const u = r() < 0.5 ? 0.25 : F.len - 0.25;
       detailRegion(3);
-      const c = at(u, 0, 0.12);
-      B.cylinder(c.x, 0.0, c.z, 0.065, Ht - 0.3, 6, { top: false });
-      for (let y = 2; y < Ht - 1; y += 2.5) placeBox(u, y, 0.06, 0.18, 0.05, 0.12);
+      const c = at(u, 0, 0.12), top = (inNotch(u, Ht - 1) ? notch.y0 : broken ? wallTop - 0.5 : Ht - 0.3);
+      B.cylinder(c.x, 0.0, c.z, 0.065, top, 6, { top: false });
+      for (let y = 2; y < top - 1; y += 2.5) placeBox(u, y, 0.06, 0.18, 0.05, 0.12);
+      if (era) { placeBox(u, top - 0.15, 0.14, 0.26, 0.3, 0.22); placeBox(u, 0.12, 0.2, 0.16, 0.24, 0.26); }
+    }
+    if (!era) return;
+    // ---------------- era details (opt-in) ----------------
+    const shopF = F.kind === 'shop' && !blankG(F.f);
+    // shop canopies / awnings over the shop windows, sign band above them
+    if (shopF && (o.awnings ?? true)) {
+      const per = F.bay > 4 ? 1 : 2;
+      for (let i = 0; i < F.nb; i += per) {
+        const u0 = i * F.bay + 0.12, u1 = Math.min(F.len, (i + per) * F.bay) - 0.12, uc = (u0 + u1) / 2, wl = u1 - u0;
+        const yTop = gH - 0.78, ext = era === 3 ? 0.6 + r2() * 0.5 : 1.25, drop = era === 2 ? 0.08 : 0.45;
+        if (!free(uc, yTop - drop / 2, ext / 2 + 0.02, wl, drop + 0.3, ext + 0.04)) continue;
+        if (era === 2) {   // 2049: slim metal canopy with an LED edge
+          detailRegion(3); placeBox(uc, yTop, ext / 2, wl, 0.1, ext);
+          special(6, [...ledC, 2.2], [0, 0, 0, 0], () => placeBox(uc, yTop - 0.06, ext - 0.02, wl, 0.03, 0.03));
+          detailRegion(3); for (const uu of [u0 + 0.2, u1 - 0.2]) B.beam(at(uu, yTop + 0.03, ext - 0.1), at(uu, yTop + 0.9, 0.02), 0.025, 0.025);
+        } else {           // fabric awning (2026 striped, 2196 torn and faded)
+          const fc = era === 3 ? lin3([0x4a4436, 0x3b3f36, 0x51402e][Math.floor(r2() * 3)]) : lin3([0x7a1f1f, 0x1f3b5a, 0x2d4a2b, 0x6a5a2a, 0x333333][Math.floor(r2() * 5)]);
+          special(8, [...fc, 0.85], [era === 3 ? 0 : 0.5, 1, 0, 0], () => {
+            const a0 = at(u0, yTop + 0.02, 0.02), a1 = at(u1, yTop + 0.02, 0.02), b1 = at(u1, yTop - drop, ext), b0 = at(u0, yTop - drop, ext);
+            B.quad(a0, b0, b1, a1, 'local'); B.quad(a0, a1, b1, b0, 'local');   // top and underside
+            const c0 = b0.clone().setY(yTop - drop - 0.28), c1 = b1.clone().setY(yTop - drop - 0.28);
+            B.quad(b0, c0, c1, b1, 'local'); B.quad(b0, b1, c1, c0, 'local');   // valance, both sides
+          });
+        }
+      }
+      if (o.signBand ?? true) {   // fascia board / LED screen band above the shop windows
+        const u = F.len / 2, wl = F.len - 0.6;
+        if (free(u, gH - 0.4, 0.06, wl, 0.5, 0.12)) {
+          if (era === 2) special(7, [...ledC, 1.6], [wl, 0.42, r2() * 9, 1], () => placeBox(u, gH - 0.42, 0.05, wl, 0.42, 0.08, { faceRegion: { 0: 3, 1: 3, 2: 3, 3: 3, 5: 3 }, faceUV: { 4: 'local' } }));
+          else special(8, [...(era === 3 ? lin3(0x2c2a26) : lin3([0x14181d, 0x2a2420, 0x1d2a24][Math.floor(r2() * 3)])), 0.6], [0, 0, 0, 0], () => placeBox(u, gH - 0.42, 0.05, wl, 0.42, 0.08));
+        }
+      }
+    }
+    // 2026: vertical aluminium fins on the panel / concrete faces
+    if (era === 1 && modern && F.kind !== 'shop' && (o.fins ?? true) && free(F.len / 2, (gH + topY) / 2, 0.15, F.len, topY - gH, 0.3)) {
+      detailRegion(3);
+      for (let i = 0; i <= F.nb; i++) placeBox(Math.min(F.len - 0.05, Math.max(0.05, i * F.bay)), (gH + topY) / 2, 0.14, 0.07, topY - gH, 0.28);
+    }
+    if (era === 2) {
+      // LED strips along a few floor lines and up one or two corners
+      const ledP = o.led ?? 0.5;
+      if (ledP > 0 && nF > 1) {
+        const every = Math.max(2, Math.round(3 + (1 - ledP) * 6));
+        special(6, [...ledC, 2.4], [0, 0, 0, 0], () => {
+          for (let j = every; j < nF; j += every) placeBox(F.len / 2, gH + j * flH - 0.03, 0.03, F.len, 0.05, 0.05);
+          if (r2() < ledP) placeBox(0.05, (gH + Ht) / 2, 0.03, 0.05, Ht - gH, 0.05);
+          placeBox(F.len / 2, Ht - 0.05, 0.02, F.len, 0.05, 0.05);   // roof-line strip
+        });
+      }
+      // LED / holo sign panels: a vertical blade on a bracket or a flat screen on the upper floors
+      const nHolo = o.holo ?? (Ht > 20 && (fi === 1 || fi === 0) ? (r2() < 0.6 ? 1 : 0) : 0);
+      for (let k = 0; k < nHolo; k++) {
+        const kind = r2() < 0.55 ? 0 : (r2() < 0.75 ? 1 : 2), col = lin3(ledCols[Math.floor(r2() * ledCols.length)]);
+        if (kind === 0) {
+          const bw = 1.0 + r2() * 0.4, bh = 4 + r2() * 4, u = r2() < 0.5 ? 1.2 + r2() * 2 : F.len - 1.2 - r2() * 2, y = gH + 2 + r2() * Math.max(1, Math.min(10, topY - gH - bh - 2));
+          if (!free(u, y + bh / 2, 0.15 + bw / 2, 0.16, bh, bw + 0.3)) continue;
+          special(7, [...col, 2.4], [bw, bh, r2() * 9, 0], () => placeBox(u, y + bh / 2, 0.2 + bw / 2, 0.12, bh, bw, { faceRegion: { 2: 3, 3: 3, 4: 3, 5: 3 }, faceUV: { 0: 'local', 1: 'local' } }));
+          detailRegion(3); placeBox(u, y + bh - 0.3, 0.12, 0.08, 0.08, 0.3); placeBox(u, y + 0.3, 0.12, 0.08, 0.08, 0.3);
+        } else {
+          const sw = Math.min(F.len - 1, 4 + r2() * 5), sh = Math.min(sw * 0.6, 2.4 + r2() * 2.2), u = sw / 2 + 0.5 + r2() * (F.len - sw - 1), y = gH + flH * (1 + Math.floor(r2() * Math.max(1, nF - 3)));
+          if (y + sh > topY || !free(u, y + sh / 2, 0.1, sw + 0.2, sh + 0.2, 0.2)) continue;
+          special(7, [...col, kind === 2 ? 2.2 : 1.5], [sw, sh, r2() * 9, kind], () => placeBox(u, y + sh / 2, 0.08, sw, sh, 0.1, { faceRegion: { 0: 3, 1: 3, 2: 3, 3: 3, 5: 3 }, faceUV: { 4: 'local' } }));
+          detailRegion(3); placeBox(u, y + sh + 0.04, 0.1, sw + 0.1, 0.08, 0.14); placeBox(u, y - 0.04, 0.1, sw + 0.1, 0.08, 0.14);
+        }
+      }
+      // cable runs drooping across the facade between windows
+      const nC = o.cables ?? (fine ? Math.floor(r2() * 3) : Math.floor(r2() * 1.6));
+      detailRegion(3);
+      for (let k = 0; k < nC; k++) {
+        const y = gH + 0.3 + r2() * Math.max(1, Math.min(nF, 4) * flH), u0 = r2() * F.len * 0.4, u1 = u0 + F.len * (0.3 + r2() * 0.5), sag = 0.3 + r2() * 0.6;
+        let prev = null;
+        for (let s = 0; s <= 8; s++) { const tt = s / 8; const p = at(u0 + (u1 - u0) * tt, y - sag * 4 * tt * (1 - tt), 0.07 + 0.02 * k); if (prev) B.beam(prev, p, 0.022, 0.022); prev = p; }
+      }
+    }
+    if (era === 3) {
+      // hanging vines from the roof line and the ledges
+      const nV = Math.round((fine ? 1 : 0.5) * moss * F.len / 2.2);
+      for (let k = 0; k < nV; k++) {
+        const u = r2() * F.len, len = 1.5 + r2() * Math.min(10, Ht * 0.5), y0 = Math.min(wallTop, Ht) - 0.1 - r2() * 0.3;
+        if (inNotch(u, y0)) continue;
+        const wv = 0.18 + r2() * 0.35, gc = lin3([0x23361a, 0x2c4220, 0x1d2c14, 0x3a4a22][Math.floor(r2() * 4)]);
+        special(8, [...gc, 0.92], [0, 0, 0, 0], () => {
+          let pu = u;
+          for (let s = 0; s < 5; s++) {
+            const ya = y0 - len * s / 5, yb = y0 - len * (s + 1) / 5, nu = pu + (r2() - 0.5) * 0.3, wa = wv * (1 - s * 0.15), wb = wv * (1 - (s + 1) * 0.15) * (s === 4 ? 0.3 : 1);
+            B.quad(at(nu - wb / 2, yb, 0.05 + s * 0.01), at(nu + wb / 2, yb, 0.05 + s * 0.01), at(pu + wa / 2, ya, 0.04 + s * 0.01), at(pu - wa / 2, ya, 0.04 + s * 0.01), 'local');
+            pu = nu;
+          }
+        });
+      }
+      // rubble along the base
+      detailRegion(5);
+      const nR = Math.round(ruin * F.len / 2.5);
+      for (let k = 0; k < nR; k++) { const u = r2() * F.len, s = 0.25 + r2() * 0.7; if (free(u, s * 0.3, 0.3 + s * 0.4, s, s * 0.6, s)) placeBox(u, s * 0.25, 0.25 + s * 0.4, s * (0.8 + r2() * 0.6), s * 0.5, s * (0.7 + r2() * 0.5)); }
     }
   });
   // rooftop clutter
   detailRegion(3);
   const roofItems = o.roof ?? {};
-  if (roofItems.bulkhead ?? r() < 0.7) { const bw = Math.min(3.2, W * 0.3), bd = Math.min(3, D * 0.3); detailRegion(1); B.box(-hw + bw / 2 + 1.2, rY + 1.3, -hd + bd / 2 + 1.2, bw, 2.6, bd); detailRegion(5); B.box(-hw + bw / 2 + 1.2, rY + 2.65, -hd + bd / 2 + 1.2, bw + 0.2, 0.12, bd + 0.2); }
+  const roofY = broken ? wallTop - 0.4 : rY;
+  const roofFree = (x, y, z, sx, sy, sz) => !blocked(new THREE.Vector3(x, y, z), new THREE.Vector3(sx / 2, 0, 0), new THREE.Vector3(0, sy / 2, 0), new THREE.Vector3(0, 0, sz / 2)) && !(notch && x + sx / 2 > notch.x0 - 0.3 && z + sz / 2 > notch.z0 - 0.3);
+  if (roofItems.bulkhead ?? r() < 0.7) { const bw = Math.min(3.2, W * 0.3), bd = Math.min(3, D * 0.3), bx = -hw + bw / 2 + 1.2, bz = -hd + bd / 2 + 1.2; if (roofFree(bx, roofY + 1.3, bz, bw, 2.6, bd)) { detailRegion(1); B.box(bx, roofY + 1.3, bz, bw, 2.6, bd); detailRegion(5); B.box(bx, roofY + 2.65, bz, bw + 0.2, 0.12, bd + 0.2); } }
   const hv = roofItems.hvac ?? (1 + Math.floor(r() * 3));
-  for (let k = 0; k < hv; k++) { detailRegion(3); const x = (r() - 0.5) * (W - 4), z = (r() - 0.5) * (D - 4), s = 1 + r() * 1.2; B.box(x, rY + s * 0.45, z, s * 1.4, s * 0.9, s, { faceRegion: { 2: 4 }, faceUV: { 2: 'local' } }); }
+  for (let k = 0; k < hv; k++) { detailRegion(3); const x = (r() - 0.5) * (W - 4), z = (r() - 0.5) * (D - 4), s = 1 + r() * 1.2; if (roofFree(x, roofY + s * 0.45, z, s * 1.4, s * 0.9, s)) B.box(x, roofY + s * 0.45, z, s * 1.4, s * 0.9, s, { faceRegion: { 2: 4 }, faceUV: { 2: 'local' } }); }
   if ((roofItems.tank ?? (!modern && r() < 0.55)) && W > 7 && D > 7) {
-    const x = hw - 3.2, z = -hd + 3.2, h0 = rY + 1.6; detailRegion(3);
-    for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.box(x + dx * 1.0, rY + 0.8, z + dz * 1.0, 0.14, 1.6, 0.14);
-    B.box(x, h0 + 0.05, z, 2.6, 0.1, 2.6);
-    B.attr(3, seed01 + 0.37, layer, tintV); B.cylinder(x, h0 + 0.1, z, 1.35, 2.7, 12, { top: false, cone: 0.7 });
+    const x = hw - 3.2, z = -hd + 3.2, h0 = roofY + 1.6;
+    if (roofFree(x, roofY + 2.2, z, 2.8, 4.4, 2.8)) {
+      detailRegion(3);
+      for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.box(x + dx * 1.0, roofY + 0.8, z + dz * 1.0, 0.14, 1.6, 0.14);
+      B.box(x, h0 + 0.05, z, 2.6, 0.1, 2.6);
+      B.attr(3, seed01 + 0.37, layer, tintV); B.cylinder(x, h0 + 0.1, z, 1.35, 2.7, 12, { top: false, cone: 0.7 });
+    }
   }
   const ant = roofItems.antenna ?? (r() < 0.5 ? 1 + Math.floor(r() * 2) : 0);
-  for (let k = 0; k < ant; k++) { detailRegion(3); const x = (r() - 0.5) * (W - 3), z = (r() - 0.5) * (D - 3); B.cylinder(x, rY, z, 0.04, 3 + r() * 4, 5, { top: false }); }
-  return { topY, floors: nF, groundFloor: gH, floorHeight: flH, faces: faceInfo };
+  let tallest = null;
+  for (let k = 0; k < ant; k++) {
+    detailRegion(3); const x = (r() - 0.5) * (W - 3), z = (r() - 0.5) * (D - 3), h = 3 + r() * 4;
+    if (!roofFree(x, roofY + h / 2, z, 0.3, h, 0.3)) continue;
+    B.cylinder(x, roofY, z, 0.04, h, 5, { top: false });
+    if (!tallest || h > tallest.h) tallest = { x, z, h };
+  }
+  if (era === 2 || era === 1) {
+    if ((roofItems.solar ?? (era === 1 ? r2() < 0.7 : r2() < 0.25)) && W > 8 && D > 8) {   // tilted solar panel rows
+      const rows = Math.min(4, Math.floor((D - 4) / 2.6)), pw = Math.min(W - 5, 8);
+      for (let j = 0; j < rows; j++) {
+        const z = -hd + 2.5 + j * 2.6 + (hd - 2.5 - rows * 1.3) * 0.0, x = hw - pw / 2 - 1.6;
+        if (!roofFree(x, roofY + 0.6, z, pw, 1.2, 1.8)) continue;
+        const ta = 0.5;   // tilt (rad): the panel rises toward +z
+        special(9, [0.02, 0.035, 0.07, 0], [0.55, 0, 0, 0], () => B.obox(new THREE.Vector3(x, roofY + 0.62, z), new THREE.Vector3(pw / 2, 0, 0), new THREE.Vector3(0, Math.cos(ta) * 0.035, -Math.sin(ta) * 0.035), new THREE.Vector3(0, Math.sin(ta) * 0.85, Math.cos(ta) * 0.85), { faceRegion: { 0: 3, 1: 3, 3: 3, 4: 3, 5: 3 } }));
+        detailRegion(3); B.box(x, roofY + 0.5, z + 0.6, pw, 0.06, 0.06); B.box(x, roofY + 0.17, z - 0.6, pw, 0.06, 0.06);
+        for (const dx of [-pw / 2 + 0.2, pw / 2 - 0.2]) { B.box(x + dx, roofY + 0.25, z + 0.6, 0.05, 0.5, 0.05); B.box(x + dx, roofY + 0.09, z - 0.6, 0.05, 0.18, 0.05); }
+      }
+    }
+    if (era === 2 && (roofItems.dish ?? r2() < 0.6)) {   // satellite dishes on stubs
+      const n = 1 + Math.floor(r2() * 3);
+      for (let k = 0; k < n; k++) {
+        const x = (r2() - 0.5) * (W - 3), z = (r2() - 0.5) * (D - 3), rd = 0.35 + r2() * 0.4;
+        if (!roofFree(x, roofY + 0.8, z, rd * 2.2, 1.6, rd * 2.2)) continue;
+        detailRegion(3); B.box(x, roofY + 0.45, z, 0.08, 0.9, 0.08);
+        B.M.multiply(new THREE.Matrix4().makeTranslation(x, roofY + 1.0, z).multiply(new THREE.Matrix4().makeRotationX(-1.1)).multiply(new THREE.Matrix4().makeRotationZ(r2() * 6.28)));
+        B.cylinder(0, 0, 0, rd, 0.05, 10, { top: false, cone: rd * 0.45 });
+        B.M.makeRotationY(o.yaw || 0).setPosition(...(o.position || [0, 0, 0]));
+      }
+    }
+    if (era === 2 && (roofItems.billboard ?? (Ht < 40 && r2() < 0.3)) && W > 8) {   // rooftop screen on a steel frame
+      const sw = Math.min(W - 2, 6 + r2() * 5), sh = sw * 0.45, z = hd - 1.0, x = 0;
+      if (roofFree(x, roofY + 1.2 + sh / 2, z, sw + 0.4, sh + 1.4, 0.6)) {
+        const col = lin3(ledCols[Math.floor(r2() * ledCols.length)]);
+        special(7, [...col, 1.8], [sw, sh, r2() * 9, r2() < 0.5 ? 1 : 2], () => B.box(x, roofY + 1.2 + sh / 2, z, sw, sh, 0.12, { faceRegion: { 0: 3, 1: 3, 2: 3, 3: 3, 5: 3 }, faceUV: { 4: 'local' } }));
+        detailRegion(3);
+        for (const dx of [-sw / 2 + 0.3, sw / 2 - 0.3]) { B.box(x + dx, roofY + 0.6 + sh / 2, z - 0.3, 0.12, 1.2 + sh, 0.12); B.beam(new THREE.Vector3(x + dx, roofY, z - 1.6), new THREE.Vector3(x + dx, roofY + sh, z - 0.2), 0.08, 0.08); }
+      }
+    }
+    if (era === 2 && tallest && Ht > 25) special(6, [1, 0.08, 0.05, 3.5], [0, 0, 0, 0], () => B.box(tallest.x, roofY + tallest.h + 0.08, tallest.z, 0.16, 0.16, 0.16));   // aviation light
+  }
+  B.rz = [0, 0, 0, 0];
+  return { topY, floors: nF, groundFloor: gH, floorHeight: flH, faces: faceInfo, era, ruin, notch };
 }
 
 /**
@@ -2264,7 +2708,8 @@ function addBuilding(B, o) {
  */
 export function cityBlock(list, opts = {}) {
   const B = new MassingBuilder();
-  const infos = list.map(o => addBuilding(B, o));
+  // block-wide defaults: era, avoid, and the 'low' tier's lighter detail (no balusters / stair treads / rungs)
+  const infos = list.map(o => addBuilding(B, { ...o, era: o.era ?? opts.era, avoid: o.avoid ?? opts.avoid, detail: o.detail ?? opts.detail ?? (qualityName === 'low' ? 'low' : 'high') }));
   const geo = B.build();
   const mat = opts.material || windowInteriorMaterial({ lit: opts.lit, daylight: opts.daylight, interior: opts.interior });
   const mesh = new THREE.Mesh(geo, mat);
@@ -2279,8 +2724,230 @@ export function cityBlock(list, opts = {}) {
  *   scene.add(facadeDetails([{ width: 14, depth: 12, height: 30, position: [x, 0, z], yaw: 0, seed: 4, wall: 'brick', fireEscape: true }]).mesh)
  */
 export function facadeDetails(list, opts = {}) { return cityBlock(list.map(o => ({ ...o, shell: false })), { ...opts, name: opts.name || 'facadeDetails' }); }
+/**
+ * Geometry of ONE building (same options as cityBlock buildings, incl. era / avoid / groundBlank) with its footprint
+ * centered on the origin and its walls starting at y = base (kit.box() uses base = -height / 2 for its centered boxes).
+ * Use it with windowInteriorMaterial(). geometry.userData.building -> { topY, floors, faces, ... }
+ *   mesh.geometry = facadeGeometry({ width: 14, depth: 18, height: 40, base: -20, seed: 3, era: '2049' })
+ */
+export function facadeGeometry(o) {
+  const B = new MassingBuilder();
+  const info = addBuilding(B, { ...o, position: [0, o.base ?? 0, 0], detail: o.detail ?? (qualityName === 'low' ? 'low' : 'high') });
+  const g = B.build(); g.userData.building = info;
+  return g;
+}
 /** Single building convenience: buildingMesh({ width, depth, height, position, seed, ... }) -> Mesh. */
 export function buildingMesh(o, opts = {}) { return cityBlock([o], opts).mesh; }
+
+// ---------- ancient settlement: stone / mud-brick / half-timber houses with thatch, flat or no roofs ----------
+// Geometry accumulator per material (world-space positions; uv in texture tiles for the uv-mapped thatch).
+class PartAcc {
+  constructor() { this.parts = {}; this.M = new THREE.Matrix4(); this.R = new THREE.Matrix3(); }
+  _p(key) { return this.parts[key] || (this.parts[key] = { P: [], N: [], U: [], I: [] }); }
+  set(matrix) { this.M.copy(matrix); this.R.setFromMatrix4(matrix); return this; }
+  // corners CCW seen from outside; uvs optional [[u, v] x4]
+  quad(key, a, b, c, d, uvs) {
+    const o = this._p(key), w = [a, b, c, d].map(p => p.clone().applyMatrix4(this.M));
+    const n = new THREE.Vector3().subVectors(w[1], w[0]).cross(new THREE.Vector3().subVectors(w[3], w[0])).normalize();
+    const base = o.P.length / 3;
+    w.forEach((p, k) => { o.P.push(p.x, p.y, p.z); o.N.push(n.x, n.y, n.z); o.U.push(...(uvs ? uvs[k] : [0, 0])); });
+    o.I.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  tri(key, a, b, c, uvs) {
+    const o = this._p(key), w = [a, b, c].map(p => p.clone().applyMatrix4(this.M));
+    const n = new THREE.Vector3().subVectors(w[1], w[0]).cross(new THREE.Vector3().subVectors(w[2], w[0])).normalize();
+    const base = o.P.length / 3;
+    w.forEach((p, k) => { o.P.push(p.x, p.y, p.z); o.N.push(n.x, n.y, n.z); o.U.push(...(uvs ? uvs[k] : [0, 0])); });
+    o.I.push(base, base + 1, base + 2);
+  }
+  // axis-aligned box in the current frame (center, size); skip: face indices to omit (0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z)
+  box(key, cx, cy, cz, sx, sy, sz, skip) {
+    const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2, V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const F = [
+      [V(x1, y0, z1), V(x1, y0, z0), V(x1, y1, z0), V(x1, y1, z1)], [V(x0, y0, z0), V(x0, y0, z1), V(x0, y1, z1), V(x0, y1, z0)],
+      [V(x0, y1, z1), V(x1, y1, z1), V(x1, y1, z0), V(x0, y1, z0)], [V(x0, y0, z0), V(x1, y0, z0), V(x1, y0, z1), V(x0, y0, z1)],
+      [V(x0, y0, z1), V(x1, y0, z1), V(x1, y1, z1), V(x0, y1, z1)], [V(x1, y0, z0), V(x0, y0, z0), V(x0, y1, z0), V(x1, y1, z0)],
+    ];
+    F.forEach((f, i) => { if (!skip || !skip.includes(i)) this.quad(key, ...f); });
+  }
+  // box along a segment a -> b (current frame) with square section s
+  beam(key, a, b, s) {
+    const d = new THREE.Vector3().subVectors(b, a), len = d.length(); if (len < 1e-4) return;
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.clone().normalize());
+    const prev = this.M.clone();
+    this.set(prev.clone().multiply(new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), q, new THREE.Vector3(1, 1, 1))));
+    this.box(key, 0, 0, 0, s, s, len);
+    this.set(prev);
+  }
+  build(mats, opts = {}) {
+    const meshes = [];
+    for (const key in this.parts) {
+      const o = this.parts[key]; if (!o.I.length || !mats[key]) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(o.P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(o.N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(o.U, 2));
+      g.setIndex(o.P.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(o.I, 1) : new THREE.Uint16BufferAttribute(o.I, 1));
+      g.computeBoundingSphere(); g.computeBoundingBox();
+      const m = new THREE.Mesh(g, mats[key]); m.name = (opts.name || 'settlement') + ':' + key;
+      m.castShadow = opts.castShadow ?? true; m.receiveShadow = true; meshes.push(m);
+    }
+    return meshes;
+  }
+}
+
+const ancientMatCache = new Map();
+/**
+ * Shared materials of the ancient builders (cached per tier): stone, mud (mud-brick render), wood, thatch, dark (door
+ * voids, window holes). World-mapped, so any number of houses merge into one draw per material.
+ *   ancientMaterials({ stone: 0xb39c78, mud: 0xb08a5e, wood: 0x5b3e26, thatch: 0xa58552 })
+ */
+export function ancientMaterials(o = {}) {
+  const key = qualityName + JSON.stringify(o);
+  if (ancientMatCache.has(key)) return ancientMatCache.get(key);
+  const safe = m => { m.userData.rzBatchSafe = true; return m; };
+  const M = {
+    stone: safe(pbrMaterial('cutStone', { params: { color: o.stone ?? 0xb39c78, joint: 0x8a7d68, rows: 5, weathering: 0.65, variation: 0.6 }, mapping: 'world' })),
+    mud: safe(pbrMaterial('plaster', { params: { color: o.mud ?? 0xb08a5e, under: 0x7d5c3d, damage: 0.45, dirt: 0.65 }, mapping: 'world' })),
+    wood: safe(pbrMaterial('wood', { params: { color: o.wood ?? 0x5b3e26, weathered: 0.65, planks: 6, variation: 0.6 }, mapping: 'world' })),
+    thatch: safe(pbrMaterial('thatch', { params: { color: o.thatch ?? 0xa58552, age: o.age ?? 0.45, moss: o.moss ?? 0.25 }, mapping: 'uv', repeat: [1, 1] })),
+    dark: safe(new THREE.MeshStandardMaterial({ color: 0x0c0907, roughness: 1, metalness: 0 })),
+  };
+  ancientMatCache.set(key, M);
+  return M;
+}
+
+/**
+ * One ancient house appended to an accumulator (see settlement()). Footprint centered on position, door on local +z.
+ *   { position, yaw, width, depth, height (eaves), wall: 'stone' | 'mud' | 'timber', roof: 'thatch' | 'flat' | 'none',
+ *     round: true (round house: radius, conical thatch), door: true, windows: 0..4, seed, overhang, pitch (rise / half span) }
+ */
+function addAncientHouse(A, o) {
+  const r = rng(o.seed ?? 1), W = o.width ?? 5, D = o.depth ?? 4.5, H = o.height ?? 2.8, wall = o.wall ?? ['stone', 'mud', 'timber'][Math.floor(r() * 3)];
+  const roof = o.roof ?? 'thatch', ov = o.overhang ?? 0.45, V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const M = new THREE.Matrix4().makeRotationY(o.yaw || 0).setPosition(...(o.position || [0, 0, 0]));
+  A.set(M);
+  const wk = wall === 'stone' ? 'stone' : 'mud';
+  const thT = 1 / RECIPES.thatch.tile;   // thatch uv: texture tiles per meter
+  if (o.round) {
+    const R0 = o.radius ?? 2.6, n = 16;
+    for (let i = 0; i < n; i++) {
+      const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2;
+      const p0 = V(Math.sin(a0) * R0, 0, Math.cos(a0) * R0), p1 = V(Math.sin(a1) * R0, 0, Math.cos(a1) * R0);
+      A.quad(wk, p0, p1, p1.clone().setY(H), p0.clone().setY(H));
+      if (wall === 'stone' || r() < 0.5) { const q0 = p0.clone().multiplyScalar(1.03), q1 = p1.clone().multiplyScalar(1.03); A.quad('stone', q0, q1, q1.clone().setY(0.38), q0.clone().setY(0.38)); }
+    }
+    if (roof !== 'none') {   // conical thatch with a thick eave
+      const Rr = R0 + ov, rise = (o.pitch ?? 1.15) * Rr, apex = V(0, H + rise - 0.15, 0), e = 0.32;
+      for (let i = 0; i < n; i++) {
+        const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2, jag0 = (r() - 0.5) * 0.1, jag1 = (r() - 0.5) * 0.1;
+        const p0 = V(Math.sin(a0) * Rr, H - 0.15 + jag0, Math.cos(a0) * Rr), p1 = V(Math.sin(a1) * Rr, H - 0.15 + jag1, Math.cos(a1) * Rr);
+        const sl = Math.hypot(Rr, rise), u0 = a0 * Rr * thT, u1 = a1 * Rr * thT;
+        A.tri('thatch', p0, p1, apex, [[u0, sl * thT], [u1, sl * thT], [(u0 + u1) / 2, 0]]);
+        A.quad('thatch', p0.clone().setY(p0.y - e), p1.clone().setY(p1.y - e), p1, p0, [[u0, sl * thT + e * thT], [u1, sl * thT + e * thT], [u1, sl * thT], [u0, sl * thT]]);
+        const s0 = V(Math.sin(a0) * (R0 - 0.05), H, Math.cos(a0) * (R0 - 0.05)), s1 = V(Math.sin(a1) * (R0 - 0.05), H, Math.cos(a1) * (R0 - 0.05));
+        A.quad('thatch', p1.clone().setY(p1.y - e), p0.clone().setY(p0.y - e), s0, s1, [[u1, 0], [u0, 0], [u0, 0.5], [u1, 0.5]]);   // soffit
+      }
+      A.box('thatch', 0, apex.y + 0.12, 0, 0.5, 0.35, 0.5);
+    }
+    // door frame on +z
+    const dz = R0 + 0.02, dw = 0.95, dh = Math.min(1.9, H - 0.3);
+    A.box('dark', 0, dh / 2, dz - 0.02, dw, dh, 0.04);
+    A.box('wood', -dw / 2 - 0.07, dh / 2, dz, 0.14, dh, 0.14); A.box('wood', dw / 2 + 0.07, dh / 2, dz, 0.14, dh, 0.14); A.box('wood', 0, dh + 0.08, dz + 0.02, dw + 0.5, 0.18, 0.2);
+    A.box('stone', 0, 0.06, dz + 0.25, dw + 0.4, 0.12, 0.5);
+    return { kind: 'round', radius: R0, height: H };
+  }
+  const hw = W / 2, hd = D / 2;
+  // walls (closed shell) + plinth
+  A.box(wk, 0, H / 2, 0, W, H, D, [3]);
+  if (wall !== 'stone') A.box('stone', 0, 0.2, 0, W + 0.08, 0.4, D + 0.08, [3]);
+  else A.box('stone', 0, 0.15, 0, W + 0.06, 0.3, D + 0.06, [3]);
+  // half-timber frame: corner posts, sill and head beams, mid rail, braces
+  if (wall === 'timber') {
+    const t = 0.16, f = 0.03;
+    for (const [x, z] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]]) A.box('wood', x, H / 2 + 0.2, z, t + f, H - 0.4, t + f);
+    for (const y of [0.42, H * 0.55, H - 0.08]) { A.box('wood', 0, y, hd + f / 2, W + t, t, t * 0.5); A.box('wood', 0, y, -hd - f / 2, W + t, t, t * 0.5); A.box('wood', hw + f / 2, y, 0, t * 0.5, t, D + t); A.box('wood', -hw - f / 2, y, 0, t * 0.5, t, D + t); }
+    for (const s of [-1, 1]) {
+      A.beam('wood', V(s * (hw - 0.2), 0.5, -hd - 0.02), V(s * (hw - 1.2), H * 0.55 - 0.05, -hd - 0.02), 0.12);
+      A.beam('wood', V(hw + 0.02, 0.5, s * (hd - 0.2)), V(hw + 0.02, H * 0.55 - 0.05, s * (hd - 1.1)), 0.12);
+      A.beam('wood', V(-hw - 0.02, 0.5, s * (hd - 0.2)), V(-hw - 0.02, H * 0.55 - 0.05, s * (hd - 1.1)), 0.12);
+    }
+  } else if (wall === 'stone') {   // quoins: alternating dressed blocks at the corners
+    for (const [x, z] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]]) for (let y = 0.3, k = 0; y < H - 0.2; y += 0.42, k++) {
+      const lx = k % 2 ? 0.5 : 0.3, lz = k % 2 ? 0.3 : 0.5;
+      A.box('stone', x - Math.sign(x) * (lx / 2 - 0.03), y + 0.19, z - Math.sign(z) * (lz / 2 - 0.03), lx, 0.38, lz, [3]);
+    }
+  }
+  // door (+z) with a timber frame, lintel and a stone step
+  if (o.door !== false) {
+    const dw = 1.0, dh = Math.min(2.0, H - 0.45), dx = o.doorX ?? 0;
+    A.box('wood', dx, dh / 2, hd + 0.025, dw, dh, 0.05);
+    for (let k = 1; k < 4; k++) A.box('dark', dx - dw / 2 + k * dw / 4, dh / 2, hd + 0.052, 0.02, dh - 0.1, 0.01);
+    A.box('wood', dx - dw / 2 - 0.07, dh / 2, hd + 0.05, 0.14, dh, 0.1); A.box('wood', dx + dw / 2 + 0.07, dh / 2, hd + 0.05, 0.14, dh, 0.1);
+    A.box('wood', dx, dh + 0.1, hd + 0.06, dw + 0.6, 0.2, 0.16);
+    A.box('stone', dx, 0.07, hd + 0.3, dw + 0.5, 0.14, 0.55);
+  }
+  // small windows with frames and open shutters
+  const nWin = o.windows ?? (1 + Math.floor(r() * 3));
+  const slots = [[hw, 0, 1], [-hw, 0, -1], [0, -hd, 0]];
+  for (let k = 0; k < Math.min(nWin, slots.length); k++) {
+    const [sx, sz, side] = slots[k], wy = H * 0.58, ww = 0.55, wh = 0.5;
+    if (side) {   // on a side wall (x = ±hw), facing ±x
+      const x = sx + side * 0.03;
+      A.box('dark', x, wy, 0, 0.02, wh, ww); A.box('wood', x + side * 0.02, wy + wh / 2 + 0.05, 0, 0.1, 0.1, ww + 0.3); A.box('wood', x + side * 0.02, wy - wh / 2 - 0.04, 0, 0.12, 0.08, ww + 0.2);
+      A.box('wood', x + side * 0.25, wy, ww / 2 + 0.05, 0.45, wh, 0.03); A.box('wood', x + side * 0.25, wy, -ww / 2 - 0.05, 0.45, wh, 0.03);
+    } else {
+      const z = sz - 0.03;
+      A.box('dark', 0, wy, z, ww, wh, 0.02); A.box('wood', 0, wy + wh / 2 + 0.05, z - 0.02, ww + 0.3, 0.1, 0.1); A.box('wood', 0, wy - wh / 2 - 0.04, z - 0.02, ww + 0.2, 0.08, 0.12);
+    }
+  }
+  if (roof === 'thatch') {   // hipped thatch: two trapezoids + two triangles, a thick eave and a ridge roll
+    const ex = hw + ov, ez = hd + ov, ey = H - 0.12, longX = W >= D;
+    const half = Math.min(ex, ez), rise = (o.pitch ?? 1.05) * half, ry = ey + rise, rl = Math.max(0, (longX ? ex : ez) - half);
+    const R1 = longX ? V(-rl, ry, 0) : V(0, ry, -rl), R2 = longX ? V(rl, ry, 0) : V(0, ry, rl);
+    const c = [V(-ex, ey, ez), V(ex, ey, ez), V(ex, ey, -ez), V(-ex, ey, -ez)].map(p => p.add(V((r() - 0.5) * 0.06, (r() - 0.5) * 0.08, (r() - 0.5) * 0.06)));
+    const sl = Math.hypot(half, rise) * thT;
+    const uvL = (p, axis) => [(axis === 'x' ? p.x : p.z) * thT, (ry - p.y) / rise * sl];
+    if (longX) {
+      A.quad('thatch', c[0], c[1], R2, R1, [uvL(c[0], 'x'), uvL(c[1], 'x'), uvL(R2, 'x'), uvL(R1, 'x')]);   // front slope (+z)
+      A.quad('thatch', c[2], c[3], R1, R2, [uvL(c[2], 'x'), uvL(c[3], 'x'), uvL(R1, 'x'), uvL(R2, 'x')]);   // back slope
+      A.tri('thatch', c[1], c[2], R2, [uvL(c[1], 'z'), uvL(c[2], 'z'), uvL(R2, 'z')]);
+      A.tri('thatch', c[3], c[0], R1, [uvL(c[3], 'z'), uvL(c[0], 'z'), uvL(R1, 'z')]);
+    } else {
+      A.quad('thatch', c[1], c[2], R1, R2, [uvL(c[1], 'z'), uvL(c[2], 'z'), uvL(R1, 'z'), uvL(R2, 'z')]);
+      A.quad('thatch', c[3], c[0], R2, R1, [uvL(c[3], 'z'), uvL(c[0], 'z'), uvL(R2, 'z'), uvL(R1, 'z')]);
+      A.tri('thatch', c[0], c[1], R2, [uvL(c[0], 'x'), uvL(c[1], 'x'), uvL(R2, 'x')]);
+      A.tri('thatch', c[2], c[3], R1, [uvL(c[2], 'x'), uvL(c[3], 'x'), uvL(R1, 'x')]);
+    }
+    const e = 0.32;   // eave band + soffit back to the wall
+    for (let i = 0; i < 4; i++) {
+      const p0 = c[i], p1 = c[(i + 1) % 4], L = p0.distanceTo(p1) * thT;
+      A.quad('thatch', p0.clone().setY(p0.y - e), p1.clone().setY(p1.y - e), p1, p0, [[0, sl], [L, sl], [L, sl - e * thT], [0, sl - e * thT]]);
+      const w0 = V(Math.sign(p0.x) * hw, H, Math.sign(p0.z) * hd), w1 = V(Math.sign(p1.x) * hw, H, Math.sign(p1.z) * hd);
+      A.quad('thatch', p1.clone().setY(p1.y - e), p0.clone().setY(p0.y - e), w0, w1, [[L, 0], [0, 0], [0, 0.4], [L, 0.4]]);
+    }
+    const rlen = R1.distanceTo(R2) + 0.4;
+    if (longX) A.box('thatch', 0, ry + 0.1, 0, rlen, 0.3, 0.42); else A.box('thatch', 0, ry + 0.1, 0, 0.42, 0.3, rlen);
+  } else if (roof === 'flat') {   // flat earth roof on beams: protruding beam ends (vigas) and a low parapet
+    A.box(wk, 0, H + 0.2, 0, W + 0.04, 0.4, D + 0.04, [3]);
+    const n = Math.max(3, Math.round(W / 0.75));
+    for (let i = 0; i < n; i++) { const x = -hw + 0.35 + i * (W - 0.7) / (n - 1); A.box('wood', x, H - 0.12, hd + 0.18, 0.16, 0.16, 0.4); A.box('wood', x, H - 0.12, -hd - 0.18, 0.16, 0.16, 0.4); }
+  }
+  return { kind: 'house', width: W, depth: D, height: H, wall, roof };
+}
+
+/**
+ * A whole ancient settlement as one merged mesh per material (five draws at most for any number of houses).
+ *   const v = settlement([{ position: [-18, 0, 6], yaw: 0.6, width: 6, depth: 5, wall: 'stone', roof: 'thatch', seed: 1 },
+ *                         { position: [21, 0, -8], round: true, radius: 3, wall: 'mud', seed: 2 }], { colors: { thatch: 0x9a7a45 } });
+ *   scene.add(v.group);   v.houses[i] -> { kind, width, depth, height, ... }
+ */
+export function settlement(list, opts = {}) {
+  const A = new PartAcc(), houses = list.map(o => addAncientHouse(A, o));
+  const meshes = A.build(opts.materials || ancientMaterials(opts.colors || {}), { name: opts.name || 'settlement', castShadow: opts.castShadow });
+  const group = new THREE.Group(); group.name = opts.name || 'settlement'; meshes.forEach(m => group.add(m));
+  return { group, meshes, houses, triangles: meshes.reduce((s, m) => s + m.geometry.index.count / 3, 0) };
+}
+/** One ancient house as a Group (see settlement() for the options). */
+export function ancientHouse(o = {}, opts = {}) { return settlement([o], opts).group; }
 
 
 // =====================================================================================
@@ -3837,4 +4504,240 @@ export function tuneShadow(light, { radius = 2 } = {}) {
   }
   if (ud.rzAuthoredRadius === 1) s.radius = radius;
   return light;
+}
+
+// =====================================================================================
+// 13. Static batching: static meshes that share a material (or an equivalent plain material) are merged into a few
+//     draws per spatial cell. The engine runs it on every scene (docs/RENDERING.md, stage 4); usable on its own.
+// =====================================================================================
+//
+// The originals stay in the scene graph untouched (geometry, material, raycasting, Box3.setFromObject, visibility
+// toggles all keep working); only an own `boundingSphere` far below the world makes the renderer cull them, and the
+// merged copy draws instead. Every frame update() checks each member: a changed transform (own or ancestor), parent,
+// material, geometry, frustumCulled, layers or shadow flags puts the member back to drawing itself; a visibility change
+// (temporal.only, residue, a mission hiding it) hides its triangles in the merged copy. Plain materials with equal
+// parameters share one batch material (a private clone); a change to any member's material un-batches its members.
+// Small props (bounding radius < 2 m) go into their own batches that are culled by distance (tier `smallCull`).
+// Opt out per object with userData.noBatch, per scene with scene.userData.batch = false.
+const BATCH_FAR = new THREE.Sphere(new THREE.Vector3(0, -1e9, 0), 0);
+const MAT_TYPES = new Set(['MeshStandardMaterial', 'MeshPhysicalMaterial', 'MeshLambertMaterial', 'MeshPhongMaterial', 'MeshBasicMaterial', 'MeshToonMaterial', 'MeshMatcapMaterial']);
+const MAP_KEYS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap', 'envMap', 'lightMap', 'bumpMap', 'displacementMap', 'specularMap', 'clearcoatMap', 'clearcoatNormalMap', 'clearcoatRoughnessMap', 'sheenColorMap', 'sheenRoughnessMap', 'iridescenceMap', 'iridescenceThicknessMap', 'transmissionMap', 'thicknessMap', 'specularIntensityMap', 'specularColorMap', 'anisotropyMap', 'matcap', 'gradientMap'];
+const NUM_KEYS = ['opacity', 'alphaTest', 'roughness', 'metalness', 'emissiveIntensity', 'envMapIntensity', 'clearcoat', 'clearcoatRoughness', 'sheen', 'sheenRoughness', 'transmission', 'ior', 'reflectivity', 'shininess', 'iridescence', 'thickness', 'aoMapIntensity', 'lightMapIntensity', 'bumpScale', 'displacementScale', 'displacementBias', 'specularIntensity', 'anisotropy', 'side', 'blending', 'polygonOffsetFactor', 'polygonOffsetUnits', 'combine', 'refractionRatio'];
+const BOOL_KEYS = ['visible', 'transparent', 'depthWrite', 'depthTest', 'fog', 'toneMapped', 'vertexColors', 'flatShading', 'wireframe', 'polygonOffset', 'colorWrite', 'premultipliedAlpha', 'dithering', 'alphaToCoverage'];
+const COL_KEYS = ['color', 'emissive', 'specular', 'sheenColor', 'attenuationColor', 'specularColor'];
+const DEF_ORB = THREE.Object3D.prototype.onBeforeRender, DEF_OAR = THREE.Object3D.prototype.onAfterRender;
+const DEF_OBC = THREE.Material.prototype.onBeforeCompile, DEF_PCK = THREE.Material.prototype.customProgramCacheKey;
+function matValues(m, out) {   // numeric snapshot of everything that changes how a plain material draws
+  let i = 0;
+  for (const k of COL_KEYS) { const c = m[k]; if (c && c.isColor) { out[i++] = c.r; out[i++] = c.g; out[i++] = c.b; } else { out[i++] = -1; out[i++] = -1; out[i++] = -1; } }
+  for (const k of NUM_KEYS) { const v = m[k]; out[i++] = typeof v === 'number' ? v : -9; }
+  for (const k of BOOL_KEYS) { const v = m[k]; out[i++] = v === true ? 1 : v === false ? 0 : -9; }
+  const ns = m.normalScale; out[i++] = ns ? ns.x : 0; out[i++] = ns ? ns.y : 0;
+  return i;
+}
+const MAT_N = COL_KEYS.length * 3 + NUM_KEYS.length + BOOL_KEYS.length + 2;
+const _mv = new Float64Array(MAT_N);
+function matSignature(m) {
+  matValues(m, _mv);
+  let s = m.type + '|' + Array.from(_mv, v => Math.round(v * 1e5)).join(',');
+  for (const k of MAP_KEYS) s += '|' + (m[k] ? m[k].uuid : '');
+  if (m.defines && Object.keys(m.defines).length) s += '|' + JSON.stringify(m.defines);
+  return s;
+}
+function plainMaterial(m) { return m.onBeforeCompile === DEF_OBC && m.customProgramCacheKey === DEF_PCK; }
+function transformSnap(o, out) {
+  if (o.matrixAutoUpdate) { const p = o.position, q = o.quaternion, s = o.scale; out[0] = p.x; out[1] = p.y; out[2] = p.z; out[3] = q.x; out[4] = q.y; out[5] = q.z; out[6] = q.w; out[7] = s.x; out[8] = s.y; out[9] = s.z; for (let i = 10; i < 16; i++) out[i] = 0; }
+  else out.set(o.matrix.elements);
+  return out;
+}
+function transformSame(o, snap) {
+  if (o.matrixAutoUpdate) { const p = o.position, q = o.quaternion, s = o.scale; return p.x === snap[0] && p.y === snap[1] && p.z === snap[2] && q.x === snap[3] && q.y === snap[4] && q.z === snap[5] && q.w === snap[6] && s.x === snap[7] && s.y === snap[8] && s.z === snap[9]; }
+  const e = o.matrix.elements; for (let i = 0; i < 16; i++) if (e[i] !== snap[i]) return false; return true;
+}
+const _bv = new THREE.Vector3(), _bn = new THREE.Matrix3(), _bs = new THREE.Sphere();
+
+export class StaticBatcher {
+  constructor(opts = {}) {
+    this.cell = opts.cell ?? 50; this.smallRadius = opts.smallRadius ?? 2; this.smallCull = opts.smallCull ?? 90;
+    this.minMembers = opts.minMembers ?? 2; this.maxVerts = opts.maxVerts ?? 60000;
+    this.scene = null; this.batches = []; this.members = new Map(); this.anc = new Map(); this.mats = new Map();
+    this.seen = new WeakMap(); this.stats = { batches: 0, members: 0, unbatched: 0, ms: 0, scans: 0 };
+  }
+  // drop everything (scene switch): merged geometries and private materials are freed, originals draw again
+  reset() {
+    for (const b of this.batches) { b.mesh.parent?.remove(b.mesh); b.mesh.geometry.dispose(); if (b.ownMat) b.mesh.material.dispose(); }
+    for (const e of this.members.values()) if (e.o.boundingSphere === BATCH_FAR) delete e.o.boundingSphere;
+    this.batches = []; this.members.clear(); this.anc.clear(); this.mats.clear(); this.seen = new WeakMap(); this.scene = null;
+    this.stats.batches = this.stats.members = this.stats.unbatched = 0;
+  }
+  // eligibility of one mesh (ancestors checked by the caller's traversal)
+  _eligible(o) {
+    if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || o.isBatchedMesh || o.isLOD || o.userData.rzBatch) return false;
+    if (o.userData.noBatch || o.userData.noCapture || o.userData.flicker != null || o.userData.rzRain || o.userData.character) return false;
+    if (!o.frustumCulled || o.layers.mask !== 1 || o.onBeforeRender !== DEF_ORB || o.onAfterRender !== DEF_OAR) return false;
+    if (o.boundingSphere !== undefined || (o.morphTargetInfluences && o.morphTargetInfluences.length)) return false;
+    if (o.customDepthMaterial || o.customDistanceMaterial) return false;
+    const m = o.material, g = o.geometry;
+    if (!m || Array.isArray(m) || !MAT_TYPES.has(m.type) || !m.visible) return false;
+    if (m.transmission > 0) return false;
+    if (m.transparent && !(m.blending === THREE.AdditiveBlending && !m.depthWrite)) return false;   // only order-independent blending
+    if (!plainMaterial(m) && !m.userData.rzBatchSafe) return false;
+    if (!g || !g.isBufferGeometry || !g.attributes.position || !g.attributes.normal || g.attributes.position.itemSize !== 3) return false;
+    if (Object.keys(g.morphAttributes).length || g.drawRange.start !== 0 || g.drawRange.count !== Infinity) return false;
+    if (g.attributes.position.count > this.maxVerts) return false;
+    return true;
+  }
+  _chain(o, scene) { const c = []; for (let p = o.parent; p && p !== scene; p = p.parent) { if (p.isBone || p.isSkinnedMesh || p.isLOD || p.isCamera || p.userData.character || p.userData.noBatch) return null; c.push(p); } return c; }
+  _visible(o, chain) { if (!o.visible) return false; for (const p of chain) if (!p.visible) return false; return true; }
+  /**
+   * Collect static candidates and merge them. stableOnly: only meshes whose transform did not change since the
+   * previous scan (incremental scans during play); the first scan of a scene batches everything eligible.
+   */
+  scan(scene, opts = {}) {
+    const t0 = performance.now();
+    if (this.scene !== scene) { this.reset(); this.scene = scene; }
+    if (scene.userData.batch === false) return 0;
+    scene.updateMatrixWorld(true);
+    const groups = new Map();
+    const visit = (o, chainOk) => {
+      for (const c of o.children) {
+        if (c.userData.character || c.userData.noBatch || c.isBone || c.isLOD || c.isCamera || c.isSkinnedMesh) continue;   // skip whole subtree
+        if (chainOk && !this.members.has(c) && this._eligible(c)) {
+          const tr = transformSnap(c, new Float64Array(16));
+          let stable = true;
+          if (opts.stableOnly) {   // unchanged world matrix since the previous scan (catches moving parents too)
+            const w = Float64Array.from(c.matrixWorld.elements), prev = this.seen.get(c);
+            stable = !!prev && prev.every((v, i) => v === w[i]); this.seen.set(c, w);
+          }
+          const chain = stable ? this._chain(c, scene) : null;
+          if (chain) {
+            const m = c.material, g = c.geometry;
+            const ident = !plainMaterial(m);
+            let mk;
+            if (ident) mk = 'id:' + m.uuid;
+            else { let me = this.mats.get(m); if (!me) { me = { sig: matSignature(m), snap: new Float64Array(MAT_N), maps: MAP_KEYS.map(k => m[k] || null), members: new Set() }; matValues(m, me.snap); this.mats.set(m, me); } mk = 'sig:' + me.sig; }
+            if (!g.boundingSphere) g.computeBoundingSphere();
+            _bs.copy(g.boundingSphere).applyMatrix4(c.matrixWorld);
+            const small = _bs.radius < this.smallRadius, big = _bs.radius > this.cell * 0.6;
+            const cellK = big ? 'big' : Math.floor(_bs.center.x / this.cell) + ',' + Math.floor(_bs.center.z / this.cell);
+            const attrs = Object.keys(g.attributes).sort().map(k => k + g.attributes[k].itemSize).join(',');
+            const key = [mk, c.castShadow ? 1 : 0, c.receiveShadow ? 1 : 0, c.renderOrder, attrs, cellK, small ? 's' : ''].join('|');
+            let G = groups.get(key); if (!G) groups.set(key, G = { key, ident, small, list: [] });
+            G.list.push({ o: c, chain, tr, center: _bs.center.clone(), radius: _bs.radius });
+          }
+        }
+        visit(c, chainOk);
+      }
+    };
+    visit(scene, true);
+    let made = 0;
+    for (const G of groups.values()) {
+      if (G.list.length < this.minMembers) continue;
+      // keep merged buffers moderate (split long lists)
+      let chunk = [], verts = 0;
+      const flush = () => { if (chunk.length >= this.minMembers) { this._build(scene, G, chunk); made++; } chunk = []; verts = 0; };
+      for (const it of G.list) { const n = it.o.geometry.attributes.position.count; if (verts + n > 200000) flush(); chunk.push(it); verts += n; }
+      flush();
+    }
+    this.stats.scans++; this.stats.batches = this.batches.length; this.stats.members = this.members.size; this.stats.ms = +(performance.now() - t0).toFixed(1);
+    return made;
+  }
+  _build(scene, G, list) {
+    const g0 = list[0].o.geometry, names = Object.keys(g0.attributes);
+    let nV = 0, nI = 0;
+    for (const it of list) { const g = it.o.geometry; nV += g.attributes.position.count; nI += g.index ? g.index.count : g.attributes.position.count; }
+    const arrays = {}; for (const k of names) arrays[k] = new Float32Array(nV * g0.attributes[k].itemSize);
+    const I = nV > 65535 ? new Uint32Array(nI) : new Uint16Array(nI);
+    const b = { mesh: null, members: [], src: null, small: G.small, center: new THREE.Vector3(), radius: 0, dirty: false, ownMat: false };
+    let vo = 0, io = 0;
+    const box = new THREE.Box3();
+    for (const it of list) {
+      const o = it.o, g = o.geometry, mw = o.matrixWorld, cnt = g.attributes.position.count;
+      _bn.getNormalMatrix(mw);
+      const flip = mw.determinant() < 0;
+      for (const k of names) {
+        const a = g.attributes[k], sz = a.itemSize, dst = arrays[k];
+        for (let i = 0; i < cnt; i++) {
+          if (k === 'position') { _bv.fromBufferAttribute(a, i).applyMatrix4(mw); dst[(vo + i) * 3] = _bv.x; dst[(vo + i) * 3 + 1] = _bv.y; dst[(vo + i) * 3 + 2] = _bv.z; box.expandByPoint(_bv); }
+          else if (k === 'normal') { _bv.fromBufferAttribute(a, i).applyMatrix3(_bn).normalize(); dst[(vo + i) * 3] = _bv.x; dst[(vo + i) * 3 + 1] = _bv.y; dst[(vo + i) * 3 + 2] = _bv.z; }
+          else if (k === 'tangent' && sz === 4) { _bv.set(a.getX(i), a.getY(i), a.getZ(i)).transformDirection(mw); const j = (vo + i) * 4; dst[j] = _bv.x; dst[j + 1] = _bv.y; dst[j + 2] = _bv.z; dst[j + 3] = a.getW(i) * (flip ? -1 : 1); }
+          else for (let c = 0; c < sz; c++) dst[(vo + i) * sz + c] = a.getComponent(i, c);
+        }
+      }
+      const start = io;
+      if (g.index) { const ix = g.index; for (let i = 0; i < ix.count; i += 3) { const a0 = ix.getX(i) + vo, a1 = ix.getX(i + 1) + vo, a2 = ix.getX(i + 2) + vo; I[io++] = a0; I[io++] = flip ? a2 : a1; I[io++] = flip ? a1 : a2; } }
+      else for (let i = 0; i < cnt; i += 3) { I[io++] = vo + i; I[io++] = vo + (flip ? i + 2 : i + 1); I[io++] = vo + (flip ? i + 1 : i + 2); }
+      const vis = this._visible(o, it.chain);
+      const e = { o, b, chain: it.chain, tr: it.tr, start, count: io - start, vis, alive: true, mat: o.material, geo: o.geometry, cast: o.castShadow, recv: o.receiveShadow };
+      b.members.push(e); this.members.set(o, e);
+      for (const p of it.chain) if (!this.anc.has(p)) this.anc.set(p, { snap: transformSnap(p, new Float64Array(16)), moved: false, frame: -1 });
+      if (!G.ident) this.mats.get(o.material).members.add(e);
+      vo += cnt;
+    }
+    const geo = new THREE.BufferGeometry();
+    for (const k of names) geo.setAttribute(k, new THREE.BufferAttribute(arrays[k], g0.attributes[k].itemSize));
+    b.src = I.slice();
+    geo.setIndex(new THREE.BufferAttribute(I, 1));
+    geo.computeBoundingSphere(); geo.boundingBox = box;
+    b.center.copy(geo.boundingSphere.center); b.radius = geo.boundingSphere.radius;
+    const m0 = list[0].o;
+    let mat = m0.material;
+    if (!G.ident) { mat = m0.material.clone(); b.ownMat = true; }
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'rzBatch'; mesh.matrixAutoUpdate = false; mesh.matrixWorldAutoUpdate = true; mesh.updateMatrix();
+    mesh.castShadow = m0.castShadow; mesh.receiveShadow = m0.receiveShadow; mesh.renderOrder = m0.renderOrder;
+    mesh.userData.rzBatch = b; mesh.userData.noBatch = true;
+    mesh.raycast = () => {};   // picking and camera rays hit the originals
+    b.mesh = mesh; scene.add(mesh);
+    for (const e of b.members) e.o.boundingSphere = BATCH_FAR;   // the renderer culls the original; the merged copy draws it
+    b.dirty = b.members.some(e => !e.vis);
+    this.batches.push(b);
+    return b;
+  }
+  _release(e) {
+    if (!e.alive) return;
+    e.alive = false; e.b.dirty = true;
+    if (e.o.boundingSphere === BATCH_FAR) delete e.o.boundingSphere;
+    this.members.delete(e.o); this.stats.unbatched++;
+    const me = this.mats.get(e.mat); if (me) me.members.delete(e);
+  }
+  /** Per frame (before rendering): un-batch members that moved / changed, sync visibility, distance-cull small props. */
+  update(scene, camera, frame = 0) {
+    if (scene !== this.scene || !this.batches.length) return;
+    // materials of deduplicated batches: any change sends their meshes back to drawing themselves
+    for (const [m, me] of this.mats) {
+      if (!me.members.size) continue;
+      matValues(m, _mv);
+      let same = true; for (let i = 0; i < MAT_N; i++) if (_mv[i] !== me.snap[i]) { same = false; break; }
+      if (same) for (let i = 0; i < MAP_KEYS.length; i++) if ((m[MAP_KEYS[i]] || null) !== me.maps[i]) { same = false; break; }
+      if (!same) for (const e of [...me.members]) this._release(e);
+    }
+    for (const [p, a] of this.anc) { if (a.frame !== frame) { a.frame = frame; a.moved = a.moved || !transformSame(p, a.snap); } }
+    for (const b of this.batches) {
+      let any = false;
+      for (const e of b.members) {
+        if (!e.alive) continue;
+        const o = e.o;
+        let ok = o.material === e.mat && o.geometry === e.geo && o.frustumCulled && o.layers.mask === 1 && o.castShadow === e.cast && o.receiveShadow === e.recv && transformSame(o, e.tr);
+        if (ok) {
+          let q = o.parent;
+          for (let i = 0; i < e.chain.length; i++) { const p = e.chain[i]; if (q !== p || this.anc.get(p).moved) { ok = false; break; } q = p.parent; }
+          if (ok && q !== scene) ok = false;   // removed from the scene
+        }
+        if (!ok) { this._release(e); continue; }
+        if (o.boundingSphere !== BATCH_FAR) o.boundingSphere = BATCH_FAR;
+        const vis = this._visible(o, e.chain);
+        if (vis !== e.vis) { e.vis = vis; b.dirty = true; }
+        if (vis) any = true;
+      }
+      if (b.dirty) {
+        b.dirty = false;
+        const I = b.mesh.geometry.index.array, S = b.src;
+        for (const e of b.members) { if (e.alive && e.vis) I.set(S.subarray(e.start, e.start + e.count), e.start); else I.fill(0, e.start, e.start + e.count); }
+        b.mesh.geometry.index.needsUpdate = true;
+      }
+      b.mesh.visible = any && (!b.small || camera.position.distanceTo(b.center) < this.smallCull + b.radius);
+    }
+    this.stats.members = this.members.size;
+  }
 }

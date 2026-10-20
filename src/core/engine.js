@@ -9,6 +9,7 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOShader } from 'three/addons/shaders/GTAOShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import * as RZ from '../world/realism.js';
+import * as KIT from '../world/kit.js';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Post-processing chain (docs/RENDERING.md, "Post-processing"):
@@ -548,14 +549,17 @@ function tierSettings(q, device) {
     high: { dprCap: 1.75, shadows: true, shadowMapMax: 4096, softShadows: true, bloom: true, bloomScale: 1, cheapPost: false, adaptive: false,
       ao: true, aa: 'smaa', dof: true, autoExposure: true,
       light: { probe: 256, probeMove: 25, puddles: 1, wetDetail: 1, contact: 0.3, rig: 2, pcfRadius: 1, shafts: 1 },
+      infra: { smallCull: 180 },
       hints: { characterDetail: 'high', crowd: 1, drawDistance: 1, maxLights: 12, particles: 1 } },
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
       light: { probe: 128, probeMove: 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
+      infra: { smallCull: 120 },
       hints: { characterDetail: m ? 'low' : 'high', crowd: 0.6, drawDistance: 0.8, maxLights: 6, particles: 0.6 } },
     low: { dprCap: m ? 1 : 0.75, shadows: false, shadowMapMax: 512, softShadows: false, bloom: false, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: null, dof: false, autoExposure: false,
       light: { probe: 64, probeMove: 0, puddles: 0, wetDetail: 0, contact: 0.5, rig: 1, pcfRadius: 1, shafts: 0 },
+      infra: { smallCull: 80 },
       hints: { characterDetail: 'low', crowd: 0.35, drawDistance: 0.6, maxLights: 4, particles: 0.35 } },
   };
   return { quality: q, mobile: m, ...T[q] };
@@ -593,6 +597,10 @@ export class Engine {
 
     // Height fog, horizon specular occlusion and wet-weather code go into three's shared chunks before anything compiles.
     RZ.installFogChunks(); RZ.installLightingChunks();
+    // the realism kit bakes its textures with this renderer (kit.js facade buildings, missions 5+); its tier follows ours
+    RZ.init(r);
+    // static batching of every scene (docs/RENDERING.md, stage 4); ?infra=nobatch turns it off
+    this._batch = new RZ.StaticBatcher(); this._bFrames = 0; this.batchOn = KIT.infraOn('batch');
 
     // Debug / A-B switches: ?post=noao,noaa,nodof,noae,nograde turn single post features off on every tier (aodebug shows
     // the AO term). engine.postOff can be changed at runtime followed by applyPost().
@@ -676,6 +684,8 @@ export class Engine {
     this.autoTier = !!opts.auto;
     const s = this.settings = tierSettings(q, this.device);
     this.quality = q;
+    RZ.setQuality(q);
+    this._batch.smallCull = s.infra.smallCull;
     const r = this.renderer;
     r.shadowMap.enabled = s.shadows;
     r.shadowMap.type = s.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
@@ -732,6 +742,7 @@ export class Engine {
     scene.environment = scene.environment || this.envTexture;
     this.renderPass.scene = scene;
     this._lightScene(scene);
+    this._batch.reset(); this._bFrames = 0;
     this._sweep = 0;
     // a new place: its own grade at once, no focus, the eye adapts from scratch
     this.focus(null); this._focus.amount = 0; this.dofPass.enabled = false;
@@ -1179,6 +1190,35 @@ export class Engine {
     if (next !== A.scale) { A.raisedAt = next > A.scale ? now : 0; A.scale = next; A.cooldown = 1; this.resize(); }
   }
 
+  // ---------- buildings and static batching (docs/RENDERING.md, stage 4) ----------
+  //   facades  kit.box() buildings get their geometry on the first frame their scene renders (kit.resolveFacades)
+  //   batch    static meshes sharing a material (or an equivalent plain one) merge into a few draws per 50 m cell:
+  //            snapshot 2 frames after setScene, merged at frame 6 if unchanged, new static meshes picked up every
+  //            120 frames; members that move / change draw themselves again (realism.StaticBatcher). Small props
+  //            are distance-culled (tier infra.smallCull). ?infra=nobatch / scene.userData.batch = false opt out.
+  _updateInfra() {
+    const s = this.scene; if (!s) return;
+    try { KIT.resolveFacades(s); } catch (e) { console.warn('facades', e); }
+    const B = this._batch;
+    if (!this.batchOn || s.userData.batch === false) { if (B.scene) B.reset(); return; }
+    const f = ++this._bFrames;
+    try {
+      if (f === 2 || f === 6 || (f > 6 && f % 120 === 0)) B.scan(s, { stableOnly: true });
+      B.update(s, this.camera, f);
+    } catch (e) { console.warn('static batching disabled for this scene', e); B.reset(); s.userData.batch = false; }
+    this.stats.batches = B.stats.batches; this.stats.batched = B.stats.members; this.stats.batchMs = B.stats.ms;
+  }
+
+  // A/B for captures and cost measurements: legacy = true shows the scene as before stage 4 (plain kit boxes, legacy
+  // lamp posts, no static batching), false restores the upgrade (batched at once).
+  setInfraLegacy(legacy) {
+    const s = this.scene; if (!s) return 0;
+    const n = KIT.setInfraLegacy(s, legacy);
+    if (legacy) { this._batch.reset(); this.batchOn = false; }
+    else { this.batchOn = KIT.infraOn('batch'); this._batch.reset(); if (this.batchOn) { this._batch.scan(s); this._batch.update(s, this.camera, this._bFrames); } }
+    return n;
+  }
+
   render(t) {
     const now = performance.now();
     const dt = this._postT ? Math.min(0.1, Math.max(0, (now - this._postT) / 1000)) : 0;
@@ -1186,6 +1226,7 @@ export class Engine {
     this.adapt(now);
     if (this._sweep-- <= 0) { this._sweep = 45; this.clampShadows(); this._lightSweep(); }
     this._updatePost(dt);
+    this._updateInfra();
     this._updateLighting(dt, t);
     this.renderer.info.reset();
     this.fx.uTime.value = t;
