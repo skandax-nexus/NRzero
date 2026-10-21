@@ -209,6 +209,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
 #touch .tc-jump{width:66px;height:66px;right:calc(20px + var(--sr));bottom:calc(18px + var(--sb))}
 #touch .tc-crouch{width:56px;height:56px;right:calc(100px + var(--sr));bottom:calc(14px + var(--sb))}
 #touch .tc-residue{width:52px;height:52px;right:calc(34px + var(--sr));bottom:calc(196px + var(--sb))}
+#touch .tc-lamp{width:46px;height:46px;right:calc(37px + var(--sr));bottom:calc(258px + var(--sb))}
 .tc-eras{position:absolute;right:calc(98px + var(--sr));bottom:calc(198px + var(--sb));display:flex;gap:8px}
 #touch .tc-era{position:relative;width:60px;height:46px;border-radius:12px;border-color:var(--era);color:var(--era);opacity:.82}
 #touch .tc-era small{font-size:13px;line-height:1}
@@ -239,7 +240,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
 @media (min-height:600px) and (min-width:900px){ /* tablets: larger thumbs targets */
   #touch .tc-jump{width:78px;height:78px} #touch .tc-crouch{width:64px;height:64px;right:calc(114px + var(--sr))}
   #touch .tc-interact{width:94px;height:94px} .tc-act{bottom:calc(112px + var(--sb))}
-  #touch .tc-residue{bottom:calc(224px + var(--sb))} .tc-eras{bottom:calc(226px + var(--sb))}
+  #touch .tc-residue{bottom:calc(224px + var(--sb))} #touch .tc-lamp{bottom:calc(290px + var(--sb))} .tc-eras{bottom:calc(226px + var(--sb))}
 }
 
 /* ===================== HUD & dialogue on touch devices ===================== */
