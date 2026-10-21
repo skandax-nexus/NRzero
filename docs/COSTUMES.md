@@ -193,6 +193,9 @@ These sit alongside the existing `glasses` and `mask`.
 - Look helpers in `src/story/cast.js`: `citizenLook` (2049), `settlerLook` (ancient), `survivorLook` (2196, `opts.faction = 'continuum'` for troops) and `pastLook` (2026).
 - `character.setGadget(type, on)`: `true` lights a gadget at its "on" level, `false` returns it to idle, a number sets the level; levels ease in `update()`. `character.hasGadget(type)`.
 - Hooks: the Chronolith band flashes on every era switch (`temporal.js` sets `wristBoost`); the AR monocle lights while Residue Vision is on (`game.setResidue`); the shoulder lamp is offered in dark scenes (`newScene({ dark })`, or a near-black background; missions can call `game.setLampAvailable(on)`), toggled with L or the touch LAMP button (`game.setLamp(on)`). It is one real SpotLight on the lens (`character.attachLamp`), kept in the scene at zero while off so switching never recompiles shaders; it casts shadows on the high tier only, and its shadow map is only redrawn while it shines.
+- Kai's kit, also wired (`game.kitGadgets`): the belt scanner pulses while an interactable is in range and flashes for 0.7 s when evidence reaches the case board; the earpiece blinks while a voice with no body in the scene speaks (`phone`, the PA, radios: `ui.callLine`). Not wired yet: the Echo Step emitter (dark at idle; `src/systems/echostep.js` should call `game.player.char.setGadget('echo_emitter', ...)` on unlock and on each step) and the Chronolith band's stability segments.
+- Continuum squads are dealt one officer (`continuum_2`) in four; the rest are helmeted troopers (`continuum_1`).
+- Speakers registered without a look (a mission's `neighbor`, the station `child`) get their portrait from their role's build on their first line (`portraitFor`).
 - Crowd LOD: people with `look.lod` switch to the 6 000-triangle build beyond 14 m from the camera, and always on tiers whose `characterDetail` hint is `low` (phones).
 
 ## Character specs
