@@ -44,6 +44,14 @@ To add a character, add an entry to `CAST`, rebuild, and (for a named role) add 
   (clefts, the spine groove and the gap between the breasts are bridged), small bumps on the bust are pressed flat,
   and tops hang straight down from the widest hip / buttock ring (and, for women, from the bust apex), so cloth never
   shrink-wraps the anatomy.
+- `costume.band_swatches`: the overlap band a broad item leaves of each layer under it would share atlas texels with
+  that item (all layers use the body uv map), so where it peeks out below a draped hem it showed the outer colour as a
+  ragged fringe. Band faces sample a flat swatch of their own garment's median painted colour (aux region) instead,
+  the outer item claims its own uv footprint (`layer_texels`), and the last 2.5 cm of a top / vest stand 3 mm clear
+  of what they cover. Skirts stay inside any top worn over them.
+- Glow is dilated into empty padding only (a baked glow swatch used to light the gadget swatch next to it).
+- Crowds and children (budget 9 000) decimate further: body floor 0.36, hands 0.19, face 0.23
+  (`CROWD_BODYK`, `CROWD_HANDK`, `CROWD_FACEK`).
 - One material per character: `baseColorTexture`, `normalTexture` and, when anything glows, `emissiveTexture` with
   `emissiveFactor` 1 (three.js shows it as `emissiveMap`). The glow colour is in the material's `extras.glow`.
 

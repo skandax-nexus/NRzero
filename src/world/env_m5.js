@@ -456,9 +456,9 @@ export function signTex(lines, bg = '#e8e4dc', fg = '#1a1c20', key = 'sign', opt
     g.fillStyle = bg; g.fillRect(0, 0, w, h);
     const r = rng(lines.join('').length); for (let k = 0; k < 400; k++) { g.fillStyle = `rgba(60,40,20,${r() * 0.08})`; g.fillRect(r() * w, r() * h, 2 + r() * 6, 2 + r() * 6); }
     g.fillStyle = opts.band || '#2a8aaa'; g.fillRect(0, 0, w, h * 0.16);
-    g.fillStyle = '#f2f4f6'; g.font = `700 ${Math.round(h * 0.1)}px Rajdhani, sans-serif`; g.textBaseline = 'middle'; g.fillText(opts.title || 'HELIX TEMPORAL RESEARCH', w * 0.05, h * 0.08);
+    g.fillStyle = '#f2f4f6'; g.font = `700 ${Math.round(h * 0.1)}px Rajdhani, sans-serif`; g.textBaseline = 'middle'; g.fillText(opts.title || 'HELIX TEMPORAL RESEARCH', w * 0.05, h * 0.08, w * 0.9);
     g.fillStyle = fg; const fs = opts.fs || Math.round(h / (lines.length + 2.5));
-    lines.forEach((l, i) => { g.font = `${i === 0 ? 700 : 600} ${i === 0 ? fs * 1.15 : fs}px Rajdhani, sans-serif`; g.fillText(l, w * 0.05, h * 0.28 + i * fs * 1.12); });
+    lines.forEach((l, i) => { g.font = `${i === 0 ? 700 : 600} ${i === 0 ? fs * 1.15 : fs}px Rajdhani, sans-serif`; g.fillText(l, w * 0.05, h * 0.28 + i * fs * 1.12, w * 0.9); });
     if (opts.rust) { for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(120,60,20,${r() * 0.25})`; g.beginPath(); g.arc(r() * w, r() * h, 3 + r() * 14, 0, 7); g.fill(); } }
   }, 'm5' + key);
 }

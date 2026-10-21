@@ -1070,7 +1070,8 @@ export class Engine {
   }
   _updateRig(dt) {
     const G = this._light.rig, cam = this.camera;
-    let on = !!(G.target && this.lightOn('rig') && this.settings.light.rig > 0 && (!G.active || G.active()));
+    // scene.userData.rigIntensity = 0 detaches the rig entirely (no light in the shader loop, not just a dark one)
+    let on = !!(G.target && this.lightOn('rig') && this.settings.light.rig > 0 && (this.scene?.userData.rigIntensity ?? 1) > 0 && (!G.active || G.active()));
     if (G.target && G.active && !G.active()) { G.target = null; G.active = null; }
     let p = null;
     if (on) {

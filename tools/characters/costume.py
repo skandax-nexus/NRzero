@@ -562,6 +562,8 @@ def build_layers(c, B, cov):
         if g.get("cat") in ("top", "over"):
             smooth_shoulder_weights(L, B)
         need = below + 0.0014
+        if g.get("cat") in ("top", "over"):     # its last 2.5 cm stand a little clear of what it covers (no poke-through at hems)
+            need = need + 0.003 * ss(0.025, 0.0, L.cov) * (below > 0.001)
         if g.get("cat") == "top" and (g.get("tail") or g.get("poncho")):   # the hem loop a tail grows from stands clear
             hem = ss(0.035, 0.0, L.cov) * (L.pos[:, 1] < LM["ch"] + 0.04) * ((B.aw["L"] + B.aw["R"])[L.base] < 0.3)
             need = need + 0.006 * hem
@@ -578,6 +580,7 @@ def build_layers(c, B, cov):
         L.g = g
         layers[key] = L
     cov["_OFF"] = OFF
+    band_swatches(stack, layers)
     for key, L in layers.items():   # cloth tails, then rims (hems with real thickness)
         g = L.g
         if g.get("cat") == "top" and (g.get("tail") or g.get("poncho")):
@@ -586,6 +589,44 @@ def build_layers(c, B, cov):
         if L.g.get("rim", 0) > 0:
             add_rims(L, B, L.g["rim"])
     return layers
+
+
+def band_swatches(stack, layers):
+    """The overlap band a broad item leaves of each layer under it shares atlas texels with that item (one body uv
+    map): painted in the outer colour, it showed as a ragged outer-coloured fringe wherever the band peeks out below a
+    draped hem (vests over shells, coats over knits). Band faces (under an outer item's field, or within its bleed)
+    sample a flat swatch of their own garment instead (its median painted colour, see paint_body / paint_aux), and the
+    outer item keeps the texels."""
+    faces_of = {}
+    for i, (key, g, f) in enumerate(stack):
+        L = layers.get(key)
+        if L is None or g.get("cat") == "head":
+            continue
+        above = [ff for kk, gg, ff in stack[i + 1:] if gg.get("hides", True) and gg.get("cat") not in ("head",) and kk in layers]
+        if not above:
+            continue
+        Fa = np.max(np.stack(above), 0)[L.base]
+        hit = [fi for fi, fc in enumerate(L.faces) if Fa[fc].max() > -0.006]     # under it, or within its bleed / uv footprint
+        if hit:
+            faces_of[key] = hit
+    if not faces_of:
+        return
+    keys = list(faces_of)
+    cols = 8
+    rows = max(1, int(math.ceil(len(keys) / cols)))
+    cell = 0.03
+    pal = []
+    for key in keys:
+        g = next(gg for kk, gg, _ in stack if kk == key)
+        c = np.clip(G.hexc(g["color"]) * 0.9, 0, 1)
+        pal.append(("%02x%02x%02x" % tuple(int(round(v * 255)) for v in c), 0.0))
+    pid = aux_piece("bandpal", cols * cell, rows * cell, None, dict(palette=pal, cols=cols, rows=rows, band_keys=keys))
+    for i, key in enumerate(keys):
+        L = layers[key]
+        cx, cy = i % cols, i // cols
+        for fi in faces_of[key]:
+            k = len(L.faces[fi])
+            L.fuv[fi] = np.array([aux_uv(pid, (cx + 0.3 + 0.4 * (a_ % 2)) / cols, 1 - (cy + 0.3 + 0.4 * (a_ // 2 % 2)) / rows) for a_ in range(k)])
 
 
 def drape_torso(L, B, g, LM):
@@ -1297,8 +1338,12 @@ def extend_tail(L, B, g, LM, cov, layers):
 # ----------------------------------------------------------------------------------------------------------------
 # aux atlas region: tails, collars, hood rolls, skirts, helmets (painted from their own 3D rest positions)
 # ----------------------------------------------------------------------------------------------------------------
+BAND_COL = {}      # garment key -> median painted colour (band swatches)
+
+
 def aux_reset():
     AUX.clear()
+    BAND_COL.clear()
 
 
 def aux_piece(name, w, h, g, flags=None):
@@ -1660,8 +1705,41 @@ def skirt_piece(c, B, g, LM, layers):
         sc = rn / np.maximum(r, 1e-6)
         grid[i, :, 0] *= sc
         grid[i, :, 2] = cz[i] + (grid[i, :, 2] - cz[i]) * sc
-    if g.get("shape") == "hipwrap":     # an overlapping wrap: open at the front-left, with a lapped edge
-        pass
+    if not over_top:      # under a top: every row the top covers stays 4 mm inside it (pleats poked through a hoodie hem)
+        tops = [L.pos for L in layers.values() if L.g.get("cat") in ("top", "over") and L.g.get("z", 50) > g.get("z", 26)]
+        if tops:
+            T = np.concatenate(tops)
+            nb_ = 72
+            last = None
+            for i in range(rows):
+                sl = T[np.abs(T[:, 1] - ys[i]) < 0.012]
+                if len(sl) < 24:
+                    if last is not None:      # the first row below the hem: no flare yet (the faces up to it cross the hem)
+                        a_s = np.arctan2(grid[i, :, 0], grid[i, :, 2] - cz[i])
+                        r_s = np.hypot(grid[i, :, 0], grid[i, :, 2] - cz[i])
+                        lim = last[((a_s + np.pi) / (2 * np.pi) * nb_).astype(int) % nb_] + 0.002
+                        sc = np.minimum(r_s, lim) / np.maximum(r_s, 1e-6)
+                        grid[i, :, 0] *= sc
+                        grid[i, :, 2] = cz[i] + (grid[i, :, 2] - cz[i]) * sc
+                        last = None
+                    continue
+                at = np.arctan2(sl[:, 0], sl[:, 2] - cz[i])
+                rt = np.hypot(sl[:, 0], sl[:, 2] - cz[i])
+                bi = ((at + np.pi) / (2 * np.pi) * nb_).astype(int) % nb_
+                rb = np.full(nb_, np.inf)
+                np.minimum.at(rb, bi, rt)
+                if np.isinf(rb).sum() > nb_ // 2:
+                    continue
+                ok = ~np.isinf(rb)
+                xs_ = np.nonzero(ok)[0]
+                rb = np.interp(np.arange(nb_), np.r_[xs_ - nb_, xs_, xs_ + nb_], np.r_[rb[ok], rb[ok], rb[ok]])
+                a_s = np.arctan2(grid[i, :, 0], grid[i, :, 2] - cz[i])
+                r_s = np.hypot(grid[i, :, 0], grid[i, :, 2] - cz[i])
+                lim = rb[((a_s + np.pi) / (2 * np.pi) * nb_).astype(int) % nb_] - 0.004
+                last = rb - 0.004
+                sc = np.minimum(r_s, lim) / np.maximum(r_s, 1e-6)
+                grid[i, :, 0] *= sc
+                grid[i, :, 2] = cz[i] + (grid[i, :, 2] - cz[i]) * sc
     gridc = np.concatenate([grid, grid[:, :1]], 1)
     edge = np.repeat((length - np.array([length * i / (rows - 1) for i in range(rows)]))[:, None], n + 1, 1)
     enc = grid_piece(f"skirt_{g['type']}", gridc, edge, g, dict(tail=1.0))
@@ -2415,9 +2493,41 @@ def texel_ctx(B, q, **kw):
     return G.Ctx(**d)
 
 
+def layer_texels(cov):
+    """key -> bool per texel: the texels under the layer's own faces in the body atlas (its uv footprint, tails, rims
+    and linings left out). A snapped border vertex can sit a few mm past the field's zero line in uv space; without
+    this, a hem's last row of faces sampled the texels of the garment below (a dark, ragged fringe on vests and pale
+    coats)."""
+    layers, xy = cov.get("_layer_objs"), cov.get("_texel_xy")
+    if not layers or xy is None:
+        return {}
+    from PIL import Image, ImageDraw
+    px, py, res = xy
+    out = {}
+    for key, L in layers.items():
+        if key == "skin" or not getattr(L, "faces", None):
+            continue
+        skip = set(getattr(L, "_rim", set())) | set(getattr(L, "_lining", set()))
+        tm = getattr(L, "tail_mask", None)
+        if tm is not None:
+            skip |= set(np.nonzero(tm)[0].tolist())
+        im = Image.new("L", (res, res), 0)
+        dr = ImageDraw.Draw(im)
+        for f, fu in zip(L.faces, L.fuv):
+            if any(v in skip for v in f):
+                continue
+            q = np.asarray(fu, float)
+            if q[:, 0].max() >= 9.5:      # aux uv (band swatch)
+                continue
+            dr.polygon([(u * res - 0.5, (1 - v) * res - 0.5) for u, v in q], fill=255)
+        out[key] = np.asarray(im)[py, px] > 0
+    return out
+
+
 def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
     """Garment texels of the body atlas (outermost layer wins). Returns height and glow arrays (per texel)."""
     n = len(pos)
+    own = layer_texels(cov)
     hgt = np.zeros(n)
     glw = np.zeros((n, 3))
     cos = cov["_costume"]
@@ -2443,6 +2553,9 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         # (hard pieces: a 1.5 mm bleed; ending the paint inside the piece left its own border faces sampling the suit
         # under it - a jagged black fringe round every plate. The plate's standing rim hides the thin halo on the suit)
         m = (f > (-0.0015 if hard else -0.003)) & ~taken
+        ok_ = own.get(key)
+        if ok_ is not None:
+            m |= ok_ & ~taken            # the layer's own faces: a hem never samples what lies under it
         col_k = (g.get("collar") or {}).get("kind")
         if key.startswith("top") and col_k in ("stand", "funnel", "mandarin", "gorget", "rib", "turtle"):   # under the collar
             m |= (f > -0.012) & ~taken & (pos[:, 1] > B.Jm["chest"][1]) & (arm_f < 0.5)
@@ -2455,6 +2568,8 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         taken |= m
         idx = np.nonzero(m)[0]
         fe = f[idx]
+        if ok_ is not None:
+            fe = np.where(ok_[idx], np.maximum(fe, 0.0), fe)     # inside the footprint: at worst on the border
         tl = g.get("_tail_len")
         tor_f = np.clip(1 - arm_f[idx] - leg_f[idx], 0, 1)
         if tl and key.startswith("top"):      # the hem loop continues into the tail: no hem painting there
@@ -2463,6 +2578,7 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         X = texel_ctx(B, pos[idx], f=fe, arm=arm_f[idx] * (not head), leg=leg_f[idx] * (not head), ny=ny[idx],
                       torso=np.zeros(len(idx)) if head else tor_f)
         cc, hh, gl = G.paint(g, X, seed + (hash(key) % 7) * 0.13)
+        BAND_COL[key] = np.median(cc[fe > 0.01], 0) if (fe > 0.01).sum() > 50 else np.median(cc, 0)
         col[idx] = cc
         hgt[idx] = hh
         glw[idx] = gl
@@ -2472,6 +2588,9 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
 def paint_aux(c, B, img, mask, himg, gimg, spx, res, seed):
     """Paint every aux piece (bilinear 3D positions of its grid -> garment painter)."""
     for pc in AUX:
+        if pc["flags"].get("band_keys") and "rect" in pc:    # band swatches: each garment's median painted colour
+            pc["flags"]["palette"] = [("%02x%02x%02x" % tuple(int(round(v * 255)) for v in np.clip(BAND_COL[k], 0, 1)), 0.0) if k in BAND_COL else p
+                                      for k, p in zip(pc["flags"]["band_keys"], pc["flags"]["palette"])]
         if pc["flags"].get("palette") and "rect" in pc:      # gadget palette swatches (gadgets.py)
             import gadgets
             gadgets.paint_palette(pc, img, mask, himg, gimg, spx, res, seed)

@@ -466,6 +466,33 @@ face per frame, i.e. six frames each re-draw the scene once more into a 64² (lo
 heaviest scenes, at the top); on a phone GPU that is six frames with one extra small-target scene draw each, under the
 mission intro. High / medium re-capture after the camera has moved 25 / 40 m; low never re-captures on movement.
 
+### Re-check after stage 4 (2026-10-21)
+
+Stage 4 batched the static meshes and changed kit / props / realism after the stage-2 captures, so all twelve views
+were captured again with `--ab=light` on high, low (mobile) and m1 medium (mobile) against the current build
+(`<scratch>/render/light/final/{high,medium_mobile,low_mobile}/sbs/`, `grid_sbs.png`). Every stage-2 effect still shows
+and nothing regressed: wet puddle streaks of the neon and lamps on m1 (all three tiers; ripples / wall streaks on high),
+the key + rim rig on m1c / m2c / m3b / m4c (m2c Iven readable on low too), the scene probe in m2 / m3, the height fog and
+desaturated probe in m4. m3b (polished lab floor) now mirrors the bright ring wall: +16 % mean brightness, the same
+as in the stage-2 table. Draw calls are lower than in the stage-2 table because of the stage-4 batching (m1a high 313,
+low 249); stage 2 still adds +1 (+2 with a light shaft).
+
+GPU-process CPU time per frame (`cpuab.mjs`, stage 2 on vs `noenv+nofog+nowet+nocontact+norig+noshadow+noshafts`,
+6 × 2 frames, same page, load average 8-21):
+
+| view, tier, 844×390 mobile | on: median (min-max) ms | off | difference |
+|---|---|---|---|
+| m1b street, low (raining) | 2005 (1960-2030) | 2005 (1940-2065) | 0 % |
+| m1b street, medium (+ puddles) | 2385 (2335-2425) | 2350 (2310-2405) | +1.5 % |
+| m4b village, low (dry) | 1810 (1780-1860) | 1835 (1780-1915) | -1.4 % |
+| m1c dialogue close-up, low (rim spot of the rig on) | 1975 (1935-1980) | 1885 (1855-1905) | +4.8 % |
+
+Gameplay frames on low / medium are unchanged within noise. The only measurable low-tier cost is the one shadowless rim
+spot during close-up dialogue shots (+4.8 %); those frames stay cheaper than the gameplay street frame of the same
+mission (1975 vs 2005 ms here, 94 vs 193 draw calls), and `scene.userData.rigIntensity = 0` or `{ rig: false }` on a
+shot removes it. The wall-clock frame times of the `--ab=light` captures swung -25 … +155 % with the host load (load
+average 28 → 5 during the run), so they are not used as cost numbers.
+
 ## 8. Stage 4: buildings and street infrastructure (kit.js, props.js, realism.js, engine.js) — done 2026-10-20
 
 Missions 1-4 get the automatic part without a code change; new missions call the builders documented in

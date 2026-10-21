@@ -1285,6 +1285,7 @@ def paint(c, B, cov, res, path_out):
     costume_mode = "_costume" in cov
     taken = np.zeros(len(px), bool)
     if costume_mode:
+        cov["_texel_xy"] = (px, py, res)
         hgt, glw = costume.paint_body(c, B, cov, pos, fld, part, col, taken, seed)
     shirt_c = hexc(c.get("shirtColor", "d8d0c4"))
     order = [] if costume_mode else [("hood", c.get("colorA")), ("scarf", c.get("accentColor")), ("top", c.get("colorA", "444a55")),
@@ -1352,7 +1353,9 @@ def paint(c, B, cov, res, path_out):
             nimg = (nimg - 0.5) / np.maximum(np.linalg.norm(nimg - 0.5, axis=-1, keepdims=True) * 2, 1e-6) * 0.5 + 0.5
         Image.fromarray((np.clip(nimg, 0, 1) * 255).astype(np.uint8)).save(out["normal"], quality=c.get("normalQ", 90))
         if gimg.max() > 0.01:
-            gimg, gm = dilate(gimg, gimg.max(-1) > 0.004, 3)
+            lit0 = gimg.max(-1) > 0.004
+            gimg, gm = dilate(gimg, lit0, 3)
+            gimg[mask & ~lit0] = 0.0      # bleed into empty padding only: a glow swatch lit the gadget swatch next to it
             half = gimg.reshape(res // 2, 2, res // 2, 2, 3).mean((1, 3))
             out["emissive"] = path_out.replace(".jpg", "_e.jpg")
             Image.fromarray((np.clip(half, 0, 1) * 255).astype(np.uint8)).save(out["emissive"], quality=92)
@@ -2274,6 +2277,7 @@ def build(c, tex_dir):
     # ---- garments ----
     if costume_mode:
         layers.update(costume.build_layers(c, B, cov))
+        cov["_layer_objs"] = layers      # the painter claims each layer's own uv footprint (costume.layer_texels)
     else:
         thick = {"coat": 0.012, "robe": 0.012, "jacket": 0.009, "uniform": 0.009, "sweater": 0.008, "vest": 0.007, "shirt": 0.006, "dress": 0.006}.get(c.get("top"), 0.008)
         if "bottom" in cov:
@@ -2627,16 +2631,17 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None, hero=False):
     target = max(target - kept, 2000)          # protected cloth tails are not decimated
     total = sum(n.values())
     if total > target:
-        face_min = 0.27 if face_keep < 1.0 else (0.4 if hero else 0.34)    # crowds / children are seen from further away
-        head_k = 0.6 if target >= 15000 else 0.36 if face_keep >= 1.0 else 0.3
-        hand_k = 0.36 if hero else (0.3 if face_keep >= 1.0 else 0.25)     # fingers stay fingers (they are seen in every gesture)
+        crowd = face_keep < 1.0       # crowds / children (budget <= 9000): seen from further away, many on screen at once
+        face_min = float(os.environ.get("CROWD_FACEK", "0.23")) if crowd else (0.4 if hero else 0.34)
+        head_k = 0.6 if target >= 15000 else 0.36 if not crowd else 0.3
+        hand_k = 0.36 if hero else (0.3 if not crowd else float(os.environ.get("CROWD_HANDK", "0.19")))   # fingers stay fingers (they are seen in every gesture)
         for _ in range(24):      # the body (and its garments) must not drop below ~30 %: spikes and chords appear
             body_k = (target - n["face"] * face_keep - n["head"] * head_k - n["hand"] * hand_k) / max(n["body"], 1)
             if body_k >= 0.3:
                 break
             head_k = max(0.2, head_k * 0.88)
             face_keep = max(face_min, face_keep * 0.94)
-        body_k = max(body_k, float(os.environ.get("BODYK", "0.42")))     # below this the collapse folds and smears the cloth (holes, stretched texels)
+        body_k = max(body_k, float(os.environ.get("BODYK", os.environ.get("CROWD_BODYK", "0.36") if crowd else "0.42")))     # below this the collapse folds and smears the cloth (holes, stretched texels)
         hand_k = min(hand_k, 0.5)
         for which, ratio in (("body", body_k), ("hand", hand_k), ("head", head_k), ("face", face_keep)):
             if ratio >= 0.999:
