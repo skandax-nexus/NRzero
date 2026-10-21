@@ -6,6 +6,7 @@ infrastructure, and smooth gameplay on phones.
 
 This file is the working contract for the rendering upgrade. It records the baseline (stage 0, the audit), the exact
 reference views every later stage re-captures, the gaps against a modern realistic game, and the staged plan.
+**Section 12 holds the final state:** features per tier (12.3), the API index (12.4), final numbers (12.5) and open items (12.6).
 Art direction and phone budgets come from docs/ART_SPEC.md, the engine API from docs/MISSION_GUIDE.md.
 
 Files owned by the rendering work: `src/core/engine.js` (renderer, composer, quality tiers), `src/world/realism.js`,
@@ -813,7 +814,8 @@ at the end.
 Also closed here, from the final low-tier captures: on `low`, `kit.cableCurve` with an organic material (the 2196
 overgrowth) still drew the smooth saturated green tubes of finding 5 (section 11), because only medium and high had
 the vine. Low now builds the same tapering, wobbling stem with the vertex count of the old tube, in a plain woody
-olive `MeshStandardMaterial` (no bark maps, no leaf cards). The per-pixel cost is the same as the old tube.
+olive `MeshStandardMaterial` (no bark maps, no leaf cards). The per-pixel cost is the same as the old tube (m3c low:
+23 calls / 51k triangles before and after; `<scratch>/render/critic/sbs/m3c_low_vines2.png`: old low / new low / high).
 
 Implementation notes: the rain geometry is plain (non-instanced: each vertex carries its drop's random vec4).
 A first, instanced version cost +7 % of the low-tier m1a frame on SwiftShader even as lines, and halving the drop count
@@ -909,7 +911,38 @@ noshadow,noshafts,nocap`, `?infra=off|nofacade,nomasonry,nolamp,nobatch,nomat,no
 
 ### 12.5 Final numbers (twelve reference views, this build)
 
-FINAL_TABLE_PLACEHOLDER
+Captured at the end of this pass with `bash tools/render/runall.sh <scratch>/render/critic/final "m1 low 844 390 --mobile;…;m4 high 1280 720;m1 medium 844 390 --mobile"`
+(all nine sets passed on the first try with no page errors; contact sheets `<scratch>/render/critic/final/grid_high.png`,
+`grid_low_mobile.png`; `node tools/render/report.mjs <scratch>/render/critic/final/<tier> <scratch>/render/audit/<tier>`
+prints the full table with frame times). Counts are exact and include shadow maps and post:
+
+| view | high calls, audit → now | high tris, audit → now | medium phones, calls / tris now | low (phone) calls, audit → now | low tris, audit → now |
+|---|---|---|---|---|---|
+| m1a_establishing | 488 → 299 | 453k → 499k | 249 / 392k | 424 → 200 | 365k → 303k |
+| m1b_street_people | 381 → 253 | 451k → 491k | 207 / 385k | 328 → 160 | 362k → 296k |
+| m1c_dialogue_hale | 244 → 195 | 444k → 429k | 161 / 364k | 148 → 107 | 356k → 275k |
+| m2a_establishing | 299 → 177 | 79k → 95k | — | 255 → 126 | 37k → 56k |
+| m2b_interior_people | 138 → 114 | 75k → 90k | — | 100 → 68 | 34k → 42k |
+| m2c_dialogue_iven | 67 → 66 | 40k → 56k | — | 24 → 20 | 20k → 28k |
+| m3a_establishing_2049 | 75 → 69 | 35k → 43k | — | 61 → 47 | 35k → 43k |
+| m3b_dialogue_iven_2049 | 41 → 50 | 28k → 36k | — | 39 → 35 | 33k → 41k |
+| m3c_future_2196 | 195 → 79 | 93k → 165k | — | 86 → 23 | 36k → 51k |
+| m4a_establishing | 479 → 262 | 350k → 275k | — | 276 → 148 | 292k → 206k |
+| m4b_village_people | 399 → 219 | 335k → 258k | — | 203 → 116 | 286k → 198k |
+| m4c_dialogue_niko | 389 → 214 | 341k → 292k | — | 163 → 95 | 282k → 193k |
+
+- **Phone budget (≤ 250 calls, ≤ 700k triangles):** every view meets it on low (at most 200 calls / 303k, where the
+  audit had m1 at 328-424 calls and m4a at 276) and on medium phones (m1a 249 / 392k). Lights in the shader loop: at
+  most 4 point / spot lights on low and 6 on medium phones, plus the rig key during dialogues (section 11, item 8). One
+  shadow caster at most, and none on low.
+- Triangles fell in m1 / m4 from the other workflows' character LODs, and rose in m2 / m3 from the batched 50 m cells
+  and the stage-2 to stage-4 geometry. They stay far inside the budget.
+- **Frame times** in these runs cannot be compared with the audit, because the host load differed (audit 15-20, now
+  7-13). Low frame min is 43-63 % lower than the audit and high is up to +170 % (high adds the desktop-only GTAO, SMAA
+  and full interior mapping, which are ALU-heavy on SwiftShader by design). The same-page A/B tables in sections 6-12
+  are the cost reference. Against the pre-upgrade renderer on the phone tiers they show: the post chain ±0 on low and
+  4-8 % of the frame on medium, scene lighting ±0, surfaces ±0, rain / sky ±0, and the m1 facade city +8 % (low) /
+  +14 % (medium phones) of GPU time, with the CPU submission time 31-45 % lower (section 11).
 
 ### 12.6 Open items (not fixable in the rendering files)
 
