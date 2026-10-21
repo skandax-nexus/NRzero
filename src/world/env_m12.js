@@ -623,7 +623,8 @@ export function buildHelixWest(game, scene, T) {
   W.update = (dt, t) => {
     ch2.userData.update(t);
     r2.rotation.z = t * 0.6; r1.rotation.y = Math.sin(t * 0.2) * 0.05;
-    for (const c of W.curtains) c.material.uniforms.uT.value = t;
+    const cam = game.engine.camera.position;
+    for (const c of W.curtains) { c.material.uniforms.uT.value = t; const d = Math.abs(cam.z - c.position.z) + Math.max(0, Math.abs(cam.y - c.position.y) - 1.5); c.visible = d > 0.6; c.userData.fade = Math.min(1, Math.max(0, (d - 0.6) / 3)); }
     W.fracture.material.uniforms.uT.value = t;
   };
   return W;

@@ -21,7 +21,7 @@ export const CAST = {
   sera: {
     name: 'SERA VOSS', role: 'Resistance leader · 2196',
     bio: 'A survivor from 2196 who distrusts Kai because he is remembered as the architect of the Fracture.',
-    look: { role: 'sera', female: true, height: 1.72, skin: 0x8a5b3c, hair: 0x2a1c14, hairStyle: 'tied-back', eyes: 0x6a7a62, top: 0x4a3a28, topKind: 'fabric', vest: 0x3a3a2c, pants: 0x3a3a30, boots: 0x2a2018, strap: true, scar: true , age: 34, likeness: 'sera', hood: true, topType: 'jacket', face: { jaw: 0.15, cheek: 0.4, nose: 0, noseWidth: 0, lips: 0.2, brow: 0.25, eyeSize: 0.05, faceLength: 0.1, chin: 0.15 }, wrinkles: 0.1 },
+    look: { role: 'sera', era: '2196', female: true, height: 1.72, skin: 0x8a5b3c, hair: 0x2a1c14, hairStyle: 'tied-back', eyes: 0x6a7a62, top: 0x4a3a28, topKind: 'fabric', vest: 0x3a3a2c, pants: 0x3a3a30, boots: 0x2a2018, strap: true, scar: true , age: 34, likeness: 'sera', hood: true, topType: 'jacket', face: { jaw: 0.15, cheek: 0.4, nose: 0, noseWidth: 0, lips: 0.2, brow: 0.25, eyeSize: 0.05, faceLength: 0.1, chin: 0.15 }, wrinkles: 0.1 },
     rimColor: 0xb6ff8a,
   },
   rook: {

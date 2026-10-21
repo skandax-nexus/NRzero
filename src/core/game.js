@@ -260,6 +260,7 @@ export class Game {
         if (this.input.hit('KeyE')) this.useInteract(best);
       }
     } else this.ui.prompt(null);
+    this.kitGadgets(dt, best);
     for (const id in this.actors) if (id !== 'kai') this.actors[id].update(dt);
     for (const f of [...this.updaters]) f(dt, this.time);
     // camera
@@ -274,6 +275,19 @@ export class Game {
       if (c.fov) { cam.fov += (c.fov - cam.fov) * Math.min(1, dt * 2); cam.updateProjectionMatrix(); }
     } else if (this.scene) this.player.updateCamera(dt, cam);
     if (this.shake > 0) cam.position.add(new THREE.Vector3((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake));
+  }
+
+  // Kai's kit (docs/COSTUMES.md): the belt scanner pulses while something can be inspected and flashes when evidence
+  // reaches the case board; the earpiece blinks while a voice with no body in the scene (a call, the PA, a radio) speaks
+  kitGadgets(dt, best) {
+    const ch = this.player.char;
+    if (!ch.person) return;
+    const n = this.ui.evidence.length;
+    if (this._evN != null && n > this._evN) this._scanFlash = 0.7;
+    this._evN = n;
+    this._scanFlash = Math.max(0, (this._scanFlash || 0) - dt);
+    ch.setGadget('belt_scanner', this._scanFlash > 0 ? 3.2 : best ? 1.1 + 0.9 * Math.max(0, Math.sin(this.time * 7)) : false);
+    ch.setGadget('earpiece', this.ui.dlgActive && this.ui.callLine ? (Math.sin(this.time * 9) > 0 ? 2.2 : 0.15) : false);
   }
 
   useInteract(it) {

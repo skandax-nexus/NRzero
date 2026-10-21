@@ -114,8 +114,9 @@ function kitPBR(kind, params, variant, repeat, o) {
   if (!infraOn('mat')) return null;
   let set;
   try { set = kitSet(kind, params, variant, o.hero); } catch (e) { if (!kitPBR.warned) { kitPBR.warned = true; console.warn('kit: surface bake unavailable, canvas materials', e.message); } return null; }
-  const M = kitMaps(set, repeat), ao = RZ.getQuality() !== 'low';
-  const props = { map: M.map, normalMap: M.normalMap, roughnessMap: M.orm, aoMap: ao ? M.orm : null, color: o.color, roughness: o.roughness, metalness: o.metalness };
+  const M = kitMaps(set, repeat), ao = RZ.getQuality() !== 'low' && o.ao !== false;
+  const props = { map: M.map, normalMap: M.normalMap, roughnessMap: M.orm, aoMap: ao ? M.orm : null, roughness: o.roughness, metalness: o.metalness };
+  if (o.color) props.color = o.color;
   const mat = new THREE.MeshStandardMaterial({ ...props, envMapIntensity: o.envMapIntensity ?? 1 });
   mat.normalScale.set(o.normalScale ?? 1, o.normalScale ?? 1);
   mat.defines = { RZ_SPECAA: '' };   // realism's shared chunk: specular AA on the mapped normal (no sparkle on glossy tiles)
@@ -166,7 +167,8 @@ function asphaltLegacy(repeat) {
 }
 export function asphaltMaterial(repeat = [6, 30]) {
   const pbr = kitPBR('wetAsphalt', { color: 0x2e3033, stone: 0x5e5c5a, puddles: 0.4, cracks: 0.55, wear: 0.45, wet: 0.55 }, 0, repeat,
-    { hero: true, roughness: 0.92, metalness: 0.15, envMapIntensity: 1.2, legacy: () => asphaltLegacy(repeat) });
+    // no AO map: its specular occlusion would dim the neon mirrored in the wet street (the look the street is built on)
+    { hero: true, ao: false, roughness: 0.92, metalness: 0.15, envMapIntensity: 1.2, legacy: () => asphaltLegacy(repeat) });
   if (pbr) return pbr;
   return new THREE.MeshStandardMaterial({ ...asphaltLegacy(repeat), envMapIntensity: 1.2 });
 }

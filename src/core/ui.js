@@ -1,4 +1,5 @@
 import { CAST } from '../story/cast.js';
+import { portraitFor } from './character.js';
 import { Voice } from './voice.js';
 import { touchText } from './touch.js';
 
@@ -83,6 +84,10 @@ export class UI {
     const def = CAST[id] || { name: id.toUpperCase(), role: '' };
     $('dlg-name').textContent = def.name; $('dlg-role').textContent = def.role || '';
     const pid = def.portraitOf || id;
+    // a speaker registered without a look still gets a portrait when its role has a costume build (rendered once)
+    if (!(pid in this.portraits) && !def.voice) this.portraits[pid] = portraitFor(pid, CAST[pid]);
+    // a voice with no body in the scene (a call, the PA, a radio) comes through Kai's earpiece (game.js blinks it)
+    this.callLine = id === 'phone' || (!!def.voice && !this.game.actors?.[id]);
     const wrap = $('portrait-wrap');
     wrap.classList.toggle('voice', !!def.voice);
     wrap.classList.toggle('hidden', !this.portraits[pid] && !def.voice);

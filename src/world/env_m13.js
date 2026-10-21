@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import * as RZ from './realism.js';
 import { canvasTex, glowMat, rng, neonSign } from './kit.js';
 import { Batch } from './env_m6.js';
-import { streetKit } from './props.js';
+import { streetKit, trainCar } from './props.js';
 import { registerCast } from '../story/cast.js';
 import { registerTheme } from '../core/audio.js';
 import { combatState } from '../systems/combat.js';
@@ -29,7 +29,7 @@ export const SPIRE = [0, -2], DOME_R = 12.5;
 export const groundY = (x, z) => ((z > 22 || z < -24) && (Math.abs(x) < 7 || (Math.abs(x) > 11 && x < 26)) ? 0 : (x >= 32 && x <= 42 && Math.abs(z) > 4) ? -2.2 : Y0);
 export const P = {
   start: [0, Y0, 80, Math.PI], cordon: [0, 0, 77.5], note1: [8.9, 1.0, 50.2],
-  arrive96: [1.5, Y0, 52, Math.PI], lasker: [-8.4, Y0, 61.6], sera: [8.6, Y0, 57.8], fire: [0, 0, 66], mapBoard: [-9.9, 1.5, 64.2],
+  arrive96: [1.5, Y0, 52, Math.PI], lasker: [-6.4, Y0, 61.6], sera: [8.6, Y0, 57.8], fire: [0, 0, 66], mapBoard: [-9.9, 1.5, 64.2],
   manifesto: [-10.9, 1.6, 70], tally: [-4.6, 1.3, 46.4],
   gap: [2.5, 0, 42], plazaEdge: [0, Y0, 23],
   nell: [-9.0, Y0, 30.4], balcony: [-11, 3.4, 30.4], bolts: [-10.2, Y0, 30.4],
@@ -45,7 +45,7 @@ export const P = {
 export const CAGES = [[-5, -6], [0, -6], [5, -6], [-5, 2], [0, 2], [5, 2]];   // C-1 .. C-6; the client's fitting is in C-5
 export const ANCHOR_CAGE = 4;
 export const SHARDS = [
-  [-14.4, 0.7, 72.5, '2196', 'the Unwritten camp, behind the stove pipes'],
+  [-9.9, 0.6, 75.6, '2196', 'the Unwritten camp, behind the stove pipes'],
   [12.8, 0.7, -13.6, '2049', 'under the held tram platform'],
   [-20.6, 0.7, 13.8, '2026', 'behind the 2026 site office'],
   [40.6, 0.7, 3.6, '2049', 'at the east end of the jammed bridge'],
@@ -284,7 +284,7 @@ export function buildSable(game, scene, T) {
   const pearl = new THREE.MeshStandardMaterial({ color: 0xe6e8ea, roughness: 0.18, metalness: 0.1, envMapIntensity: 1.3 });
   const graphite = new THREE.MeshStandardMaterial({ color: 0x202328, roughness: 0.5, metalness: 0.4 });
   const goldTrim = new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.3, metalness: 0.85 });
-  const goldGlow = glowMat(0xffd27a, 2.4), cyan = glowMat(0x5fe6ff, 2.0), warm = glowMat(0xffd8a0, 1.6), ember = glowMat(0xff7a3a, 2.4), redLed = glowMat(0xff4d5e, 2.2);
+  const goldGlow = glowMat(0xffd27a, 2.4), cyan = glowMat(0x5fe6ff, 2.0), ember = glowMat(0xff7a3a, 2.4);
   const hiVis = new THREE.MeshStandardMaterial({ color: 0xe8c21a, roughness: 0.6 });
   const tarp = new THREE.MeshStandardMaterial({ color: 0x5a5444, roughness: 0.95, side: THREE.DoubleSide });
   const tarpRed = new THREE.MeshStandardMaterial({ color: 0x7a3e22, roughness: 0.95, side: THREE.DoubleSide });
@@ -359,7 +359,6 @@ export function buildSable(game, scene, T) {
     const w = (face === '+z' || face === '-z') ? x1 - x0 : z1 - z0, d = (face === '+z' || face === '-z') ? z1 - z0 : x1 - x0;
     return { width: Math.abs(w), depth: Math.abs(d), position: [(x0 + x1) / 2, o.y ?? 0, (z0 + z1) / 2], yaw, ...o };
   };
-  const walls = ['brick', 'plaster', 'concrete', 'darkBrick', 'panel', 'stone'];
   const FOOT = [
     [-30, -11, 54, 84, '+x', 20, 'brick'], [-30, -11, 28, 52, '+x', 17, 'plaster'], [-30, -11, -44, -24, '+x', 22, 'darkBrick'], [-30, -11, -86, -56, '+x', 26, 'concrete'],
     [11, 30, 54, 84, '-x', 18, 'stone'], [11, 30, 28, 52, '-x', 24, 'brick'], [11, 30, -44, -24, '-x', 19, 'plaster'], [11, 30, -86, -56, '-x', 28, 'panel'],
@@ -431,22 +430,19 @@ export function buildSable(game, scene, T) {
       B.box(M.dark, x - 2.6, 2.9, z - 0.9, x + 2.6, 3.0, z + 0.9); box(x - 2.4, 0.35, z - 0.15, x + 2.4, 2.9, z + 0.15, ['2049']);
     }
     plane(TEX.stop(), 3.2, 0.8, -9, 3.4, -11.9, 0, '2049', 0.6); plane(TEX.stop(), 3.2, 0.8, 9, 3.4, -3.7, Math.PI, '2049', 0.6);
-    const tram = new THREE.Group(); tram.position.set(0, 0, -8); g49.add(tram); W.tram = tram;
-    for (const [cx, len] of [[-7.2, 13.6], [7.2, 13.6]]) {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(len, 2.8, 2.6), trainWhite); body.position.set(cx, 1.85, 0); tram.add(body);
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(len + 0.02, 0.18, 2.62), cyan); stripe.position.set(cx, 1.05, 0); tram.add(stripe);
-      const win = new THREE.Mesh(new THREE.BoxGeometry(len - 0.6, 1.0, 2.64), new THREE.MeshStandardMaterial({ color: 0x18242c, roughness: 0.1, metalness: 0.5, emissive: 0xffe0b0, emissiveIntensity: 0.18 })); win.position.set(cx, 2.3, 0); tram.add(win);
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(len - 1, 0.3, 1.6), M.dark); roof.position.set(cx, 3.4, 0); tram.add(roof);
-    }
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.6, 2.5), trainWhite); cab.position.set(-14.5, 1.75, 0); cab.scale.set(1, 1, 1); tram.add(cab);
-    const cabGlass = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 2.2), new THREE.MeshStandardMaterial({ color: 0x18242c, roughness: 0.05, metalness: 0.6 })); cabGlass.position.set(-15.12, 2.3, 0); tram.add(cabGlass);
-    const pant = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.06), M.dark); pant.position.set(-6, 4.6, 0); pant.rotation.z = 0.5; tram.add(pant);
-    box(-15.2, 0, -9.35, 14.4, 3.4, -6.65, ['2049']);
-    // the anchor: a gold Continuum stake driven through the driver's console (visible through the cab door)
-    const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.11, 1.6, 10), goldGlow); stake.position.set(-14.4, 1.7, 0.9); stake.rotation.z = 0.35; tram.add(stake);
-    const stakeRing = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 8, 24), goldGlow); stakeRing.position.set(-14.4, 1.4, 0.9); stakeRing.rotation.x = Math.PI / 2; tram.add(stakeRing);
+    const tram = new THREE.Group(); tram.position.set(0, Y0, -8); g49.add(tram); W.tram = tram;
+    for (const cx of [-7.0, 7.0]) { const car = trainCar(13.6, 0xe9edf2, 0x5fe6ff); car.rotation.y = Math.PI / 2; car.position.set(cx, 0, 0); car.scale.set(0.9, 0.95, 1); tram.add(car); }
+    const gang = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.4, 2.2), M.rubber); gang.position.set(0, 1.9, 0); tram.add(gang);
+    for (const dz of [-0.75, 0.75]) { const hl = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), glowMat(0xfff2d8, 5)); hl.position.set(-13.95, 1.25, dz); tram.add(hl); }
+    const dest = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.3), new THREE.MeshBasicMaterial({ map: TEX.sign('7 · SABLE', '', '#05080a', '#ffb347', 'dest'), toneMapped: false })); dest.position.set(-13.92, 3.05, 0); dest.rotation.y = -Math.PI / 2; tram.add(dest);
+    for (const [x, z] of [[-9.6, -1.38], [-2.6, -1.38], [4.4, -1.38], [11.2, -1.38]]) { const door = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.1), new THREE.MeshStandardMaterial({ color: 0x0a0d10, emissive: 0xffe9c8, emissiveIntensity: 0.35, roughness: 0.4 })); door.position.set(x, 1.45, z); door.rotation.y = Math.PI; tram.add(door); }
+    const pant = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.06), M.dark); pant.position.set(-6, 4.0, 0); pant.rotation.z = 0.5; tram.add(pant);
+    box(-14.2, 0, -9.55, 14.2, 3.6, -6.45, ['2049']);
+    // the anchor: a gold Continuum stake driven through the cab's windscreen into the driver's console
+    const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.11, 2.0, 10), goldGlow); stake.position.set(-13.6, 1.75, -0.35); stake.rotation.set(0.2, 0, 1.0); tram.add(stake);
+    const stakeRing = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.03, 8, 24), goldGlow); stakeRing.position.set(-14.25, 2.2, -0.35); stakeRing.rotation.set(0, 0, 1.0 + Math.PI / 2); tram.add(stakeRing);
     W.anchor49 = { stake, ring: stakeRing };
-    src(-14.4, 2.2, -7, 0xffd27a, 4, 6, '2049');
+    src(-15, 2.4, -8, 0xffd27a, 4, 6, '2049');
     // the Helix cordon at the south end
     for (const x of [-10, -3.5, 3.5, 10]) B.cyl(M.dark, x, 0.55, 77.5, 0.05, 1.1, 8);
     const cord = new THREE.Mesh(new THREE.PlaneGeometry(22, 0.36), new THREE.MeshStandardMaterial({ map: TEX.cordon(), roughness: 0.6, side: THREE.DoubleSide })); cord.position.set(0, 1.0, 77.5); g49.add(cord);
@@ -458,11 +454,11 @@ export function buildSable(game, scene, T) {
   }
   // the held rain: thousands of drops that never land (one Points draw)
   {
-    const n = low ? 2400 : 6000, pos = new Float32Array(n * 3), r = rng(49);
-    for (let i = 0; i < n; i++) { pos[i * 3] = -24 + r() * 48; pos[i * 3 + 1] = 0.3 + r() * 9; pos[i * 3 + 2] = -40 + r() * 124; }
+    const n = low ? 3200 : 7000, pos = new Float32Array(n * 3), r = rng(49);
+    for (let i = 0; i < n; i++) { pos[i * 3] = -14 + r() * 28; pos[i * 3 + 1] = 0.3 + r() * 7; pos[i * 3 + 2] = -24 + r() * 104; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const dropTex = canvasTex(32, 64, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(220,240,255,0)'); gr.addColorStop(0.5, 'rgba(220,240,255,.85)'); gr.addColorStop(1, 'rgba(220,240,255,0)'); c.fillStyle = gr; c.fillRect(12, 0, 8, h); }, 'm13drop');
-    const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: dropTex, size: 0.07, transparent: true, opacity: 0.7, depthWrite: false, color: 0xd8ecff, sizeAttenuation: true }));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ map: dropTex, size: 0.16, transparent: true, opacity: 0.8, depthWrite: false, color: 0xd8ecff, sizeAttenuation: true }));
     pts.frustumCulled = false; g49.add(pts); W.heldRain = pts; W.heldRainPos = pos;
   }
 
@@ -563,7 +559,7 @@ export function buildSable(game, scene, T) {
     for (const [x, z] of [[-6, 56], [6.6, 64], [-7, 72], [7, 52], [-2, 70]]) { B.boxc(M.wood, x, Y0 + 0.35, z, 0.9, 0.7, 0.7, R()); box(x - 0.5, 0, z - 0.5, x + 0.5, 0.8, z + 0.5, ['2196']); }
     for (const [x, z] of [[9.2, 56.6], [9.2, 59.4]]) { B.box(tarp, x - 0.4, Y0, z - 1, x + 0.4, Y0 + 0.4, z + 1); }
     // stove pipes in the camp alley (shard)
-    for (let k = 0; k < 3; k++) B.cyl(M.rustHeavy, -14 - k * 0.6, 0.6, 73, 0.18, 1.2, 8);
+    for (let k = 0; k < 3; k++) B.cyl(M.rustHeavy, -10.2 + k * 0.5, 0.75, 74.6, 0.18, 1.5, 8);
     // the Continuum line (z -40, gap x -1.5..1.5): pearl barriers with gold emitters, a checkpoint arch, pylons
     for (const [x0, x1] of [[-11, -1.5], [1.5, 11]]) {
       for (let x = x0; x < x1 - 0.1; x += 2.5) { const w = Math.min(2.4, x1 - x); B.geo(pearl, new THREE.BoxGeometry(w - 0.1, 1.3, 0.7), [x + w / 2, 0.65, -40.3], [0, 0, 0]); B.geo(goldTrim, new THREE.BoxGeometry(w - 0.3, 0.06, 0.72), [x + w / 2, 1.0, -40.3]); }
@@ -596,13 +592,20 @@ export function buildSable(game, scene, T) {
     W.craters = [];
     for (const list of Object.values(IMPACTS)) for (const [x, z] of list) {
       const d = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 4.6), scorch); d.rotation.x = -Math.PI / 2; d.position.set(x, groundY(x, z) + 0.02, z); g96.add(d); W.craters.push(d);
-      for (let k = 0; k < 5; k++) { const a = R() * 6.28; B.geo(M.concrete96, new THREE.BoxGeometry(0.3 + R() * 0.4, 0.2 + R() * 0.2, 0.3 + R() * 0.4), [x + Math.cos(a) * (1.6 + R() * 0.6), 0.2, z + Math.sin(a) * (1.6 + R() * 0.6)], [R(), R(), R()]); }
+      for (let k = 0; k < 6; k++) { const a = R() * 6.28, h = 0.12 + R() * 0.16; B.geo(M.concrete96, new THREE.BoxGeometry(0.22 + R() * 0.3, h, 0.2 + R() * 0.3), [x + Math.cos(a) * (1.7 + R() * 0.5), groundY(x, z) + h * 0.4, z + Math.sin(a) * (1.7 + R() * 0.5)], [(R() - 0.5) * 0.5, R() * 3, (R() - 0.5) * 0.5]); }
     }
     // cover in no-man's land: a tram body on its side, concrete blocks, a fallen kiosk
     B.geo(M.rustHeavy, new THREE.BoxGeometry(9, 2.6, 2.8), [-3, 1.3, 31.6], [0, 0.18, Math.PI / 2 - 0.05]); box(-7.4, 0, 30.2, 1.4, 2.6, 33, ['2196']);
     for (const [x, z] of [[5.6, 37.5], [-6.5, 24.8], [6.6, 21.2], [-1.2, 18.6], [14, 16.5], [-15, 18], [22, 9], [21, -8], [-20, -16], [12, -30], [-12, -31]]) { B.boxc(M.concrete96, x, 0.6, z, 2.2, 1.2, 0.8, R() * 0.6 - 0.3); box(x - 1.15, 0, z - 0.6, x + 1.15, 1.25, z + 0.6, ['2196']); }
     // the Continuum forward post at the plaza edge (z 16): two pearl shields
     for (const x of [-4.2, 4.8]) { B.geo(pearl, new THREE.BoxGeometry(2.2, 1.25, 0.5), [x, 0.75, 15.2], [0, 0, 0]); box(x - 1.1, 0, 14.9, x + 1.1, 1.35, 15.5, ['2196']); }
+    // what is left of the interchange: rusted platform canopies and a buckled rail where the 2049 tram stood
+    for (const [x, z] of [[-13, -12], [13, -12], [-15, -3.6], [15, -3.6]]) {
+      for (const dx of [-2.2, 2.2]) B.box(M.rustHeavy, x + dx - 0.08, Y0, z - 0.08, x + dx + 0.08, Y0 + 2.9, z + 0.08);
+      B.geo(M.rustHeavy, new THREE.BoxGeometry(5.2, 0.12, 1.6), [x, Y0 + 2.9, z], [0.05, 0, x > 0 ? -0.12 : 0.18]);
+      box(x - 2.35, 0, z - 0.15, x + 2.35, 2.9, z + 0.15, ['2196']);
+    }
+    for (const z of [-8.6, -7.4]) B.geo(M.rust, new THREE.BoxGeometry(10, 0.12, 0.1), [-19, Y0 + 0.06, z], [0, 0.04 * (z + 8), 0]);
     // Senn's wreck (east plaza)
     // smoke columns from the ruins (drifting mist volumes)
     try {
@@ -627,6 +630,9 @@ export function buildSable(game, scene, T) {
       box(sx + Math.cos(a) * 2.6 - 0.7, 2.4, sz + Math.sin(a) * 2.6 - 0.7, sx + Math.cos(a) * 2.6 + 0.7, 26, sz + Math.sin(a) * 2.6 + 0.7, ['2196']);
     }
     box(sx - 2.1, 2.4, sz - 2.1, sx + 2.1, 26, sz + 2.1, ['2196']);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.5, 3.2, 12), goldTrim); tip.position.y = 28; sp.add(tip);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 6), graphite); mast.position.y = 32; sp.add(mast);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), goldGlow); beacon.position.y = 35.1; sp.add(beacon);
     // the heart: a gold core in a cage on the deck, three couplings around it
     const heart = new THREE.Mesh(new THREE.IcosahedronGeometry(0.75, 1), goldGlow); heart.position.set(0, 3.6, 3.0); sp.add(heart); W.heart = heart;
     const cage = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.05, 6, 24), goldTrim); cage.position.copy(heart.position); sp.add(cage); W.heartCage = cage;

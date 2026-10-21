@@ -114,7 +114,8 @@ const POOLS = {
 const FACTIONS = {
   helix: { m: ['helix_sci_m'], f: ['helix_sci_f'] }, security: { m: ['helix_sec_1'], f: ['helix_sec_2'] },
   transit: { m: ['transit_worker'], f: ['transit_worker'] }, tech: { m: ['technician'], f: ['technician'] },
-  continuum: { m: ['continuum_1'], f: ['continuum_2'] },
+  // Continuum squads: helmeted troopers, one officer (visor up, half-cape) in four, whatever the body underneath
+  continuum: { m: ['continuum_1', 'continuum_1', 'continuum_2', 'continuum_1'], f: ['continuum_1', 'continuum_2', 'continuum_1', 'continuum_1'] },
 };
 const ERA = { past: '2026', 2026: '2026', present: '2049', 2049: '2049', unwritten: '2049', future: '2196', 2196: '2196', ancient: 'ancient', settlement: 'ancient' };
 export function eraOf(look) {
@@ -250,22 +251,25 @@ export class Character {
 
   /**
    * A real SpotLight in the shoulder lamp (the player in dark scenes; one per scene on phones). opts.shadow: cast
-   * shadows (high tier only). Kept in the scene while available and dimmed to 0 when off, so toggling never recompiles
-   * shaders. Returns the light, or null when the build has no lamp.
+   * shadows (high tier only). The light lives in the scene (not under the character, which the engine hides during
+   * environment captures: that would change the light count and compile extra shader variants) and follows the lens
+   * every frame. It stays at zero while off, so switching never recompiles shaders. Returns the light, or null when the
+   * build has no lamp or the person is not in a scene yet.
    */
   attachLamp(opts = {}) {
-    const P = this.person;
-    if (!P || !P.gadgets.shoulder_lamp || !P.bones.chest) return null;
+    const P = this.person, scene = this.root.parent;
+    if (!P || !P.gadgets.shoulder_lamp || !P.bones.chest || !scene) return null;
     if (!this.lamp) {
-      const chest = P.bones.chest, L = new THREE.SpotLight(0xe8f4ff, 0, 16, 0.44, 0.6, 1.3);
-      L.name = 'shoulderLamp'; L.userData.noShaft = true; L.userData.noCapture = true;
-      L.shadow.mapSize.set(512, 512); L.shadow.bias = -0.0006; L.shadow.normalBias = 0.02; L.shadow.camera.near = 0.15;
-      chest.add(L, L.target);
-      this.lamp = { light: L, on: false, k: 0 };
+      const L = new THREE.SpotLight(0xe8f4ff, 0, 16, 0.44, 0.6, 1.3);
+      L.name = 'shoulderLamp'; L.userData.noShaft = true;
+      L.shadow.mapSize.set(512, 512); L.shadow.bias = -0.0006; L.shadow.normalBias = 0.02; L.shadow.camera.near = 0.2;
+      this.lamp = { light: L, on: false, k: 0, at: new THREE.Vector3(), fwd: new THREE.Vector3() };
       this.placeLamp();
     }
     const L = this.lamp.light;
+    if (L.parent !== scene) scene.add(L, L.target);
     L.castShadow = !!opts.shadow; L.shadow.autoUpdate = false;
+    this.followLamp();
     return L;
   }
   detachLamp() {
@@ -273,11 +277,12 @@ export class Character {
     const L = this.lamp.light; L.parent?.remove(L); L.target.parent?.remove(L.target); L.dispose?.();
     this.lamp = null;
   }
-  // the light sits on the lamp lens (centre of its glow vertices) and aims ahead and a little down
+  // the light sits on the lamp lens (centre of its glow vertices, chest space) and aims where the person faces, a
+  // little down (body space, so the beam does not swing with the torso twist of the walk cycle)
   placeLamp() {
-    const P = this.person, L = this.lamp.light, chest = P.bones.chest;
+    const P = this.person, lamp = this.lamp, chest = P.bones.chest;
     this.root.updateMatrixWorld(true);
-    const at = new THREE.Vector3(), v = new THREE.Vector3();
+    const at = lamp.at.set(0, 0, 0), v = new THREE.Vector3();
     let n = 0;
     for (const o of P.meshes) {
       const gid = o.geometry.attributes._gid;
@@ -286,10 +291,16 @@ export class Character {
       for (let i = 0; i < gid.count; i++) if (Math.round(gid.getX(i) * 32) === slot) { o.getVertexPosition(i, v); o.localToWorld(v); at.add(v); n++; }
     }
     if (n) at.divideScalar(n); else chest.localToWorld(at.set(0.1, 0.15, 0.14));
-    const fwd = v.set(0, -0.3, 1).applyQuaternion(this.root.getWorldQuaternion(new THREE.Quaternion())).normalize();
-    const aim = at.clone().addScaledVector(fwd, 4);
+    const fwd = v.set(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(new THREE.Quaternion()));
     at.addScaledVector(fwd, 0.03);
-    L.position.copy(chest.worldToLocal(at)); L.target.position.copy(chest.worldToLocal(aim));
+    chest.worldToLocal(at);
+  }
+  followLamp() {
+    const lamp = this.lamp, chest = this.person.bones.chest, L = lamp.light;
+    chest.updateWorldMatrix(true, false);
+    L.position.copy(lamp.at).applyMatrix4(chest.matrixWorld);
+    lamp.fwd.set(0, -0.3, 1).transformDirection(this.root.matrixWorld);
+    L.target.position.copy(L.position).addScaledVector(lamp.fwd, 4);
   }
 
   /** Rebuild in place (keeps this.root), e.g. once the 3D cast has finished loading. */
@@ -450,7 +461,7 @@ Character.prototype.update3d = function (dt) {
     if (name !== band) P.setGadget(name, this.gadgetLv[name]);
   }
   if (band) {
-    const base = this.gadgetLv[band] ?? P.gadgets[band].level;
+    const base = this.gadgetLv[band] ?? (this._bandIdle ??= P.gadgets[band].level);
     const lv = base + boost * 0.5;
     if (lv !== this._bandLv) { this._bandLv = lv; P.setGadget(band, lv); }
   } else if (this.wrist?.material) this.wrist.material.emissiveIntensity = 1.4 + Math.sin(this.t * 2.2) * 0.6 + boost;
@@ -461,6 +472,7 @@ Character.prototype.update3d = function (dt) {
     lamp.k += ((lamp.on ? 1 : 0) - lamp.k) * (dt > 0 ? Math.min(1, dt * 9) : 1);
     if (!lamp.on && lamp.k < 0.01) lamp.k = 0;
     lamp.light.intensity = LAMP_POWER * lamp.k;
+    if (lamp.k > 0) this.followLamp();
     lamp.light.shadow.autoUpdate = lamp.light.castShadow && lamp.k > 0;
   }
   // crowd level of detail (look.lod people with a low build): far from the camera or on the low character tier
@@ -510,6 +522,14 @@ function renderOne(id, def, size) {
   const url = r.domElement.toDataURL('image/jpeg', 0.9);
   ch.root.traverse(o => { if (o.isMesh && o.material?.dispose && !o.material.map) o.material.dispose(); });
   return url;
+}
+// A portrait for a speaker registered without a look (e.g. a mission's `neighbor`, the station `child`) whose role has
+// a costume build in the cast file. '' when there is nothing to show (voices, unknown ids).
+export function portraitFor(id, def = {}, size = 320) {
+  if (!def || def.voice) return '';
+  const look = def.look || (cast.ready && has(ROLE_TEMPLATE[id] || id) ? { role: id } : null);
+  if (!look) return '';
+  try { return renderOne(id, { ...def, look }, size); } catch (e) { console.warn('portrait', id, e); return ''; }
 }
 export function renderPortraits(cast, size = 320) {
   const out = {}, done = {};

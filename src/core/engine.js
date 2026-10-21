@@ -23,7 +23,7 @@ import * as KIT from '../world/kit.js';
 // Every pass is tier-gated in setQuality(); render() allocates nothing.
 // ---------------------------------------------------------------------------------------------------------------
 
-const _infraV = new THREE.Vector3();
+const _infraV = new THREE.Vector3(), _infraB = new THREE.Box3();
 const LUMA_GLSL = 'const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);';
 const RAW_VS = `precision highp float;
   uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix;
@@ -556,15 +556,16 @@ function tierSettings(q, device) {
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
       light: { probe: 128, probeMove: 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
-      // phones on medium: the lite facade (RZ_INTERIOR 0, measured +12 % instead of +23-35 % raster on m1), low's small-prop
-      // cull distance, 1024 sign atlases and no shadows from small batched / street-kit props (m1a <= 250 draw calls)
-      infra: m ? { smallCull: 85, atlas: 1024, facadeInterior: 0, smallShadows: false } : { smallCull: 120, atlas: 2048 },
+      // phones on medium: low's facade path (RZ_INTERIOR 0: m1a +13-24 % raster over the pre-stage-4 city instead of
+      // +20-35 % with RZ_INTERIOR 1), about low's small-prop cull distance, 1024 sign atlases (-106 MB texture memory on
+      // m1), 200 m batch cells and no shadows from small props / ground slabs (m1a 295 -> 245 draw calls)
+      infra: m ? { smallCull: 85, atlas: 1024, facadeInterior: 0, smallShadows: false, cell: 200 } : { smallCull: 120, atlas: 2048 },
       bloomMips: m ? 3 : 5,
       hints: { characterDetail: m ? 'low' : 'high', crowd: 0.6, drawDistance: 0.8, maxLights: 6, particles: 0.6 } },
     low: { dprCap: m ? 1 : 0.75, shadows: false, shadowMapMax: 512, softShadows: false, bloom: false, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: null, dof: false, autoExposure: false,
       light: { probe: 64, probeMove: 0, puddles: 0, wetDetail: 0, contact: 0.5, rig: 1, pcfRadius: 1, shafts: 0 },
-      infra: { smallCull: 80, atlas: 1024 },
+      infra: { smallCull: 80, atlas: 1024, cell: m ? 200 : 50 },
       hints: { characterDetail: 'low', crowd: 0.35, drawDistance: 0.6, maxLights: 4, particles: 0.35 } },
   };
   return { quality: q, mobile: m, ...T[q] };
@@ -707,6 +708,7 @@ export class Engine {
     this.quality = q;
     RZ.setQuality(q, s.infra.facadeInterior !== undefined ? { interior: s.infra.facadeInterior } : undefined);
     this._batch.smallCull = s.infra.smallCull; this._batch.atlasSize = s.infra.atlas; this._batch.smallShadows = s.infra.smallShadows !== false;
+    this._batch.cell = s.infra.cell ?? 50;   // phones: 200 m batch cells (fewer, larger merged draws; m1a medium -23 calls, +1 % triangles)
     const r = this.renderer;
     r.shadowMap.enabled = s.shadows;
     r.shadowMap.type = s.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
@@ -1265,16 +1267,27 @@ export class Engine {
     // street kit: distance culling of small instanced props (userData.rzCullDist, scaled by the tier) and animated
     // props (userData.rzAnimate + update(t): traffic lights), collected every 60 frames
     if (f === 1 || f % 60 === 0 || !this._culls) {
-      const c = [], a = [], shadows = this.settings.infra.smallShadows !== false;
-      s.traverse(o => {
-        if (o.userData.rzCullDist) {
-          c.push(o);
-          // medium phones: small street-kit props cast no shadow (their shadow-pass draws), restored on other tiers
-          if (o.userData.rzCast0 === undefined) o.userData.rzCast0 = o.castShadow;
-          o.castShadow = shadows && o.userData.rzCast0;
-        }
+      const c = [], a = [], shadows = this.settings.infra.smallShadows !== false, B = this._batch;
+      // medium phones: small props (street kit, static meshes under 1 m radius) and flat ground slabs cast no shadow (their shadow-pass draws;
+      // characters keep theirs), restored on other tiers. A batched member keeps its flag (changing it would un-batch it;
+      // its small batch already casts nothing).
+      const visit = o => {
+        if (o.userData.character) return;
+        if (o.userData.rzCullDist) c.push(o);
         if (o.userData.rzAnimate) a.push(o);
-      });
+        if ((o.isMesh || o.isInstancedMesh) && !o.isSkinnedMesh && !o.userData.rzBatch && (o.userData.rzCast0 !== undefined || (o.castShadow && !shadows))) {
+          let small = !!o.userData.rzCullDist;
+          if (!small && o.geometry) { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); small = o.geometry.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis() < 1; }
+          // flat slabs on the ground (pavements, plazas, rail beds: kit boxes cast by default) shadow nothing visible
+          if (!small && !o.isInstancedMesh && o.geometry) { if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); _infraB.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); small = _infraB.max.y - _infraB.min.y < 0.35 && _infraB.max.y < 0.6; }
+          if (small && !B.members.has(o)) {
+            if (o.userData.rzCast0 === undefined) o.userData.rzCast0 = o.castShadow;
+            o.castShadow = shadows && o.userData.rzCast0;
+          }
+        }
+        for (const ch of o.children) visit(ch);
+      };
+      visit(s);
       this._culls = c; this._anims = a;
     }
     if (this._culls?.length) {

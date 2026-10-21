@@ -698,7 +698,7 @@ export default {
         setTimeout(() => ui.subtitle('kai', `Flight ${seg + 1}. He crossed it in ${ROUTE[seg]}.`, 2600), 1500);
       }
       // the curtains glow calmer in the state each flight holds in, once Kai has crossed it
-      W.curtains.forEach((c, i) => { const k = i >> 1; c.material.uniforms.uS.value = (k < lastLanding && T.current === ROUTE[k]) ? 0.05 : 0.13; });
+      W.curtains.forEach((c, i) => { const k = i >> 1; c.material.uniforms.uS.value = ((k < lastLanding && T.current === ROUTE[k]) ? 0.05 : 0.13) * (c.userData.fade ?? 1); });
     });
     hint(() => S.phase === 'descent' && S.inst > 0.3, 4, () => ui.subtitle('kai', 'Wrong year for this flight. Switch.', 1800));
     await game.waitFor(() => pl.pos.z < -126.4 && pl.pos.y < -7.5);
@@ -752,15 +752,16 @@ export default {
     }
     // the wrist: his band, and under it the same burn
     witness.pose = 'look';
-    const wristShot = async (ch, dist, fov) => {
+    const wristShot = async (ch, fov) => {   // in front of him and out to his left, looking at the left wrist
       const wp = V(); wristNode(ch).getWorldPosition(wp);
-      await game.shot([wp.x + dist, wp.y + 0.22, wp.z + dist * 0.6], [wp.x, wp.y, wp.z], 1.6, { fov });
+      const ry = ch.root.rotation.y, fwd = V(Math.sin(ry), 0, Math.cos(ry)), left = V(Math.cos(ry), 0, -Math.sin(ry));
+      await game.shot([wp.x + fwd.x * 1.25 + left.x * 0.7, wp.y + 0.32, wp.z + fwd.z * 1.25 + left.z * 0.7], [wp.x, wp.y + 0.05, wp.z], 1.6, { fov });
     };
-    await wristShot(witness, 0.55, 22);
+    await wristShot(witness, 30);
     audio.sfxPlay('heartbeat');
     await game.say('kai', 'That scar. Under the band.');
     kai.pose = 'look';
-    await wristShot(kai, -0.55, 22);
+    await wristShot(kai, 30);
     await game.talk([
       ['kai', 'The Chronolith burned that into me when it bound to my wrist.'],
       ['witness', 'It doesn\'t heal. You just stop looking at it.'],
@@ -809,7 +810,8 @@ export default {
     W.ch2.userData.disc.material.uniforms.uPower.value = 0.08;
     await game.wait(0.9); game.shake = 0;
     audio.silence(2.2);
-    await game.shot([-71.0, -7.2, -128.6], [-72.4, -7.6, -130.6], 2.0, { fov: 40 });
+    pl.place(fx.x - 3.0, -8, fx.z + 2.6, Math.atan2(3.0, -2.6)); kai.lookTarget = null;
+    await game.shot([fx.x - 4.0, -6.5, fx.z + 5.6], [fx.x - 3.0, -6.75, fx.z + 2.6], 2.0, { fov: 42 });
     await game.wait(1.0);
     kai.pose = null;
     await game.say('m12band', 'Signatures in field: two. Operator: K. Varen. Operator: K. Varen.');

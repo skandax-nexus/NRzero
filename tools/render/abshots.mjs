@@ -23,7 +23,7 @@ const VIEWS = JSON.parse(fs.readFileSync(path.join(R, 'views.json'), 'utf8')); c
 const b = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--mute-audio', '--disable-audio-output'] });
 const ctx = await b.newContext({ viewport: { width: +W >> 2, height: +H >> 2 }, deviceScaleFactor: 1, isMobile: mobile, hasTouch: mobile });
 const p = await ctx.newPage(); p.on('pageerror', e => console.log('PAGEERROR', e.message));
-p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text().slice(0, 300)); });
+p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text().slice(0, 8000)); });
 await p.goto(`${base}index.html?m=${M.m}&dtcap=0.25&gfx=${gfx}&auto${query ? '&' + query : ''}`);
 await p.waitForFunction(M.ready, null, { timeout: 900000, polling: 1000 });
 await p.setViewportSize({ width: +W, height: +H }); await p.waitForTimeout(1500);
