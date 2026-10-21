@@ -167,7 +167,12 @@ export default {
     };
     const ots = (speaker, listener, dur = 1.0, fov = 36, sideOff = 0.7) => {
       const sp = posOf(speaker), l = posOf(listener), dx = sp.x - l.x, dz = sp.z - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
-      const small = speaker === pip || speaker === teo, sd = sideOff + Math.max(0, 2.2 - d) * 0.45, back = 1.35;
+      const small = speaker === pip || speaker === teo;
+      if (small || listener === pip || listener === teo) {   // a child in the scene: a low two-shot from the side, favouring whoever speaks
+        const mx = l.x + dx * 0.55, mz = l.z + dz * 0.55, sgn = sideOff >= 0 ? 1 : -1;
+        return game.shot([mx + uz * 2.7 * sgn, 1.3, mz - ux * 2.7 * sgn], [l.x + dx * 0.7, small ? 1.02 : 1.3, l.z + dz * 0.7], dur, { fov: 40 });
+      }
+      const sd = sideOff + Math.max(0, 2.2 - d) * 0.45, back = 1.35;
       const sy = small ? 1.12 : speaker === mara ? 1.48 : 1.58, ly = l.y + (small ? 1.3 : speaker === mara ? 1.56 : 1.66);
       return game.shot([l.x - ux * back + uz * sd, ly, l.z - uz * back - ux * sd], [sp.x, sp.y + sy, sp.z], dur, { fov });
     };
@@ -373,6 +378,15 @@ export default {
         if (Math.abs(pl.pos.x) < 22 && pl.pos.z > 40.2 && pl.pos.z < 70 && d < r) return 'THE IRON AGES A CENTURY IN ONE SECOND · AND SO DO YOU';
         return false;
       });
+    }
+    // the echo of 16:40:12 in the Saltmarket: the forty-one, as ghosts that only Residue Vision shows
+    for (let i = 0; i < 9; i++) {
+      const a = i / 9 * Math.PI * 2 + 0.3, r = 2.0 + (i % 3) * 2.6, x = P.epic[0] + Math.sin(a) * r, z = P.epic[2] + Math.cos(a) * r;
+      if (x > 20.5 || z > 68.5) continue;
+      const ch = game.ambient({ ...resLook(i + 1, 1600 + i), lod: true }, x, 0, z, a + Math.PI);
+      ch.pose = i % 3 === 0 ? 'fall' : 'look'; try { ch.setGhost(0xffe0b0); } catch (err) { console.warn('m15 ghost', err); }
+      ch.root.userData.states = ['2196']; game.residue(ch.root);
+      if (i % 3 === 2) await tick();
     }
     window.__m15 = { S, W, L, T, P, anja, mara, wren, okafor, tully, pip, sera, teo };
 

@@ -19,7 +19,7 @@
 {"eval": "__game.use('footprints'); __game.setResidue(false); __game.player.place(-23,0,42.4,Math.PI); __game.use('chalk at the stairs'); null"},
 {"wait": 1500},
 {"eval": "({trail:__m14.S.trail.size, ev:__m14.S.ev.size})"},
-{"eval": "__m14.S.bind=0.02; null"},
+{"eval": "__m14.S.bind=0.003; null"},
 {"wait": 6000},
 {"until": "__game.control && !__game._failing", "timeout": 120000},
 {"eval": "({drifts:__m14.S.drifts, bind:__m14.S.bind.toFixed(2), pos:[__game.player.pos.x.toFixed(1),__game.player.pos.z.toFixed(1)]})"},

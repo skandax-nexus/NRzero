@@ -1630,6 +1630,10 @@ function cubeLuminance(r, cubeRT, maxRadiance = 32, opts = {}) {
     // no pipeline stall: the read-back completes a few frames later (fence), the caller polls the promise
     const px = new Uint8Array(32 * 16 * 4);
     const p = r.readRenderTargetPixelsAsync(L.rt, 0, 0, 32, 16, px).then(() => lumReduce(px, maxRadiance));
+    // three leaves its pixel-pack buffer bound while it waits for the fence: any other readPixels meanwhile (texture
+    // bakes, tools) would fail. The read into it is already queued, so it can be unbound now (three binds it again
+    // to fetch the data, and deleting it unbinds it).
+    const gl = r.getContext(); if (gl.PIXEL_PACK_BUFFER) gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     r.setRenderTarget(prev); L.mat.uniforms.tSrc.value = null;
     return p;
   }
@@ -1909,7 +1913,9 @@ vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, 
   vec3 h = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
   vec3 h2 = rzH32(cid.yx * 1.37 + vec2(bseed * 57.0, 5.0));
   vec3 d = normalize(vt);
-  float x0 = 0.06, x1 = bw - 0.06, y1 = ch - 0.3;
+  // a shop's sales floor spans three bays (seen along the street at grazing angles, a one-bay room would show only
+  // its side wall); a home is one bay wide
+  float x0 = shop ? -bw : 0.06, x1 = shop ? bw * 2.0 : bw - 0.06, y1 = ch - 0.3;
   vec3 o = vec3(g, 0.0);
   float tx = d.x > 0.0 ? (x1 - o.x) / d.x : (x0 - o.x) / min(d.x, -1e-4);
   float ty = d.y > 0.0 ? (y1 - o.y) / d.y : (0.0 - o.y) / min(d.y, -1e-4);
@@ -1936,7 +1942,13 @@ vec3 rzRoom(vec2 g, vec3 vt, vec2 cid, float bw, float ch, float rD, bool shop, 
       if (abs(p.x - px) < 0.38 && abs(p.y - 1.55) < 0.28) a = mix(vec3(0.06), rzPal(fract(h2.z * 7.3)), 0.6);
       if (h2.y > 0.65 && abs(p.x - (x1 - 0.55)) < 0.42 && p.y < 2.05) a = vec3(0.03);
     }
-  } else if (surf == 1) { a = wallC * 0.9; }
+  } else if (surf == 1) {
+    a = wallC * 0.9;
+    if (shop && p.y < 2.1 && p.z > 0.8) {   // shelving along the side walls too
+      float row = fract(p.y * 2.4), colz = fract(p.z * 6.0); vec2 pc = floor(vec2(p.z * 6.0, p.y * 2.4)) + (d.x > 0.0 ? 17.0 : 0.0);
+      a = row < 0.72 ? (colz < 0.12 || row < 0.06 ? vec3(0.05) : mix(rzPal(rzH12(pc + 5.0)), vec3(0.3, 0.5, 0.8) * rzH12(pc), 0.35) * (0.55 + 0.6 * rzH12(pc + 9.0))) : (row < 0.8 ? vec3(0.55) : vec3(0.07));
+    }
+  }
   else if (d.y > 0.0) { a = vec3(0.78); sf = 0.45; }
   else { a = (h2.y < 0.5 ? vec3(0.24, 0.14, 0.07) : vec3(0.15, 0.15, 0.16)) * (0.8 + 0.4 * rzN2(p.xz * vec2(1.3, 9.0))); if (shop) a = vec3(0.32, 0.31, 0.3); }
   vec3 Lp = vec3((x0 + x1) * 0.5, y1 - 0.2, rD * 0.42);
@@ -2178,6 +2190,9 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     alb = mix(alb, mix(wall, vec3(0.025), cov), farW); orm = mix(orm, mix(o4.rgb, vec3(1.0, 0.12, 0.0), cov), farW);
     nW = normalize(mix(nW, N, farW)); emi = mix(emi, avgE, farW);
   }
+#ifdef RZ_DBG_FAC   // A/B probe for tools/render captures (never set in the game): branch colours of window pixels
+  if (region < 0.5 && zone > 0.0) { alb = vec3(0.0); emi = vec3(shop ? 1.0 : 0.0, farW, gf ? 1.0 : 0.0) * 2.0; }
+#endif
 }
 #else
 // Lite facade for the phone tiers: one wall texture tap on 'low' (three on 'medium') and plain arithmetic (no noise
@@ -4179,12 +4194,12 @@ export function lightShaft(o = {}) {
         float vL = clamp(-pm.y / uLen, 0.0, 1.0);
       #ifdef RZ_SHAFT_BOX
         vec2 hw = max(mix(uShape.xz, uShape.yw, vL), vec2(1e-3));
-        float xs = min(chord / (2.0 * min(hw.x, hw.y)), 2.5);
+        float xs = min(chord / (2.0 * min(hw.x, hw.y)), 1.6);
         float dens = xs * (1.0 - smoothstep(0.55, 1.0, abs(pm.x) / hw.x)) * (1.0 - smoothstep(0.55, 1.0, abs(pm.z) / hw.y));
       #else
         float rr = max(mix(uShape.x, uShape.y, vL), 1e-3);
         float xs = chord / (2.0 * rr), dens = xs * min(xs, 1.0) * (1.0 - smoothstep(0.7, 1.0, length(pm.xz) / rr) * 0.5);
-        dens = min(dens, 2.5);
+        dens = min(dens, 1.6);
       #endif
         vec3 wm = cameraPosition + (vW - cameraPosition) * (tm / max(tB, 1e-5));   // the chord's midpoint in world space
         float along = smoothstep(0.0, 0.15, vL) * pow(1.0 - vL, 2.2);

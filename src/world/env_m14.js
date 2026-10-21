@@ -30,7 +30,7 @@ export const P = {
   stairsFoot: [-23, 0, 41], platform: [-28, DECK, 27], loop: [-35, DECK, 24.6], loopAnchor: [-43.6, DECK, 20.6],
   beamW: [-11.2, DECK, 24], beamE: [7.4, DECK, 24], tram: [24, DECK, 24], cell: [21.2, DECK, 21.2],
   exitTop: [42, DECK, 20.6], exitFoot: [42, 0, 9.6], lobby: [20, 0, -2.6], directory: [19, 1.5, -5.0],
-  flightA: [16.2, 0, -7], flightB: [37.8, L1, -33], flightC: [16.2, L2, -14.4], relay: [19.6, ROOF, -30.4],
+  flightA: [16.2, 0, -7], flightB: [38.2, L1, -19.4], flightC: [16.2, L2, -14.4], relay: [19.6, ROOF, -30.4],
   plaza: [-4, 0, -40], statue: [-8, 2.4, -55], plaque: [-8, 1.3, -51.8], names: [-8, 1.6, -64.6], clock: [4, 0, -46],
   witnessNote: [-10.6, 0.7, -57.2], underStairs: [-30.5, 0, -50], board: [-47.2, PIT, -51], gate: [0, 0, -77],
   hall: [0, 0, -90], beacon: [0, 0, -121], benchB: [3.4, 0, -118.2], seraHall: [-3.6, 0, -117],
@@ -467,7 +467,7 @@ export function buildReach(game, scene) {
     }
   };
   slab(L1, [[14, 17.8, -13.6, -6], [30, 36, -33, -27]]);             // the hole over flight A, a collapse in the east bay
-  slab(L2, [[36, 40, -34, -28], [20, 25, -12, -7]]);                  // the hole over flight B, a collapse at the front
+  slab(L2, [[36.4, 40, -25.4, -21.6], [20, 25, -12, -7]]);             // the hole over flight B, a collapse at the front
   B.box(M.concrete, 24.5, L2, -34, 26.5, L2 + 2.2, -27.6); box(24.5, L2, -34, 26.5, L2 + 2.2, -27.6);   // fallen partitions: the only way west
   B.box(M.concrete, 24.5, L2, -12, 26.5, L2 + 2.2, -6); box(24.5, L2, -12, 26.5, L2 + 2.2, -6);          // on the second floor is past the zone
   slab(ROOF, [[14, 17.8, -20.6, -13]]);                              // the hole over flight C
@@ -477,7 +477,7 @@ export function buildReach(game, scene) {
       B.box(M.concrete, x0, y0, Math.min(za, zb), x1, y, Math.max(za, zb)); box(x0, y0, Math.min(za, zb), x1, y, Math.max(za, zb));
     }
   };
-  flight(14.6, 17.4, -8.2, -1, 0); flight(36.8, 39.6, -33.4, 1, L1); flight(14.6, 17.4, -15.2, -1, L2);
+  flight(14.6, 17.4, -8.2, -1, 0); flight(36.8, 39.6, -20, -1, L1); flight(14.6, 17.4, -15.2, -1, L2);
   // parapets at the open edges of the roof, the rubble at the collapses, rebar
   B.box(M.concrete, 14, ROOF, -34, 27, ROOF + 1.0, -33.6); box(14, ROOF, -34, 27, ROOF + 1.0, -33.6);
   B.box(M.concrete, 14, ROOF, -6.4, 27, ROOF + 1.0, -6); box(14, ROOF, -6.4, 27, ROOF + 1.0, -6);
@@ -546,6 +546,9 @@ export function buildReach(game, scene) {
     B.box(M.concrete, ux0, PIT, uz1, ux1, 0.9, uz1 + 0.4); box(ux0, PIT, uz1, ux1, 0.9, uz1 + 0.4);
     B.box(M.concrete, ux1, PIT, uz0, ux1 + 0.4, 0.9, -52.6); box(ux1, PIT, uz0, ux1 + 0.4, 0.9, -52.6);
     B.box(M.concrete, ux1, PIT, -47.4, ux1 + 0.4, 0.9, uz1); box(ux1, PIT, -47.4, ux1 + 0.4, 0.9, uz1);
+    // fallen ceiling slabs along both walls: the only way to the board is through the middle, where the zone breathes
+    B.geo(M.concrete, new THREE.BoxGeometry(3.4, 2.2, 4.6), [-40.6, PIT + 1.1, -57.7], [0.05, 0.2, 0.08]); box(-42.4, PIT, -60, -38.8, PIT + 2.4, -55.4);
+    B.geo(M.concrete, new THREE.BoxGeometry(3.4, 2.2, 4.6), [-40.6, PIT + 1.1, -44.3], [-0.06, -0.15, 0.05]); box(-42.4, PIT, -46.6, -38.8, PIT + 2.4, -42);
     for (let i = 0; i < 8; i++) {                                    // stairs down, westward
       const xa = ux1 + 0.4 - i * 0.5, y = -(i + 1) * 0.35;
       B.box(M.concrete, xa - 0.5, PIT, -52.6, xa, y, -47.4); box(xa - 0.5, PIT, -52.6, xa, y, -47.4);
@@ -608,7 +611,7 @@ export function buildReach(game, scene) {
   }
   // the track bed: raised garden beds between the platforms
   W.beds = [];
-  for (let z = -114; z < -92; z += 4.5) for (const x of [-7, 0, 7]) {
+  for (let z = -112; z < -92; z += 4.5) for (const x of [-7, 0, 7]) {
     B.box(M.wood, x - 2.2, 0, z - 1.6, x + 2.2, 0.6, z + 1.6); box(x - 2.2, 0, z - 1.6, x + 2.2, 0.6, z + 1.6);
     const s = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.04, 3.0), soil); s.position.set(x, 0.6, z); scene.add(s); W.beds.push(s);
   }
@@ -617,8 +620,8 @@ export function buildReach(game, scene) {
   for (const [dx, dz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) B.box(M.rustHeavy, P.cistern[0] + dx - 0.12, 0, P.cistern[2] + dz - 0.12, P.cistern[0] + dx + 0.12, 6, P.cistern[2] + dz + 0.12);
   B.box(M.wood, P.cistern[0] - 3, 5.8, P.cistern[2] - 3, P.cistern[0] + 3, 6.0, P.cistern[2] + 3); box(P.cistern[0] - 3, 5.8, P.cistern[2] - 3, P.cistern[0] + 3, 6.0, P.cistern[2] + 3);
   box(P.cistern[0] - 1.6, 6.0, P.cistern[2] - 1.6, P.cistern[0] + 1.6, 9.5, P.cistern[2] + 1.6);
-  for (let i = 0; i < 17; i++) {                                   // steps up the east side of the cistern tower (from the platform)
-    const z1 = -94 - i * 0.42, y = (i + 1) * 0.35, x0 = P.cistern[0] + 3;
+  for (let i = 0; i < 17; i++) {                                   // steps up the west side of the cistern tower, along the hall wall
+    const z1 = -94 - i * 0.42, y = (i + 1) * 0.35, x0 = P.cistern[0] - 4.6;
     B.box(M.wood, x0, y - 0.1, z1 - 0.42, x0 + 1.4, y, z1); box(x0, 0, z1 - 0.42, x0 + 1.4, y, z1);
   }
   B.cyl(M.rust, -22.4, 3, -102.75, 0.12, 6, 8); B.geo(M.rust, new THREE.CylinderGeometry(0.12, 0.12, 18.6, 8), [-13.1, 0.3, -102.75], [0, 0, Math.PI / 2]);
@@ -631,7 +634,7 @@ export function buildReach(game, scene) {
   // the water when the garden runs: a thin glossy line along the beds
   const flowMat = new THREE.MeshStandardMaterial({ color: 0x4a7a8a, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.75 });
   W.flow = new THREE.Group(); scene.add(W.flow); W.flow.visible = false;
-  for (let z = -114; z < -92; z += 4.5) for (const x of [-7, 0, 7]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 3.0), flowMat); m.position.set(x, 0.63, z); W.flow.add(m); }
+  for (let z = -112; z < -92; z += 4.5) for (const x of [-7, 0, 7]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 3.0), flowMat); m.position.set(x, 0.63, z); W.flow.add(m); }
   // the old channel along the hall's east side (runs only if the ancient river was turned, mission 5)
   W.channel = new THREE.Group(); scene.add(W.channel);
   B.box(M.concrete, 24, -0.6, -130, 26.4, 0.05, -78);

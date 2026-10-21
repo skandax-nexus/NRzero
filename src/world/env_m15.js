@@ -337,7 +337,7 @@ export function buildHarrow(game, scene, T) {
     concrete: pm('concrete', { color: 0x7a746a, formwork: 1, stains: 0.9 }),
     brick: pm('brick', { color: 0x7a3e28, soot: 0.6 }),
     brickDark: pm('brick', { color: 0x5a3426, soot: 0.8 }),
-    plaster: pm('plaster', { color: 0xb8ac94, damage: 0.65, dirt: 0.7 }),
+    plaster: pm('plaster', { color: 0xb0a48c, damage: 0.22, dirt: 0.55 }),
     plasterIn: pm('plaster', { color: 0xb8ae96, damage: 0.12, dirt: 0.35 }),
     tile: pm('ceramicTile', { color: 0x6e675c, grout: 0x3e3a34, count: 4, gloss: 0.25, variation: 0.45 }),
     tileW: pm('ceramicTile', { color: 0xd8d6cc, grout: 0x8a887e, count: 6, gloss: 0.7, variation: 0.15 }),
@@ -420,7 +420,7 @@ export function buildHarrow(game, scene, T) {
     plane(TEX.carved('RAIN CITY CIVIC MUSEUM', 'MMXXXI'), 10, 1.55, 0, 7.6, -9.55, 0, g49, 0.05);
     // 2049: the doors are shut ("closed for installation"): the museum is a thin spot, not a way out
     S['2049'].box(M.wood, -2.6, 0, -10.2, 2.6, 5.2, -9.8); box(-2.6, 0, -10.4, 2.6, 5.2, -9.6, ['2049']);
-    plane(TEX.sign('CLOSED FOR INSTALLATION', 'GALLERY 3 OPENS 01.11.2049', '#1d2a44', '#f2f2ee'), 3.2, 1.0, 0, 2.2, -10.45, Math.PI, g49, 0.3);
+    plane(TEX.sign('CLOSED FOR INSTALLATION', 'GALLERY 3 OPENS 01.11.2049', '#1d2a44', '#f2f2ee'), 3.2, 1.0, 0, 2.2, -10.8, Math.PI, g49, 0.3);
     // archive stacks along the hall (2196) / museum plinths (2049)
     for (const sx of [-1, 1]) {
       for (let z = -44; z < -12; z += 4.2) {
@@ -498,6 +498,16 @@ export function buildHarrow(game, scene, T) {
     plane(TEX.museum('founding'), 1.6, 1.0, -16.6, 2.3, -45.1, 0, g49, 0.3);
     plane(TEX.museum('operational'), 1.6, 1.0, -14.6, 2.3, -45.1, 0, g49, 0.3);
     S['2049'].box(M.plasterIn, -19.4, 0, -45.6, -12.2, 9, -45.3);
+    // 2049 linings: clean painted walls over the old stone, ceiling light strips, banners, a bench, a photo wall
+    const paint49 = pm('plaster', { color: 0xdedcd4, under: 0xcac6bc, damage: 0, dirt: 0.04 }), dark49 = new THREE.MeshStandardMaterial({ color: 0x1d2a44, roughness: 0.6 }), strip49 = glowMat(0xf4f6ff, 1.6);
+    S['2049'].box(paint49, -19.6, 0, -45.55, -19.25, 9, -10.45); S['2049'].box(paint49, 19.25, 0, -45.55, 19.6, 9, -10.45);
+    S['2049'].box(paint49, -19.6, 0, -45.6, 19.6, 9, -45.25); S['2049'].box(paint49, -19.6, 0, -10.75, 19.6, 9, -10.4);
+    for (const x of [-12.45, 11.95]) { S['2049'].box(paint49, x, 0, -45.6, x + 0.5, 9, -20.5); S['2049'].box(paint49, x, 0, -17, x + 0.5, 9, -10.4); S['2049'].box(paint49, x, 3.4, -20.5, x + 0.5, 9, -17); }
+    S['2049'].box(dark49, -19.6, 0, -45.55, 19.6, 0.25, -45.2);
+    for (const [x0, x1] of [[-18.6, -13], [-10, 10], [13, 18.6]]) for (let z = -43; z < -12; z += 6) S['2049'].box(strip49, x0, 8.9, z, x1, 8.98, z + 0.25);
+    for (const [x, z, ry, t, sub] of [[-11.9, -30, Math.PI / 2, 'RAIN CITY CIVIC MUSEUM', 'THE CITY IN TIME'], [11.9, -30, -Math.PI / 2, 'GALLERY 4 · CLOSED', 'INSTALLATION IN PROGRESS']]) plane(TEX.sign(t, sub, '#1d2a44', '#f2f2ee', 'b' + x), 4.2, 1.3, x, 6.4, z, ry, g49, 0.35);
+    S['2049'].box(M.wood, -15.4, 0.42, -24.6, -13.2, 0.5, -23.8); S['2049'].box(M.steel, -15.2, 0, -24.5, -13.4, 0.42, -23.9); box(-15.4, 0, -24.6, -13.2, 0.5, -23.8, ['2049']);
+    for (let k = 0; k < 4; k++) plane(TEX.paper('HELIX · ' + ['2026', '2031', '2040', '2049'][k], [['The founding team', 'The first ring', 'Test Hall C', 'Binding day'][k], ['Old Helix hall, Rain City.', 'Cast from a template nobody could date.', 'Director: Dr. E. Rook.', 'Operator: K. Varen (scheduled).'][k]], { bg: '#f2f2ee', ink: '#1b1e23', key: 'ph' + k }), 1.3, 0.98, -19.2, 2.3, -40.2 + k * 3.2 + (k > 1 ? 2.4 : 0), Math.PI / 2, g49, 0.25);
     src(-16, 3, -36, 0xffffff, 5, 10, '2049'); src(0, 6, -30, 0xf0f4ff, 6, 22, '2049'); src(0, 6, -16, 0xf0f4ff, 4, 16, '2049');
     src(0, 4, -12, 0xffd8b0, 4, 12, '2196');
   }
@@ -703,7 +713,7 @@ export function buildHarrow(game, scene, T) {
     // the residue echo of 16:40:12: figures under the roof (Residue Vision only)
     const echoMat = new THREE.MeshBasicMaterial({ color: 0xffe0b0, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
     const echoes = new THREE.Group(); echoes.userData.states = ['2196'];
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 0; i++) {   // (the mission adds ghosted residents instead)
       const a = R() * Math.PI * 2, r = 1.5 + R() * 8, x = P.epic[0] + Math.sin(a) * r, z = P.epic[2] + Math.cos(a) * r;
       if (x > 21 || z > 69) continue;
       const fig = new THREE.Group(); fig.position.set(x, 0, z); fig.rotation.y = R() * 6;

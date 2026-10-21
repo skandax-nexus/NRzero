@@ -746,7 +746,7 @@ export default {
     joss.root.position.set(P.beacon[0] + 2.0, 0.4, P.beacon[2] + 3.2); joss.root.rotation.y = -1.6; joss.pose = null; show(joss, true);
     sera.root.position.set(P.beacon[0] - 2.4, 0.4, P.beacon[2] + 4.6); sera.root.rotation.y = 2.6; show(sera, true);
     await tick();
-    await game.shot([P.beacon[0] + 2.4, 2.2, P.beacon[2] + 5.4], [P.beacon[0], 1.4, P.beacon[2] + 2.0], 1.4, { fov: 38 });
+    await game.shot([P.beacon[0] - 2.6, 1.9, P.beacon[2] + 4.2], [P.beacon[0] + 0.2, 1.4, P.beacon[2] + 2.0], 1.4, { fov: 40 });
     for (let i = 0; i < 3; i++) { audio.sfxPlay('pickup'); W.sockets[i].material.emissiveIntensity = 2.6; musicState.beacon = (i + 1) * 0.2; await game.wait(0.6); }
     faceEach(kai, joss);
     await ots(joss, kai, 0.9, 36);
@@ -788,11 +788,11 @@ export default {
     // =====================================================================================
     lockMusic('m14-reveal', 2.6);
     joss.lookTarget = null; joss.pose = 'work';
-    walkTo(wren, [[P.beacon[0] - 6, 0, P.beacon[2] + 9]], 1.2);
-    sera.root.position.set(P.beacon[0] - 1.4, 0.4, P.beacon[2] + 5.2); pl.place(P.beacon[0] + 0.4, 0.4, P.beacon[2] + 6.6, Math.PI + 0.4);
+    walkTo(wren, [[P.beacon[0] - 3.5, 0, P.beacon[2] + 10]], 1.2);
+    sera.root.position.set(P.beacon[0] - 1.6, 0.4, P.beacon[2] + 3.1); pl.place(P.beacon[0] + 1.4, 0.4, P.beacon[2] + 3.4, -Math.PI / 2);
     await tick();
     faceEach(kai, sera);
-    await game.shot([P.beacon[0] + 3.4, 1.8, P.beacon[2] + 7.6], [P.beacon[0] - 0.5, 1.5, P.beacon[2] + 5.8], 1.6, { fov: 40 });
+    await game.shot([P.beacon[0] - 0.1, 1.9, P.beacon[2] + 7.4], [P.beacon[0], 1.5, P.beacon[2] + 3.2], 1.6, { fov: 40 });
     await game.talk([
       ['kai', 'It holds. A road back to 2049, whenever I want it.'],
       ['sera', 'Whenever you want it.'],
@@ -816,11 +816,11 @@ export default {
       ['sera', 'Every one of them read the plaque. And every one of them said the same thing.'],
       ['kai', 'That it wasn\'t me.'],
     ]);
-    await game.shot([P.beacon[0] - 2.2, 1.62, P.beacon[2] + 6.6], [P.beacon[0] - 1.4, 1.6, P.beacon[2] + 5.2], 1.2, { fov: 28 });
+    await game.shot([P.beacon[0] + 0.2, 1.62, P.beacon[2] + 4.6], [P.beacon[0] - 1.6, 1.6, P.beacon[2] + 3.1], 1.2, { fov: 28 });
     await game.say('sera', 'Every version of you denies it. Every single one. It\'s the only thing about you that never changes.');
     F.m14denial = true; F.seraKnowsVersions = true;
     audio.silence?.(2.4);
-    await game.shot([P.beacon[0] + 1.2, 1.6, P.beacon[2] + 4.6], [P.beacon[0] + 0.4, 1.55, P.beacon[2] + 6.6], 2.6, { fov: 30 });
+    await game.shot([P.beacon[0] - 0.6, 1.6, P.beacon[2] + 5.0], [P.beacon[0] + 1.4, 1.55, P.beacon[2] + 3.4], 2.6, { fov: 30 });
     await game.say('kai', 'What happened to them? The others.');
     await ots(sera, kai, 0.9, 30);
     await game.say('sera', 'They went home.');

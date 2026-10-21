@@ -1020,7 +1020,7 @@ export class Engine {
   // and spray fill the whole canyon), other eras thin fully. scene.userData.fogFloor overrides.
   _fogFloor(scene) {
     if (scene.userData.fogFloor !== undefined) return scene.userData.fogFloor;
-    return { rain2049: 0.55 }[gradeForScene(scene)] ?? 0;
+    return { rain2049: 0.6 }[gradeForScene(scene)] ?? 0;
   }
   // What the probe depends on: a change re-captures it (era switch, blackout, lights switched on / off).
   _lightSig(scene) {
@@ -1064,6 +1064,9 @@ export class Engine {
       const r1 = Math.min(len * 0.9, Math.tan(Math.min(l.angle, 1.2)) * len * 0.75);
       const sh = RZ.lightShaft({ from: from.toArray(), to: to.toArray(), radius: [0.12, r1], color: l.color.getHex(), intensity: 0, floorY: to.y, dust: 0.8 });
       sh.userData.light = l; l.userData.rzShaft = sh; l.parent.add(sh); L.shafts.push(sh); shafts.push(sh);
+      // a capture already under way collected its hidden objects at its start: the probe must not see the new cone
+      // (a bright additive cone in the environment map glows in every glossy floor of the room)
+      if (L.probe?.job) L.probe.job.hide.push(sh);
     }
     // every shaft of the scene (the engine's and the missions' own): on high they are drawn after the scene pass with
     // its depth (Engine._drawShafts), through proxies in a small scene of their own
