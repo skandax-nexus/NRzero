@@ -275,6 +275,17 @@ export const TEX = {
     g.font = o.hand ? `500 30px ${HAND}` : `500 21px ${FONT}`; g.fillStyle = o.ink || '#2a241c'; wrap(g, body, 28, o.head ? 170 : 124, w - 56, o.hand ? 34 : 28);
     if (o.stamp) { g.save(); g.translate(w * 0.62, h * 0.8); g.rotate(-0.22); g.strokeStyle = '#c8202a'; g.fillStyle = '#c8202a'; g.lineWidth = 5; g.strokeRect(-130, -36, 260, 72); g.font = `700 34px ${FONT}`; g.textAlign = 'center'; g.fillText(o.stamp, 0, 12); g.restore(); }
   }, 'm17doc' + title + (o.key || '')),
+  tally: (n = 1046) => canvasTex(1024, 512, (g, w, h) => {   // Room 0001: one chalk stroke per iteration, in fives
+    g.fillStyle = '#2a2622'; g.fillRect(0, 0, w, h); grain(g, w, h, 2400, 0.08, 46);
+    const r = rng(1046); g.strokeStyle = 'rgba(226,220,204,0.85)'; g.lineCap = 'round';
+    let k = 0;
+    for (let row = 0; row < 14 && k < n; row++) for (let grp = 0; grp < 15 && k < n; grp++) {
+      const x0 = 24 + grp * 66, y0 = 30 + row * 34;
+      for (let j = 0; j < 4 && k < n; j++, k++) { g.lineWidth = 2 + r() * 1.2; g.beginPath(); g.moveTo(x0 + j * 11 + r() * 2, y0 + r() * 3); g.lineTo(x0 + j * 11 + r() * 3 - 1, y0 + 24 + r() * 3); g.stroke(); }
+      if (k < n) { g.lineWidth = 2.2; g.beginPath(); g.moveTo(x0 - 4, y0 + 20 + r() * 3); g.lineTo(x0 + 42, y0 + 4 + r() * 3); g.stroke(); k++; }
+    }
+    g.fillStyle = 'rgba(226,220,204,0.9)'; g.font = `600 34px ${HAND}`; g.fillText('1046', w - 120, h - 22);
+  }, 'm17tally' + n),
   map: () => canvasTex(512, 512, (g, w, h) => {      // the Witness's map of the Stacks: three layouts
     g.fillStyle = '#e6dcc2'; g.fillRect(0, 0, w, h); grain(g, w, h, 900, 0.07, 17);
     g.fillStyle = '#2a2018'; g.font = `700 22px ${FONT}`; g.fillText('THE STACKS · turns every 16 s · A → B → C', 20, 36);
@@ -711,7 +722,10 @@ export function buildArchive(game, scene, T) {
     for (let k = 0; k < 30; k++) { const z = -129 + (k % 10) * 2.1, y = 1.4 + Math.floor(k / 10) * 0.9; B96.geo(paperMat, new THREE.PlaneGeometry(0.4, 0.55), [-11.66, y + R() * 0.2, z + R() * 0.4], [0, PI / 2, (R() - 0.5) * 0.3]); }
     B96.box(mat(0x5a4a3a, 0.95), 8.6, 0, -130.6, 10.8, 0.45, -128.8); cbox(8.6, 0, -130.6, 10.8, 0.45, -128.8, ['2196']);
     const rock = mat(0x4a4640, 0.95); for (let k = 0; k < 10; k++) B96.geo(rock, new THREE.DodecahedronGeometry(0.5 + R() * 0.7, 0), [-0.6 + (R() - 0.5) * 3, 0.3 + R() * 1.6, -106.6 + R() * 0.6], [R() * 3, R() * 3, 0]);
-    src(0, 6.4, -120, 0xffa060, 3.6, 14, '2196'); src(wx, 2.2, wz, 0xff8a5a, 2.4, 7, '2196'); src(0, 1.6, -120.2, 0xff6a4a, 1.6, 6, '2196');
+    plane(TEX.tally(), 9.6, 4.8, 0, 4.2, -131.66, 0, g96, 0.2);
+    for (const z of [-126, -116]) B96.geo(reelsA, new THREE.BoxGeometry(0.5, 6.0, 8.6), [11.45, 3.0, z]);
+    { const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 0.4, 14, 1, true), amber); lamp.position.set(-6.4, 3.4, -125.4); g96.add(lamp); B96.cyl(M.rust, -6.4, 6.2, -125.4, 0.015, 5.4, 4); }
+    src(0, 6.4, -120, 0xffa060, 3.6, 14, '2196'); src(0, 3.4, -128, 0xffb070, 2.6, 9, '2196'); src(wx, 2.2, wz, 0xff8a5a, 2.4, 7, '2196'); src(0, 1.6, -120.2, 0xff6a4a, 1.6, 6, '2196');
     // residue: where everyone stood at 08:14:00 (Residue Vision)
     W.prints = {};
     const printTex = canvasTex(128, 128, (g) => { g.fillStyle = 'rgba(255,190,120,0.9)'; for (const [x, y, rr] of [[44, 70, 18], [84, 58, 18]]) { g.beginPath(); g.ellipse(x, y, rr * 0.6, rr, 0.2, 0, 7); g.fill(); g.beginPath(); g.ellipse(x + 2, y - rr * 1.5, rr * 0.45, rr * 0.55, 0, 0, 7); g.fill(); } }, 'm17print');
@@ -750,11 +764,11 @@ export function buildArchive(game, scene, T) {
     const mg = mergeAll(proxy); const pm2 = new THREE.Mesh(mg, new THREE.MeshBasicMaterial({ visible: false })); pm2.userData.noBatch = true; scene.add(pm2); game.blocker(pm2);
   }
   // dust in the lamp light (2196)
-  const dustN = low ? 220 : 600, dg = new THREE.BufferGeometry(), dp = new Float32Array(dustN * 3);
-  for (let i = 0; i < dustN; i++) { dp[i * 3] = (R() - 0.5) * 26; dp[i * 3 + 1] = R() * 8; dp[i * 3 + 2] = 20 - R() * 150; }
+  const dustN = low ? 140 : 320, dg = new THREE.BufferGeometry(), dp = new Float32Array(dustN * 3);
+  for (let i = 0; i < dustN; i++) { dp[i * 3] = (R() - 0.5) * 26; dp[i * 3 + 1] = 0.8 + R() * 7; dp[i * 3 + 2] = 20 - R() * 150; }
   dg.setAttribute('position', new THREE.BufferAttribute(dp, 3));
   const dotTex = canvasTex(32, 32, (g, w, h) => { const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, 'm17dot', { alpha: true });
-  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffd0a0, map: dotTex, size: 0.016, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })); g96.add(dust); W.dust = dust;
+  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffd0a0, map: dotTex, size: 0.009, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending })); g96.add(dust); W.dust = dust;
 
   W.update = (dt, t) => {
     for (const d of W.spin) d.rotation.y += dt * 0.05;
@@ -762,7 +776,7 @@ export function buildArchive(game, scene, T) {
     if (W.ring) W.ring.userData.update(t);
     for (const l of W.lenses) { const e = l.userData.eye; if (e) e.material.emissiveIntensity = (l.userData.on ? 3.2 : 1.0) + Math.sin(t * 3) * 0.3; }
     amber.emissiveIntensity = 2.0 + Math.sin(t * 1.6) * 0.4;
-    if (W.dust) { const p = W.dust.geometry.attributes.position; for (let i = 0; i < dustN; i += 7) { p.array[i * 3 + 1] += dt * 0.05; if (p.array[i * 3 + 1] > 8) p.array[i * 3 + 1] = 0; } p.needsUpdate = true; }
+    if (W.dust) { const p = W.dust.geometry.attributes.position; for (let i = 0; i < dustN; i += 7) { p.array[i * 3 + 1] += dt * 0.05; if (p.array[i * 3 + 1] > 8) p.array[i * 3 + 1] = 0.8; } p.needsUpdate = true; }
   };
   return W;
 }

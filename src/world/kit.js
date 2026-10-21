@@ -306,13 +306,22 @@ export function sky(top, horizon, opts = {}) {
 // section 12): no per-frame CPU loop or buffer upload, width kept >= ~1 px with the alpha scaled by coverage (no 1 px
 // scratches at a constant brightness, distant rain thins out into the fog), per-drop brightness and length variation,
 // and frozen drops shorten into hanging beads. ?infra=norain (or off) builds the legacy line streaks.
-function rainGeometry(count, seed = 42) {
-  const g = new THREE.InstancedBufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
-  g.setIndex([0, 1, 2, 0, 2, 3]);
-  const s = new Float32Array(count * 4), r = rng(seed);
-  for (let i = 0; i < s.length; i++) s[i] = r();
-  g.setAttribute('aS', new THREE.InstancedBufferAttribute(s, 4)); g.instanceCount = count;
+// Plain (non-instanced) geometry: every vertex carries its drop's random vec4, because tiny instances (2-4 vertices)
+// run poorly on phone GPUs and on ANGLE / SwiftShader (m1a, low: instanced +7 % of the frame, plain = the old CPU rain).
+function rainGeometry(count, lines, seed = 42) {
+  const corner = lines ? [[0, 0], [0, 1]] : [[-0.5, 0], [0.5, 0], [0.5, 1], [-0.5, 1]], nv = corner.length;
+  const pos = new Float32Array(count * nv * 3), aS = new Float32Array(count * nv * 4), r = rng(seed);
+  for (let i = 0; i < count; i++) {
+    const d = [r(), r(), r(), r()];
+    for (let k = 0; k < nv; k++) { const v = i * nv + k; pos[v * 3] = corner[k][0]; pos[v * 3 + 1] = corner[k][1]; aS.set(d, v * 4); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aS', new THREE.BufferAttribute(aS, 4));
+  if (!lines) {
+    const idx = new Uint32Array(count * 6);
+    for (let i = 0; i < count; i++) idx.set([0, 1, 2, 0, 2, 3].map(x => x + i * 4), i * 6);
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+  }
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
   return g;
 }
@@ -330,9 +339,17 @@ const RAIN_VS = `attribute vec4 aS; uniform float uT, uSpeed, uLen, uW, uViewH; 
     vec4 vp = viewMatrix * vec4(p, 1.0);
     // world size of one pixel at this depth; streaks never get thinner than ~1.1 px, their alpha carries the coverage
     float px = max(-vp.z, 0.05) * 2.0 / (projectionMatrix[1][1] * uViewH);
-    float w = max(uW, px * 1.1);
+    #if RZ_LINES
+      float w = max(uW, px);   // 1 px GL lines (phone tiers): same animation and fades, the line rasterizer's cost
+    #else
+      float w = max(uW, px * 1.1);
+    #endif
     float L = uLen * (0.7 + fract(aS.w * 7.13) * 0.6);
-    vec3 wp = p + side * position.x * w + axis * (position.y - 0.5) * L;
+    #if RZ_LINES
+      vec3 wp = p + axis * (position.y - 0.5) * L;
+    #else
+      vec3 wp = p + side * position.x * w + axis * (position.y - 0.5) * L;
+    #endif
     vec4 mvPosition = viewMatrix * vec4(wp, 1.0);
     vA = sqrt(uW / w) * smoothstep(0.6, 2.5, dist) * (0.55 + fract(aS.x * 13.7 + aS.y * 3.1) * 0.9);
     vX = position.x * 2.0;
@@ -342,7 +359,11 @@ const RAIN_VS = `attribute vec4 aS; uniform float uT, uSpeed, uLen, uW, uViewH; 
 const RAIN_FS = `uniform vec3 uCol; uniform float uOp; varying float vA; varying float vX;
   #include <fog_pars_fragment>
   void main(){
-    float a = 1.0 - vX * vX;
+    #if RZ_LINES
+      float a = 1.0;
+    #else
+      float a = 1.0 - vX * vX;
+    #endif
     gl_FragColor = vec4(uCol, a * uOp * vA);
     #include <fog_fragment>
   }`;
@@ -357,11 +378,16 @@ export class Rain {
     }]);
     this.uniforms.uViewH = RZ.shared.viewH;   // kept current by the engine
     this._len = 0.62;
-    const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: RAIN_VS, fragmentShader: RAIN_FS, transparent: true, depthWrite: false, fog: true });
-    this.mesh = new THREE.Mesh(rainGeometry(count), mat);
+    // high: soft-edged streak quads; phone tiers (low / medium): the same drops as 1 px GL lines, which SwiftShader and
+    // phone GPUs rasterize at the old line rain's cost (docs/RENDERING.md section 12)
+    const lines = RZ.getQuality() !== 'high';
+    const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: RAIN_VS, fragmentShader: RAIN_FS, transparent: true, depthWrite: false, fog: true, defines: { RZ_LINES: lines ? 1 : 0 } });
+    if (lines) this.uniforms.uOp.value = 0.5;
+    this.mesh = lines ? new THREE.LineSegments(rainGeometry(count, true), mat) : new THREE.Mesh(rainGeometry(count, false), mat);
     this.mesh.frustumCulled = false; this.mesh.renderOrder = 6; this.mesh.raycast = () => {};
     // the engine makes the scene wet while rain is visible; env-probe captures and static batching skip the streaks
     this.mesh.userData.rzRain = true; this.mesh.userData.noCapture = true; this.mesh.userData.noBatch = true;
+    Object.defineProperty(this.mesh, 'rzRainSystem', { value: this });   // tools reach the Rain from its mesh (not in userData: clone() JSON-copies it)
   }
   update(dt, cam) {
     if (this.legacy) return this._legacyUpdate(dt, cam);
@@ -715,8 +741,9 @@ export function chronolith(scale = 1, opts = {}) {
 export function cableCurve(points, radius = 0.05, mat) {
   const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
   const q = RZ.getQuality();
-  if (mat && isVineMaterial(mat) && q !== 'low') {
-    try { return vineMesh(curve, radius, mat, q === 'high'); } catch (e) { console.warn('vine', e); }
+  if (mat && isVineMaterial(mat)) {
+    // low: the same tapering, wobbling stem in a plain woody colour (no bark maps, no leaves: the old tube's cost)
+    try { return vineMesh(curve, radius, mat, q === 'high', q === 'low'); } catch (e) { console.warn('vine', e); }
   }
   const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, radius, 8, false), mat || new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }));
   m.castShadow = true; return m;
@@ -727,12 +754,17 @@ function isVineMaterial(m) {
 }
 const vineMats = new Map();
 let vineLeafMat = null, vineSeed = 1;
-function vineMaterial(mat) {
-  let v = vineMats.get(mat);
+function vineMaterial(mat, plain) {
+  let v = vineMats.get(plain ? mat.uuid + ':plain' : mat);
   if (v) return v;
   // the authored green, desaturated and pulled toward a woody olive brown (old stems lignify; moss keeps the green)
   const c = mat.color.clone(), l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
   c.lerp(new THREE.Color(l, l, l), 0.35).lerp(new THREE.Color(0x4a3f2c), 0.35);
+  if (plain) {
+    v = new THREE.MeshStandardMaterial({ color: c.lerp(mat.color, 0.2), roughness: 1, metalness: 0, name: 'vineBarkLite' });   // a little of the moss green kept
+    vineMats.set(mat.uuid + ':plain', v);
+    return v;
+  }
   // bark plates stretched along the stem (u: ~6 narrow strands around a 7 cm stem, v: about one plate per metre), so
   // it reads as fibrous vine bark, not as a scaled hose
   v = RZ.pbrMaterial('bark', { params: { color: c.getHex(), lichen: 0.45, depth: 0.6 }, mapping: 'uv', repeat: [2, 0.3], metalness: 0, roughness: 1, tint: 0x8f9a80, normalScale: 0.7 });
@@ -740,7 +772,7 @@ function vineMaterial(mat) {
   vineMats.set(mat, v);
   return v;
 }
-function vineMesh(curve, radius, mat, leaves) {
+function vineMesh(curve, radius, mat, leaves, plain = false) {
   const TS = 48, RS = 8, r = rng(vineSeed++ * 7919);
   const frames = curve.computeFrenetFrames(TS, false), len = curve.getLength();
   const P = [], N = [], U = [], I = [], ph = r() * 6.28, ph2 = r() * 6.28;
@@ -766,7 +798,7 @@ function vineMesh(curve, radius, mat, leaves) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I);
-  const m = new THREE.Mesh(g, vineMaterial(mat)); m.castShadow = true; m.name = 'vine';
+  const m = new THREE.Mesh(g, vineMaterial(mat, plain)); m.castShadow = true; m.name = 'vine';
   if (leaves) {
     // ivy leaf cards: single quads hanging off the stem, more toward the growing end
     const LP = [], LN = [], LU = [], LC = [], LI = [], nl = Math.max(3, Math.round(len * 1.6));

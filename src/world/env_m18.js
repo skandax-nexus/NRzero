@@ -36,7 +36,7 @@ export const P1 = {   // Lantern Hall (env_m14 coordinates)
   start: [0, 0, -82, PI], gate: [0, 0, -77], sera: [-2.6, 0, -79.4], wren: [2.8, 0, -79.0], beacon: [0, 0, -121],
   joss: [2.6, 0.4, -117.6], cabs: [[-2.0, 0.4, -118.9], [2.0, 0.4, -118.9]], jossLog: [3.2, 0.9, -117.9],
   ama: [-3.5, 0, -98], gard: [[2.2, 0, -103.4], [6.4, 0, -99.6]], tin: [-22.4, 6.0, -101.8], cisternTop: [-27.9, 6.0, -101.2],
-  teacher: [16.2, 1, -96.4], kids: [[16.8, 1, -94.8], [18.0, 1, -95.6], [15.6, 1, -95.2]], lio: [19.6, 1.0, -115.4],
+  teacher: [16.2, 1, -96.4], kids: [[16.8, 1, -94.8], [18.0, 1, -95.6], [15.6, 1, -95.2]], lio: [19.0, 1.0, -113.4],
   patient: [-17.0, 1, -108.6], medic: [-18.6, 1, -107.2], elders: [[-6.4, 0, -63.4], [-9.6, 0, -63.6]],
   out: [[0, 0, -79], [0, 0, -70], [0.5, 0, -58]], shard: [-27.4, 0.6, -126.4],
 };
@@ -66,7 +66,7 @@ export const P6 = {   // The Long Array
 // Mira's three notes (M17: E-B-A in the cello): the Array's horns must carry them, west, north, east
 export const NOTE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 export const NOTE_MIDI = [60, 62, 64, 65, 67, 69, 71];
-export const HORN_OK = [2, 6, 5];          // west E, north B, east A (in the order the tune is played: horn 0, 2, 1)
+export const HORN_OK = [2, 5, 6];          // per horn (west, east, north): E, A, B. The tune is played west E, north B, east A
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Cast (registerCast never overwrites). Every look: era, sex/age and a COSTUMES.md archetype.
@@ -385,7 +385,7 @@ export function buildGorge(game, scene, T) {
     hoarding: pm('paintedMetalPanel', { color: 0x2e5a3a, cols: 6, rows: 1, wear: 0.2, grime: 0.4, gloss: 0.2 }), cabin: pm('paintedMetalPanel', { color: 0xc8c8be, cols: 4, rows: 1, wear: 0.3, grime: 0.5, gloss: 0.3 }),
     rock: pm('rock', { color: 0x8a7a68 }),
   };
-  const white = glowMat(0xfff2d8, 2.2), amber = glowMat(0xffb040, 2.4), red = glowMat(0xff4030, 2.0), violet = glowMat(0xb08aff, 2.6);
+  const amber = glowMat(0xffb040, 2.4), red = glowMat(0xff4030, 2.0), violet = glowMat(0xb08aff, 2.6);
   W.mats = { amber, red, violet };
 
   // ---------- the gorge (2026): a terrain carved to the walkable surfaces ----------
@@ -652,12 +652,13 @@ export function buildEastway(game, scene, T) {
   solid(M.panel, P3.e7[0] - 0.3, 0, P3.e7[2] - 0.7, P3.e7[0] + 0.5, 1.6, P3.e7[2] + 0.7, '2049');
   plane(signTex('e7', [['RAIN CITY GRID', 22, '#1a1a1a'], ['ISOLATOR E-7', 40, '#1a1a1a'], ['⚡ DANGER 11 kV', 26, '#b01010']], { bg: '#e8d020', border: '#1a1a1a', h: 220 }), 0.9, 0.5, P3.e7[0] - 0.32, 1.25, P3.e7[2], -PI / 2, 0.25, '2049');
   W.e7Lamp = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.12), red.clone()); W.e7Lamp.position.set(P3.e7[0] - 0.33, 0.7, P3.e7[2] + 0.4); add(W.e7Lamp, '2049');
-  bat('2049').geo(M.steel, new THREE.CylinderGeometry(0.1, 0.16, 11, 8), [-1, 0.6, -55.4], [0, 0.4, PI / 2 - 0.08]);
+  bat('2049').geo(M.steel, new THREE.CylinderGeometry(0.1, 0.16, 13, 8), [7.6, 0.6, -57.4], [0, 0.2, PI / 2 - 0.06]);
+  bat('2049').geo(M.rubber, new THREE.CylinderGeometry(0.03, 0.03, 30, 5), [0, 0.32, -58], [0, 0, PI / 2]);
   const spark = new THREE.Group(); add(spark, '2049'); W.spark = spark;
   const sparkM = new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-  for (let i = 0; i < 14; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.05 + R() * 0.05, 6, 4), sparkM); s.position.set(P3.cable[0] + (R() - 0.5) * 3, 0.3, P3.cable[2] + (R() - 0.5) * 3); s.userData.ph = R() * 6; spark.add(s); }
-  const halo = new THREE.Mesh(new THREE.RingGeometry(P3.cableR - 0.3, P3.cableR, 64), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
-  halo.rotation.x = -PI / 2; halo.position.set(P3.cable[0], 0.45, P3.cable[2]); spark.add(halo); W.halo = halo;
+  for (let i = 0; i < 22; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.05 + R() * 0.05, 6, 4), sparkM); s.position.set(-14 + R() * 28, 0.3, P3.cable[2] + (R() - 0.5) * 2); s.userData.ph = R() * 6; spark.add(s); }
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(31, 12), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+  halo.rotation.x = -PI / 2; halo.position.set(0, 0.45, P3.cable[2]); spark.add(halo); W.halo = halo;
   src(P3.cable[0], 1.2, P3.cable[2], 0x9fd8ff, 4, 9, '2049');
   // ---------- the night bus ----------
   const [bx, , bz] = P3.bus;
@@ -672,7 +673,7 @@ export function buildEastway(game, scene, T) {
   solid(M.brick, -22.6, 0.6, -98.6, -22.0, 4.2, -91.4, '2049'); solid(M.brick, -22.6, 0.6, -98.6, -16.0, 4.2, -98.0, '2049'); solid(M.brick, -22.6, 0.6, -92.0, -16.0, 4.2, -91.4, '2049');
   solid(M.brick, -16.6, 0.6, -98.0, -16.0, 4.2, -96.4, '2049'); solid(M.brick, -16.6, 0.6, -93.6, -16.0, 4.2, -92.0, '2049'); solid(M.brick, -16.6, 3.0, -96.4, -16.0, 4.2, -93.6, '2049');
   bat('2049').box(M.conc, -22.8, 4.2, -98.8, -15.8, 4.5, -91.2);
-  solid(M.conc, -16.0, 0, -96.4, -15.3, 0.6, -93.6, '2049');                       // the step up through the wall
+  solid(M.conc, -16.0, 0, -96.4, -15.3, 0.36, -93.6, '2049');                      // the step up through the wall
   bat('2049').box(M.panel, -21.9, 0.6, -96.4, -21.4, 2.4, -93.6);
   W.pumpLamp = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.14), red.clone()); W.pumpLamp.position.set(-21.38, 2.0, -95); add(W.pumpLamp, '2049');
   plane(signTex('pump3', [['EASTWAY DRAINAGE', 26], ['PUMP STATION 3', 40], ['outfall via culvert C-3', 22, '#ffd27a']], { bg: '#202830', border: '#e8eef0', h: 220 }), 1.2, 0.55, -21.36, 1.7, -95, PI / 2, 0.3, '2049');
@@ -699,8 +700,8 @@ export function buildEastway(game, scene, T) {
   plane(signTex('c3', [['CULVERT C-3', 32, '#1a1a1a'], ['STRIKE FORMWORK BEFORE POUR', 20, '#b01010'], ['pour: Fri 23.10.2026', 20, '#1a1a1a', 500]], { bg: '#e8e0c8', border: '#1a1a1a', h: 200 }), 1.0, 0.5, -10.9, 0.9, -98.4, PI / 2, 0.15, '2026');
   bat('2026').box(M.timber, -11.0, 0, -98.5, -10.9, 1.1, -98.3);
   // an excavator on strip A, a mixer truck by the culvert
-  { const ex = bat('2026'); ex.box(M.yellow, 7, 0.6, -24, 9.6, 2.2, -20); ex.box(M.rubber, 6.8, 0, -24.4, 9.8, 0.6, -19.6); ex.geo(M.yellow, new THREE.BoxGeometry(0.5, 0.5, 5), [8.2, 3.2, -26], [0.7, 0, 0]); }
-  box(7, 0, -24, 9.6, 2.2, -20, '2026');
+  { const ex = bat('2026'); ex.box(M.yellow, 8.7, 0.6, -24, 11.3, 2.2, -20); ex.box(M.rubber, 8.5, 0, -24.4, 11.5, 0.6, -19.6); ex.geo(M.yellow, new THREE.BoxGeometry(0.5, 0.5, 5), [9.9, 3.2, -26], [0.7, 0, 0]); }
+  box(8.7, 0, -24, 11.3, 2.2, -20, '2026');
   src(-11, 2.6, -96, 0xfff0d8, 3, 10, '2026'); src(8, 2.6, -26, 0xfff0d8, 3, 10, '2026');
   try { const sk = RZ.skyline({ center: [0, -40], radius: [150, 280], count: low ? 30 : 50, height: [30, 160], lit: 0.85, seed: 185 }); add(sk.mesh || sk, '2049'); } catch (e) { void e; }
   try { const sk = RZ.skyline({ center: [0, -40], radius: [170, 300], count: low ? 16 : 26, height: [20, 70], lit: 0.0, seed: 186 }); add(sk.mesh || sk, '2026'); } catch (e) { void e; }
@@ -713,6 +714,342 @@ export function buildEastway(game, scene, T) {
   W.update = (dt, t) => {
     if (W.spark.visible) for (const s of W.spark.children) { if (!s.userData.ph) continue; const k = (Math.sin(t * 9 + s.userData.ph * 3) + 1) / 2; s.scale.setScalar(0.4 + k); s.position.y = (W.level ?? 0.3) + 0.05 + k * 0.25; }
     W.halo.material.opacity = 0.18 + Math.sin(t * 2.4) * 0.06;
+  };
+  return W;
+}
+
+// =====================================================================================================================
+// I · LANTERN HALL dressing (on top of env_m14 buildReach): the storm bubble, carts, the tally, items
+// =====================================================================================================================
+export function dressHall(game, scene, T) {
+  const K = kit(game, scene, T, 'hall18'), { box, solid, pm, add, plane, bat } = K, R = rng(1801);
+  const W = { lightSrc: K.lightSrc, root: K.root };
+  const M = { wood: pm('wood', { color: 0x6a5034, planks: 5 }), rust: pm('rust', { color: 0x5a3018, paint: 0x3d4a52, amount: 0.8 }), canvas: new THREE.MeshStandardMaterial({ color: 0xb8ab90, roughness: 0.95, side: THREE.DoubleSide }), tin: pm('brushedMetal', { color: 0x8a8a7a, roughness: 0.5 }) };
+  // handcarts and bundles in the square, where the convoy forms up
+  for (const [x, z, a] of [[-3, -60, 0.2], [3.6, -58, -0.3], [8, -62, 0.6], [-9, -57, -0.5]]) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = a; add(g);
+    const C = new Batch(); C.box(M.wood, -0.8, 0.6, -1.3, 0.8, 0.9, 1.3); C.box(M.wood, -0.8, 0.9, -1.3, -0.74, 1.4, 1.3); C.box(M.wood, 0.74, 0.9, -1.3, 0.8, 1.4, 1.3);
+    C.geo(M.rust, new THREE.CylinderGeometry(0.5, 0.5, 0.08, 14), [-0.86, 0.5, 0], [0, 0, PI / 2]); C.geo(M.rust, new THREE.CylinderGeometry(0.5, 0.5, 0.08, 14), [0.86, 0.5, 0], [0, 0, PI / 2]);
+    for (let i = 0; i < 3; i++) C.geo(M.canvas, new THREE.BoxGeometry(0.5 + R() * 0.3, 0.4, 0.6), [(R() - 0.5) * 0.8, 1.15, (R() - 0.5) * 1.6], [0, R(), 0]);
+    C.build(g, { name: 'cart' }); box(x - 1.1, 0, z - 1.4, x + 1.1, 1.4, z + 1.4);
+  }
+  // the tally board by the gate
+  W.tallyMat = new THREE.MeshStandardMaterial({ map: TEX.tally(0, 34), roughness: 0.9, emissive: 0xffffff, emissiveMap: TEX.tally(0, 34), emissiveIntensity: 0.12 });
+  const tb = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.0), W.tallyMat); tb.position.set(4.6, 1.8, -78.2); tb.rotation.y = PI; add(tb);
+  bat().box(M.wood, 3.7, 0, -78.1, 3.8, 2.4, -78.0); bat().box(M.wood, 5.4, 0, -78.1, 5.5, 2.4, -78.0);
+  W.setTally = (n) => { const t = TEX.tally(n, 34); W.tallyMat.map = t; W.tallyMat.emissiveMap = t; W.tallyMat.needsUpdate = true; };
+  // Ama's seed tin on the cistern platform
+  W.tin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.3, 14), M.tin); W.tin.position.set(P1.tin[0], P1.tin[1] + 0.15, P1.tin[2]); W.tin.userData.noBatch = true; add(W.tin);
+  // the stall Lio hides under: a low tarp over a crate stack
+  bat().geo(M.canvas, new THREE.BoxGeometry(2.0, 0.04, 1.6), [P1.lio[0] + 0.4, 1.75, P1.lio[2]], [0.2, 0, 0.12]);
+  solid(M.wood, P1.lio[0] + 1.0, 1, P1.lio[2] - 0.7, P1.lio[0] + 1.4, 1.7, P1.lio[2] + 0.8);
+  for (let i = 0; i < 3; i++) bat().geo(M.canvas, new THREE.BoxGeometry(0.5, 0.4, 0.4), [P1.lio[0] + 0.7, 1.2, P1.lio[2] - 0.5 + i * 0.5], [0, R(), 0]);
+  // Joss's log on his bench
+  plane(paperTex('josslog', 'BEACON LOG · J. HARROW', ['Yr 30, day 211. Anchor 99. Quiet.', 'Day 290. She answered. A road to', '  Helix SL4, 08:14:00. (the Varen boy)', 'Day 297. Anchor 88. Purple sky N.', 'Day 298. Anchor 71. Hum in the coil', '  like a voice saying a name.', 'Day 298, later. Told Sera: if she', '  goes, take her heart. It holds.'], { hand: true }), 0.4, 0.5, P1.jossLog[0], P1.jossLog[1], P1.jossLog[2], -PI / 2, 0.15).rotation.x = -PI / 2;
+  // the storm front, rolling in from the north: a wall of very large radius centred far beyond the hall, so near the
+  // hall it reads as a straight front. setFront(z) puts its near face at z (the anchor holds it back)
+  W.storm = stormWall({ center: [0, -520], radius: 300, height: 130, y: -8, a: 0x8a5aff, b: 0x4ad8ff, amp: 1.0 }); add(W.storm);
+  W.storm2 = stormWall({ center: [0, -520], radius: 290, height: 170, y: -8, a: 0x5a3aaa, b: 0x8a6aff, amp: 0.75 }); add(W.storm2);
+  W.shard = shardMesh(); W.shard.position.set(...P1.shard); add(W.shard);
+  K.finish();
+  W.front = -240;
+  W.setFront = (z) => { W.front = z; const r = z + 520; W.storm.scale.set(r, 1, r); W.storm2.scale.set(r - 8, 1, r - 8); };
+  W.setFront(-240);
+  W.update = (dt, t) => { W.storm.material.uniforms.uTime.value = t; W.storm2.material.uniforms.uTime.value = t * 0.7 + 3; W.shard.rotation.y = t * 1.5; };
+  return W;
+}
+
+// =====================================================================================================================
+// IV · THE CORRAN BUILDING (2196; 2049 below the third floor, 12 s at a time)
+// =====================================================================================================================
+export const TOWER = {
+  L1: { all: [[6, -12, 7.8, 12], [7.8, -12, 11.2, -2.3], [7.8, 3.3, 11.2, 12], [11.2, -12, 12, 12], [-4, -6, 0, 2], [-12, -12, -6, 12]],
+    only49: [[-6, -12, -4, 12], [-4, -12, 0, -6], [-4, 2, 0, 12], [0, -12, 6, 12]] },
+  L2: { all: [[-12, -12, -11.2, 12], [-11.2, -12, -7.8, -1.5], [-11.2, 4.1, -7.8, 12], [-7.8, -12, 2, 12], [2, -12, 8, -2], [2, 6, 8, 12], [8, -12, 12, 12]], only49: [[2, -2, 8, 6]] },
+  L3: [[-4, -12, 4, -9.5], [-12, -12, -4, -9.5], [-12, -9.5, -6, -3], [-12, -3, -6, 2]],
+  L4: [[-12, -12, -11.2, 12], [-11.2, -12, -7.8, 1.9], [-11.2, 7.5, -7.8, 12], [-7.8, -12, 12, 12]],
+};
+export function buildTower(game, scene, T) {
+  const Q = RZ.getQuality(), low = Q === 'low', R = rng(1804);
+  const K = kit(game, scene, T, 'corran'), { box, solid, pm, src, add, plane, ground, bat, flight } = K;
+  const W = { lightSrc: K.lightSrc, root: K.root, sections: [] };
+  const M = {
+    conc: pm('concrete', { color: 0x8a867e, formwork: 1, stains: 1 }), concD: pm('concrete', { color: 0x5e5a54, formwork: 0, stains: 1 }), moss: pm('moss', { color: 0x4a5a2a }),
+    rust: pm('rust', { color: 0x5a3018, paint: 0x3d4a52, amount: 0.9 }), steel: pm('brushedMetal', { color: 0x8a8e90, roughness: 0.4 }),
+    carpet: pm('rubber', { color: 0x3a4250 }), tile: pm('ceramicTile', { color: 0xc8c4bc, grout: 0x8a8680, count: 2, gloss: 0.6, variation: 0.2 }),
+    desk: pm('wood', { color: 0x9a7a5a, planks: 1 }), panel: pm('paintedMetalPanel', { color: 0xdcdcd8, cols: 2, rows: 1, wear: 0.05, grime: 0.1, gloss: 0.4 }),
+    dirt: pm('dirt', { color: 0x4a3e2e }), paving: pm('concrete', { color: 0x76716a, slabs: 1, stains: 0.9 }),
+  };
+  const glass49 = new THREE.MeshStandardMaterial({ color: 0x9ab8c8, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+  const ceil = glowMat(0xeaf2ff, 1.6), exitG = glowMat(0x3aff8a, 2.2);
+  const L = P4.L;
+  // ---------- ground: the plaza (south), the gorge (north), the Helix terrace beyond ----------
+  ground(M.paving, -60, -14, 60, 60, 0.0); box(-60, -1, -14, 60, 0, 60);
+  box(-60, -9, -36, 60, -8, -14);                                                     // the river bed (a fall here is caught by the mission)
+  try { const wat = RZ.water({ rect: [-60, -36, 120, 22], level: -6.6, flow: [0.4, 0], deep: 0x1a2a2a, shallow: 0x3a4a3a, heightAt: () => -9 }); add(wat.mesh); } catch (e) { void e; }
+  solid(M.concD, -60, -9, -15, 60, 0, -14);                                         // the embankment wall
+  solid(M.concD, -30, -9, -60, 30, 12, -36);                                        // the Helix terrace (top 12)
+  for (let x = -28; x < 29; x += 4) bat().box(M.rust, x, 12, -36.2, x + 0.12, 13.1, -36.0);
+  bat().box(M.rust, -30, 12.95, -36.2, 30, 13.1, -36.0); box(-30, 12, -36.4, -1.2, 13.1, -36.0); box(1.2, 12, -36.4, 30, 13.1, -36.0);
+  plane(signTex('helixterr', [['HELIX TEMPORAL RESEARCH', 40, '#cfe8f0'], ['TEST HALL C · EAST TERRACE', 24, '#8ab0c0']], { bg: '#20282c', border: '#5fe6ff', h: 200, wear: 0.8 }), 6, 2, 0, 8, -35.9, 0, 0.12);
+  // ---------- the tower: columns, slabs, stairs ----------
+  const cols = [-12, -6, 0, 6, 12];
+  for (const x of cols) for (const z of cols) { if (x === 0 && (z === -6 || z === -12)) continue; const t = Math.abs(x) === 12 || Math.abs(z) === 12 ? 0.35 : 0.3; solid(M.conc, x - t, 0, z - t, x + t, 18, z + t); }
+  const slab = (rects, y, e, mat = M.conc) => rects.forEach(([x0, z0, x1, z1]) => solid(mat, x0, y - 0.4, z0, x1, y, z1, e));
+  ground(M.tile, -12, -12, 12, 12, 0.01); box(-12, -0.5, -12, 12, 0, 12);
+  slab(TOWER.L1.all, L[1]); slab(TOWER.L1.only49, L[1], '2049', M.carpet);
+  slab(TOWER.L2.all, L[2]); slab(TOWER.L2.only49, L[2], '2049', M.carpet);
+  for (const [x0, z0, x1, z1] of [[-12, -12, 7.8, 12], [11.2, -12, 12, 12]]) bat('2049').box(M.carpet, x0, L[1] + 0.01, z0, x1, L[1] + 0.02, z1);
+  slab(TOWER.L4, L[4]);
+  // L3: the floor that will go (one mesh and one collider per section)
+  TOWER.L3.forEach(([x0, z0, x1, z1], i) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.4, z1 - z0), M.conc); m.position.set((x0 + x1) / 2, L[3] - 0.2, (z0 + z1) / 2); m.castShadow = m.receiveShadow = true; m.userData.noBatch = true; add(m);
+    const b = box(x0, L[3] - 0.4, z0, x1, L[3], z1); W.sections.push({ m, b, y0: m.position.y, i });
+  });
+  // broken beams where the rest of L3 was
+  for (let i = 0; i < 6; i++) bat().geo(M.conc, new THREE.BoxGeometry(0.5, 0.6, 6), [-4 + i * 3, L[3] - 0.3, 3 + R() * 6], [R() * 0.3, 0, R() * 0.3]);
+  // stairs (rise 0.375 x 12 = 4.5, run 0.45)
+  flight(M.concD, 8, 11, 3.2, -1, L[0], 12, 0.375, 0.45);           // E: lobby -> 1
+  flight(M.concD, -11, -8, -1.4, 1, L[1], 12, 0.375, 0.45);         // W: 1 -> 2
+  flight(M.panel, -2, 2, -4, -1, L[2], 12, 0.375, 0.45, '2049');     // N: 2 -> 3 (only the 2049 flight is still there)
+  for (let i = 0; i < 5; i++) bat('2196').geo(M.concD, new THREE.BoxGeometry(3.4 + R(), 0.5, 1.2), [(R() - 0.5) * 2, L[2] + 0.25, -5 - R() * 4], [R() * 0.4, R(), R() * 0.4]);
+  flight(M.concD, -11, -8, 2, 1, L[3], 12, 0.375, 0.45);            // roof stair: 3 -> roof
+  // 2049 partitions on L1: the glass wall of the meeting suite and the alarmed fire door
+  box(-2.05, L[1], -12, -1.95, L[1] + 3.2, 12, '2049'); bat('2049').geo(glass49, new THREE.BoxGeometry(0.04, 3.0, 24), [-2, L[1] + 1.5, 0]);
+  for (let z = -12; z <= 12; z += 2) bat('2049').box(M.steel, -2.04, L[1], z - 0.03, -1.96, L[1] + 3.0, z + 0.03);
+  plane(signTex('suite', [['CORRAN & VEY', 30, '#1a2a3a'], ['BOARD SUITE · BOOKED', 20, '#3a4a5a']], { bg: '#e8eaec', h: 128, grain: false }), 1.2, 0.32, -1.93, L[1] + 2.2, -3, PI / 2, 0.2, '2049');
+  box(-11.2, L[1], -2.65, -7.8, L[1] + 3.0, -2.3, '2049'); bat('2049').box(M.panel, -11.2, L[1], -2.6, -7.8, L[1] + 2.9, -2.35);
+  plane(signTex('fire', [['FIRE EXIT', 34, '#e8fff0'], ['ALARMED · STORM LOCKDOWN', 20, '#ffd27a']], { bg: '#0a6a3a', h: 128 }), 1.6, 0.5, -9.5, L[1] + 2.4, -2.66, PI, 0.6, '2049');
+  // 2049: curtain wall, desks, ceiling panels on the lobby, 1 and 2
+  for (const y of [L[0], L[1], L[2]]) {
+    for (const s of [-1, 1]) { bat('2049').geo(glass49, new THREE.BoxGeometry(24, 4.0, 0.04), [0, y + 2.1, s * 12.1]); bat('2049').geo(glass49, new THREE.BoxGeometry(0.04, 4.0, 24), [s * 12.1, y + 2.1, 0]); }
+    for (let x = -10; x <= 10; x += 4) for (let z = -10; z <= 10; z += 4) if (y > 0) bat('2049').geo(ceil, new THREE.BoxGeometry(1.2, 0.04, 0.6), [x, y + 4.04, z]);
+  }
+  for (const [x, z] of [[2, -8], [4.4, -8], [2, 8], [4.4, 8], [-8.8, 8], [-8.8, 10.4], [9, 8], [9, -8]]) { bat('2049').box(M.desk, x - 0.8, L[1] + 0.72, z - 0.4, x + 0.8, L[1] + 0.76, z + 0.4); bat('2049').box(M.steel, x - 0.75, L[1], z - 0.35, x - 0.7, L[1] + 0.72, z + 0.35); bat('2049').box(M.steel, x + 0.7, L[1], z - 0.35, x + 0.75, L[1] + 0.72, z + 0.35); }
+  for (const [x, z] of [[-6, -9], [-3.6, -9], [-6, 9], [4, 9], [8, -9]]) { bat('2049').box(M.desk, x - 0.8, L[2] + 0.72, z - 0.4, x + 0.8, L[2] + 0.76, z + 0.4); }
+  plane(signTex('l1', [['1', 120, '#e8eef0']], { bg: '#20282c', h: 200, w: 200 }), 0.6, 0.6, 11.4, L[1] + 1.8, -2.4, PI, 0.25);
+  plane(signTex('l2', [['2', 120, '#e8eef0']], { bg: '#20282c', h: 200, w: 200 }), 0.6, 0.6, -7.6, L[2] + 1.8, 4.3, -PI / 2, 0.25);
+  plane(signTex('l3', [['3', 120, '#e8eef0']], { bg: '#20282c', h: 200, w: 200 }), 0.6, 0.6, 2.2, L[3] + 1.8, -9.6, PI / 2, 0.25);
+  plane(signTex('corrandir', [['THE CORRAN BUILDING', 30], ['CORRAN & VEY LOGISTICS', 22, '#8ab0c0'], ['1 · 2 BOARD SUITE · 3-40 OFFICES', 18, '#cfe0e8', 500]], { bg: '#1c2428', border: '#cfe0e8', h: 200, wear: 0.6 }), 1.6, 0.8, 4, 1.8, 11.6, 0, 0.15);
+  // the façade: precast spandrel bands at every floor edge (broken in places in 2196), mullions, window frames; the
+  // stump of the fallen upper floors above the roof
+  for (const y of [L[1], L[2], L[3], L[4]]) for (let i = -12; i < 12; i += 3) {
+    for (const [x0, z0, x1, z1] of [[i, -12.35, i + 3, -12.0], [i, 12.0, i + 3, 12.35], [12.0, i, 12.35, i + 3], [-12.35, i, -12.0, i + 3]]) {
+      const broken = R() < (y === L[3] ? 0.55 : 0.22);
+      bat(broken ? '2049' : 'all').box(M.conc, x0, y - 0.9, z0, x1, y + 0.5, z1);
+      if (y < L[4]) for (let k = 0; k < 2; k++) { const m = R() < 0.35 ? '2049' : 'all'; if (x1 - x0 > 1) bat(m).box(M.steel, x0 + k * 1.5 - 0.04, y + 0.5, z0, x0 + k * 1.5 + 0.04, y + 3.6, z1); else bat(m).box(M.steel, x0, y + 0.5, z0 + k * 1.5 - 0.04, x1, y + 3.6, z0 + k * 1.5 + 0.04); }
+    }
+  }
+  for (const [x, z] of [[-12, -12], [-6, -12], [6, -12], [12, -12], [-12, -6], [12, -6], [-12, 0], [12, 0]]) { const hgtS = 1.5 + R() * 4; bat('2196').box(M.conc, x - 0.3, L[4], z - 0.3, x + 0.3, L[4] + hgtS, z + 0.3); }
+  bat('2196').geo(M.concD, new THREE.BoxGeometry(14, 0.4, 9), [-4, L[4] + 3.2, -8], [0.1, 0.2, -0.35]);
+  try { add(new THREE.Mesh(RZ.rebar({ origin: [-6, L[4] + 3, -10], dir: [0, 1, 0.2], count: 18, length: 1.6, spread: 8, seed: 41 }), M.rust), '2196'); } catch (e) { void e; }
+  for (let i = 0; i < 18; i++) bat('2196').geo(R() < 0.5 ? M.concD : M.moss, new THREE.DodecahedronGeometry(0.4 + R() * 0.7, 0), [(R() - 0.5) * 22, L[Math.floor(R() * 3)] + 0.2, (R() - 0.5) * 22], [R(), R(), R()]);
+  bat('2196').geo(exitG, new THREE.BoxGeometry(0.5, 0.2, 0.04), [-9.5, L[1] + 2.6, -2.4]);
+  // the roof: parapet, plant, the boom over the gorge
+  for (const [x0, z0, x1, z1] of [[-12, 11.6, 12, 12], [-12, -12, -11.6, 12], [11.6, -12, 12, 12], [-12, -12, -1.0, -11.6], [1.0, -12, 12, -11.6]]) solid(M.concD, x0, L[4], z0, x1, L[4] + 1.0, z1);
+  const crown = new THREE.Group(); add(crown); W.crown = crown;
+  { const C = new Batch(); C.box(M.rust, 4, L[4], 2, 9, L[4] + 2.4, 7); C.cyl(M.rust, 8, L[4] + 3.4, -6, 1.6, 4, 16); C.box(M.steel, -6, L[4], -8, -2, L[4] + 1.6, -4); C.build(crown, { name: 'crown' }); }
+  box(4, L[4], 2, 9, L[4] + 2.4, 7); box(6.4, L[4], -7.6, 9.6, L[4] + 5.4, -4.4); box(-6, L[4], -8, -2, L[4] + 1.6, -4);
+  // the boom: a fallen tower-crane jib from the roof's north edge down onto the Helix terrace
+  for (let i = 0; i < 24; i++) { const za = -12 - i, zb = za - 1, y = L[4] - (i + 1) * 0.25; box(-0.8, y - 0.4, zb, 0.8, y, za); box(-1.0, y, zb, -0.8, y + 1.0, za); box(0.8, y, zb, 1.0, y + 1.0, za); }
+  bat().geo(M.rust, new THREE.BoxGeometry(1.6, 0.3, 24.8), [0, (L[4] + 12) / 2 - 0.2, -24], [Math.atan2(6, 24), 0, 0]);
+  for (const s of [-1, 1]) bat().geo(M.rust, new THREE.BoxGeometry(0.1, 0.1, 24.8), [s * 0.9, (L[4] + 12) / 2 + 0.8, -24], [Math.atan2(6, 24), 0, 0]);
+  for (let i = 0; i < 12; i++) { const z = -13 - i * 2, y = L[4] - (i * 2 + 1) * 0.25; for (const s of [-1, 1]) bat().box(M.rust, s * 0.9 - 0.04, y, z - 0.04, s * 0.9 + 0.04, y + 0.95, z + 0.04); bat().geo(M.rust, new THREE.BoxGeometry(1.7, 0.06, 0.06), [0, y - 0.5, z], [0, 0, 0]); }
+  // L2 extras: Corran's shipping memo on a desk, a shard
+  plane(paperTex('corranmemo', 'CORRAN & VEY · MANIFEST 31/07', ['Consignor: Helix Temporal Research', 'Item: "Artefact A" (ring, 1 unit)', 'From: Site Zero, sub-level 6', 'To: Helix main laboratory', 'Route: Eastway via Varrow fill', 'Escort: E. Rook in person', 'Note: do not open, do not log.']), 0.42, 0.52, P4.memo[0], P4.memo[1] + 0.78, P4.memo[2], 0, 0.15).rotation.x = -PI / 2;
+  bat().box(M.desk, P4.memo[0] - 0.8, L[2] + 0.72, P4.memo[2] - 0.4, P4.memo[0] + 0.8, L[2] + 0.76, P4.memo[2] + 0.4); box(P4.memo[0] - 0.8, L[2], P4.memo[2] - 0.4, P4.memo[0] + 0.8, L[2] + 0.76, P4.memo[2] + 0.4);
+  W.shard = shardMesh(); W.shard.position.set(...P4.shard); add(W.shard);
+  // ---------- the city around: ruined towers, skyline, trees on the plaza ----------
+  try {
+    const list = [
+      { width: 26, depth: 20, height: 46, position: [-38, 0, 14], yaw: PI / 2, seed: 1841, wall: 'concrete', ruin: 0.8, moss: 0.7, collapse: true },
+      { width: 22, depth: 24, height: 62, position: [36, 0, 18], yaw: -PI / 2, seed: 1842, wall: 'panel', ruin: 0.7, moss: 0.5 },
+      { width: 30, depth: 16, height: 30, position: [0, 0, 54], yaw: PI, seed: 1843, wall: 'brick', ruin: 0.6, moss: 0.6, collapse: true },
+      { width: 20, depth: 18, height: 38, position: [-40, 12, -50], yaw: 0, seed: 1844, wall: 'darkBrick', ruin: 0.8, moss: 0.5 },
+      { width: 24, depth: 20, height: 52, position: [40, 12, -50], yaw: 0, seed: 1845, wall: 'concrete', ruin: 0.75, moss: 0.6, collapse: true },
+    ];
+    for (const b of list) box(b.position[0] - (b.yaw ? b.depth : b.width) / 2, b.position[1], b.position[2] - (b.yaw ? b.width : b.depth) / 2, b.position[0] + (b.yaw ? b.depth : b.width) / 2, b.position[1] + b.height, b.position[2] + (b.yaw ? b.width : b.depth) / 2);
+    const blk = RZ.cityBlock(list.map(b => ({ ...b, era: '2196', groundFloor: 4.4, faces: ['windows', 'windows', 'windows', 'windows'] })), { era: '2196', lit: 0.0, daylight: 0.4, detail: low ? 'low' : undefined }); add(blk.mesh);
+    const sk = RZ.skyline({ center: [0, 0], radius: [160, 300], count: low ? 30 : 48, height: [30, 150], lit: 0.0, seed: 1846 }); add(sk.mesh || sk);
+  } catch (e) { console.warn('m18 city', e); }
+  try { add(RZ.forest({ species: 'broadleaf', placements: [{ x: -18, z: 24, scale: 1.0 }, { x: 20, z: 30, scale: 0.9 }, { x: -24, z: 4, scale: 0.8 }, { x: 22, z: 2, scale: 1.1 }, { x: 8, z: 22 + R() * 4, scale: 0.7 }], heightAt: () => 0, impostors: false, variants: 2, seed: 184 })); } catch (e) { void e; }
+  try { const iv = RZ.ivy({ edges: [[[-12.3, L[2], -12], [-12.3, L[2], 12], [-1, 0, 0]], [[12.3, L[1], -12], [12.3, L[1], 12], [1, 0, 0]], [[-12, L[4], 12.3], [12, L[4], 12.3], [0, 0, 1]]], length: [1.2, 4.5], density: low ? 1.2 : 2, seed: 184 }); add(iv.mesh || iv); } catch (e) { void e; }
+  try { const k = streetKit({ era: '2196', seed: 1804 }); k.car([-16, 0, 36, 0.4], 0.4).car([18, 0, 40, 2.1], 2.1).van([-8, 0, 46, -0.6], -0.6); k.overgrowth({ area: [-40, 14, 40, 60] }, { density: 0.7, cracks: 0.8 }); add(k.build()); for (const c of k.colliders) box(c.min[0], c.min[1], c.min[2], c.max[0], c.max[1], c.max[2]); } catch (e) { void e; }
+  src(9.5, L[1] + 3, -2, 0xffc890, 3, 9); src(-9.5, L[2] + 3, 2, 0xffc890, 3, 9); src(0, L[3] + 2, -8, 0xffb080, 3, 10); src(0, L[2] + 3.4, 0, 0xeaf2ff, 4, 14, '2049'); src(4, L[1] + 3.4, 0, 0xeaf2ff, 4, 14, '2049');
+  W.storm = stormCells(scene, T, [
+    { x: -3, y: L[2], z: 6, r: 1.5, path: [[-3, 0], [3, 0]], period: 7, era: '2196' },
+    { x: 4, y: L[2], z: -8, r: 1.4, path: [[0, -2.5], [0, 2.5]], period: 6, era: '2196' },
+  ]);
+  W.sky = stormWall({ center: [0, 0], radius: 260, height: 220, y: -20, a: 0x6a3aff, b: 0xff7a4a, amp: 0.8 }); add(W.sky);
+  K.finish();
+  W.resetSections = () => { for (const s of W.sections) { s.m.position.y = s.y0; s.m.rotation.set(0, 0, 0); s.m.visible = true; s.b.enabled = true; s.fall = 0; } };
+  W.update = (dt, t) => {
+    W.storm.update(t); W.sky.material.uniforms.uTime.value = t; W.shard.rotation.y = t * 1.5;
+    for (const s of W.sections) if (s.fall > 0) { s.fall += dt; s.m.position.y = s.y0 - s.fall * s.fall * 4.9; s.m.rotation.x = s.fall * 0.3; s.m.rotation.z = s.fall * 0.2 * (s.i % 2 ? 1 : -1); if (s.fall > 3) s.m.visible = false; }
+  };
+  return W;
+}
+
+// =====================================================================================================================
+// V · HELIX TEST HALL C (2196 ruin / 2049 lab)
+// =====================================================================================================================
+export const HALL_COVER = [[-8, 4, 2.0, 1.2, 1.6], [8, -2, 2.2, 1.1, 1.4], [-12, -12, 1.6, 1.6, 1.4], [12, 10, 2.4, 1.2, 1.2], [0, -19, 3.0, 1.2, 1.3], [-16, 8, 4.2, 1.0, 1.1], [16, -8, 1.2, 4.0, 1.1], [-5, 14, 1.6, 1.0, 1.1], [6, 15, 1.4, 1.4, 1.2]];
+export function buildHallC(game, scene, T) {
+  const Q = RZ.getQuality(), low = Q === 'low', R = rng(1805);
+  const K = kit(game, scene, T, 'hallc'), { box, solid, pm, src, add, plane, ground, bat, flight } = K;
+  const W = { lightSrc: K.lightSrc, root: K.root };
+  const M = {
+    floor: pm('concrete', { color: 0x6a6862, slabs: 1, stains: 1 }), wall: pm('concrete', { color: 0x7a766e, formwork: 1, stains: 1 }), moss: pm('moss', { color: 0x4a5a2a }),
+    rust: pm('rust', { color: 0x5a3018, paint: 0x3d4a52, amount: 0.85 }), steel: pm('brushedMetal', { color: 0x9a9ea0, roughness: 0.35 }),
+    lab: pm('ceramicTile', { color: 0xe4e6e8, grout: 0xb8bcc0, count: 1, gloss: 0.7, variation: 0.08 }), labWall: pm('paintedMetalPanel', { color: 0xe8eaec, cols: 4, rows: 2, wear: 0.02, grime: 0.05, gloss: 0.5 }),
+    crate: pm('paintedMetalPanel', { color: 0x4a5a4a, cols: 2, rows: 1, wear: 0.7, grime: 0.7, gloss: 0.2 }), cont: pm('paintedMetalPanel', { color: 0xe6e8ea, cols: 2, rows: 1, wear: 0.1, grime: 0.2, gloss: 0.6 }),
+  };
+  const glass = new THREE.MeshStandardMaterial({ color: 0x9ab8c8, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+  const gold = glowMat(0xffd27a, 2.4), cyan = glowMat(0x5fe6ff, 2.2), labL = glowMat(0xf2f6ff, 1.8);
+  W.mats = { gold, cyan };
+  ground(M.floor, -26, -26, 26, 26, 0.01, '2196'); ground(M.lab, -26, -26, 26, 26, 0.012, '2049'); box(-40, -1, -40, 40, 0, 40);
+  // walls: breaches in 2196 (west, east, north), closed doors in 2049
+  const wallSeg = (x0, z0, x1, z1, h, e) => solid(e === '2049' ? M.labWall : M.wall, x0, 0, z0, x1, h, z1, e);
+  for (const e of ['2196', '2049']) {
+    const h = e === '2049' ? 12 : 8.5;
+    wallSeg(-26.6, -26.6, -26, -6, h, e); wallSeg(-26.6, -1, -26, 26.6, h, e);
+    wallSeg(26, -26.6, 26.6, 0, h, e); wallSeg(26, 5, 26.6, 26.6, h, e);
+    wallSeg(-26.6, -26.6, -2.5, -26, h, e); wallSeg(2.5, -26.6, 26.6, -26, h, e);
+    wallSeg(-26.6, 26, 26.6, 26.6, h, e);
+  }
+  solid(M.labWall, -26.6, 0, -6, -26, 12, -1, '2049'); solid(M.labWall, 26, 0, 0, 26.6, 12, 5, '2049'); solid(M.labWall, -2.5, 0, -26.6, 2.5, 12, -26, '2049');
+  for (let i = 0; i < 16; i++) bat('2196').geo(R() < 0.6 ? M.wall : M.moss, new THREE.DodecahedronGeometry(0.6 + R() * 1.0, 0), [(R() < 0.5 ? -1 : 1) * (22 + R() * 4), 0.4, (R() - 0.5) * 50], [R(), R(), R()]);
+  for (let i = 0; i < 10; i++) bat('2196').geo(M.wall, new THREE.DodecahedronGeometry(0.5 + R() * 0.8, 0), [(R() - 0.5) * 50, 0.4, -22 - R() * 4], [R(), R(), R()]);
+  // the gallery (south) and its stair
+  solid(M.wall, -22, 5.6, 26, 22, 6, 34); box(-24, 0, 26, 24, 5.6, 34); box(-24, 6, 34, 24, 8, 34.4); box(-24, 6, 26, -22, 8, 34); box(22, 6, 26, 24, 8, 34);
+  for (const [x0, x1] of [[-22, -2.2], [2.2, 22]]) { solid(M.steel, x0, 6, 25.8, x1, 7.05, 26.0); bat('2049').geo(glass, new THREE.BoxGeometry(x1 - x0, 3.0, 0.05), [(x0 + x1) / 2, 8.6, 25.9]); }
+  flight(M.wall, -2, 2, 20, 1, 0, 16, 0.375, 0.375);
+  for (const s of [-1, 1]) solid(M.steel, s * 2.0 - 0.05, 0, 20, s * 2.0 + 0.05, 1.0, 26);
+  // the Chronolith: a cracked ring in its cradle
+  const ring = chronolith(1.35, { color: 0x9a7bff, power: 0.15 }); ring.position.set(...P5.ring); add(ring); W.ring = ring;
+  solid(M.steel, -3.8, 0, -11.2, -2.8, 1.6, -8.8); solid(M.steel, 2.8, 0, -11.2, 3.8, 1.6, -8.8); bat().box(M.wall, -4.4, 0, -12, 4.4, 0.4, -8);
+  box(-4.4, 0, -12, 4.4, 0.4, -8);
+  W.cracks = []; for (let i = 0; i < 5; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5 + R() * 0.4, 0.62), new THREE.MeshBasicMaterial({ color: 0x000000 })); const a = R() * PI * 2; c.position.set(P5.ring[0] + Math.cos(a) * 3.24, P5.ring[1] + Math.sin(a) * 3.24, P5.ring[2]); c.rotation.z = a; c.userData.noBatch = true; add(c); W.cracks.push(c); }
+  const tools = new Batch(); tools.box(M.crate, -3.2, 0, -6.4, -1.8, 0.7, -5.6); tools.box(M.steel, -3.0, 0.7, -6.2, -2.2, 0.8, -5.8); tools.build(K.root, { name: 'tools' });
+  // the stabilizer spire and its field
+  const [sx, , sz] = P5.spire;
+  bat().cyl(M.cont, sx, 0.5, sz, 1.4, 1.0, 20); bat().cyl(M.steel, sx, 3.8, sz, 0.42, 6.6, 16); box(sx - 1.4, 0, sz - 1.4, sx + 1.4, 7, sz + 1.4);
+  W.vanes = []; for (let i = 0; i < 3; i++) { const v = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 1.0), M.cont); const a = i * PI * 2 / 3; v.position.set(sx + Math.cos(a) * 0.7, 4.6, sz + Math.sin(a) * 0.7); v.rotation.y = -a; v.userData.noBatch = true; add(v); W.vanes.push(v); }
+  W.core = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12), gold.clone()); W.core.position.set(sx, 7.4, sz); W.core.userData.noBatch = true; add(W.core);
+  W.field = new THREE.Mesh(new THREE.SphereGeometry(15, 40, 20, 0, PI * 2, 0, PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  W.field.position.set(sx, 0, sz); W.field.userData.noBatch = true; add(W.field, '2196');
+  plane(signTex('stab', [['CONTINUUM FIELD STABILIZER', 24, '#ffd27a'], ['UNIT 4 · SEIZED', 20, '#e8eef0']], { bg: '#202328', border: '#ffd27a', h: 128 }), 1.6, 0.4, sx, 1.4, sz + 1.42, 0, 0.5, '2196');
+  // cover: crates, fallen columns (2196) and lab benches (2049)
+  for (const [x, z, w, d, h] of HALL_COVER) { solid(M.crate, x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, '2196'); }
+  for (const [x, z] of [[-10, -4], [10, 4], [-14, 16], [14, -16]]) { bat('2049').box(M.labWall, x - 1.6, 0, z - 0.5, x + 1.6, 0.92, z + 0.5); bat('2049').box(M.steel, x - 1.6, 0.92, z - 0.5, x + 1.6, 0.96, z + 0.5); box(x - 1.6, 0, z - 0.5, x + 1.6, 0.96, z + 0.5, '2049'); }
+  for (let x = -20; x <= 20; x += 8) for (let z = -20; z <= 20; z += 8) bat('2049').geo(labL, new THREE.BoxGeometry(2.4, 0.06, 0.4), [x, 11.8, z]);
+  // the 2049 ring console and Rook's run log, the 2196 shard on the gallery
+  solid(M.labWall, P5.console49[0] - 0.7, 0, P5.console49[2] - 0.4, P5.console49[0] + 0.7, 1.0, P5.console49[2] + 0.4, '2049');
+  W.consoleScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.5), cyan.clone()); W.consoleScreen.position.set(P5.console49[0], 1.25, P5.console49[2] + 0.2); W.consoleScreen.rotation.x = -0.6; add(W.consoleScreen, '2049');
+  plane(signTex('collar', [['RING COLLAR · C', 30, '#0a2a3a'], ['phase lock: manual', 20, '#2a4a5a']], { bg: '#e8f4f8', h: 128, grain: false }), 1.0, 0.3, P5.console49[0], 0.7, P5.console49[2] + 0.41, 0, 0.3, '2049');
+  plane(paperTex('tchlog', 'TEST HALL C · RUN SHEET', ['19.10.2049 · 08:13:58 · ring at 4.1 kHz', '08:14:00 · ZERO SECOND (see incident)', 'Collar C slipped half a phase at', '08:14:00.2. Reseat by hand from', 'this console if it slips again.', '', 'Operator on shift: K. VAREN']), 0.5, 0.62, P5.log49[0], 1.0, P5.log49[2], 0.4, 0.2, '2049');
+  bat('2049').box(M.labWall, P5.log49[0] - 0.6, 0, P5.log49[2] - 0.3, P5.log49[0] + 0.6, 0.85, P5.log49[2] + 0.3); box(P5.log49[0] - 0.6, 0, P5.log49[2] - 0.3, P5.log49[0] + 0.6, 0.85, P5.log49[2] + 0.3, '2049');
+  W.shard = shardMesh(); W.shard.position.set(...P5.shard); add(W.shard, '2196');
+  // the sky through the broken roof, the Array on the hill to the north (its light pulses when the ring wakes)
+  const mast = new THREE.Group(); mast.position.set(-60, 0, -220); add(mast, '2196'); W.farMast = mast;
+  { const MB = new Batch(); for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) MB.geo(M.rust, new THREE.BoxGeometry(0.8, 90, 0.8), [dx * 4, 45, dz * 4], [dz * 0.04, 0, -dx * 0.04]); MB.build(mast, { name: 'farmast' }); }
+  W.farLight = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 8), glowMat(0x9a7bff, 0.6)); W.farLight.position.set(0, 92, 0); mast.add(W.farLight);
+  try { const sk = RZ.skyline({ center: [0, 0], radius: [120, 260], count: low ? 24 : 40, height: [30, 120], lit: 0.0, seed: 1851 }); add(sk.mesh || sk, '2196'); } catch (e) { void e; }
+  try { const iv = RZ.ivy({ edges: [[[-26, 8.5, -26], [-26, 8.5, 26], [1, 0, 0]], [[26, 8.5, -26], [26, 8.5, 26], [-1, 0, 0]], [[-26, 8.5, -26], [26, 8.5, -26], [0, 0, 1]]], length: [1.5, 5], density: low ? 1.2 : 2, seed: 185 }); add(iv.mesh || iv, '2196'); } catch (e) { void e; }
+  src(0, 5, -7, 0x9a7bff, 5, 14); src(sx, 7, sz, 0xffd27a, 5, 14, '2196'); src(-14, 6, 12, 0xffc890, 3, 12, '2196'); src(14, 6, -12, 0xffc890, 3, 12, '2196'); src(0, 10, 0, 0xf2f6ff, 6, 30, '2049');
+  W.sky = stormWall({ center: [0, 0], radius: 200, height: 200, y: -20, a: 0x6a3aff, b: 0x5fe6ff, amp: 0.7 }); add(W.sky, '2196');
+  K.finish();
+  W.update = (dt, t) => {
+    ring.userData.update?.(t); W.sky.material.uniforms.uTime.value = t; W.shard.rotation.y = t * 1.5;
+    W.vanes.forEach((v, i) => { v.rotation.y += dt * (0.4 + (W.spin || 0)); const a = t * (0.4 + (W.spin || 0)) + i * PI * 2 / 3; v.position.x = sx + Math.cos(a) * 0.7; v.position.z = sz + Math.sin(a) * 0.7; });
+    W.core.material.emissiveIntensity = 1.6 + Math.sin(t * 3) * 0.4;
+  };
+  return W;
+}
+
+// =====================================================================================================================
+// VI · THE LONG ARRAY (2196 / 2049)
+// =====================================================================================================================
+export function buildArray(game, scene, T) {
+  const Q = RZ.getQuality(), low = Q === 'low', R = rng(1806);
+  const K = kit(game, scene, T, 'array'), { box, solid, pm, src, add, plane, bat } = K;
+  const W = { lightSrc: K.lightSrc, root: K.root, horns: [] };
+  const M = {
+    rust: pm('rust', { color: 0x5a3018, paint: 0x6a6e70, amount: 0.75 }), steel49: pm('brushedMetal', { color: 0xc8ccd0, roughness: 0.3 }), grate: pm('paintedMetalPanel', { color: 0x4a4e50, cols: 6, rows: 6, wear: 0.6, grime: 0.7, gloss: 0.2 }),
+    conc: pm('concrete', { color: 0x7a766e, formwork: 1, stains: 0.9 }), panel: pm('paintedMetalPanel', { color: 0xe8eaec, cols: 3, rows: 1, wear: 0.1, grime: 0.2, gloss: 0.5 }), fence: pm('brushedMetal', { color: 0x6a6e70, roughness: 0.6 }),
+  };
+  const violet = glowMat(0x9a7bff, 2.4), white = glowMat(0xf2f6ff, 2.0), red = glowMat(0xff4030, 2.4);
+  // the hill: a plateau carved into a terrain that falls away on every side
+  const hgt = (x, z) => { const dx = Math.max(0, Math.abs(x) - 50), dz = Math.max(0, z - 90, -30 - z), d = Math.hypot(dx, dz), n = RZ.noise.fbm2(x * 0.05, z * 0.05, 4); return d > 0 ? -Math.min(60, d * 0.7) + n * 3 : -0.04 + n * 0.2; };
+  try { const ter = RZ.terrain({ size: 260, sizeZ: 260, center: [0, 30], heightFn: hgt, segments: low ? 110 : 160, rockSlope: 0.45, dirt: 0.4, layers: [['grass', { color: 0x4a5a2a }], ['dirt', { color: 0x5a4a38 }], ['rock', { color: 0x6a645a }], ['sand', { color: 0x8a7a62 }]] }); add(ter.mesh); } catch (e) { console.warn('m18 hill', e); }
+  box(-50, -1, -30, 50, 0, 90); box(-51, 0, -31, -50, 3, 91); box(50, 0, -31, 51, 3, 91); box(-51, 0, 90, 51, 3, 91); box(-51, 0, -31, 51, 3, -30);
+  try { add(RZ.rocks({ placements: Array.from({ length: 22 }, () => ({ x: (R() - 0.5) * 90, z: -20 + R() * 100, scale: 0.6 + R() * 1.6 })).filter(p => Math.hypot(p.x, p.z) > 9 && !(Math.abs(p.x) < 3 && p.z > 6)), seed: 186, moss: 0.4 })); } catch (e) { void e; }
+  try { const gr = RZ.instancedGrass({ heightAt: () => 0, mask: (x, z) => (Math.hypot(x, z) < 7 ? 0 : 0.9), rect: [-50, -30, 100, 120], radius: 24, height: 0.6, color: 0x5a6a30, tipColor: 0xb8a870, seed: 187 }); add(gr.mesh, '2196'); } catch (e) { void e; }
+  // the 2049 campus: fence, security booth, lit path (2049); its ruin (2196)
+  for (let z = -20; z < 80; z += 3) for (const s of [-1, 1]) bat('2049').box(M.fence, s * 24 - 0.04, 0, z, s * 24 + 0.04, 2.4, z + 0.06);
+  for (const s of [-1, 1]) bat('2049').box(M.fence, s * 24 - 0.02, 2.3, -20, s * 24 + 0.02, 2.36, 80);
+  solid(M.panel, P6.booth[0] - 2, 0, P6.booth[2] - 1.6, P6.booth[0] + 2, 2.8, P6.booth[2] + 1.6, '2049');
+  bat('2196').box(M.conc, P6.booth[0] - 2, 0, P6.booth[2] - 1.6, P6.booth[0] + 2, 1.2, P6.booth[2] + 1.6); box(P6.booth[0] - 2, 0, P6.booth[2] - 1.6, P6.booth[0] + 2, 1.2, P6.booth[2] + 1.6, '2196');
+  plane(signTex('arrayplq', [['HELIX LONG ARRAY', 38], ['HALCYON HILL · COMMISSIONED 2041', 20, '#8ab0c0'], ['"ONE SECOND FOR EVERY CLOCK ON EARTH"', 18, '#e8d8a0', 500]], { bg: '#1c2428', border: '#cfe0e8', h: 200, wear: 0.0 }), 2.4, 1.2, P6.booth[0] + 2.02, 1.6, P6.booth[2], PI / 2, 0.25, '2049');
+  plane(signTex('arrayplq96', [['HELIX LONG ARRAY', 38], ['HALCYON HILL · 2041', 20, '#8ab0c0'], ['"ONE SECOND FOR EVERY CLOCK ON EARTH"', 18, '#e8d8a0', 500]], { bg: '#1c2428', border: '#cfe0e8', h: 200, wear: 1.2 }), 2.4, 1.2, P6.booth[0] + 2.02, 0.7, P6.booth[2], PI / 2, 0.15, '2196');
+  for (let z = 10; z < 80; z += 8) { bat('2049').geo(white, new THREE.BoxGeometry(0.2, 0.2, 0.2), [-2.2, 0.4, z]); bat('2049').geo(white, new THREE.BoxGeometry(0.2, 0.2, 0.2), [2.2, 0.4, z]); }
+  // the mast: four tapering legs, bracing, platforms, ladders, the lift shaft
+  const leg = (y) => 4 - 2.4 * y / 46;
+  const mastMat = (e) => (e === '2049' ? M.steel49 : M.rust);
+  for (const e of ['2196', '2049']) {
+    const B = bat(e), mm = mastMat(e);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const a = Math.atan2(2.4, 46); B.geo(mm, new THREE.BoxGeometry(0.34, 46.2, 0.34), [sx * (4 - 1.2), 23, sz * (4 - 1.2)], [sz * a, 0, -sx * a]); }
+    for (let y = 2; y < 46; y += 4) { const w = leg(y); for (const s of [-1, 1]) { B.box(mm, -w, y, s * w - 0.06, w, y + 0.12, s * w + 0.06); B.box(mm, s * w - 0.06, y, -w, s * w + 0.06, y + 0.12, w); } const w2 = leg(y + 4), d = Math.hypot(w + w2, 4), ang = Math.atan2(4, w + w2); for (const s of [-1, 1]) { B.geo(mm, new THREE.BoxGeometry(d, 0.08, 0.08), [0, y + 2, s * (w + w2) / 2], [0, 0, ang]); B.geo(mm, new THREE.BoxGeometry(0.08, 0.08, d), [s * (w + w2) / 2, y + 2, 0], [ang, 0, 0]); } }
+    for (const [x0, x1] of [[-1.0, -0.9], [0.9, 1.0]]) for (const [z0, z1] of [[-1.0, -0.9], [0.9, 1.0]]) B.box(mm, x0, 0, z0, x1, 34, z1);
+  }
+  solid(M.conc, -5, 0, -5, 5, 0.4, 5);
+  const deck = (y, hw, gapZ) => {   // a grated deck with the lift shaft cut out, rails with a ladder gap on +z (south) or -z (north)
+    for (const [x0, z0, x1, z1] of [[-hw, -hw, hw, -1.0], [-hw, 1.0, hw, hw], [-hw, -1.0, -1.0, 1.0], [1.0, -1.0, hw, 1.0]]) solid(M.grate, x0, y - 0.25, z0, x1, y, z1);
+    for (const s of [-1, 1]) { solid(M.rust, s * hw - 0.05, y, -hw, s * hw + 0.05, y + 1.1, hw); }
+    for (const s of [-1, 1]) { const z = s * hw; if (s === gapZ) { solid(M.rust, -hw, y, z - 0.05, -0.7, y + 1.1, z + 0.05); solid(M.rust, 0.7, y, z - 0.05, hw, y + 1.1, z + 0.05); } else solid(M.rust, -hw, y, z - 0.05, hw, y + 1.1, z + 0.05); }
+  };
+  deck(P6.P1y, 5, 1); deck(P6.P2y, 4, -1); deck(P6.P3y, 3, 0);
+  // ladders: south face base -> P1, north face P2 -> P3
+  const ladder = (z, y0, y1, s) => { for (const x of [-0.32, 0.32]) bat().box(M.rust, x - 0.03, y0, z - 0.03, x + 0.03, y1 + 1.0, z + 0.03); for (let y = y0 + 0.3; y < y1; y += 0.32) bat().box(M.rust, -0.32, y, z - 0.02, 0.32, y + 0.04, z + 0.02); for (let y = y0 + 2.2; y < y1; y += 1.4) bat().geo(M.rust, new THREE.TorusGeometry(0.55, 0.03, 4, 16, PI), [0, y, z + s * 0.05], [PI / 2, 0, 0]); };
+  ladder(5.15, 0.4, P6.P1y, 1); ladder(-4.15, P6.P2y, P6.P3y, -1);
+  // the 2049 lift car and the radome hatch that seals the crown in 2049
+  W.lift = new THREE.Group(); W.lift.position.set(0, 0.4, 0); add(W.lift, '2049');
+  { const LB = new Batch(); LB.box(M.panel, -0.85, 0, -0.85, 0.85, 0.1, 0.85); LB.box(M.panel, -0.85, 2.3, -0.85, 0.85, 2.4, 0.85); for (const s of [-1, 1]) { LB.box(M.panel, s * 0.85 - 0.05, 0, -0.85, s * 0.85 + 0.05, 2.4, 0.85); LB.box(M.panel, -0.85, 0, s * 0.85 - 0.05, 0.85, 2.4, s * 0.85 + 0.05); } LB.geo(white, new THREE.BoxGeometry(1.0, 0.04, 0.3), [0, 2.28, 0]); LB.build(W.lift, { name: 'liftcar' }); }
+  W.liftLamp = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), red.clone()); W.liftLamp.position.set(0.9, P6.P1y + 1.4, 1.02); add(W.liftLamp, '2049');
+  plane(signTex('liftop', [['SERVICE LIFT · P1 → P2', 26], ['OPERATOR ACCESS ONLY', 20, '#ffd27a']], { bg: '#202830', border: '#e8eef0', h: 128 }), 1.0, 0.32, 0, P6.P1y + 2.2, 1.04, 0, 0.3, '2049');
+  box(-1.0, P6.P2y, -4.4, 1.0, P6.P2y + 3, -4.0, '2049'); bat('2049').box(M.panel, -1.0, P6.P2y, -4.4, 1.0, P6.P2y + 3, -4.0);
+  plane(signTex('radome', [['RADOME HATCH', 28], ['SEALED · STORM PROTOCOL', 20, '#ffd27a']], { bg: '#202830', border: '#ffd27a', h: 128 }), 1.2, 0.36, 0, P6.P2y + 1.8, -3.98, PI, 0.35, '2049');
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(5.6, 32, 18, 0, PI * 2, 0, PI * 0.62), new THREE.MeshStandardMaterial({ color: 0xe8eaec, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide })); dome.position.set(0, P6.P3y - 3, 0); add(dome, '2049');
+  const domeR = new THREE.Mesh(new THREE.SphereGeometry(5.6, 24, 12, 0.6, PI * 0.7, 0, PI * 0.45), new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: 0.8, side: THREE.DoubleSide })); domeR.position.set(0, P6.P3y - 3, 0); add(domeR, '2196');
+  // the crown: three feed horns with tuning dials, the emitter
+  const hornG = new THREE.ConeGeometry(0.7, 1.6, 20, 1, true);
+  P6.horns.forEach(([x, y, z], i) => {
+    const out = new THREE.Vector3(x, 0, z).normalize();
+    const h = new THREE.Mesh(hornG, M.rust); h.position.set(x * 1.0, y + 1.6, z * 1.0); h.lookAt(x * 3, y + 3.2, z * 3); h.rotateX(PI / 2); add(h);
+    const dialMat = new THREE.MeshBasicMaterial({ map: TEX.dial('·', false), toneMapped: false });
+    const d = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), dialMat); d.position.set(x - out.x * 0.45, y + 1.0, z - out.z * 0.45); d.lookAt(0, y + 1.0, 0); d.userData.noBatch = true; add(d);
+    bat().box(M.rust, x - out.x * 0.45 - 0.3, y, z - out.z * 0.45 - 0.3, x - out.x * 0.45 + 0.3, y + 0.75, z - out.z * 0.45 + 0.3);
+    W.horns.push({ mesh: h, dial: d, dialMat, i, pos: [x - out.x * 0.9, y, z - out.z * 0.9] });
+  });
+  W.setDial = (i, note, ok) => { const t = TEX.dial(note, ok); W.horns[i].dialMat.map = t; W.horns[i].dialMat.needsUpdate = true; };
+  W.emitter = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.1, 10, 36), violet.clone()); W.emitter.position.set(0, P6.P3y + 3.6, 0); W.emitter.rotation.x = PI / 2; W.emitter.userData.noBatch = true; add(W.emitter);
+  bat().box(M.rust, -0.12, P6.P3y, -0.12, 0.12, P6.P3y + 3.6, 0.12); box(-0.3, P6.P3y, -0.3, 0.3, P6.P3y + 3.6, 0.3);
+  W.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 1.4, 300, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x9a7bff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  W.beam.position.set(0, P6.P3y + 154, 0); W.beam.userData.noBatch = true; add(W.beam);
+  W.shard = shardMesh(); W.shard.position.set(...P6.shard); add(W.shard);
+  // storm cells on the plateau path; the planetary storm around the hill; the unbuilt city in the clouds (hidden)
+  W.storm = stormCells(scene, T, [
+    { x: -3, y: 0, z: 62, r: 2.0, path: [[-6, 0], [6, 0]], period: 8, era: '2196' },
+    { x: 3, y: 0, z: 40, r: 2.2, path: [[5, -3], [-5, 3]], period: 7, era: '2196' },
+    { x: 0, y: 0, z: 20, r: 2.0, path: [[-7, 0], [7, 0]], period: 6.5, era: '2196' },
+  ]);
+  W.sky = stormWall({ center: [0, 30], radius: 230, height: 260, y: -60, a: 0x7a4aff, b: 0x4ad8ff, amp: 0.9 }); add(W.sky);
+  try { const sk = RZ.skyline({ center: [0, -60], radius: [260, 380], count: low ? 30 : 50, height: [60, 240], lit: 1.0, seed: 1861 }); const m = sk.mesh || sk; m.position.y = 70; m.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0; o.material.depthWrite = false; } }); m.visible = false; add(m); W.unbuilt = m; } catch (e) { void e; }
+  src(0, P6.P1y + 2, 0, 0xffc890, 3, 10); src(0, P6.P3y + 2, 0, 0x9a7bff, 5, 14); src(P6.booth[0], 3, P6.booth[2], 0xf2f6ff, 3, 10, '2049'); src(0, 3, 6, 0xffc890, 3, 10);
+  K.finish();
+  W.update = (dt, t) => {
+    W.storm.update(t); W.sky.material.uniforms.uTime.value = t; W.shard.rotation.y = t * 1.5;
+    W.emitter.rotation.z = t * 0.6; W.emitter.material.emissiveIntensity = 1.6 + Math.sin(t * 2.2) * 0.6;
   };
   return W;
 }

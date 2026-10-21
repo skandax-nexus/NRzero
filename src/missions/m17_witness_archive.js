@@ -234,6 +234,7 @@ export default {
     // ---------- HUD: the echo timer and the Stacks layout ----------
     const hud = document.createElement('div');
     hud.style.cssText = 'position:absolute;right:calc(22px + var(--sr,0px));top:calc(120px + var(--st,0px));padding:8px 12px;border-radius:6px;background:rgba(10,8,6,.55);border:1px solid rgba(255,200,140,.35);color:#ffe2b8;font:600 12px/1.45 var(--ui,system-ui);letter-spacing:.16em;pointer-events:none;opacity:0;transition:opacity .4s;text-align:right;min-width:150px';
+    if (document.documentElement.classList.contains('touch') || game.touch?.enabled) { hud.style.right = 'auto'; hud.style.left = 'calc(16px + var(--sl,0px))'; hud.style.top = 'calc(66px + var(--st,0px))'; hud.style.textAlign = 'left'; hud.style.minWidth = '120px'; hud.style.fontSize = '11px'; }
     (document.getElementById('hud') || document.body).appendChild(hud);
     const bar = '<div style="height:4px;margin-top:5px;background:rgba(255,255,255,.12);border-radius:2px"><div class="m17bar" style="height:4px;width:0;background:#ffd27a;border-radius:2px"></div></div>';
     let hudKey = '';
@@ -298,20 +299,20 @@ export default {
       S.main = true; cine(true); lockMusic(i === 3 ? 'm17-witness' : 'm17-record', 1.2); playDeck(i, true); audio.sfxPlay('rewind');
       const [sx, sz] = P.stage[i];
       if (i === 0) {
-        stage('m17rook26', sx + 1.6, sz - 1.6, -PI / 2 - 0.4, 'work'); stage('m17mother', sx - 1.2, sz + 1.6, PI / 2 + 0.3);
+        stage('m17rook26', sx + 2.6, sz - 2.6, -PI / 2 - 0.5, 'work'); stage('m17mother', sx - 1.2, sz + 1.6, PI / 2 + 0.3);
         stage('m17kai7', sx - 0.3, sz + 0.5, PI / 2); stage('m17mira10', sx + 0.3, sz - 0.1, PI / 2 + 0.2);
         await recShot(i);
         await game.say('m17label', 'Recording zero zero zero one. The ring\'s own pickup. Site Zero, the nineteenth of October, twenty twenty-six.');
-        await game.shot([sx + 3.4, 1.7, sz - 2.6], [sx + 1.6, 1.5, sz - 1.6], 1.2, { fov: 34 });
+        await game.shot([sx + 4.2, 1.7, sz - 3.8], [sx + 2.6, 1.5, sz - 2.6], 1.2, { fov: 34 });
         await game.say('m17rook26', 'Field at four point one. Stable. Run one, start oh-eight-fourteen-oh-two.');
         await game.say('m17mother', 'Kai, hold your sister\'s hand. Stay behind the rope.');
-        await game.shot([sx + 2.2, 1.2, sz + 0.6], [sx, 1.0, sz + 0.2], 1.2, { fov: 34 });
+        await game.shot([sx - 0.9, 1.15, sz + 2.5], [sx + 0.1, 1.0, sz + 0.2], 1.2, { fov: 36 });
         ghosts.m17mira10.lookTarget = ghosts.m17kai7.head;
         await game.say('m17mira10', 'Kai. It\'s singing. Can you hear it?'); audio.sfxPlay('motif');
         await game.say('m17kai7', 'Mira, the rope! Mum said...');
         await game.say('m17mira10', 'Just one look. Hold on to me.');
         ghosts.m17mira10.pose = 'look'; ghosts.m17mira10.root.position.x += 0.4;
-        await game.shot([sx + 3.4, 1.7, sz - 2.6], [sx + 1.6, 1.5, sz - 1.6], 0.8, { fov: 34 });
+        await game.shot([sx + 4.2, 1.7, sz - 3.8], [sx + 2.6, 1.5, sz - 2.6], 0.8, { fov: 34 });
         await game.say('m17rook26', 'Who let a child past the... Abort! Cut the field!');
         audio.sfxPlay('anomaly'); game.shake = 0.05;
         ghosts.m17mira10.pose = 'fall'; ghosts.m17kai7.pose = 'sad'; ghosts.m17mother.pose = 'sad';
@@ -692,7 +693,7 @@ export default {
           else await game.say('kai', 'Two lessons. I\'ve still got a few habits they haven\'t seen.');
           S.wave++; C.reset({ all: true }); spawnWave(S.wave); cpWave(); audio.sfxPlay('alarm');
         } else {
-          S.fightDone = true; S.waveList.forEach(e => { e.char.root.visible = false; }); C.showHud(false);
+          S.fightDone = true; S.waveList.forEach(e => { e.char.root.visible = false; }); C.showHud(false); C.weapon.owned = false; C.aim?.classList.remove('on'); echo?.unlock(false);
           F.m17mimicWaves = 3; F.m17counters = [...S.counters]; F.m17tactic = Object.keys(S.tact).sort((a, b) => S.tact[b] - S.tact[a])[0]; F.m17tactics = { ...S.tact };
           S.busy = true; S.main = true; cine(true);
           try {
@@ -725,6 +726,9 @@ export default {
       }
       startEcho(1, ECHO_I); lens1.prompt = 'Replay the echo at Lens I';
     }) });
+    act({ pos: [P.lens1[0], 1.2, P.lens1[2]], radius: 1.9, states: ['2196'], prompt: 'Examine Echo Lens I', enabled: () => !S.reels.has('corr'), onUse: () => side(async () => {
+      await game.say('kai', 'A lens on a tripod, with an empty spindle. It wants a reel. The one he left on the Concordance.');
+    }) });
     act({ pos: [W.items.reelVault.position.x, 0.6, W.items.reelVault.position.z], radius: 1.7, states: ['2196'], prompt: 'Take the reel on the cot · THE CORRIDOR, 07:40', enabled: () => !S.reels.has('vault'), onUse: () => side(async () => {
       S.reels.add('vault'); W.items.reelVault.visible = false; audio.sfxPlay('pickup');
       await game.say('kai', 'He slept here. In a cupboard of cables, with a reel of a corridor for a pillow.');
@@ -735,7 +739,7 @@ export default {
     }) });
     // the echo runs down; in a room that only exists in 2026 the end of the echo throws Kai back to the lens
     game.onUpdate(dt => {
-      if (S.echoT <= 0 || S.main) return;
+      if (S.echoT <= 0 || S.main || ui.dlgActive || game._failing) return;
       if (S.anchored && zone() === 'zero') return;
       S.echoT -= dt;
       if (S.echoT <= 6 && S.echoT + dt > 6) { audio.sfxPlay('heartbeat'); ui.toast('THE ECHO IS ENDING', 1600); }
@@ -783,6 +787,11 @@ export default {
       S.anchored = true; S.echoT = 0; master.done(); F.m17anchored = true;
       musicLock = null; S.main = false; cine(false);
       game.checkpoint(0, 0, -109, PI);
+    }) });
+    act({ pos: [0, 1.6, -130.4], radius: 2.2, states: ['2196'], prompt: 'Look at the marks on the wall', enabled: () => !S.seen.tally && zone() === 'zero', onUse: () => side(async () => {
+      S.seen.tally = true; F.m17tally = true;
+      await game.say('kai', 'Chalk. One stroke for every try, in fives. One thousand and forty-six.');
+      await game.say('kai', 'He started at the floor. He ran out of wall before he ran out of reasons.');
     }) });
     game.onUpdate(() => {
       if (S.phase === 'seal' && zone() === 'zero' && !S.busy && !S.main) { S.phase = 'zero'; enterZero(); }
@@ -862,6 +871,7 @@ export default {
       S.main = true; cine(true); lockMusic('m17-814', 1.2); game.setResidue(false);
       const g = ghosts, uni = W.ring.userData.disc.material.uniforms;
       for (const id of ['m17mira10', 'm17kai7', 'm17rook26', 'm17mother']) g[id].frozen = false;
+      pl.place(3.4, 0, -112.8, PI * 0.85);
       await game.shot([8.4, 2.6, -110.6], [0, 1.6, -119], 2.0, { fov: 50 });
       await game.say('m17band', 'Reconstruction: RUN 01. Eight-fourteen and two seconds.');
       await tween(2.0, k => { uni.uPower.value = 0.35 + k * 0.5; });
@@ -878,7 +888,7 @@ export default {
       audio.sfxPlay('boom'); game.shake = 0.08;
       await tween(1.2, k => { uni.uPower.value = 0.85 + k * 0.7; uni.uColor.value.lerp(new THREE.Color(0x9a7bff), k * 0.5); });
       g.m17mira10.pose = 'fall'; g.m17kai7.pose = 'sad';
-      await game.shot([-5.6, 2.2, -110.4], [-7.4, 1.5, -112.4], 0.9, { fov: 36 });
+      await game.shot([-5.2, 2.15, -115.4], [-7.4, 1.5, -111.2], 0.9, { fov: 38 });
       await game.say('m17rook26', 'Abort! Cut the field!');
       g.m17mother.pose = 'sad';
       await game.say('m17mother', 'Mira!');
@@ -888,7 +898,8 @@ export default {
       await game.wait(1.4);
       audio.unsilence?.();
       await game.say('kai', 'That\'s what happened. That\'s all that happened. She reached, and I held on, and it took her anyway.');
-      await game.say('kai', 'The ring kept something. Look at it. It\'s still lit.');
+      audio.sfxPlay('rewind'); await tween(1.6, k => { g.m17mira10.root.position.y = -k * 0.02; }); g.m17mira10.mode = null;
+      await game.say('kai', 'She\'s gone from the floor. The ring kept something. Look at it. It\'s still lit.');
       S.ran = true; F.m17reconstructed = true; F.m17reconMisses = S.reconMiss;
       ev('RUN 01, reconstructed', 'Test Hall Zero, 19.10.2026: field 4.1 kHz from 08:14:02, collars II · IV · I. Mira unhooked the rope and reached into the ring at 08:14:09 holding Kai\'s hand; Rook aborted at 08:14:11. Her body fell. The ring stayed lit, violet.', 'Reconstruction');
       musicLock = null; S.main = false; cine(false);
@@ -1039,6 +1050,7 @@ export default {
     await game.say('m17label', 'If you are hearing this, you are the next one. Listen to the four on the west wall. Then come down. Do not be long. It is a bad place to be young.');
     await game.shot([4.0, 2.2, 13.4], [11, 1.6, 4], 1.6, { fov: 48 });
     await game.say('m17band', 'Second signature: Site Zero, sealed, 2049. The same room. Switching available here.');
+    ui.missionTag('MISSION 17 · THE WITNESS\'S ARCHIVE'); ui.show('hud', true);
     T.unlocked = true; S.phase = 'hub'; T.refreshHud();
     ui.toast('TEMPORAL STATE · THE ARCHIVE 2196 (3) · SITE ZERO, SEALED 2049 (2)', 3600);
     S.main = false; cine(false);

@@ -1,6 +1,7 @@
 // Cost of the stage-6 atmosphere upgrade (kit Rain as GPU streaks, kit sky() cloud deck) on one reference view,
 // same page and same frame, A/B/A/B: 'new' draws the current Rain / sky, 'legacy' swaps in the pre-upgrade line rain
-// (built by kit's own legacy path) and the cloudless sky program. Reports the browser GPU process's CPU time per frame
+// (built by kit's own legacy path) and the cloudless sky program; 'norain' hides both rains (new sky) so the rain's own
+// cost is new - norain. Reports the browser GPU process's CPU time per frame
 // (SwiftShader's rasterizer work, see cpuab.mjs) and the main-thread cost of Rain.update() per frame (the CPU side a
 // phone pays every frame). See docs/RENDERING.md section 12.
 //   node tools/render/atmosab.mjs <mission m1..m4> <view> <gfx> W H [--mobile] <reps> <frames> [--shots=dir]
@@ -31,8 +32,8 @@ const info = await p.evaluate(async () => {
   const KIT = await import('/src/world/kit.js');
   const g = window.__game, E = g.engine, S = E.scene, cam = E.camera, A = window.__atmos = { rain: [], sky: [] };
   S.traverse(o => {
-    if (o.userData.rzRain && o.isMesh && o.material.uniforms?.uLen) {
-      const L = Object.create(KIT.Rain.prototype); L.count = o.geometry.instanceCount; L.area = o.material.uniforms.uArea.value.x; L.frozen = false;
+    if (o.userData.rzRain && (o.isMesh || o.isLineSegments) && o.material.uniforms?.uLen) {
+      const L = Object.create(KIT.Rain.prototype); L.count = o.geometry.attributes.aS.count / (o.geometry.index ? 4 : 2); L.area = o.material.uniforms.uArea.value.x; L.frozen = false;
       L._legacy(L.count, L.area, o.material.uniforms.uCol.value.getHex()); L._legacyUpdate(0.016, cam); L.mesh.visible = false; o.parent.add(L.mesh);
       A.rain.push({ n: o, l: L.mesh, legacy: L });
     }
@@ -40,7 +41,7 @@ const info = await p.evaluate(async () => {
       const m0 = o.material, m1 = m0.clone(); m1.defines = { CLOUDS: 0 }; m1.uniforms = m0.uniforms; A.sky.push({ o, n: m0, l: m1 });
     }
   });
-  A.set = legacy => { for (const r of A.rain) { r.n.visible = !legacy; r.l.visible = legacy; } for (const s of A.sky) s.o.material = legacy ? s.l : s.n; };
+  A.set = (legacy, half) => { for (const r of A.rain) { const u = r.n.material.uniforms; r.n.geometry.setDrawRange(0, half ? Math.round(r.legacy.count * half) * (r.n.geometry.index ? 6 : 2) : Infinity); u.uArea.value.x = u.uArea.value.z = r.legacy.area * (half ? Math.sqrt(half) : 1); r.l.visible = true; r.n.material.visible = legacy === false; r.l.material.visible = legacy === true; } for (const s of A.sky) s.o.material = legacy ? s.l : s.n; };   // material.visible: the scene stays wet
   // main-thread cost of one Rain.update() (legacy: the CPU streak loop + buffer upload flag; new: two uniforms)
   const tUpd = (fn) => { const t0 = performance.now(); for (let i = 0; i < 200; i++) fn(); return (performance.now() - t0) / 200; };
   const r0 = A.rain[0];
@@ -51,9 +52,11 @@ const info = await p.evaluate(async () => {
 console.log('atmos', JSON.stringify(info));
 const tck = 100;
 const gpuCpu = () => { const s = fs.readFileSync(`/proc/${GPU}/stat`, 'utf8'); const f = s.slice(s.lastIndexOf(')') + 2).split(' '); return (+f[11] + +f[12]) / tck; };
-const cfgs = ['new', 'legacy']; const out = { new: [], legacy: [] }; const wall = { new: [], legacy: [] };
+const cfgs = ['new', 'legacy', 'norain', 'half']; const out = {}, wall = {}; for (const c of cfgs) { out[c] = []; wall[c] = []; }
+const mode = c => (c === 'legacy' ? true : c === 'new' || c === 'half' ? false : null);
+const halfK = +(a.find(x => x.startsWith('--half=')) || '--half=0.5').slice(7);   // 'half': that share of the drops in a box with the same density
 for (let k = 0; k < +reps; k++) for (const c of cfgs) {
-  await p.evaluate(legacy => { const g = window.__game, E = g.engine; window.__atmos.set(legacy); E.settlePost(); E._refRender.call(E, g.time); E.renderer.getContext().readPixels(0, 0, 1, 1, 6408, 5121, new Uint8Array(4)); }, c === 'legacy');
+  await p.evaluate(([legacy, half]) => { const g = window.__game, E = g.engine; window.__atmos.set(legacy, half); E.settlePost(); E._refRender.call(E, g.time); E.renderer.getContext().readPixels(0, 0, 1, 1, 6408, 5121, new Uint8Array(4)); }, [mode(c), c === 'half' ? halfK : 0]);
   const c0 = gpuCpu(), w0 = Date.now();
   await p.evaluate(n => { const g = window.__game, E = g.engine, gl = E.renderer.getContext(); for (let i = 0; i < n; i++) { E._refRender.call(E, g.time); gl.readPixels(0, 0, 1, 1, 6408, 5121, new Uint8Array(4)); } }, +frames);
   out[c].push((gpuCpu() - c0) / +frames * 1000); wall[c].push((Date.now() - w0) / +frames);
@@ -61,7 +64,7 @@ for (let k = 0; k < +reps; k++) for (const c of cfgs) {
 if (shots) {
   fs.mkdirSync(shots, { recursive: true });
   for (const c of cfgs) {
-    const png = await p.evaluate(legacy => { const g = window.__game, E = g.engine; window.__atmos.set(legacy); E.settlePost(); E._refRender.call(E, g.time); return E.renderer.domElement.toDataURL('image/png'); }, c === 'legacy');
+    const png = await p.evaluate(([legacy, half]) => { const g = window.__game, E = g.engine; window.__atmos.set(legacy, half); E.settlePost(); E._refRender.call(E, g.time); return E.renderer.domElement.toDataURL('image/png'); }, [mode(c), c === 'half' ? halfK : 0]);
     fs.writeFileSync(path.join(shots, `${viewName}_${gfx}${mobile ? '_mobile' : ''}_${c}.png`), Buffer.from(png.split(',')[1], 'base64'));
   }
 }
