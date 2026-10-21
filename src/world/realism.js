@@ -4496,7 +4496,7 @@ if ( rzWetA.x > 0.001 ) {
  *   probe.start(scene, camera.position, { hide: o => !!o.userData.character, normalize: { luminance: 0.6, strength: 0.5 } });
  *   each frame: probe.step(1)  (true when done), or probe.finish() to complete at once
  * start() options: hide(o) -> bool, normalize (see captureEnvironment, plus fill: 0..0.9 = share of the mean radiance
- * spread evenly as bounce light, floor: 0..1 = minimum radiance in every direction as a share of normalize.luminance), measure, scale, clamp (max radiance, 32), saturation (1 = as captured; < 1 keeps a
+ * spread evenly as bounce light, floor: 0..2 = minimum radiance in every direction as a share of normalize.luminance, or of the keepAsFloor() capture in that direction), measure, scale, clamp (max radiance, 32), saturation (1 = as captured; < 1 keeps a
  * strongly tinted place, e.g. an orange sunset sky, from tinting every surface twice over),
  * shadows: true re-renders shadow maps per face (default false: the current maps are reused, the probe sees the
  * frame's shadows). Objects with userData.noCapture are always hidden. probe.ms = cost of the last capture.
@@ -4550,7 +4550,7 @@ export class EnvProbe {
         if (N && N.luminance > 0) {
           // floor: no direction darker than this share of the reference luminance (a floor under a black ceiling, the
           // legs of a character above a black floor keep a readable ambient in a blacked-out room)
-          floor = Math.max(0, Math.min(1, N.floor ?? 0)) * (this.floorRT ? N.luminance / Math.max(this.floorLum, 1e-5) : N.luminance);
+          floor = Math.max(0, Math.min(2, N.floor ?? 0)) * (this.floorRT ? N.luminance / Math.max(this.floorLum, 1e-5) : N.luminance);
           scale *= Math.min(N.max ?? 6, Math.max(N.min ?? 0.25, Math.pow(N.luminance / Math.max(lum, 1e-5), N.strength ?? 0.5)));
           // fill: part of the mean radiance spread evenly (bounce light), so faces turned away from every light
           // (a floor under a dark ceiling) keep some ambient instead of going black; the mean is unchanged

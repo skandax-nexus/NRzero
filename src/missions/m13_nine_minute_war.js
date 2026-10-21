@@ -183,9 +183,11 @@ export default {
       if (b === kai) { pl.yaw = yb; kai.root.rotation.y = yb; } else b.root.rotation.y = yb;
       a.lookTarget = b.head; b.lookTarget = a.head;
     };
-    const ots = (speaker, listener, dur = 1.0, fov = 36, side = 0.55) => {
+    const ots = (speaker, listener, dur = 1.0, fov = 36, side = 0.7) => {
+      // over the listener's shoulder: wider offset when the two stand close or the speaker is low, so the listener never covers the speaker
       const sp = posOf(speaker), l = posOf(listener), dx = sp.x - l.x, dz = sp.z - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
-      return game.shot([l.x - ux * 1.35 + uz * side, l.y + 1.68, l.z - uz * 1.35 - ux * side], [sp.x, sp.y + (speaker.crouch > 0.5 ? 1.0 : 1.58), sp.z], dur, { fov });
+      const low = speaker.crouch > 0.5, sd = side + (d < 1.8 ? 0.2 : 0) + (low ? 0.2 : 0), back = 1.5;
+      return game.shot([l.x - ux * back + uz * sd, l.y + (low ? 1.45 : 1.68), l.z - uz * back - ux * sd], [sp.x, sp.y + (low ? 1.0 : 1.58), sp.z], dur, { fov });
     };
     // named people
     const sera = person(game.actor('sera', { ...CAST.sera.look, era: '2196' }, P.sera[0], Y0, P.sera[2], -Math.PI / 2), '2196');
@@ -897,8 +899,9 @@ export default {
       ui.subtitle('kai', 'Exactly nine minutes, every time. She\'s been writing it down for weeks.', 3000);
     } });
     game.interact({ pos: [0, 1.4, -58.6], radius: 2.6, prompt: 'Talk to the Prefect', once: false, states: ['2196'], enabled: () => S.phase === 'talks' && S.adairOpen && !S.adairOk, onUse: () => side(async () => {
-      S.main = true; cine(true); faceEach(kai, adair);
-      await ots(adair, kai);
+      // stand Kai on his mark across the Prefect's table so the two-shot always frames her
+      S.main = true; cine(true); pl.place(0.7, 0.3, -57.5, Math.PI); adair.root.position.set(P.adair[0], 0.3, P.adair[2]); faceEach(kai, adair);
+      await game.shot([4.8, 1.8, -58.75], [0.35, 1.62, -58.75], 1.0, { fov: 40 });   // profile two-shot across the field table
       await game.talk([
         ['prefect', F.m10released ? 'Varen. Last time you emptied my loop cells. Now my anchors.' : F.m10done ? 'Varen. You walked out of Block D4. Now you walk into my command.' : 'Kai Varen. Every version of you ends up in front of me eventually.'],
         ['prefect', 'Without the stakes the spire holds nothing. You\'ve made it a target. Both sides will want it now.'],

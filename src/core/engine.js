@@ -1087,9 +1087,13 @@ export class Engine {
       hide: o => !!(o.userData.character || o.userData.rzRain || o.isPoints || o.isLineSegments || o.isSprite),
       // floor: no direction darker than half the studio light the scene was authored with in that direction (bright
       // from above), so a blacked-out room keeps readable floors and characters' legs (up-facing surfaces under a black
-      // ceiling had almost no image-based light); measured on m1b street +14 %, m2b office floor about 2x
+      // ceiling had almost no image-based light); measured on m1b street +14 %. A scene whose author turned the
+      // environment far down (m2's blackout: environmentIntensity 0.06 against the usual 0.3-0.5) keeps more of that
+      // shape (x (0.3 / intensity)^0.6, at most x 3: 1.3 for the blackout, whose floor then reads like the studio light).
+      // The ancient valley keeps the whole studio sky light from above (1): its captured sunset sky is darker overhead
+      // than the studio, which left the orange key light alone on the grass (ochre grass: hue 41-45 deg, studio 50)
       normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: this.scene.userData.envFill ?? this.settings.light.envFill ?? 0.15,
-        floor: this.scene.userData.envFloor ?? this.settings.light.envFloor ?? 0.5 },
+        floor: this.scene.userData.envFloor ?? (this.settings.light.envFloor ?? ({ ancient: 1 }[gradeForScene(this.scene)] ?? 0.5)) * Math.min(3, Math.max(1, Math.pow(0.3 / Math.max(this.scene.environmentIntensity ?? 1, 0.01), 0.6))) },
       // emissive panels stay bright in reflections without blowing wet floors out; tinted eras keep their hue in the
       // key / hemisphere lights and fog, so the probe adds less of it (an orange sunset would turn green grass brown,
       // a red alarm strip would paint a whole lab red); a rainy street keeps its full neon colour
