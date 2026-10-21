@@ -488,7 +488,7 @@ export function buildHarrow(game, scene, T) {
     // ---- 2049: the museum ----
     S['2049'].box(M.tileW, -19.6, 0.04, -45.6, 19.6, 0.06, -10.4);
     {   // 2049 wings: freshly painted gallery walls over the shared (2196-weathered) plaster
-      const clean = pm('plaster', { color: 0xe2e0da, damage: 0, dirt: 0.04 });
+      const clean = new THREE.MeshStandardMaterial({ color: 0xe4e2dc, roughness: 0.82 });   // flat gallery paint (the plaster shader always peels)
       for (const s of [-1, 1]) {
         const xo = s * 19.56, xi = s * 12.24, a = Math.min(xo, xi), b = Math.max(xo, xi);
         S['2049'].box(clean, xo - 0.02, 0.06, -45.56, xo + 0.02, 9, -10.44);

@@ -2218,15 +2218,6 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
 // octaves, no room ray-box);
 // windows keep their frames, mullions, sills, lit / unlit rooms with a lamp gradient and Fresnel glass, so the
 // buildings read the same from gameplay distance at about the cost of the textured boxes they replace.
-// anti-aliased edges of the lite facade (window boxes, frames, mullions, sills, roof line): linear ramps over the
-// pixel footprint instead of smoothstep (a few ALU less per edge, the same 1-2 px transition)
-#ifdef RZ_LITE_LINAA
-#define rzAS(a, b, x) clamp(((x) - (a)) / ((b) - (a)), 0.0, 1.0)
-float rzBoxA(vec2 p, vec2 mn, vec2 mx, vec2 aa){ vec2 ia = 0.5 / aa; vec2 s = clamp((p - mn) * ia + 0.5, 0.0, 1.0) * clamp((mx - p) * ia + 0.5, 0.0, 1.0); return s.x * s.y; }
-#else
-#define rzAS(a, b, x) smoothstep(a, b, x)
-#define rzBoxA rzBoxM
-#endif
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
 #if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 1   // cost probes for tools/render/infraab.mjs (never set in the game)
   alb = vec3(0.3); orm = vec3(1.0, 0.8, 0.0); nW = rzSafeN(vRzWN); emi = vec3(0.0); return;
@@ -2291,12 +2282,12 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
       else { wmin = vec2((bay - ww) * 0.5, sill + (gH - flH) * 0.6); wmax = wmin + vec2(ww, wh); } }
     else { float fy = (P.y - gH) / flH; cid = vec2(floor(P.x / bay), floor(fy)); cl = vec2(P.x - cid.x * bay, (fy - cid.y) * flH); ch = flH;
       wmin = vec2((bay - ww) * 0.5, sill); wmax = wmin + vec2(ww, wh); }
-    zone = 1.0 - rzAS(topY - aa.y, topY + aa.y, P.y);
+    zone = 1.0 - smoothstep(topY - aa.y, topY + aa.y, P.y);
     // far away only the cheap per-cell facade below is drawn (each window a flat lit / dark cell, no frames: a window
     // under ~5 px on 'low', ~3.5 px on 'medium'), skipping the per-window work
     farW = farA;
     // the window mask is exactly 0 outside its box grown by the AA width: wall pixels skip it
-    if (farW < 0.999 && zone > 0.0 && cl.x > wmin.x - aa.x && cl.x < wmax.x + aa.x && cl.y > wmin.y - aa.y && cl.y < wmax.y + aa.y) open = rzBoxA(cl, wmin, wmax, aa) * zone;
+    if (farW < 0.999 && zone > 0.0 && cl.x > wmin.x - aa.x && cl.x < wmax.x + aa.x && cl.y > wmin.y - aa.y && cl.y < wmax.y + aa.y) open = rzBoxM(cl, wmin, wmax, aa) * zone;
   }
   vec3 wall = vec3(0.3); o4 = vec4(1.0, 0.85, 0.0, 0.5);
   if (open < 0.999 || farW > 0.001) {
@@ -2317,7 +2308,7 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   if (!winR) return;
   // sill (below the window, never on shop fronts): exactly 0 outside its box grown by the AA width
   if (!shop && farW < 0.999 && zone > 0.0 && cl.x > wmin.x - 0.07 - aa.x && cl.x < wmax.x + 0.07 + aa.x && cl.y > wmin.y - 0.09 - aa.y && cl.y < wmin.y + aa.y) {
-    float sillM = rzBoxA(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone;
+    float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone;
     alb = mix(alb, vec3(0.40, 0.38, 0.35), sillM);
   }
 #if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 3
@@ -2328,11 +2319,11 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     vec3 V = normalize(vRzWP - cameraPosition);
     float cosv = max(dot(-V, N), 0.0), fr1 = 1.0 - cosv, fr2 = fr1 * fr1, F = 0.04 + 0.96 * fr2 * fr2 * fr1;
     vec2 de = min(cl - wmin, wmax - cl); float fwid = shop ? 0.07 : 0.05;
-    float frameM = 1.0 - rzAS(fwid - aa.x, fwid + aa.x, min(de.x, de.y));
+    float frameM = 1.0 - smoothstep(fwid - aa.x, fwid + aa.x, min(de.x, de.y));
     float mx = (wmin.x + wmax.x) * 0.5, my = wmin.y + (wmax.y - wmin.y) * 0.68;
     if (!shop) {
-      if (st > 0.5 && st < 2.5) frameM = max(frameM, 1.0 - rzAS(fwid * 0.5 - aa.x, fwid * 0.5 + aa.x, abs(cl.x - mx)));
-      if (st > 1.5) frameM = max(frameM, 1.0 - rzAS(fwid * 0.5 - aa.y, fwid * 0.5 + aa.y, abs(cl.y - my)));
+      if (st > 0.5 && st < 2.5) frameM = max(frameM, 1.0 - smoothstep(fwid * 0.5 - aa.x, fwid * 0.5 + aa.x, abs(cl.x - mx)));
+      if (st > 1.5) frameM = max(frameM, 1.0 - smoothstep(fwid * 0.5 - aa.y, fwid * 0.5 + aa.y, abs(cl.y - my)));
     }
     float fh = vRzK.w;
     vec3 fc = fh < 0.4 ? vec3(0.7, 0.7, 0.68) : (fh < 0.75 ? vec3(0.03, 0.03, 0.032) : vec3(0.16, 0.1, 0.06));
