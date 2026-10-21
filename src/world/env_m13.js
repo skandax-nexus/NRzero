@@ -284,12 +284,11 @@ export function buildSable(game, scene, T) {
   const pearl = new THREE.MeshStandardMaterial({ color: 0xe6e8ea, roughness: 0.18, metalness: 0.1, envMapIntensity: 1.3 });
   const graphite = new THREE.MeshStandardMaterial({ color: 0x202328, roughness: 0.5, metalness: 0.4 });
   const goldTrim = new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.3, metalness: 0.85 });
-  const goldGlow = glowMat(0xffd27a, 2.4), cyan = glowMat(0x5fe6ff, 2.0), ember = glowMat(0xff7a3a, 2.4);
+  const goldGlow = glowMat(0xffd27a, 2.4), ember = glowMat(0xff7a3a, 2.4);
   const hiVis = new THREE.MeshStandardMaterial({ color: 0xe8c21a, roughness: 0.6 });
   const tarp = new THREE.MeshStandardMaterial({ color: 0x5a5444, roughness: 0.95, side: THREE.DoubleSide });
   const tarpRed = new THREE.MeshStandardMaterial({ color: 0x7a3e22, roughness: 0.95, side: THREE.DoubleSide });
   const sand = new THREE.MeshStandardMaterial({ color: 0x8a7a5a, roughness: 1 });
-  const trainWhite = new THREE.MeshStandardMaterial({ color: 0xe9edf2, roughness: 0.35, metalness: 0.3 });
   W.mats = { pearl, goldTrim, goldGlow, graphite };
   const S = { common: new Batch(), '2026': new Batch(), '2049': new Batch(), '2196': new Batch() };
   const g26 = new THREE.Group(), g49 = new THREE.Group(), g96 = new THREE.Group();

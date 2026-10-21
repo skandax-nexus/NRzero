@@ -202,9 +202,9 @@ export default {
     const fighters = [[-8.2, 43.6, Math.PI, 1], [-4.4, 43.4, Math.PI, 1], [6.2, 43.4, Math.PI, 1], [9.4, 43.6, Math.PI, 1], [-2.6, 64.8, 0.4, 0]].map(([x, z, ry, cr], i) => {
       const ch = person(game.ambient({ ...UNWRITTEN[i % 4], seed: 900 + i }, x, groundY(x, z), z, ry), '2196'); ch.crouch = cr; return ch;
     });
-    const sentries = [[-6, -41.4, 0], [5.4, -41.4, 0]].map(([x, z, ry], i) => person(game.ambient({ ...CAST.m13keeper.look, seed: 950 + i, lod: true }, x, Y0, z, ry), '2196'));
+    [[-6, -41.4, 0], [5.4, -41.4, 0]].map(([x, z, ry], i) => person(game.ambient({ ...CAST.m13keeper.look, seed: 950 + i, lod: true }, x, Y0, z, ry), '2196'));
     await tick();
-    const workers = [[-3, 12.4, 2.6, 'work'], [9.6, -1.0, -1.6, 'look']].map(([x, z, ry, pose], i) => { const ch = person(game.ambient({ ...WORKER26[i], seed: 960 + i }, x, Y0, z, ry), '2026'); ch.pose = pose; return ch; });
+    [[-3, 12.4, 2.6, 'work'], [9.6, -1.0, -1.6, 'look']].map(([x, z, ry, pose], i) => { const ch = person(game.ambient({ ...WORKER26[i], seed: 960 + i }, x, Y0, z, ry), '2026'); ch.pose = pose; return ch; });
     await tick();
     // the held: Sable residents stopped at 08:14:00 (frozen mid-step)
     const HELD = [
@@ -502,7 +502,7 @@ export default {
     hint(() => S.phase === 'cross' && pl.pos.z < 24 && !C.allDown(post), 55, () => ui.subtitle('kai', 'The post faces south. Stun one, the other will turn. Or go round them in the still year.', 3200));
     // Nell, under the balcony
     let nellCall = 0;
-    const offNell = game.onUpdate(dt => {
+    game.onUpdate(dt => {
       if (S.nell !== 'none' || T.current !== '2196' || !game.control) return;
       if (Math.hypot(pl.pos.x - P.nell[0], pl.pos.z - P.nell[2]) < 16) { nellCall -= dt; if (nellCall <= 0) { nellCall = 14; ui.subtitle('nell', 'Help — anyone! Under the balcony, west side!', 2600); } }
     });
@@ -798,7 +798,7 @@ export default {
     const ringEcho = new THREE.Group(); scene.add(ringEcho); game.residue(ringEcho); T.only(ringEcho, '2196');
     const shellM = glowMat(0xff8f6a, 3), shellG = glowMat(0xffd27a, 3);
     const echoShells = [];
-    for (let k = 0; k < 4; k++) { const a = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), shellM); ringEcho.add(a); const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), shellM); ringEcho.add(b); echoShells.push([a, b, k]); }
+    for (let k = 0; k < 4; k++) { const a = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), shellM); ringEcho.add(a); const b = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), shellG); ringEcho.add(b); echoShells.push([a, b, k]); }
     const lbl = (txt, x, y, z) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.sign(txt, '', 'rgba(0,0,0,0)', '#ffd27a', 'lbl'), transparent: true, depthTest: false, toneMapped: false })); s.scale.set(2.6, 0.8, 1); s.position.set(x, y, z); ringEcho.add(s); };
     lbl('IN 06:12:00', -3, 11.5, 6); lbl('OUT 06:21:00', 3, 11.5, 6);
     game.onUpdate((dt, t) => {
