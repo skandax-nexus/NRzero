@@ -323,6 +323,10 @@ export default {
     await game.say('prefect', 'We remember you.');
     if (F.timelineVersion === 17 || F.m8version === 17) await game.say('prefect', 'Version seventeen. Your machine counts them too, I hear.');
     if (F.m8yara === 'saved') await game.say('prefect', 'And the physicist you pulled out of her second. Lind. She is on our list now.');
+    if (F.m9ines) await game.talk([   // continuity with M9: Ines was on the ring with him
+      ['kai', 'There was a woman with me on the tower. Ines Calder.'],
+      ['prefect', 'The engineer took the stairs while we were taking you. She is not the one we came for.'],
+    ]);
     await game.say('prefect', 'At first light the Assessor tests your binding in Chamber Two. Then we decide if there is an eighteenth.');
     prefect.lookTarget = null;
     walkTo(prefect, [-14, 0, 0.6], 4.5).then(() => { if (game.token === tok) parkCh(prefect); });

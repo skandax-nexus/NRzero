@@ -245,7 +245,7 @@ export default {
     await game.shot([24, 1.4, 25], [34, 9, 15], 3.2, { fov: 40 });
     await game.shot([-2.2, 1.7, 49.4], [-3.4, 1.55, 45.6], 1.6, { fov: 40 });
     kai.lookTarget = V(30, 8, 14);
-    if (F.m10done) await game.say('kai', 'Sera\'s evening was a real one. Here, even the rain can\'t agree which way to fall.');
+    if (F.m10done) await game.say('kai', 'Sera\'s skiff, a real evening, then the band pulled me home. Here, even the rain can\'t agree which way to fall.');
     await game.talk([
       ['kai', 'Halden General. Twenty-three years ago they told my parents Mira died on the fourth floor of the East Wing.'],
       ['kai', 'Three days ago, at eight-fourteen, the East Wing started running backward.'],

@@ -3,11 +3,11 @@
 // in 2196 · reconstruct the Witness's route from repeated fragments · enter a chamber containing a second Chronolith.
 // Quote: "The person you become when you refuse to let go." Ending: the Witness bears the same wrist scar as Kai and
 // escapes through a fracture. Uses Echo Step (src/systems/echostep.js).
-// Saturday 23.10.2049, 23:40. Kai has come to Helix to make Rook explain bed 4-07; a long-coated man is waiting for
+// Thursday 23.10.2049, 23:40. Kai has come to Helix to make Rook explain bed 4-07; a long-coated man is waiting for
 // him behind the glass of Test Hall C instead, and he changes states to get away.
 import * as THREE from 'three';
 import * as RZ from '../world/realism.js';
-import { CAST, registerCast } from '../story/cast.js';
+import { CAST } from '../story/cast.js';
 import { renderPortraits } from '../core/character.js';
 import { Drone } from '../world/props.js';
 import { glowMat } from '../world/kit.js';
@@ -25,10 +25,7 @@ export default {
     const tick = () => new Promise(r => setTimeout(r, 0));
     registerM12Cast(); registerM12Themes();
     const haleSide = F.trustedHale !== false;
-    registerCast('m12rook', { name: 'DR. ELIAS ROOK', role: 'Gallery C intercom · director\'s line', portraitOf: 'rook', vp: { sex: 'm', pitch: 0.9, rate: 0.94, langs: ['en-GB', 'en-US'] } });
-    registerCast('m12hale', { name: 'OFF. R. HALE · RADIO', role: 'Helix channel 2', portraitOf: 'hale', vp: { sex: 'm', pitch: 0.84, rate: 1.0, langs: ['en-US', 'en-GB'] } });
-    registerCast('m12brandt', { name: 'M. BRANDT · RADIO', role: 'Helix channel 2', portraitOf: 'brandt', vp: { sex: 'm', pitch: 0.8, rate: 1.02, langs: ['en-GB', 'en-US'] } });
-    const radioId = haleSide ? 'm12hale' : 'm12brandt';
+    const radioId = haleSide ? 'hale' : 'brandt';   // the same voices as on the cordon in M9 and M11
     try {
       const need = ['ben', 'ife', 'witness', 'm12guard', 'rook', 'hale', 'brandt'].filter(id => !ui.portraits[id] && CAST[id]?.look);
       if (need.length) Object.assign(ui.portraits, renderPortraits(Object.fromEntries(need.map(id => [id, CAST[id]]))));
@@ -220,7 +217,7 @@ export default {
     });
 
     // =====================================================================================
-    // OPENING: Test Hall C behind the glass of Observation Gallery C, Saturday 23.10.2049, 23:40
+    // OPENING: Test Hall C behind the glass of Observation Gallery C, Thursday 23.10.2049, 23:40
     // =====================================================================================
     ui.missionTag('MISSION 12 · THE MAN BEHIND THE GLASS'); ui.show('hud', true);
     pl.place(...P.start, Math.PI); game.checkpoint(...P.start, Math.PI);
@@ -229,7 +226,7 @@ export default {
     await game.shot([5.5, 6.4, -22.5], [0, 2.6, -14], 0.01, { fov: 52 });
     await ui.fade(0, 2400);
     lockMusic('m12-glass', 2);
-    const cc = ui.chapterCard('ACT II · THE NINE-MINUTE WAR', 'The Man Behind the Glass', 'Helix Temporal Research · Test Hall C · Saturday 23.10.2049 · 23:40', 4400);
+    const cc = ui.chapterCard('ACT II · THE NINE-MINUTE WAR', 'The Man Behind the Glass', 'Helix Temporal Research · Test Hall C · Thursday 23.10.2049 · 23:40', 4400);
     await game.shot([-4.5, 4.2, -18.5], [0, 2.0, -6], 6.5, { fov: 46 });
     await cc;
     await game.shot([3.4, 1.7, -0.8], [-2.6, 1.55, -5.2], 2.0, { fov: 40 });
@@ -239,7 +236,7 @@ export default {
       ['kai', 'He said five minutes. Gallery C. Midnight.'],
     ]);
     kai.lookTarget = null;
-    ev('Gallery C, 23:40', 'Saturday 23.10.2049. Rook agreed to meet Kai in Observation Gallery C, over Test Hall C, "for five minutes". Helix\'s own records still list Dr. K. Varen as deceased.', 'HELIX · 2049');
+    ev('Gallery C, 23:40', 'Thursday 23.10.2049. Rook agreed to meet Kai in Observation Gallery C, over Test Hall C, "for five minutes". Helix\'s own records still list Dr. K. Varen as deceased.', 'HELIX · 2049');
     cine(false); lockMusic(null);
     objective('Wait for Rook at the glass · or use the intercom');
     game.interact({ pos: P.intercom, radius: 1.8, prompt: 'Call the director\'s line', onUse: () => { S.calledRook = true; } });
@@ -252,9 +249,9 @@ export default {
     await game.shot([-0.8, 1.7, -3.4], [1.8, 1.4, -8.6], 1.2, { fov: 42 });
     audio.sfxPlay('blip');
     await game.talk([
-      ['m12rook', 'Varen. Or whoever is wearing his face this week. You have four minutes left.'],
+      ['rook', 'Varen. Or whoever is wearing his face this week. You have four minutes left.'],
       ['kai', 'Bed four-oh-seven. Your memo. "Do not move the occupant."'],
-      ['m12rook', 'I write a great many memos. Look down, Varen. I didn\'t put the lights on for myself.'],
+      ['rook', 'I write a great many memos. Look down, Varen. I didn\'t put the lights on for myself.'],
     ]);
     // the hall lights come up on a man standing at the glass
     wShown = true; witness.root.position.set(...P.witnessHall); witness.root.rotation.y = 0; witness.lookTarget = kai.head;
@@ -270,7 +267,7 @@ export default {
     await game.shot([2.6, 1.5, -12.6], [1.8, 1.6, -7.2], 1.6, { fov: 32 });
     await game.talk([
       ['kai', 'Those three notes. Mira used to hum those.'],
-      ['m12rook', 'That man is not one of mine. Varen. Who is in my test hall?'],
+      ['rook', 'That man is not one of mine. Varen. Who is in my test hall?'],
       ['kai', 'I was going to ask you.'],
     ]);
     audio.sfxPlay('alarm'); W.screens.lock.visible = true;
@@ -278,7 +275,7 @@ export default {
     witness.lookTarget = null;
     const exitWalk = walkTo(witness, [[4.0, 0, -12.2], [4.2, 0, -21.0], [0, 0, -23.6], [0, 0, -26]], 1.6);
     await game.shot([-3.0, 2.2, -2.0], [1.2, 1.4, -14], 2.6, { fov: 44, follow: witness.root });
-    await game.talk([['m12rook', 'Stay exactly where you are, Varen.'], ['kai', 'No.']]);
+    await game.talk([['rook', 'Stay exactly where you are, Varen.'], ['kai', 'No.']]);
     await exitWalk; wShown = false;
     F.m12witnessSeen = true;
     ev('The man behind the glass', 'At 23:41 a grey-haired man in a long coat stood inside Test Hall C, behind the glass of Gallery C, and tapped three notes on it: the tune Mira used to hum. Rook: "That man is not one of mine." Helix locked down. His wrist band glows red-orange.', 'TEST HALL C');
@@ -291,7 +288,7 @@ export default {
     // optional: Rook's office (the door was left open in the lockdown)
     game.interact({ pos: [16.8, 1.1, -13.4], radius: 1.8, prompt: 'Read Rook\'s calendar', onUse: () => {
       F.m12rookOffice = true; audio.sfxPlay('blip');
-      ev('Rook\'s calendar', 'Sat 23.10, 23:40: "Gallery C · K. VAREN (record: deceased 19.10)". 23:41: "Test Hall C · badge: —". 23:41: "LOCKDOWN · Director". Rook booked the meeting with a man his own system calls dead.', 'ROOK\'S OFFICE');
+      ev('Rook\'s calendar', 'Thu 23.10, 23:40: "Gallery C · K. VAREN (record: deceased 19.10)". 23:41: "Test Hall C · badge: —". 23:41: "LOCKDOWN · Director". Rook booked the meeting with a man his own system calls dead.', 'ROOK\'S OFFICE');
       ui.subtitle('kai', 'He booked the meeting. And the hall. A minute apart.', 3000);
     } });
     game.interact({ pos: [18.6, 1.7, -12.4], radius: 1.6, prompt: 'Look at the framed photograph', onUse: () => {
@@ -788,6 +785,7 @@ export default {
     await game.talk([
       ['witness', 'You heard me once already. In the station, through every speaker in the city.'],
       ['witness', 'You didn\'t listen then, either.'],
+      ...(F.m9voice ? [['kai', 'And in Meridian. "To become me."']] : []),
       ['kai', 'Wait —'],
     ]);
     F.m12stationVoice = true;
@@ -818,6 +816,7 @@ export default {
     await game.shot([-74.6, -6.4, -128.4], [-73, -5.2, -137], 2.0, { fov: 42 });
     await game.talk([
       ['kai', 'Same band. Same scar. Same name.'],
+      ...(F.m9anchorKV ? [['kai', 'The old band holding Meridian\'s nine minutes. "K.V." He left it there.']] : []),
       [radioId, haleSide ? 'Varen? Sublevel three just lit up on every board in the building. Rook\'s coming down himself.' : 'Varen. Sublevel three is lit on every board. Stay where you are. The director is coming down.'],
       ['kai', 'Good. Let him see what he buried.'],
     ]);

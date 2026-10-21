@@ -73,11 +73,9 @@ export function registerM9Cast() {
   registerCast('m9vendor', { name: 'MARKET VENDOR', role: 'Market Hall · noodle stall', look: { era: '2049', costume: 'c49_m6', sex: 0, age: 34, height: 1.78, build: 1.0, skin: 0xb98463, hair: 0x111111, hairStyle: 'messy', topType: 'jacket', top: 0x2e3338, vest: 0x3a4048, pantsType: 'cargo', pants: 0x2a2f36, shoes: 'boots', boots: 0x141210, cap: 0x2a2f36 }, vp: { sex: 'm', pitch: 1.0, rate: 1.05, langs: ['en-US', 'en-GB'] } });
   registerCast('m9mother', { name: 'A MOTHER ON THE AVENUE', role: 'Meridian Avenue · 08:13', look: { era: '2049', costume: 'c49_f1', sex: 1, female: true, age: 36, height: 1.67, build: 0.96, skin: 0xd9a585, hair: 0x2a1c14, hairStyle: 'long', topType: 'jacket', top: 0x3b4441, pantsType: 'trousers', pants: 0x1d2430, shoes: 'boots', boots: 0x141210 }, vp: { sex: 'f', pitch: 1.08, rate: 1.02, langs: ['en-GB', 'en-US'] } });
   registerCast('m9boy', { name: 'HER SON', role: 'Meridian Avenue', look: { era: '2049', costume: 'c49_kid_m', sex: 0, age: 7, height: 1.22, child: true, build: 0.9, skin: 0xd9a585, hair: 0x2a1c14, hairStyle: 'short', topType: 'jacket', top: 0x1f6aa8, pantsType: 'trousers', pants: 0x3a3e44, shoes: 'boots', boots: 0xb0262c, lod: true }, vp: { sex: 'm', pitch: 1.5, rate: 1.08, langs: ['en-GB', 'en-US'] } });
-  registerCast('m9voice', { name: '— — —', role: 'Meridian public address · unidentified', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.86, langs: ['en-GB', 'en-US'] } }); // the voice from M1/M3/M8
   registerCast('m9pa', { name: 'CONTINUUM ARRAY', role: 'Meridian · automated', voice: true, vp: { sex: 'f', pitch: 1.1, rate: 1.02, langs: ['en-GB', 'en-US'] } });
   registerCast('m9command', { name: 'CONTINUUM COMMAND', role: 'Meridian array · channel open', voice: true, vp: { sex: 'm', pitch: 0.78, rate: 0.96, langs: ['en-GB', 'en-US'] } });
   registerCast('m9radio', { name: 'HELIX RADIO', role: 'Channel 2 · outside the cordon', voice: true, vp: { sex: 'm', pitch: 0.86, rate: 1.0, langs: ['en-US', 'en-GB'] } });
-  registerCast('m9figure', { name: '— — —', role: 'A rooftop across the square', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.86, langs: ['en-GB', 'en-US'] } });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

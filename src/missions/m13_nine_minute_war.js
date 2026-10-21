@@ -3,7 +3,7 @@
 // factions are reacting to their own previous attacks · choose to destroy the stabilizer or redirect its energy to free
 // civilians. Quote: "This is not the future." / "What is it, then?" / "The future that survives long enough to remember
 // us." Ending: the choice changes the district and later support options, but does not block the campaign.
-// Sunday 24.10.2049, 05:52. The Witness's trail from Chamber II leads Kai to the Sable Yards, a district held in one
+// Friday 24.10.2049, 05:52. The Witness's trail from Chamber II leads Kai to the Sable Yards, a district held in one
 // second since the Zero Second. In its 2196 state the Continuum and the Unwritten fight over the stabilizer that holds it.
 // Shared systems: src/systems/factions.js (owner), combat.js, echostep.js.
 import * as THREE from 'three';
@@ -28,11 +28,8 @@ export default {
     const tick = () => new Promise(r => setTimeout(r, 0));
     registerM13Cast(); registerM10Cast(); registerM13Themes();
     const haleSide = F.trustedHale !== false, metSera = !!(F.metSera || F.m10metSera);
-    registerCast('m13hale', { name: 'OFF. R. HALE · RADIO', role: 'Helix cordon, Sable Yards', portraitOf: 'hale', vp: { sex: 'm', pitch: 0.84, rate: 1.0, langs: ['en-US', 'en-GB'] } });
-    registerCast('m13brandt', { name: 'M. BRANDT · RADIO', role: 'Helix cordon, Sable Yards', portraitOf: 'brandt', vp: { sex: 'm', pitch: 0.8, rate: 1.02, langs: ['en-GB', 'en-US'] } });
-    registerCast('m13lasker', { name: 'DOV LASKER · RADIO', role: 'Unwritten band', portraitOf: 'lasker', vp: { sex: 'm', pitch: 0.78, rate: 0.95, langs: ['en-GB', 'en-IE', 'en-US'] } });
     registerCast('m13held', { name: 'RESIDENT', role: 'Sable Yards · 2049', vp: { sex: 'f', pitch: 1.06, rate: 1.0, langs: ['en-GB', 'en-US'] } });
-    const radioId = haleSide ? 'm13hale' : 'm13brandt';
+    const radioId = haleSide ? 'hale' : 'brandt';   // the same voices as in M9, M11 and M12
     try {
       const need = ['lasker', 'nell', 'senn', 'm13foreman', 'prefect', 'sera', 'witness', 'hale', 'brandt', 'm13keeper', 'm13fighter', 'm13worker'].filter(id => !ui.portraits[id] && CAST[id]?.look);
       if (need.length) Object.assign(ui.portraits, renderPortraits(Object.fromEntries(need.map(id => [id, CAST[id]]))));
@@ -391,7 +388,7 @@ export default {
     }) });
 
     // =====================================================================================
-    // OPENING: the held district, Sunday 24.10.2049, 05:52
+    // OPENING: the held district, Friday 24.10.2049, 05:52
     // =====================================================================================
     ui.missionTag('MISSION 13 · THE NINE-MINUTE WAR'); ui.show('hud', true);
     pl.place(...P.start); cp(P.start[0], P.start[1], P.start[2], P.start[3]);
@@ -399,7 +396,7 @@ export default {
     await game.shot([16, 24, 94], [0, 4, 30], 0.01, { fov: 50 });
     await ui.fade(0, 2400);
     lockMusic('m13-held', 2);
-    const cc = ui.chapterCard('ACT II · THE NINE-MINUTE WAR', 'The Nine-Minute War', 'Sable Yards · Rain City · Sunday 24.10.2049 · 05:52', 4600);
+    const cc = ui.chapterCard('ACT II · THE NINE-MINUTE WAR', 'The Nine-Minute War', 'Sable Yards · Rain City · Friday 24.10.2049 · 05:52', 4600);
     await game.shot([9, 9, 76], [0, 3, 46], 6.5, { fov: 46 });
     await cc;
     await game.shot([4.2, 1.5, 61], [-8.2, 1.1, 55.4], 3.2, { fov: 36 });
@@ -410,9 +407,10 @@ export default {
       ['kai', F.m12witnessEscaped || F.metWitness ? 'The man from Chamber Two came this way. My band followed his signature here.' : 'Something with my signature walked in here. My band followed it.'],
       [radioId, haleSide ? 'The Yards stopped at 08:14 on Sunday and stayed stopped. Three hundred people in there. Rain\'s still in the air.' : 'The Yards have been held since 08:14 on the nineteenth. Three hundred residents. No one gets in.'],
       ['kai', 'Then I\'ll be the one who does.'],
+      ...(F.m9done ? [['kai', 'Meridian got nine minutes, over and over. The Yards don\'t even get one second.']] : []),
     ]);
     kai.lookTarget = null;
-    ev('The Sable Yards', 'Sunday 24.10.2049. A rail and tram district on Rain City\'s east side, held in a single second (08:14:00, 19.10) since the Zero Second: rain in the air, traffic and about three hundred residents stopped mid-step. Helix has cordoned it.', 'SABLE YARDS · 2049');
+    ev('The Sable Yards', 'Friday 24.10.2049. A rail and tram district on Rain City\'s east side, held in a single second (08:14:00, 19.10) since the Zero Second: rain in the air, traffic and about three hundred residents stopped mid-step. Helix has cordoned it.', 'SABLE YARDS · 2049');
     cine(false); lockMusic(null); S.main = false;
     S.phase = 'open';
     objective('Walk into the held district · follow your band\'s signature north');
@@ -467,7 +465,7 @@ export default {
       ['lasker', 'Then we break the spire, and nobody gets to hold a minute still again.'],
     ]);
     FX.offer({ id: 'smoke', faction: 'unwritten', label: 'UNWRITTEN SMOKE', min: -1, uses: 1, why: 'SMOKE ONLY REACHES THE YARD', enabled: () => T.current === '2196' && pl.pos.z < 46 && pl.pos.z > -36,
-      onCall: () => { const fw = V(Math.sin(pl.yaw), 0, Math.cos(pl.yaw)); for (let k = 0; k < 3; k++) W.smokeAt(pl.pos.x + fw.x * (3 + k * 6), pl.pos.z + fw.z * (3 + k * 6), 32); ui.subtitle('m13lasker', 'Smoke out. You\'ve got thirty seconds, architect.', 2600); F.m13smoke = (F.m13smoke || 0) + 1; } });
+      onCall: () => { const fw = V(Math.sin(pl.yaw), 0, Math.cos(pl.yaw)); for (let k = 0; k < 3; k++) W.smokeAt(pl.pos.x + fw.x * (3 + k * 6), pl.pos.z + fw.z * (3 + k * 6), 32); ui.subtitle('lasker', 'Smoke out. You\'ve got thirty seconds, architect.', 2600); F.m13smoke = (F.m13smoke || 0) + 1; } });
     ui.toast(game.touch?.enabled ? 'FACTION SUPPORT · TAP SUPPORT TO CALL IT' : 'FACTION SUPPORT · PRESS G TO CALL IT', 3200);
     sera.lookTarget = null; await game.shot([3.4, 1.6, 51.4], [2.6, 1.5, 54.0], 1.0, { fov: 36 });
     await game.talk([
@@ -574,7 +572,7 @@ export default {
         FX.adjust('continuum', +1, 'You walked Senn out');
         FX.offer({ id: 'holdfire', faction: 'continuum', label: 'SENN\'S WORD · A POST HOLDS FIRE', min: 1, uses: 1, why: 'NO CONTINUUM POST NEAR YOU', enabled: () => T.current === '2196' && C.standing().some(e => e.char.root.position.distanceTo(pl.pos) < 22 && e.states?.includes('2196')),
           onCall: () => { const list = C.standing().filter(e => e.char.root.position.distanceTo(pl.pos) < 26 && e.states?.includes('2196')); for (const e of list) { e.enabled = false; e.char.speed = 0; } ui.subtitle('senn', 'Post, this is Senn. Let the architect through. Twenty seconds. Please.', 3000); F.m13holdFire = true; setTimeout(() => { for (const e of list) e.enabled = true; }, 20000); } });
-        ev('Trooper Senn', 'Arvid Senn, Continuum trooper, twenty-four, loop-aware: "You did that already. No — you\'re about to do it. I hate that I know the difference." Kai talked him out between the shells. He promised the Prefect would hear about it.', 'SIDE · THE TROOPER');
+        ev('Trooper Senn', 'Arvid Senn, Continuum trooper, twenty-four, loop-aware: "You\'re going to say \'stay down\'. You did that already." Continuum troopers keep saying it to Kai. Kai talked him out between the shells. He promised the Prefect would hear about it.', 'SIDE · THE TROOPER');
       } else {
         S.senn = 'left'; F.m13senn = 'left';
         await game.say('senn', 'Right. You did that already, too.');
@@ -878,7 +876,7 @@ export default {
         }
       }
       S.laskerOk = true; F.m13laskerHolds = true; lasker.lookTarget = null; kai.lookTarget = null; lasker.root.rotation.y = -Math.PI / 2;
-      ui.subtitle('m13lasker', 'All tubes, Lasker. Hold fire. You heard me. Hold.', 2600);
+      ui.subtitle('lasker', 'All tubes, Lasker. Hold fire. You heard me. Hold.', 2600);
       cine(false); S.main = false;
     }) });
     // the Continuum gate: the sentries stop him, then the Prefect lets him through
@@ -999,7 +997,7 @@ export default {
       ['sera', 'Every joule it took to hold them is in that heart. Turn it around and give it back. Let them walk.'],
       ['kai', 'If I redirect it, the spire stays standing. Adair keeps it.'],
       ['sera', 'Then she keeps an empty spire.'],
-      ['m13lasker', 'Varen. I can see you up there. Break it. Or it\'ll be holding another district by winter.'],
+      ['lasker', 'Varen. I can see you up there. Break it. Or it\'ll be holding another district by winter.'],
     ]);
     if (F.m13witnessNote) await game.say('kai', '"Break it. Whatever she tells you." He knew she\'d be standing here.');
     else await game.say('kai', 'Break it, and nobody ever holds a district with it again. Free them, and it\'s still here.');
@@ -1049,7 +1047,7 @@ export default {
       await game.wait(1.6);
       await game.shot([6, 2.2, 30], [0, 2, 0], 2.6, { fov: 46 });
       await game.talk([
-        ['m13lasker', 'It\'s down. It\'s down! Sable Yards, the spire is down!'],
+        ['lasker', 'It\'s down. It\'s down! Sable Yards, the spire is down!'],
         ['m13pa', 'Sable line. Stabilizer lost. Fall back to the viaduct.'],
       ]);
       // and the held, in 2049: still held
@@ -1104,13 +1102,13 @@ export default {
       FX.adjust('unwritten', -1, 'You left the spire standing'); FX.adjust('continuum', -1, 'You emptied their fixed point');
       FX.grant('sable-civilians', 'sera', 'The freed Sable residents know every back route in the Yards');
       F.seraTrust = (F.seraTrust || 0) + 1;
-      ev('The held, freed', 'Kai turned the stabilizer\'s stored charge back into the held second. At 05:58 on Sunday 24.10.2049 three hundred and twelve Sable residents finished the step they had started at 08:14 on the nineteenth. The spire stands, empty, and the Continuum still hold it. Lasker\'s Unwritten feel betrayed.', 'THE CHOICE');
+      ev('The held, freed', 'Kai turned the stabilizer\'s stored charge back into the held second. At 05:58 on Friday 24.10.2049 three hundred and twelve Sable residents finished the step they had started at 08:14 on the nineteenth. The spire stands, empty, and the Continuum still hold it. Lasker\'s Unwritten feel betrayed.', 'THE CHOICE');
       await T.switchTo('2196', { force: true, free: true });
       pl.place(0, Y0, 22, Math.PI);
       sera.root.position.set(-2.6, Y0, 23.4); sera.lookTarget = kai.head; kai.lookTarget = sera.head;
       await game.shot([2.4, 1.7, 19.4], [-1.2, 1.6, 22.8], 1.4, { fov: 36 });
       await game.talk([
-        ['m13lasker', 'You gave them the spire, architect. Remember that I asked.'],
+        ['lasker', 'You gave them the spire, architect. Remember that I asked.'],
         ['sera', 'You gave three hundred people their morning back. He\'ll come round. Or he won\'t.'],
         ['kai', 'Adair will re-stake it.'],
         ['sera', 'Then we\'ll be here. That\'s what surviving is.'],

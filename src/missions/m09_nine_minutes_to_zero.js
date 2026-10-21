@@ -544,7 +544,7 @@ export default {
       await game.shot([-31.5, 2.0, -97.5], [-35.6, 1.4, -95.2], 1.4, { fov: 36 });
       await game.talk([
         ['kai', 'Residue. Older than all the loops. 08:13:59, the very first time.'],
-        ['m9figure', 'Here. Hold it here. Until he is ready.'],
+        ['voice', 'Here. Hold it here. Until he is ready.'],
         ['kai', 'A long coat. A band on his wrist like mine. He rode the lift to the ring one second before the first reset.'],
       ]);
       lockMusic(null); cine(false); evidence('echo');
@@ -708,11 +708,11 @@ export default {
     await game.talk([['kai', 'I was on the roof. Now I\'m back at the boundary, and it\'s five past eight again.']]);
     await game.shot([-4.6, 3.0, 29.4], [-6.6, 4.6, 26], 1.6, { fov: 24 }); W.speakerPulse = 1;
     audio.sfxPlay('motif');
-    await game.talk([['m9voice', 'You have nine minutes.']]);
+    await game.talk([['voice', 'You have nine minutes.']]);
     await game.shot([-3.4, 1.7, 33.2], [pl.pos.x, 1.6, pl.pos.z], 1.0, { fov: 36 });
     await game.talk([['kai', 'To do what?']]);
     await game.shot([-6.0, 3.8, 28.4], [-6.6, 4.6, 26], 1.4, { fov: 26 });
-    await game.talk([['m9voice', 'To become me.']]); W.speakerPulse = 0;
+    await game.talk([['voice', 'To become me.']]); W.speakerPulse = 0;
     audio.silence(1.2); await game.wait(1.0);
     F.m9voice = true;
     await game.shot([5.0, 1.8, 44.5], [1.5, 1.5, 48.8], 1.4, { fov: 40 });

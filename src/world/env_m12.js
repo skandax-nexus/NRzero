@@ -336,7 +336,7 @@ export function buildHelixWest(game, scene, T) {
   floor('2049', M49.wood, 12, -8, 19, -16); ceil('2049', M49.ceiling, 12, -8, 19, -16, 3.2);
   wall('2049', 12, -8, 19, -8, 3.2, M49.wall); wall('2049', 12, -16, 19, -16, 3.2, M49.wall); wall('2049', 19, -8, 19, -16, 3.2, M49.wallDark);
   box('2049', M49.wood, 15.4, 0, -14.4, 17.8, 0.76, -12.6); B['2049'].box(black, 16.2, 0.76, -14.1, 17.4, 1.3, -14.0);
-  W.screens.rook = planeAt(TEX.screen('rook', ['E. ROOK · CALENDAR · SAT 23.10', '23:40  Gallery C · K. VAREN', '       (record: deceased 19.10)', '23:41  Test Hall C · badge: —', '23:41  LOCKDOWN · Director'], '#d8e6f0'), 1.14, 0.5, 16.8, 1.05, -13.94, 0, '2049', { emit: 0.8 });
+  W.screens.rook = planeAt(TEX.screen('rook', ['E. ROOK · CALENDAR · THU 23.10', '23:40  Gallery C · K. VAREN', '       (record: deceased 19.10)', '23:41  Test Hall C · badge: —', '23:41  LOCKDOWN · Director'], '#d8e6f0'), 1.14, 0.5, 16.8, 1.05, -13.94, 0, '2049', { emit: 0.8 });
   box('2049', M49.dark, 18.2, 0, -10.0, 18.9, 2.0, -8.4); // filing cabinet
   panel('2049', 15.5, 3.18, -12, 2.0, 0.6); src('2049', 15.5, 2.9, -12, 0xffe8cc, 9, 8, 'east');
   const frame = planeAt(canvasTex(256, 192, (g) => { g.fillStyle = '#2a2a2a'; g.fillRect(0, 0, 256, 192); g.fillStyle = '#8a8676'; g.fillRect(16, 16, 224, 160); g.fillStyle = '#1a1a1a'; g.beginPath(); g.ellipse(128, 96, 70, 46, 0, 0, 7); g.fill(); g.fillStyle = '#8a8676'; g.beginPath(); g.ellipse(128, 96, 44, 26, 0, 0, 7); g.fill(); g.fillStyle = '#222'; g.font = '14px sans-serif'; g.fillText('SITE ZERO · 2029 · A + B', 40, 172); }, 'm12photo'), 0.9, 0.66, 18.86, 1.7, -12.4, -Math.PI / 2, '2049');
