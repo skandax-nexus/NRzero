@@ -1798,7 +1798,11 @@ export function installLightingChunks() {
   if (C.lights_fragment_maps.includes(findI)) C.lights_fragment_maps = C.lights_fragment_maps.replace(findI, `
 			vec3 rzIrrRaw = vec3( 0.0 );
 		{
+		#ifdef RZ_VIRR
+			vec3 rzIrr = vRzIrr;   // lite facades: flat faces, taken per vertex (windowInteriorMaterial)
+		#else
 			vec3 rzIrr = getIBLIrradiance( geometryNormal );
+		#endif
 			rzIrrRaw = rzIrr;
 			if ( rzEnvS.w > 0.0 ) rzIrr = mix( rzIrr, vec3( dot( rzIrr, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rzEnvS.w );
 			iblIrradiance += rzIrr;
@@ -2439,6 +2443,38 @@ export function windowInteriorMaterial(opts = {}) {
     if (lite) shader.uniforms.rzSpecAAOn = { value: 0 };   // the lite facade's normals are flat: no specular AA needed
     // rough walls reuse the diffuse env lookup for their specular (installLightingChunks; A/B: defines.RZ_FULL_IBL)
     if (lite) shader.fragmentShader = '#ifndef RZ_FULL_IBL\n#define RZ_LITE_IBL\n#endif\n' + shader.fragmentShader;
+    // the lite facade shades every pixel of a face with the face's own flat normal, so its diffuse image-based light
+    // is one value per face: fetched once per vertex instead of one cube-UV lookup per pixel (same result; walls
+    // then do no cube-UV fetch at all, their rough specular reuses it). A/B: defines.RZ_PIXEL_IRR
+    if (lite && shader.envMapCubeUVHeight) {
+      const h = shader.envMapCubeUVHeight, mip = Math.log2(h) - 2, f = v => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+      const on = '#ifndef RZ_PIXEL_IRR\n#define RZ_VIRR\n#endif\n';
+      shader.fragmentShader = on + '#ifdef RZ_VIRR\nvarying vec3 vRzIrr;\n#endif\n' + shader.fragmentShader;
+      shader.vertexShader = on + shader.vertexShader;
+      patch(shader, 'v', '#include <common>', `#ifdef RZ_VIRR
+varying vec3 vRzIrr; uniform sampler2D envMap; uniform mat3 envMapRotation; uniform float envMapIntensity;
+#ifndef CUBEUV_TEXEL_WIDTH
+#define CUBEUV_TEXEL_WIDTH ${f(1 / (3 * Math.max(Math.pow(2, mip), 7 * 16)))}
+#define CUBEUV_TEXEL_HEIGHT ${f(1 / h)}
+#define CUBEUV_MAX_MIP ${f(mip)}
+#endif
+#ifndef ENVMAP_TYPE_CUBE_UV
+#define ENVMAP_TYPE_CUBE_UV
+#define RZ_CUBEUV_VS
+#endif
+#include <cube_uv_reflection_fragment>
+#ifdef RZ_CUBEUV_VS
+#undef ENVMAP_TYPE_CUBE_UV
+#endif
+#endif`);
+      patch(shader, 'v', '#include <project_vertex>', `#ifdef RZ_VIRR
+{ vec3 rzn = objectNormal;
+  #ifdef USE_INSTANCING
+  rzn = mat3(instanceMatrix) * rzn;
+  #endif
+  vRzIrr = PI * textureCubeUV(envMap, envMapRotation * normalize(mat3(modelMatrix) * rzn), 1.0).rgb * envMapIntensity; }
+#endif`);
+    }
     patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz, vRzK; flat varying vec3 vRzM; uniform float rzViewH; uniform vec3 rzWMean[7];\n' + FACADE_VHASH_GLSL);
     patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;\n' +
       'vRzK = vec4(mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), aFac.w) * (0.88 + 0.24 * rzH12v(vec2(aFac.y * 91.0, 3.0))), rzH12v(vec2(aFac.y * 7.0, 1.0)));\n' +

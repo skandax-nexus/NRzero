@@ -486,29 +486,22 @@ export function buildHarrow(game, scene, T) {
     S['2196'].box(M.wood, 13, 0, -14, 19, 2.4, -11); box(13, 0, -14, 19, 2.4, -11, ['2196']);     // crates of instruments
     src(17.6, 2.4, -31, 0xb6ff8a, 4, 9, '2196'); src(15, 6, -20, 0xffe0c0, 3, 12, 'all');
     // ---- 2049: the museum ----
+    const plinth49 = new THREE.MeshStandardMaterial({ color: 0xeeece6, roughness: 0.7 });   // clean museum plinths
     S['2049'].box(M.tileW, -19.6, 0.04, -45.6, 19.6, 0.06, -10.4);
-    {   // 2049 wings: freshly painted gallery walls over the shared (2196-weathered) plaster
-      const clean = new THREE.MeshStandardMaterial({ color: 0xe4e2dc, roughness: 0.82 });   // flat gallery paint (the plaster shader always peels)
-      for (const s of [-1, 1]) {
-        const xo = s * 19.56, xi = s * 12.24, a = Math.min(xo, xi), b = Math.max(xo, xi);
-        S['2049'].box(clean, xo - 0.02, 0.06, -45.56, xo + 0.02, 9, -10.44);
-        S['2049'].box(clean, xi - 0.02, 0.06, -45.56, xi + 0.02, 9, -20.5); S['2049'].box(clean, xi - 0.02, 0.06, -17, xi + 0.02, 9, -10.44); S['2049'].box(clean, xi - 0.02, 3.4, -20.5, xi + 0.02, 9, -17);
-        S['2049'].box(clean, a, 0.06, -45.58, b, 9, -45.54); S['2049'].box(clean, a, 0.06, -10.46, b, 9, -10.42);
-      }
-    }
-    for (const [x, z] of [[-6, -16], [6, -16], [-6, -38], [6, -38], [-8, -30], [8, -30]]) { S['2049'].box(M.plasterIn, x - 0.7, 0, z - 0.7, x + 0.7, 1.1, z + 0.7); S['2049'].box(glass, x - 0.6, 1.1, z - 0.6, x + 0.6, 1.9, z + 0.6); box(x - 0.7, 0, z - 0.7, x + 0.7, 1.9, z + 0.7, ['2049']); }
+    for (const [x, z] of [[-6, -16], [6, -16], [-6, -38], [6, -38], [-8, -30], [8, -30]]) { S['2049'].box(plinth49, x - 0.7, 0, z - 0.7, x + 0.7, 1.1, z + 0.7); S['2049'].box(glass, x - 0.6, 1.1, z - 0.6, x + 0.6, 1.9, z + 0.6); box(x - 0.7, 0, z - 0.7, x + 0.7, 1.9, z + 0.7, ['2049']); }
     S['2049'].box(M.wood, -4.6, 0, -14.6, -1.8, 1.1, -13.2); box(-4.6, 0, -14.6, -1.8, 1.1, -13.2, ['2049']);     // welcome desk
     S['2049'].cyl(M.steel, 0, 0.6, -30, 3.4, 1.2, 32); box(-3, 0, -33, 3, 1.2, -27, ['2049']);     // the museum's centrepiece: a model of the city
     plane(TEX.sign('RAIN CITY · 1890-2049', 'THE CITY IN MINIATURE', '#1d2a44', '#f2f2ee'), 2.6, 0.8, 0, 1.5, -26.5, 0, g49, 0.35);
     // Gallery 3 (west wing): HELIX · TWENTY-THREE YEARS
     plane(TEX.museum('title'), 3.2, 2.0, -19.1, 2.6, -28, Math.PI / 2, g49, 0.3);
-    S['2049'].box(M.plasterIn, -17.2, 0, -37.2, -14.8, 1.0, -35.6); S['2049'].box(glass, -17.1, 1.0, -37.1, -14.9, 1.8, -35.7); box(-17.2, 0, -37.2, -14.8, 1.8, -35.6, ['2049']);
+    S['2049'].box(plinth49, -17.2, 0, -37.2, -14.8, 1.0, -35.6); S['2049'].box(glass, -17.1, 1.0, -37.1, -14.9, 1.8, -35.7); box(-17.2, 0, -37.2, -14.8, 1.8, -35.6, ['2049']);
     W.badge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.2), new THREE.MeshStandardMaterial({ color: 0xe8e8e0, roughness: 0.5 })); W.badge.position.set(-16, 1.05, -36.4); g49.add(W.badge);
     plane(TEX.museum('founding'), 1.6, 1.0, -16.6, 2.3, -45.1, 0, g49, 0.3);
     plane(TEX.museum('operational'), 1.6, 1.0, -14.6, 2.3, -45.1, 0, g49, 0.3);
-    S['2049'].box(M.plasterIn, -19.4, 0, -45.6, -12.2, 9, -45.3);
+    S['2049'].box(plinth49, -19.4, 0, -45.6, -12.2, 9, -45.3);
     // 2049 linings: clean painted walls over the old stone, ceiling light strips, banners, a bench, a photo wall
-    const paint49 = pm('plaster', { color: 0xdedcd4, under: 0xcac6bc, damage: 0, dirt: 0.04 }), dark49 = new THREE.MeshStandardMaterial({ color: 0x1d2a44, roughness: 0.6 }), strip49 = glowMat(0xf4f6ff, 1.6);
+    const paint49 = new THREE.MeshStandardMaterial({ color: 0xe4e2dc, roughness: 0.82 }),   // flat gallery paint (the plaster shader always peels)
+      dark49 = new THREE.MeshStandardMaterial({ color: 0x1d2a44, roughness: 0.6 }), strip49 = glowMat(0xf4f6ff, 1.6);
     S['2049'].box(paint49, -19.6, 0, -45.55, -19.25, 9, -10.45); S['2049'].box(paint49, 19.25, 0, -45.55, 19.6, 9, -10.45);
     S['2049'].box(paint49, -19.6, 0, -45.6, 19.6, 9, -45.25); S['2049'].box(paint49, -19.6, 0, -10.75, 19.6, 9, -10.4);
     for (const x of [-12.45, 11.95]) { S['2049'].box(paint49, x, 0, -45.6, x + 0.5, 9, -20.5); S['2049'].box(paint49, x, 0, -17, x + 0.5, 9, -10.4); S['2049'].box(paint49, x, 3.4, -20.5, x + 0.5, 9, -17); }

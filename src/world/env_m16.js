@@ -32,13 +32,13 @@ export const P = {
   caseI: [-12, 0, -5.2], caseII: [12, 0, -5.2], caseIII: [-12, 0, -25.2],
   trays: [[12, 0, -17.6], [9.0, 0, -21], [15.0, 0, -21]],       // tray for memory I (badge), II (coat), III (clock)
   crates: [[12, 0, -16.6], [8.2, 0, -21], [15.8, 0, -21]],
-  rotunda: [0, 0, -44], zeroCase: [0, 0, -44], stackGate: [9.6, 0, -44], ledger: [11.8, 0, -41.0],
+  rotunda: [0, 0, -44], zeroCase: [0, 0, -44], stackGate: [9.6, 0, -44], ledger: [11.9, 0, -42.85],
   stacksIn: [12.2, 0, -44, -Math.PI / 2], alcoveN2: [22.25, 0, -48.4], musicBox: [22.25, 0, -49.8], shardS1: [17.25, 0, -40.0],
   studyDoor: [30.6, 0, -44], studyIn: [33, 0, -44, -Math.PI / 2], desk: [36.2, 0, -39.6], drawer: [36.2, 0, -40.4], lectern: [37.6, 0, -47.6],
   bands: [40.6, 0, -45], emptyCase: [34.4, 0, -51.0], studyCoat: [32.0, 0, -37.0], shardStudy: [39.6, 0, -37.2],
   // memory stage
-  memHall: [MEM_X, 0, 10, Math.PI], ring: [MEM_X, 3.0, -9.4], rope: -4.2, desk: [MEM_X + 8.2, 0, 4.2],
-  memKitchen: [MEM_X - 2.6, 0, 53.2, Math.PI], kTable: [MEM_X - 5, 0, 49], kWindow: [MEM_X - 5, 1.6, 42.4], kClock: [MEM_X - 11.8, 2.2, 49], kRadio: [MEM_X + 0.6, 0.95, 44.4],
+  memHall: [MEM_X, 0, 10, Math.PI], ring: [MEM_X, 3.0, -9.4], rope: -4.2, memDesk: [MEM_X + 8.2, 0, 4.2],
+  memKitchen: [MEM_X - 3.4, 0, 50.4, Math.PI], kTable: [MEM_X - 5, 0, 47.8], kWindow: [MEM_X - 5, 1.6, 42.4], kClock: [MEM_X - 9.4, 2.2, 47.8], kRadio: [MEM_X - 1.0, 0.95, 44.4],
 };
 
 // The Hall of Ordinary Things: eight strays (optional). [x, z, ry, title, story]
@@ -372,14 +372,14 @@ export function buildMuseum(game, scene, T) {
     rust: pm('rust', { color: 0x5a2a12, paint: 0x2e3a3e, amount: 0.7 }),
     tileHelix: pm('ceramicTile', { color: 0xd8d8d4, grout: 0x9a9a96, count: 2, gloss: 0.85, variation: 0.06 }),
     kitchenTile: pm('ceramicTile', { color: 0xc8c0a8, grout: 0x8a8270, count: 6, gloss: 0.6, variation: 0.2 }),
-    paint26: pm('plaster', { color: 0xe4e2dc, damage: 0.02, dirt: 0.05 }),
-    kitchenWall: pm('plaster', { color: 0xd8c8a0, damage: 0.05, dirt: 0.15 }),
+    paint26: new THREE.MeshStandardMaterial({ color: 0xdedcd6, roughness: 0.88 }),
+    kitchenWall: new THREE.MeshStandardMaterial({ color: 0xcdbb94, roughness: 0.9 }),
   };
   const mat = (c, r = 0.8, m = 0, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m, ...o });
   const dark = mat(0x14120f, 0.95), cloth = mat(0x5a2a22, 0.95, 0, { side: THREE.DoubleSide }), cloth2 = mat(0x2a3a3a, 0.95, 0, { side: THREE.DoubleSide });
   const crateMat = mat(0x8a9096, 0.6, 0.3), crateDark = mat(0x40464c, 0.6, 0.3), cardboard = mat(0x9a7a52, 0.95), paperMat = mat(0xd8ccb0, 0.9), brass = mat(0xb08a4a, 0.35, 0.8);
   const glass = new THREE.MeshPhysicalMaterial({ color: 0xc8d4d0, roughness: 0.06, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
-  const amber = glowMat(0xffc27a, 2.4), cool = glowMat(0xe8f4ff, 2.6), cyan = glowMat(0x5fe6ff, 1.8);
+  const amber = glowMat(0xffc27a, 2.4), cool = glowMat(0xe8f4ff, 2.6);
   W.mats = { amber, cool, dark };
   const S = { common: new Batch(), '2049': new Batch(), '2196': new Batch() };
   const g49 = new THREE.Group(), g96 = new THREE.Group(); scene.add(g49, g96); T.only(g49, '2049'); T.only(g96, '2196');
@@ -388,7 +388,7 @@ export function buildMuseum(game, scene, T) {
   const src = (x, y, z, c, i, d, era = 'all') => W.lightSrc.push({ p: [x, y, z], c, i, d, era });
   const plane = (tex, w, h, x, y, z, ry, parent = scene, emiss = 0.2, rx = 0) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: emiss, side: THREE.DoubleSide }));
-    m.position.set(x, y, z); m.rotation.set(rx, ry, 0); parent.add(m); return m;
+    m.position.set(x, y, z); m.rotation.order = 'YXZ'; m.rotation.set(rx, ry, 0); parent.add(m); return m;
   };
   const wallX = (B, mtl, z, x0, x1, y0, y1, t, gaps = [], states) => {
     let x = x0; const gs = [...gaps].sort((a, b) => a[0] - b[0]);
@@ -417,9 +417,9 @@ export function buildMuseum(game, scene, T) {
   ceil(11, -58.2, 31, -29.8, 6.0); ceil(31, -54.2, 41.2, -35.8, 4.2); ceil(9, -46.2, 11, -41.8, 3.6);
   // the nave: a brick barrel vault in 2196, a flat slab with strip lights in 2049
   {
-    const vault = new THREE.CylinderGeometry(6, 6, 42.4, 28, 1, true, -Math.PI / 2, Math.PI);
+    const vault = new THREE.CylinderGeometry(6, 6, 42.4, 28, 1, true, Math.PI / 2, Math.PI);
     vault.rotateX(Math.PI / 2); vault.scale(1, 0.48, 1); vault.translate(0, 4.4, -13);
-    const vm = M.brick.clone(); vm.side = THREE.BackSide;
+    const vm = M.brick.clone(); vm.side = THREE.BackSide; vm.color?.setScalar?.(0.6);
     B96.push(vm, vault);
     for (let z = -32; z <= 6; z += 6.4) B96.geo(M.stone, new THREE.TorusGeometry(5.9, 0.16, 6, 24, Math.PI), [0, 4.4, z], [0, 0, 0], [1, 0.48, 1]);
     B49.box(M.conc49, -6, 6.2, -34, 6, 6.6, 8);
@@ -478,6 +478,24 @@ export function buildMuseum(game, scene, T) {
     B96.box(cloth, -3.5, 0.01, 10.5, 3.5, 0.03, 19.5); B96.box(M.wood, -7.8, 0, 18.6, -5.4, 0.45, 20.8);
     for (let k = 0; k < 6; k++) { const x = -6 + k * 2.4; B96.cyl(amber, x, 4.7 - Math.abs(Math.sin(k)) * 0.3, 15, 0.08, 0.16, 8); }
     src(-3, 4.2, 15, 0xffc890, 8, 12, '2196'); src(3, 5.0, 15, 0xe8f4ff, 6, 12, '2049');
+    // shelves of strays along the walls (2196): boards, uprights and the small things nobody has a case for yet
+    {
+      const shelfW = mat(0x4a3424, 0.8), things = [mat(0x8a6a4a, 0.9), mat(0x6a7a7a, 0.5, 0.3), mat(0xb8a888, 0.85), mat(0x5a2a22, 0.7), brass, mat(0x3a4a5a, 0.6)];
+      for (const [x0, x1, z0, z1] of [[-8.7, -8.15, 16.4, 21.4], [-8.7, -8.15, 8.6, 11.6], [8.15, 8.7, 8.6, 12.2], [8.15, 8.7, 16.4, 21.4]]) {
+        box(x0, 0, z0, x1, 2.6, z1, ['2196']);
+        for (const z of [z0, z1]) B96.box(shelfW, x0, 0, z - 0.04, x1, 2.6, z + 0.04);
+        for (let y = 0.3; y < 2.6; y += 0.62) {
+          B96.box(shelfW, x0, y, z0, x1, y + 0.04, z1);
+          let z = z0 + 0.1;
+          while (z < z1 - 0.3) {
+            const w = 0.14 + R() * 0.3, m = things[Math.floor(R() * things.length)], h = 0.1 + R() * 0.34, cx = (x0 + x1) / 2;
+            if (R() < 0.45) B96.cyl(m, cx, y + 0.04 + h / 2, z + w / 2, w * 0.45, h, 8); else if (R() < 0.85) B96.box(m, cx - 0.18, y + 0.04, z, cx + 0.18, y + 0.04 + h, z + w);
+            z += w + 0.06 + R() * 0.12;
+          }
+          for (let k = 0; k < 3; k++) B96.box(paperMat, x0 < 0 ? x1 : x0 - 0.002, y - 0.1, z0 + 0.6 + k * 1.5, x0 < 0 ? x1 + 0.002 : x0, y - 0.02, z0 + 0.78 + k * 1.5);
+        }
+      }
+    }
     W.visitorBook = plane(TEX.label(['VISITORS', 'K.V. · K.V. · K.V. · K.V. · K.V. · K.V.', '(every line, the same two letters)'], { founder: true }), 0.38, 0.24, P.visitors[0], 1.115, P.visitors[2], 0, g96, 0.1, -Math.PI / 2);
   }
   // ================= the nave: eight cases =================
@@ -582,7 +600,7 @@ export function buildMuseum(game, scene, T) {
     const coat49 = W.artifacts[1].clone(); coat49.position.set(P.crates[1][0], 0.95, P.crates[1][2]); coat49.rotation.y = Math.PI / 2; g49.add(coat49);
     const photo49 = plane(TEX.pressPhoto(), 0.5, 0.375, P.crates[2][0], 0.95, P.crates[2][2], Math.PI / 2, g49, 0.1, -Math.PI / 2);
     W.copies = [log, coat49, photo49]; W.copies.forEach(c => { c.visible = false; });
-    for (let k = 0; k < 2; k++) B49.box(crateDark, 7.0, 0, -26.4 + k * 9.8, 17.4, 2.8, -25.8 + k * 9.8);
+    B49.box(crateDark, 7.0, 0, -26.4, 17.4, 2.8, -25.8);
     src(12, 4.2, -21, 0xe8f4ff, 6, 10, '2049'); B49.box(cool, 11.9, 4.48, -23, 12.1, 4.58, -19);
   }
   // ================= the rotunda: Accession Zero =================
@@ -650,8 +668,8 @@ export function buildMuseum(game, scene, T) {
     for (const x of [13, 20, 27]) { B96.cyl(amber, x, 3.6, -44, 0.08, 0.16, 8); src(x, 3.4, -44, 0xffc890, 4.5, 9, '2196'); B49.box(cool, x - 1.2, 5.9, -44.1, x + 1.2, 6.0, -43.9); src(x, 5.2, -44, 0xe8f4ff, 4, 10, '2049'); }
     // the ledger stand at the entrance (the register of worlds)
     const [lx, , lz] = P.ledger;
-    C.box(M.woodDark, lx - 0.3, 0, lz - 0.25, lx + 0.3, 1.05, lz + 0.25); box(lx - 0.3, 0, lz - 0.25, lx + 0.3, 1.1, lz + 0.25);
-    plane(TEX.ledger(), 0.44, 0.55, lx, 1.12, lz, 0, g96, 0.15, -1.1);
+    C.box(M.woodDark, lx - 0.3, 0, lz - 0.2, lx + 0.3, 1.05, lz + 0.2); box(lx - 0.3, 0, lz - 0.2, lx + 0.3, 1.1, lz + 0.2);
+    plane(TEX.ledger(), 0.44, 0.55, lx, 1.14, lz, Math.PI, g96, 0.15, -1.1);
     // the music box (Edie's) on the alcove N2 back shelf
     const mb = new THREE.Group(); const mbB = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.16), mat(0x7a3a22, 0.4)); mb.add(mbB);
     const mbL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.16), brass); mbL.position.y = 0.075; mb.add(mbL);
@@ -672,8 +690,7 @@ export function buildMuseum(game, scene, T) {
   {
     const [dx, , dz] = P.desk;
     // the door with its dial lock
-    const door = C.box(M.woodDark, 31.1, 0, -45.5, 31.3, 3.0, -42.5);
-    W.doors.study = { col: box(31.0, 0, -45.5, 31.4, 3.0, -42.5), batched: door };
+    W.doors.study = { col: box(31.0, 0, -45.5, 31.4, 3.0, -42.5) };
     const doorMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.95, 2.95), mat(0x3a2618, 0.7)); doorMesh.position.set(31.2, 1.48, -44); scene.add(doorMesh); W.doors.study.mesh = doorMesh;
     const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.06, 20), brass); dial.rotation.z = Math.PI / 2; dial.position.set(31.0, 1.3, -43.2); scene.add(dial); W.dial = dial;
     // the desk, the chair, the drawer, the lamp
@@ -684,7 +701,7 @@ export function buildMuseum(game, scene, T) {
     for (let k = 0; k < 4; k++) B96.box(paperMat, dx - 0.4 + R() * 0.4, 0.85, dz - 0.8 + k * 0.3, dx - 0.1 + R() * 0.4, 0.86 + k * 0.003, dz - 0.55 + k * 0.3);
     // the photograph: face down in the drawer until found
     const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.225), new THREE.MeshStandardMaterial({ map: TEX.photoFrame(), roughness: 0.6, emissive: 0xffffff, emissiveMap: TEX.photoFrame(), emissiveIntensity: 0.12, side: THREE.DoubleSide }));
-    photo.rotation.x = -Math.PI / 2; photo.position.set(dx - 0.1, 0.862, dz - 0.1); photo.visible = false; g96.add(photo); W.photo = photo;
+    photo.rotation.x = -Math.PI / 2; photo.rotation.z = 0.12; photo.position.set(dx - 0.12, 0.886, dz - 0.05); photo.visible = false; g96.add(photo); W.photo = photo;
     // the lectern with the register of iterations
     const [lx, , lz] = P.lectern;
     B96.box(M.woodDark, lx - 0.3, 0, lz - 0.3, lx + 0.3, 1.1, lz + 0.3); box(lx - 0.3, 0, lz - 0.3, lx + 0.3, 1.1, lz + 0.3);
@@ -734,7 +751,7 @@ export function buildMuseum(game, scene, T) {
     plane(TEX.artefactSign(), 1.2, 0.6, X - 4.6, 1.3, P.rope + 0.2, 0, scene, 0.2);
     plane(TEX.banner(), 9, 2.25, X, 6.6, -15.75, 0, scene, 0.35);
     // the reception desk, the badge printer, the log on its clipboard
-    const [dx, , dz] = P.desk;
+    const [dx, , dz] = P.memDesk;
     C.box(M.paint26, dx - 0.6, 0, dz - 2.4, dx + 0.6, 1.1, dz + 2.4); C.box(M.woodDark, dx - 0.7, 1.1, dz - 2.5, dx + 0.7, 1.16, dz + 2.5); box(dx - 0.6, 0, dz - 2.4, dx + 0.6, 1.16, dz + 2.4);
     plane(TEX.helixSign(), 2.4, 0.75, dx - 0.62, 0.6, dz, -Math.PI / 2, scene, 0.15);
     plane(TEX.helixSign(), 3.6, 1.12, x1 - 0.22, 4.2, dz, -Math.PI / 2, scene, 0.3);
@@ -750,7 +767,7 @@ export function buildMuseum(game, scene, T) {
   }
   // ================= the memory stage: the Varen kitchen, Calder Row, world 0388 =================
   {
-    const X = MEM_X - 5, x0 = X - 7, x1 = X + 7, z0 = 42, z1 = 56, H = 2.7;
+    const X = MEM_X - 5, x0 = X - 4.6, x1 = X + 4.6, z0 = 42, z1 = 51.5, H = 2.7;
     box(x0 - 1, -1, z0 - 1, x1 + 1, 0, z1 + 1);
     C.box(M.kitchenTile, x0, -0.2, z0, x1, 0, z1);
     wallX(C, M.kitchenWall, z0, x0, x1, 0, H, 0.3, [[X - 2, X + 2, 2.3]]); wallX(C, M.kitchenWall, z1, x0, x1, 0, H, 0.3); wallZ(C, M.kitchenWall, x0, z0, z1, 0, H, 0.3); wallZ(C, M.kitchenWall, x1, z0, z1, 0, H, 0.3);
@@ -775,6 +792,20 @@ export function buildMuseum(game, scene, T) {
     // the child's drawing on the fridge: ME · MIRA · THE MACHINE
     plane(TEX.label(['ME · MIRA · THE MACHINE', 'by Kai'], { key: 'fridge', bg: '#f0ead8' }), 0.36, 0.24, x1 - 0.82, 1.3, z1 - 2.4, -Math.PI / 2, scene, 0.15);
     src(tx, 2.4, tz, 0xffe0b0, 6, 7, 'mem'); src(X, 1.6, z0 + 0.8, 0xa8b8c8, 3, 6, 'mem');
+    // a lived-in kitchen: wall cupboards, sink and hob, a door to the hall, a coat on its hook, a fruit bowl
+    {
+      const cup = mat(0xe8e0cc, 0.6), dk = mat(0x2a2a2c, 0.4, 0.3), steel = mat(0xb8bcc0, 0.3, 0.8);
+      C.box(cup, x1 - 0.42, 1.55, z0 + 0.3, x1 - 0.1, 2.3, z1 - 3.1);
+      for (let z = z0 + 0.3; z < z1 - 3.2; z += 0.7) C.box(mat(0xb8a888, 0.5), x1 - 0.43, 1.6, z + 0.32, x1 - 0.42, 2.25, z + 0.36);
+      C.box(steel, x1 - 0.62, 0.9, z0 + 1.6, x1 - 0.18, 0.95, z0 + 2.4); C.cyl(steel, x1 - 0.2, 1.1, z0 + 2.0, 0.02, 0.3, 6);
+      C.box(dk, x1 - 0.66, 0.94, z0 + 3.6, x1 - 0.14, 0.96, z0 + 4.2);
+      for (const [a, b] of [[0.2, 0.15], [0.2, 0.45], [0.45, 0.15], [0.45, 0.45]]) C.cyl(mat(0x5a5a5a, 0.5), x1 - 0.66 + a, 0.965, z0 + 3.6 + b, 0.09, 0.01, 12);
+      C.box(M.woodDark, x0 + 0.15, 0, z1 - 2.6, x0 + 0.2, 2.15, z1 - 2.5); C.box(M.woodDark, x0 + 0.15, 0, z1 - 1.3, x0 + 0.2, 2.15, z1 - 1.2); C.box(M.woodDark, x0 + 0.15, 2.05, z1 - 2.6, x0 + 0.2, 2.15, z1 - 1.2);
+      C.box(mat(0x6a4a32, 0.6), x0 + 0.16, 0, z1 - 2.5, x0 + 0.19, 2.05, z1 - 1.3);
+      C.geo(mat(0x2a4a6a, 0.95), new THREE.CylinderGeometry(0.12, 0.2, 0.62, 8), [x0 + 0.32, 1.5, z1 - 0.7]);
+      C.cyl(mat(0xd8d0c0, 0.4), tx, 0.83, tz, 0.16, 0.08, 14); for (let k = 0; k < 4; k++) C.geo(mat([0xc83a2a, 0xd8b030, 0x6aa040, 0xc83a2a][k], 0.5), new THREE.SphereGeometry(0.045, 8, 6), [tx - 0.06 + (k % 2) * 0.1, 0.9, tz - 0.05 + (k >> 1) * 0.1]);
+      C.box(mat(0x8a3a2a, 0.9), tx - 1.4, 0.005, tz - 1.0, tx + 1.4, 0.012, tz + 1.0);
+    }
     // rain on the window
     W.mem.rainWin = win;
   }
