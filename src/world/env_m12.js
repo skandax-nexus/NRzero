@@ -25,7 +25,7 @@ export const LANDINGS = [0, 1, 2, 3].map(k => ({ k, z: k === 0 ? -94.5 : -103 - 
 
 // Key positions used by the script and the playthrough test
 export const P = {
-  start: [-2.6, 0, -3.2], glass: [0, 0, -7.6], witnessHall: [1.4, 0, -10.6], galleryDoor: [8, 0, -3.5],
+  start: [-2.6, 0, -3.2], glass: [0, 0, -7.6], witnessHall: [2.0, 0, -10.4], galleryDoor: [8, 0, -3.5],
   intercom: [-7.6, 1.3, -1.2], rookDoor: [12, 0, -12], rookDesk: [16.6, 0, -13.4], shutter: [10, 0, -21],
   node: [12.5, 0, -30], nodeExit: [10, 0, -38], northStart: [10, 0, -42], deadEnd: [-23.2, 0, -42],
   d1: [-27.5, 0, -42], trench: [-38, 0, -42], records: [-38, 0, -42], d3: [-48.5, 0, -42], lobby: [-55, 0, -42],
@@ -313,6 +313,14 @@ export function buildHelixWest(game, scene, T) {
   for (const [x, z] of [[-5.5, -11], [5.5, -11], [-5.5, -21], [5.5, -21]]) { box('2049', M49.dark, x - 0.8, 0, z - 0.4, x + 0.8, 1.0, z + 0.4); B['2049'].box(new THREE.MeshStandardMaterial({ color: 0x050a10, emissive: 0x3a9aff, emissiveIntensity: 0.9 }), x - 0.7, 1.0, z - 0.42, x + 0.7, 1.5, z - 0.38); }
   for (let x = -6; x <= 6; x += 4) panel('2049', x, 6.98, -16, 2.4, 0.5);
   src('2049', 0, 6.4, -12, 0xdff4ff, 18, 16, 'gallery'); src('2049', 0, 5.6, -16.5, 0x5fe6ff, 10, 10, 'gallery');
+  // hall dressing: hazard ring around the rig, gantry beams, cable trays, the hall sign, a wall of status screens
+  const hz = new THREE.Mesh(new THREE.RingGeometry(3.3, 3.7, 48), new THREE.MeshStandardMaterial({ map: canvasTex(512, 32, (g, w, h) => { for (let x = 0; x < w; x += 32) { g.fillStyle = '#e8b020'; g.fillRect(x, 0, 16, h); g.fillStyle = '#16171a'; g.fillRect(x + 16, 0, 16, h); } }, 'm12hz'), roughness: 0.6 }));
+  hz.rotation.x = -Math.PI / 2; hz.position.set(0, 0.012, -16.5); scene.add(hz); T.only(hz, '2049');
+  for (const z of [-11, -16.5, -22]) { B['2049'].box(M49.dark, -8, 6.2, z - 0.25, 8, 6.7, z + 0.25); B['2049'].box(G.panel, -6, 6.17, z - 0.08, 6, 6.2, z + 0.08); }
+  for (const x of [-7.7, 7.7]) { B['2049'].box(M49.steel, x - 0.2, 4.8, -23.8, x + 0.2, 4.9, -8.2); for (let z = -9; z > -24; z -= 1.5) B['2049'].box(M49.dark, x - 0.18, 4.6, z - 0.03, x + 0.18, 4.8, z + 0.03); }
+  planeAt(TEX.sign('TEST HALL C', 'Field rig 3 · Chronolith programme · Level 0'), 4.4, 1.1, 0, 5.2, -23.85, 0, '2049', { emit: 0.35 });
+  for (const [x, txt] of [[-5.2, 'RIG 3 · FIELD'], [5.2, 'DAMPERS · ARMED']]) planeAt(TEX.screen('hall' + x, [txt, 'coherence 0.997', '23:40:12'], '#5fe6ff'), 1.6, 1.0, x, 3.0, -23.85, 0, '2049', { emit: 0.8 });
+  W.screens.galleryLogo = planeAt(TEX.screen('galLogo', ['HELIX TEMPORAL RESEARCH', 'Observation · Level 1', 'Visitors must be escorted'], '#e8eaec', '#14181e'), 1.8, 1.1, 4.0, 1.9, 0.27, Math.PI, '2049', { emit: 0.5 });
 
   // =========================================================================================
   // 2049 · the east research corridor, Rook's office, the shutter, the security node
@@ -334,7 +342,7 @@ export function buildHelixWest(game, scene, T) {
   const frame = planeAt(canvasTex(256, 192, (g) => { g.fillStyle = '#2a2a2a'; g.fillRect(0, 0, 256, 192); g.fillStyle = '#8a8676'; g.fillRect(16, 16, 224, 160); g.fillStyle = '#1a1a1a'; g.beginPath(); g.ellipse(128, 96, 70, 46, 0, 0, 7); g.fill(); g.fillStyle = '#8a8676'; g.beginPath(); g.ellipse(128, 96, 44, 26, 0, 0, 7); g.fill(); g.fillStyle = '#222'; g.font = '14px sans-serif'; g.fillText('SITE ZERO · 2029 · A + B', 40, 172); }, 'm12photo'), 0.9, 0.66, 18.86, 1.7, -12.4, -Math.PI / 2, '2049');
   W.photo = frame;
   // the lockdown shutter (jams at 0.5 m)
-  const shutter = new THREE.Mesh(new THREE.BoxGeometry(4.0, 3.2, 0.18), M49.dark); shutter.position.set(10, 3.2 + 1.6, -21); scene.add(shutter); T.only(shutter, '2049');
+  const shutter = new THREE.Mesh(new THREE.BoxGeometry(4.0, 3.2, 0.18), M49.dark); shutter.position.set(10, 3.2 + 1.6, -21); scene.add(shutter); T.only(shutter, '2049'); game.blocker(shutter);
   const stripe = new THREE.Mesh(new THREE.BoxGeometry(4.02, 0.1, 0.2), G.red); stripe.position.y = -1.5; shutter.add(stripe);
   B['2049'].box(M49.steel, 7.9, 0, -21.2, 8.1, 3.2, -20.8); B['2049'].box(M49.steel, 11.9, 0, -21.2, 12.1, 3.2, -20.8);
   W.shutter = { mesh: shutter, box: blk('2049', 8, 0, -21.15, 12, 3.2, -20.85), open: 1 };
@@ -344,7 +352,7 @@ export function buildHelixWest(game, scene, T) {
   floor('2049', M49.floor, 12, -25, 17, -35); ceil('2049', M49.ceiling, 12, -25, 17, -35, 3.2);
   wall('2049', 12, -25, 17, -25, 3.2, M49.wall); wall('2049', 12, -35, 17, -35, 3.2, M49.wall); wall('2049', 17, -25, 17, -35, 3.2, M49.wallDark);
   box('2049', M49.dark, 14.2, 0, -31.6, 16.4, 1.05, -30.4); B['2049'].box(new THREE.MeshStandardMaterial({ color: 0x050a10, emissive: 0xff4d5e, emissiveIntensity: 0.7 }), 14.4, 1.05, -31.5, 16.2, 1.5, -31.45);
-  for (let z = -25.9; z > -34.5; z -= 1.3) { const h = 1.12 + r() * 0.1; box('2049', z > -30 ? M49.steel : M49.dark, 11.0, 0, z - 0.62, 11.9, h, z + 0.62); B['2049'].box(G.amber, 11.0, h, z - 0.05, 11.9, h + 0.01, z + 0.05); }
+  for (let z = -25.9; z > -34.5; z -= 1.3) { const h = 1.12 + r() * 0.1; box('2049', z > -30 ? M49.wallDark : M49.wall, 11.0, 0, z - 0.62, 11.9, h, z + 0.62); B['2049'].box(G.amber, 11.0, h, z - 0.05, 11.9, h + 0.01, z + 0.05); }
   panel('2049', 14.5, 3.18, -30, 1.8, 0.6, G.red); src('2049', 14.5, 3.0, -30, 0xff6a70, 10, 10, 'east'); src('2049', 10, 3.0, -36, 0xeaf2ff, 9, 9, 'east');
   W.note0 = null;
   // =========================================================================================
@@ -390,7 +398,15 @@ export function buildHelixWest(game, scene, T) {
   floor('2049', M49.dust, -45, -37, -31, -47);
   wall('2049', -45, -37, -31, -37, 3.0, M49.wall); wall('2049', -45, -47, -31, -47, 3.0, M49.wall); wall('2049', -45, -37, -45, -47, 3.0, M49.wall); wall('2049', -31, -37, -31, -47, 3.0, M49.wall);
   ceil('2049', M49.ceiling, -45, -37, -31, -47, 3.0);
-  for (const z of [-38.0, -46.0]) for (let x = -43.8; x < -32; x += 2.4) { box('2049', M49.steel, x, 0, z - 0.45, x + 2.0, 2.4, z + 0.45); for (let y = 0.3; y < 2.3; y += 0.5) B['2049'].box(new THREE.MeshStandardMaterial({ color: 0xc8b890, roughness: 0.9 }), x + 0.1, y, z - 0.3, x + 1.9, y + 0.32, z + 0.3); }
+  const cardboard = new THREE.MeshStandardMaterial({ color: 0xb8a47e, roughness: 0.92 }), paperM = new THREE.MeshStandardMaterial({ color: 0xe8e2d0, roughness: 0.9 });
+  for (const z of [-38.0, -46.0]) for (let x = -43.8; x < -32; x += 2.4) {
+    blk('2049', x, 0, z - 0.45, x + 2.0, 2.4, z + 0.45);
+    for (const ux of [x + 0.03, x + 1.97]) for (const uz of [z - 0.42, z + 0.42]) B['2049'].box(M49.dark, ux - 0.03, 0, uz - 0.03, ux + 0.03, 2.4, uz + 0.03);
+    for (let y = 0.12; y < 2.4; y += 0.56) {
+      B['2049'].box(M49.steel, x, y, z - 0.45, x + 2.0, y + 0.03, z + 0.45);
+      for (let bx = x + 0.08; bx < x + 1.8; bx += 0.5 + r() * 0.1) { if (r() < 0.15) continue; const bh = 0.26 + r() * 0.12; B['2049'].box(r() < 0.8 ? cardboard : paperM, bx, y + 0.03, z - 0.32, bx + 0.42, y + 0.03 + bh, z + 0.32); }
+    }
+  }
   box('2049', M49.dark, -38.6, 0, -43.0, -37.4, 0.8, -41.0);   // the archive table
   W.sealOrder = planeAt(TEX.sealOrder(), 0.42, 0.52, -38.0, 0.81, -42.4, 0, '2049'); W.sealOrder.rotation.x = -Math.PI / 2;
   W.bookOld = planeAt(TEX.bookPage('none'), 0.46, 0.34, -37.9, 0.81, -41.4, 0, '2049'); W.bookOld.rotation.x = -Math.PI / 2;
@@ -459,7 +475,7 @@ export function buildHelixWest(game, scene, T) {
   const vineMat = new THREE.MeshStandardMaterial({ color: 0x2e5a2a, roughness: 0.85 });
   for (let k = 0; k < 16; k++) { const x = AT.x0 + 1 + r() * 32, z = AT.z0 - 0.4 - (k % 2) * 47.2; const pts = []; for (let j = 0; j < 5; j++) pts.push([x + (r() - 0.5) * 0.5, 6.0 - j * 1.6 - r() * 0.4, z + (k % 2 ? 0.2 : -0.2) * j]); B['2196'].push(vineMat, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p))), 12, 0.04 + r() * 0.03, 5)); }
   const shaft = RZ.lightShaft({ from: [-76, 12, -50], to: [-74, -0.5, -56], radius: [2.4, 5.5], color: 0xb8d0ff, intensity: 0.35 }); scene.add(shaft); T.only(shaft, '2196');
-  src('2196', -75, 8.0, -54, 0xb8d0ff, 70, 34, 'atrium'); src('2196', -86.5, 3.4, -61.0, 0xffa050, 12, 9, 'atrium');
+  src('2196', -75, 8.0, -54, 0xb8d0ff, 70, 34, 'atrium'); src('2196', -61, 6.0, -43, 0xb8d0ff, 34, 20, 'atrium'); src('2196', -73, 6.5, -68, 0xb8d0ff, 34, 20, 'atrium'); src('2196', -86.5, 3.4, -61.0, 0xffa050, 12, 9, 'atrium');
   // water over the drowned floor
   try {
     const wtr = RZ.water({ rect: [AT.x0, AT.z1, AT.x1 - AT.x0, AT.z0 - AT.z1], level: -0.5, heightAt: () => -3.0, deep: 0x0a1c1e, shallow: 0x22403a, flow: [0.02, 0.01], res: low ? 32 : 64 });
@@ -553,7 +569,7 @@ export function buildHelixWest(game, scene, T) {
   // the field at each segment: a curtain of shimmer at its top and bottom in every state (only knowledge tells which is stable)
   W.curtains = [];
   for (const s of SEGS) for (const z of [s.z0 - 0.1, s.z1 + 0.1]) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(4, 3.4), fractureMaterial(0xff6a4a, 0.32)); m.position.set(-73, (z === s.z0 - 0.1 ? s.y0 : s.y1) + 1.7, z); m.userData.noBatch = true; scene.add(m); W.curtains.push(m);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(3.9, 3.0), fractureMaterial(0xff6a4a, 0.13)); m.position.set(-73, (z === s.z0 - 0.1 ? s.y0 : s.y1) + 1.7, z); m.userData.noBatch = true; scene.add(m); W.curtains.push(m);
   }
   W.shardL2 = null;
 
@@ -575,7 +591,8 @@ export function buildHelixWest(game, scene, T) {
   };
   chWall('2026', M26.wall); chWall('2049', M49.wallDark); chWall('2196', M96.wall);
   ceil('2049', M49.ceiling, CH2.x - CR, CH2.z + CR, CH2.x + CR, CH2.z - CR, CY + 9);
-  const ch2 = chronolith(1.1, { color: 0xff6a4a, power: 0.25, stone: 0x161012 });
+  const ch2 = chronolith(0.85, { color: 0xff6a4a, power: 0.25, stone: 0x161012 });
+  ch2.userData.frags.scale.setScalar(0.72);
   ch2.position.set(P.ch2[0], CY + 3.0, P.ch2[2]); scene.add(ch2); W.ch2 = ch2;
   blk('all', CH2.x - 3.2, CY, P.ch2[2] - 0.9, CH2.x + 3.2, CY + 6, P.ch2[2] + 0.9);
   // 2049: Helix cradle and containment ring, plate, consoles; 2026: rock face, survey pegs; 2196: roots and water
@@ -585,7 +602,7 @@ export function buildHelixWest(game, scene, T) {
   box('2049', M49.dark, -70.6, CY, -132.0, -69.0, CY + 1.0, -131.2);
   W.screens.ch2console = planeAt(TEX.screen('ch2', ['ARTEFACT B · FIELD', 'Dormant since 14.03.2031', 'Operator log:', '  K. VAREN · 23:58'], '#ff9a8a', '#140806'), 1.3, 0.8, -69.8, CY + 1.45, -131.18, 0, '2049', { emit: 0.8 });
   for (let k = 0; k < 6; k++) { const a = k * 1.05; panel('2049', CH2.x + Math.sin(a) * 6, CY + 8.9, CH2.z - Math.cos(a) * 6, 1.6, 0.4); }
-  src('2049', CH2.x, CY + 8.0, CH2.z, 0xeaf2ff, 24, 20, 'ch2'); src('all', CH2.x, CY + 3.0, P.ch2[2] + 1.6, 0xff6a4a, 22, 14, 'ch2');
+  src('2049', CH2.x, CY + 8.0, CH2.z, 0xeaf2ff, 24, 20, 'ch2'); src('all', CH2.x, CY + 3.0, P.ch2[2] + 1.6, 0xff6a4a, 12, 10, 'ch2');
   for (let k = 0; k < 14; k++) { const a = r() * Math.PI * 2, d = CR - 1 - r() * 1.5; B['2026'].boxc(M26.dirt, CH2.x + Math.sin(a) * d, CY + 0.4, CH2.z - Math.cos(a) * d, 1 + r() * 2, 0.8 + r() * 1.2, 1 + r() * 2, r() * 3); }
   for (let k = 0; k < 4; k++) B['2026'].box(new THREE.MeshStandardMaterial({ color: 0xd84020, roughness: 0.6 }), -76 + k * 2, CY, -130.5, -75.95 + k * 2, CY + 0.6, -130.45);
   src('2026', CH2.x - 4, CY + 2.5, CH2.z + 4, 0xffc880, 14, 14, 'ch2');

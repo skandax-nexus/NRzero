@@ -93,6 +93,7 @@ export function citizenLook(rng, opts = {}) {
     pants: pick([0x1a1d22, 0x23262b, 0x2d2a26, 0x1d2430]), boots: 0x141210,
     umbrella: opts.umbrella && rng() < 0.6 ? pick(UMBRELLAS) : null,
     glasses: rng() < 0.15, stubble: !female && rng() < 0.4, cap: rng() < 0.12 ? pick(COATS) : null,
+    era: '2049',   // the 3D cast dresses this person from the 2049 Rain City pool (character.js)
     ...opts.override,
   };
 }
@@ -108,5 +109,39 @@ export function settlerLook(rng) {
     sash: rng() < 0.6 ? pick([0x9b3b24, 0xd0a24a, 0x2f5a5a, 0x5a2a4a]) : null,
     pants: pick([0x7a6248, 0x5a4632, 0x8a7458]), boots: 0x4a3220, belt: 0x4a3220,
     bracelets: rng() < 0.5 ? 0xc9a050 : null,
+    era: 'ancient',
+  };
+}
+
+// 2196: resistance survivors (patched, scavenged layers) or, with opts.faction = 'continuum', Continuum troops.
+export function survivorLook(rng, opts = {}) {
+  const pick = a => a[Math.floor(rng() * a.length)];
+  const female = rng() < 0.5;
+  return {
+    female, height: female ? 1.6 + rng() * 0.12 : 1.7 + rng() * 0.14, build: 0.86 + rng() * 0.18,
+    skin: pick(CITIZEN_SKINS), hair: pick(CITIZEN_HAIR),
+    hairStyle: female ? pick(['tied-back', 'short', 'bun']) : pick(['buzz', 'short', 'messy', 'bald']),
+    top: pick([0x4a3a28, 0x5a5444, 0x3a3a2c, 0x6a5a44]), topKind: 'fabric', topType: 'jacket',
+    pants: pick([0x3a3a30, 0x4a4a32, 0x2c2a26]), pantsType: 'cargo', boots: 0x2a2018,
+    stubble: !female && rng() < 0.6, faction: opts.faction || null,
+    era: '2196',
+    ...opts.override,
+  };
+}
+
+// 2026: everyday clothes of Kai's childhood city and the Helix lab's early years.
+export function pastLook(rng, opts = {}) {
+  const pick = a => a[Math.floor(rng() * a.length)];
+  const female = rng() < 0.5;
+  return {
+    female, height: female ? 1.6 + rng() * 0.12 : 1.7 + rng() * 0.15, build: 0.9 + rng() * 0.2,
+    skin: pick(CITIZEN_SKINS), hair: pick(CITIZEN_HAIR),
+    hairStyle: female ? pick(['long', 'bob', 'tied-back', 'short']) : pick(['short', 'swept', 'messy', 'buzz']),
+    top: pick([0x2a3a4e, 0x3a3a3a, 0x5a4a3a, 0x24323e, 0x6a2a3a]), topKind: 'fabric',
+    pants: pick([0x2f3a4e, 0x23262b, 0x3a5078]), boots: 0x1a1612,
+    umbrella: opts.umbrella && rng() < 0.4 ? pick(UMBRELLAS) : null,
+    glasses: rng() < 0.15, stubble: !female && rng() < 0.35,
+    era: '2026',
+    ...opts.override,
   };
 }

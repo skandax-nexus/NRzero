@@ -90,6 +90,7 @@ function openPanel(kind) {
       <span><b class="tk">HAND</b></span><span>Interact — appears when something is in reach; keep holding when it shows HOLD</span>
       <span><b class="tk">JUMP · CROUCH</b></span><span>Jump · crouch / sneak (drones see less of you)</span>
       <span><b class="tk">EYE</b></span><span>Residue Vision — see temporal echoes (from Mission 2)</span>
+      <span><b class="tk">LAMP</b></span><span>Shoulder lamp — shows up in dark places</span>
       <span><b class="tk">2026 · 2049 · 2196</b></span><span>Temporal State Switch (from Mission 3) — costs Chronolith stability</span>
       <span><b class="tk">CASE BOARD · PAUSE</b></span><span>Top-right corner</span>
       <span><b class="tk">TAP</b></span><span>Advance dialogue; choices are buttons</span></div>`;
@@ -102,6 +103,7 @@ function openPanel(kind) {
       <span><kbd>Space</kbd></span><span>Jump · advance dialogue</span>
       <span><kbd>E</kbd></span><span>Interact (hold when prompted)</span>
       <span><kbd>F</kbd></span><span>Residue Vision — see temporal echoes (from Mission 2)</span>
+      <span><kbd>L</kbd></span><span>Shoulder lamp (in dark places)</span>
       <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> / <kbd>Q</kbd></span><span>Temporal State Switch (from Mission 3) — costs Chronolith stability</span>
       <span><kbd>J</kbd></span><span>Case board — evidence you have found</span>
       <span><kbd>Esc</kbd></span><span>Pause</span>

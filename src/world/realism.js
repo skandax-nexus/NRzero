@@ -36,18 +36,20 @@ import * as THREE from 'three';
  */
 export const TIERS = {
   low: { tex: 256, texHero: 512, aniso: 2, skyCube: 256, envCube: 128, capture: 128, grass: 0.45, grassTris: 60000, trees: 0.55, forestTris: 90000, impostorRes: 128,
-    terrainSeg: 96, cloudOctaves: 4, localLights: 4, particles: 0.35, rockDetail: 2, triplanar: false, interior: 0, specAA: 1 },
+    terrainSeg: 96, cloudOctaves: 4, localLights: 4, particles: 0.35, rockDetail: 2, triplanar: false, interior: 0, specAA: 1, kitTex: 256, kitHero: 256 },
   medium: { tex: 512, texHero: 512, aniso: 4, skyCube: 512, envCube: 128, capture: 128, grass: 0.75, grassTris: 120000, trees: 0.8, forestTris: 150000, impostorRes: 256,
-    terrainSeg: 128, cloudOctaves: 5, localLights: 8, particles: 0.65, rockDetail: 2, triplanar: true, interior: 1, specAA: 1 },
+    terrainSeg: 128, cloudOctaves: 5, localLights: 8, particles: 0.65, rockDetail: 2, triplanar: true, interior: 1, specAA: 1, kitTex: 512, kitHero: 512 },
   high: { tex: 512, texHero: 1024, aniso: 8, skyCube: 1024, envCube: 256, capture: 256, grass: 1, grassTris: 190000, trees: 1, forestTris: 200000, impostorRes: 256,
-    terrainSeg: 192, cloudOctaves: 6, localLights: 16, particles: 1, rockDetail: 3, triplanar: true, interior: 2, specAA: 1 },
+    terrainSeg: 192, cloudOctaves: 6, localLights: 16, particles: 1, rockDetail: 3, triplanar: true, interior: 2, specAA: 1, kitTex: 512, kitHero: 1024 },
 };
 let qualityName = 'medium';
 let Q = TIERS.medium;
 let R = null; // the WebGLRenderer used for baking
 
 /** Select 'low' | 'medium' | 'high' (or 'auto'). Affects everything built afterwards (texture sizes, instance counts, cube sizes). */
-export function setQuality(q) { if (q === 'auto') q = autoQuality(); if (TIERS[q]) { qualityName = q; Q = TIERS[q]; } return qualityName; }
+// overrides (optional): per-device adjustments on top of the tier, e.g. { interior: 0 } (the engine gives phones on
+// 'medium' the lite facade) or { kitTex: 256 }; they replace the matching TIERS fields until the next setQuality().
+export function setQuality(q, overrides) { if (q === 'auto') q = autoQuality(); if (TIERS[q]) { qualityName = q; Q = overrides ? { ...TIERS[q], ...overrides } : TIERS[q]; } return qualityName; }
 export function getQuality() { return qualityName; }
 /** Current tier settings (read-only use). */
 export function tier() { return Q; }
@@ -93,6 +95,7 @@ export const shared = {
   sunDir: { value: new THREE.Vector3(0.3, 0.8, 0.2).normalize() },
   sunColor: { value: new THREE.Color(1, 1, 1) },
   fogSun: { value: new THREE.Color(0, 0, 0) },        // forward-scatter haze color toward the sun (set by skyEnvironment)
+  viewH: { value: 720 },                              // drawing-buffer height in pixels (the engine keeps it current): thin emitters stay >= 1.5 px wide
 };
 /**
  * Comfort Mode (docs/ART_SPEC.md section 7), on by default: kit shaders drop high-frequency flicker (TV glow in
@@ -562,20 +565,21 @@ const RECIPES = {
   // Glazed ceramic or polished stone tiles with grout, lippage and optional marble veining.
   ceramicTile: {
     tile: 1.2, range: 0.004,
-    defaults: { color: 0xd8d6d0, grout: 0x8c8a86, count: 4, countY: 0, gloss: 0.85, marble: 0, variation: 0.3, lippage: 1, wet: 0 },
-    uniforms: p => ({ uC0: lin(p.color), uC1: lin(p.grout), uP0: [p.count, p.countY || p.count, p.gloss, p.marble], uP1: [p.variation, p.lippage, 0, 0], uWet: p.wet }),
+    // joint: grout half-width in metres (0 = the default 1.5 mm)
+    defaults: { color: 0xd8d6d0, grout: 0x8c8a86, count: 4, countY: 0, gloss: 0.85, marble: 0, variation: 0.3, lippage: 1, joint: 0, wet: 0 },
+    uniforms: p => ({ uC0: lin(p.color), uC1: lin(p.grout), uP0: [p.count, p.countY || p.count, p.gloss, p.marble], uP1: [p.variation, p.lippage, p.joint || 0.0015, 0], uWet: p.wet }),
     glsl: /* glsl */`
       vec3 tileCell(vec2 uv){ vec2 g = uv * uP0.xy; vec2 f = fract(g); vec2 d = min(f, 1.0 - f) * (uTile / uP0.xy); return vec3(floor(g), min(d.x, d.y)); }
       float height(vec2 uv){
         vec3 t = tileCell(uv);
-        float body = smoothstep(0.0015, 0.003, t.z);
+        float body = smoothstep(uP1.z, uP1.z * 2.0, t.z);
         vec2 tilt = rzH22(mod(t.xy, uP0.xy)) - 0.5;
         vec2 f = fract(uv * uP0.xy) - 0.5;
         return body * (0.002 + dot(f, tilt) * 0.0008 * uP1.y + fbm(uv, vec2(32.0), 3) * 0.00008) - (1.0 - body) * 0.0008;
       }
       void shade(vec2 uv, float h, inout Surf s){
         vec3 t = tileCell(uv);
-        float body = smoothstep(0.0015, 0.0022, t.z);
+        float body = smoothstep(uP1.z, uP1.z * 1.47, t.z);
         vec3 r = rzH32(mod(t.xy, uP0.xy) + 2.0);
         vec3 c = uC0 * (1.0 + (r.x - 0.5) * 0.12 * uP1.x);
         float vein = 0.0;
@@ -1556,16 +1560,23 @@ export function captureEnvironment(renderer, scene, position, opts = {}) {
 
 // Copy a captured cube into a fresh cube target with NaN / inf / negative texels removed, radiance clamped and scaled.
 let sanitizeState = null;
-function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0, sat = 1) {
+function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0, sat = 1, floor = 0, floorCube = null) {
   if (!sanitizeState) {
     const mat = new THREE.ShaderMaterial({
-      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 }, uAdd: { value: 0 }, uSat: { value: 1 } },
+      uniforms: { tSrc: { value: null }, uMax: { value: 64 }, uScale: { value: 1 }, uAdd: { value: 0 }, uSat: { value: 1 }, uFloor: { value: 0 }, tFloor: { value: null }, uFloorCube: { value: 0 } },
       vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform samplerCube tSrc; uniform float uMax, uScale, uAdd, uSat; varying vec3 vDir;
+      fragmentShader: `uniform samplerCube tSrc, tFloor; uniform float uMax, uScale, uAdd, uSat, uFloor, uFloorCube; varying vec3 vDir;
         void main(){ vec3 c = textureCube(tSrc, normalize(vDir)).rgb;
           bvec3 bad = bvec3(isnan(c.r) || isinf(c.r), isnan(c.g) || isinf(c.g), isnan(c.b) || isinf(c.b));
           c = mix(c, vec3(0.0), bad);
-          c = clamp(c, 0.0, uMax); c = max(mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, uSat), 0.0) * uScale + uAdd; gl_FragColor = vec4(c, 1.0); }`,
+          c = clamp(c, 0.0, uMax); c = max(mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, uSat), 0.0) * uScale + uAdd;
+          // floor: no direction darker than uFloor, or than uFloor x the floor cube (shaped like the light the scene
+          // was authored with: bright from above, dim from below); a dim but coloured direction is lifted in its own hue
+          // (a red alarm-lit wall stays red), a black one with neutral light
+          float fl = uFloorCube > 0.5 ? uFloor * dot(textureCube(tFloor, normalize(vDir)).rgb, vec3(0.2126, 0.7152, 0.0722)) : uFloor;
+          float l0 = dot(c, vec3(0.2126, 0.7152, 0.0722));
+          c += max(fl - l0, 0.0) * mix(vec3(1.0), c / max(l0, 1e-6), smoothstep(0.0, 0.25 * fl + 1e-6, l0));
+          gl_FragColor = vec4(c, 1.0); }`,
       side: THREE.BackSide, depthTest: false, depthWrite: false, toneMapped: false,
     });
     const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat); box.frustumCulled = false;
@@ -1574,9 +1585,9 @@ function sanitizeCube(r, srcRT, maxRadiance, scale = 1, out = null, add = 0, sat
   }
   const size = srcRT.width;
   if (!out) out = new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false });
-  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale; sanitizeState.mat.uniforms.uAdd.value = add; sanitizeState.mat.uniforms.uSat.value = sat;
+  sanitizeState.mat.uniforms.tSrc.value = srcRT.texture; sanitizeState.mat.uniforms.uMax.value = maxRadiance; sanitizeState.mat.uniforms.uScale.value = scale; sanitizeState.mat.uniforms.uAdd.value = add; sanitizeState.mat.uniforms.uSat.value = sat; sanitizeState.mat.uniforms.uFloor.value = floor; sanitizeState.mat.uniforms.tFloor.value = floorCube; sanitizeState.mat.uniforms.uFloorCube.value = floorCube ? 1 : 0;
   new THREE.CubeCamera(0.1, 10, out).update(r, sanitizeState.sc);
-  sanitizeState.mat.uniforms.tSrc.value = null;
+  sanitizeState.mat.uniforms.tSrc.value = null; sanitizeState.mat.uniforms.tFloor.value = null;
   return out;
 }
 
@@ -1746,6 +1757,22 @@ export function installLightingChunks() {
   if (lightingInstalled) return; lightingInstalled = true;
   const C = THREE.ShaderChunk, find = 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
   if (!C.lights_fragment_maps.includes(find)) return;
+  // diffuse image-based light can be desaturated on its own (setEnvDiffuseSaturation): a tinted place (an orange sunset
+  // sky) keeps coloured reflections without tinting every lit surface (green grass turning ochre)
+  const findI = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
+  if (C.lights_fragment_maps.includes(findI)) C.lights_fragment_maps = C.lights_fragment_maps.replace(findI, `{
+			vec3 rzIrr = getIBLIrradiance( geometryNormal );
+			if ( rzEnvS.w > 0.0 ) rzIrr = mix( rzIrr, vec3( dot( rzIrr, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rzEnvS.w );
+			iblIrradiance += rzIrr;
+		}`);
+  // specular anti-aliasing for normal-mapped kit surfaces (kit.js floors / walls carry defines.RZ_SPECAA): roughness
+  // widened where the mapped normal varies inside a pixel, so glossy tiles and wet stone do not sparkle at distance
+  const findR = 'material.roughness += geometryRoughness;';
+  if (C.lights_physical_fragment.includes(findR)) C.lights_physical_fragment = C.lights_physical_fragment.replace(findR, `${findR}
+#if defined( RZ_SPECAA ) && defined( USE_NORMALMAP )
+{ vec3 rzDx = dFdx( normal ), rzDy = dFdy( normal ); float rzK = min( ( dot( rzDx, rzDx ) + dot( rzDy, rzDy ) ) * 0.5, 0.18 );
+  float rzR2 = material.roughness * material.roughness; material.roughness = sqrt( sqrt( rzR2 * rzR2 + rzK ) ); }
+#endif`);
   C.lights_fragment_maps = C.lights_fragment_maps.replace(find, `{
 			vec3 rzRv = reflect( - geometryViewDir, geometryNormal );
 			float rzHz = clamp( 1.0 + 1.2 * dot( rzRv, nonPerturbedNormal ), 0.0, 1.0 );
@@ -1978,10 +2005,12 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
       vec2 q = P; vec2 c = vec2(0.5, 0.26); float r = length(q - c);
       float fan = 1.0 - smoothstep(0.17, 0.18, r);
       float bars = fan * step(0.5, fract(atan(q.y - c.y, q.x - c.x) * 3.0 + r * 9.0));
-      float louv = (1.0 - fan) * step(0.55, fract(q.y * 22.0));
+      // louvres every 1/22 of the unit: faded to their average once a louvre spans under ~2 px (no moire / crawl)
+      float lk = smoothstep(0.25, 0.6, aa.y * 27.5), louv0 = step(0.55, fract(q.y * 22.0));
+      float louv = (1.0 - fan) * mix(louv0, 0.45, lk);
       mc = mix(vec3(0.42, 0.42, 0.4), mc, 0.4);
       mc *= 1.0 - fan * 0.75 + bars * 0.4 - louv * 0.35; ao = 1.0 - fan * 0.5;
-      nn = normalize(N + B * (louv - 0.3) * 0.5);
+      nn = normalize(N + B * (1.0 - fan) * (louv0 - 0.3) * 0.5 * (1.0 - lk));
     }
     float rust = smoothstep(0.6 - ruin * 0.35, 0.9 - ruin * 0.2, rzFbm2(vRzWP.xz * 3.0 + vRzWP.y * 2.0)) * (1.0 - smoothstep(0.0, 0.3, N.y) * (1.0 - ruin));
     alb = mix(mc, vec3(0.2, 0.09, 0.035), rust * 0.6); orm = vec3(ao, 0.55 + rust * 0.3, 0.55 * (1.0 - rust)); nW = nn; return;
@@ -2070,7 +2099,8 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     vec3 wOrm = mix(vec3(1.0, 0.035 + grime, 0.0), vec3(1.0, 0.45, 0.25), frameM);
     vec3 wN = normalize(mix(gN, N, frameM));
     vec3 wEmi = roomC * (1.0 - F) * (1.0 - frameM);
-    if (shutter) { float gr = fract(g.y * 12.0); wAlb = vec3(0.32, 0.33, 0.34) * (0.8 + 0.2 * rzN2(g * 4.0)); wOrm = vec3(0.8 + 0.2 * gr, 0.5, 0.7); wN = normalize(N + B * (gr - 0.5) * 0.8); wEmi = vec3(0.0); }
+    // roller shutter ridges every 1/12 m: amplitude fades out as a ridge nears ~2 px (derivative from P, outside the branch)
+    if (shutter) { float sk = 1.0 - smoothstep(0.3, 0.8, aa.y * 15.0); float gr = mix(0.5, fract(g.y * 12.0), sk); wAlb = vec3(0.32, 0.33, 0.34) * (0.8 + 0.2 * rzN2(g * 4.0)); wOrm = vec3(0.8 + 0.2 * gr, 0.5, 0.7); wN = normalize(N + B * (gr - 0.5) * 0.8); wEmi = vec3(0.0); }
     if (ruin > 0.0) {
       float hb = rzH12(cid * 1.91 + vec2(bseed * 23.0, 0.7));
       if (hb < ruin * 0.7) {          // blown out: no glass, a dark sooty room, a few shards left in the frame
@@ -2133,7 +2163,7 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   if (region > 2.5 && region < 4.5) {
     float h = rzH12(vec2(bseed * 31.0, 7.0));
     alb = mix(vec3(0.045, 0.05, 0.055), vec3(0.2, 0.19, 0.17), h);
-    if (region > 3.5) alb *= 1.0 - step(0.55, fract(P.y * 22.0)) * 0.35;
+    if (region > 3.5) alb *= 1.0 - mix(step(0.55, fract(P.y * 22.0)), 0.45, smoothstep(0.25, 0.6, aa.y * 27.5)) * 0.35;
     alb = mix(alb, vec3(0.2, 0.09, 0.035), ruin * 0.5); orm = vec3(1.0, 0.55 + ruin * 0.3, 0.55 * (1.0 - ruin)); return;
   }
   // window cell first (region 0), so the wall texture is only fetched where some wall shows
@@ -2239,6 +2269,21 @@ void RE_Direct_RzFacade(const in IncidentLight directLight, const in vec3 geomet
 #define RE_Direct RE_Direct_RzFacade
 #endif
 `;
+// LED strips (region 6, aWin2.w = 1): a strip thinner than ~1.5 px is widened to that in screen space (across its
+// thin extents, world-space offsets so merged / rotated copies work alike), its emission scaled by the square root of
+// the coverage it gained, so a distant strip reads as a continuous dim line instead of rasterizing as dots and dashes.
+const THIN_GLSL = /* glsl */`
+if (aFac.x > 5.5 && aFac.x < 6.5 && aWin2.w > 0.5) {
+  vec3 rzNw = normalize(mat3(modelMatrix) * objectNormal);
+  vec3 rzTw = normalize(cross(vec3(0.0, 1.0, 0.0), rzNw));
+  float rzZ = max(-(viewMatrix * (modelMatrix * vec4(transformed, 1.0))).z, 0.01);
+  float rzWant = rzZ / (projectionMatrix[1][1] * max(rzViewH, 1.0)) * 1.5;   // half of ~1.5 px, in metres
+  vec2 rzH = abs(aWin2.xy), rzX = max(vec2(rzWant) - rzH, 0.0) * step(1e-4, rzH);
+  vec3 rzOff = rzTw * sign(aWin2.x) * rzX.x + vec3(0.0, sign(aWin2.y) * rzX.y, 0.0);
+  transformed += rzOff * mat3(modelMatrix);   // world -> object (rotation)
+  float rzG = (rzH.x > 0.0 ? rzH.x / (rzH.x + rzX.x) : 1.0) * (rzH.y > 0.0 ? rzH.y / (rzH.y + rzX.y) : 1.0);
+  vWin.w *= sqrt(rzG);
+}`;
 const facadeCache = new Map();
 /**
  * Interior-mapped facade material (one draw call for a whole city block built with cityBlock / buildingMesh).
@@ -2247,7 +2292,7 @@ const facadeCache = new Map();
  * Uniforms are exposed on material.userData.facade so the game can switch day/night at runtime.
  */
 export function windowInteriorMaterial(opts = {}) {
-  const key = qualityName + JSON.stringify(opts);
+  const key = qualityName + (opts.interiorDetail ?? Q.interior) + JSON.stringify(opts);
   if (facadeCache.has(key)) return facadeCache.get(key);
   const arr = textureArray(WALL_LAYERS, { size: opts.texSize || Q.tex });
   // phone tiers: nearest-mip filtering of the wall layers (half the texel reads of trilinear, invisible on textured
@@ -2258,14 +2303,17 @@ export function windowInteriorMaterial(opts = {}) {
     rzWA: { value: arr.map }, rzWN: { value: arr.normalMap }, rzWO: { value: arr.ormMap }, rzWTile: { value: arr.tiles },
     rzLit: { value: opts.lit ?? 0.35 }, rzDay: { value: opts.daylight ?? 0 }, rzIntI: { value: opts.interior ?? 1 }, rzComfort: shared.comfort,
   };
+  U.rzViewH = shared.viewH;
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 1, envMapIntensity: opts.envMapIntensity ?? 1 });
-  const lite = (opts.interiorDetail ?? Q.interior) === 0;
   addMod(mat, 'facade', shader => {
+    // read at compile time, so a runtime tier change (engine.setQuality: defines.RZ_INTERIOR + needsUpdate) gets the
+    // matching lighting path
+    const lite = String(mat.defines?.RZ_INTERIOR) === '0';
     ensureWorld(shader);
     if (lite) patch(shader, 'f', '#include <lights_physical_pars_fragment>', FACADE_LIGHT_GLSL, 'after');   // A/B: defines.RZ_FACADE_FULL_LIGHT
     if (lite) shader.uniforms.rzSpecAAOn = { value: 0 };   // the lite facade's normals are flat: no specular AA needed
-    patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz;');
-    patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;');
+    patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz; uniform float rzViewH;');
+    patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;\n' + THIN_GLSL);
     decl(shader, FACADE_GLSL);
     patch(shader, 'f', '#include <map_fragment>', `vec3 fAlb, fOrm, fN, fEmi; rzFacade(fAlb, fOrm, fN, fEmi);
       diffuseColor.rgb *= fAlb; rzORM = vec4(fOrm, 0.5); rzNW = fN; rzHasN = true;`, 'replace');
@@ -2278,9 +2326,24 @@ export function windowInteriorMaterial(opts = {}) {
   mat.emissive.set(0x000000);
   mat.defines = { RZ_INTERIOR: opts.interiorDetail ?? Q.interior };
   mat.userData.rzBatchSafe = true;   // world-space shading only: the engine may merge meshes that share it
-  mat.userData.facade = { uniforms: U, set lit(v) { U.rzLit.value = v; }, set daylight(v) { U.rzDay.value = v; }, set interior(v) { U.rzIntI.value = v; } };
+  mat.userData.facade = { uniforms: U, followsTier: opts.interiorDetail === undefined, set lit(v) { U.rzLit.value = v; }, set daylight(v) { U.rzDay.value = v; }, set interior(v) { U.rzIntI.value = v; } };
   facadeCache.set(key, mat);
   return mat;
+}
+/**
+ * Re-tier a facade material that already exists (runtime tier change): interior 0 (lite, one wall tap, Lambert direct
+ * light) | 1 (lite with the PBR wall) | 2 (interior mapping). Recompiles on the next frame; going to 0 frees the GPU
+ * copies of the wall normal / ORM arrays, which the lite path never samples (they re-upload if a material needs them).
+ * Returns true when something changed.
+ */
+export function setFacadeInterior(mat, interior) {
+  const F = mat?.userData?.facade; if (!F || !mat.defines) return false;
+  if (String(mat.defines.RZ_INTERIOR) === String(interior)) return false;
+  mat.defines.RZ_INTERIOR = interior; mat.needsUpdate = true;
+  const minF = interior < 2 ? THREE.LinearMipmapNearestFilter : THREE.LinearMipmapLinearFilter;
+  for (const k of ['rzWA', 'rzWN', 'rzWO']) { const t = F.uniforms[k]?.value; if (t && t.minFilter !== minF) { t.minFilter = minF; t.needsUpdate = true; } }
+  if (interior === 0) for (const k of ['rzWN', 'rzWO']) F.uniforms[k]?.value?.dispose();
+  return true;
 }
 
 // Geometry builder that writes the facade attributes for every primitive.
@@ -2288,9 +2351,18 @@ class MassingBuilder {
   constructor() { this.P = []; this.N = []; this.U = []; this.F = []; this.W = []; this.W2 = []; this.R = []; this.I = []; this.n = 0; this.M = new THREE.Matrix4(); this.base = 0; this.attr(1, 0, 0, 0.5); this.win = [3, 3.2, 1.4, 1.8]; this.win2 = [0, 0.9, 1e4, 0]; this.rz = [0, 0, 0, 0]; }
   attr(region, seed = this.fac?.[1] ?? 0, layer = this.fac?.[2] ?? 0, tintV = this.fac?.[3] ?? 0.5) { this.fac = [region, seed, layer, tintV]; return this; }
   region(r) { this.fac = [r, this.fac[1], this.fac[2], this.fac[3]]; return this; }
-  _push(p, n, uv) {
+  _push(p, n, uv, w2) {
     this.P.push(p.x, p.y, p.z); this.N.push(n.x, n.y, n.z); this.U.push(uv[0], uv[1]);
-    this.F.push(...this.fac); this.W.push(...this.win); this.W2.push(...this.win2); this.R.push(...this.rz); return this.n++;
+    this.F.push(...this.fac); this.W.push(...this.win); this.W2.push(...(w2 || this.win2)); this.R.push(...this.rz); return this.n++;
+  }
+  // thin emitters (this.thin = max half-thickness, LED strips): per vertex, its signed offset from the quad centre
+  // across the face (along T = up x n) and vertically where that extent is thin, so the vertex shader can widen the
+  // strip to ~1.5 px at any distance (no dotted / dashed lines). Horizontal faces are left alone.
+  _thinW2(w, n) {
+    if (!(this.thin > 0) || Math.abs(n.y) > 0.7) return null;
+    const T = new THREE.Vector3(0, 1, 0).cross(n).normalize(), c = w[0].clone().add(w[1]).add(w[2]).add(w[3]).multiplyScalar(0.25);
+    const out = w.map(p => { const d = p.clone().sub(c), dT = d.dot(T), dU = d.y; return [Math.abs(dT) <= this.thin ? dT : 0, Math.abs(dU) <= this.thin ? dU : 0, 0, 1]; });
+    return out.some(v => v[0] || v[1]) ? out : null;
   }
   // corners in local space, CCW seen from outside. uvMode: array of 4 uvs | 'auto' | 'local'
   quad(a, b, c, d, uvMode = 'auto') {
@@ -2305,7 +2377,8 @@ class MassingBuilder {
         else uvs = w.map(p => [p.dot(T), p.y - this.base]);
       }
     }
-    const i = w.map((p, k) => this._push(p, n, uvs[k]));
+    const thin = this._thinW2(w, n);
+    const i = w.map((p, k) => this._push(p, n, uvs[k], thin && thin[k]));
     this.I.push(i[0], i[1], i[2], i[0], i[2], i[3]);
   }
   // oriented box: center + three half-axis vectors (local space). faces: optional per-face uv mode overrides
@@ -2515,7 +2588,8 @@ function addBuilding(B, o) {
   if (ledges) for (let j = ledges; j < nF; j += ledges) { const y = gH + j * flH + 0.04; if (notch && y > notch.y0) continue; B.box(0, y, 0, W + 0.12, 0.16, D + 0.12); }
   // per-face details
   const detailRegion = (rg) => B.attr(rg, seed01, layer, tintV);
-  const special = (rg, win, win2, fn) => { const pw = B.win, pw2 = B.win2; B.attr(rg, seed01, layer, tintV); B.win = win; B.win2 = win2; fn(); B.win = pw; B.win2 = pw2; };
+  // region 6 (LED strips): thin parts are widened to ~1.5 px in the vertex shader (see MassingBuilder._thinW2)
+  const special = (rg, win, win2, fn) => { const pw = B.win, pw2 = B.win2, pt = B.thin; B.attr(rg, seed01, layer, tintV); B.win = win; B.win2 = win2; B.thin = rg === 6 ? 0.04 : 0; fn(); B.win = pw; B.win2 = pw2; B.thin = pt; };
   const ledCols = o.ledColors || LED_COLORS;
   const ledC = lin3(ledCols[Math.floor(r2() * ledCols.length)]);
   faceInfo.forEach((F, fi) => {
@@ -3960,11 +4034,13 @@ export function mist(o = {}) {
  */
 export function lightShaft(o = {}) {
   const a = v3(o.from || [0, 5, 0]), b = v3(o.to || [0, 0, 0]), len = a.distanceTo(b);
-  let geo;
-  if (o.shape === 'box') { const [w, d] = o.size || [1, 1]; const [s0, s1] = o.spread || [1, 1.3]; geo = new THREE.CylinderGeometry(s1 * 0.7071, s0 * 0.7071, len, 4, 6, true); geo.rotateY(Math.PI / 4); geo.scale(w, 1, d); }
-  else { const [r0, r1] = o.radius || [0.3, 1.2]; geo = new THREE.CylinderGeometry(r1, r0, len, 20, 6, true); }
+  // the cylinder's top cap (local y = 0 after the translate) sits at `from`: radius[0] / spread[0] belong there and
+  // radius[1] / spread[1] at `to` (the earlier build had them swapped: cones opened toward the light)
+  let geo, rr = [0, 0];
+  if (o.shape === 'box') { const [w, d] = o.size || [1, 1]; const [s0, s1] = o.spread || [1, 1.3]; geo = new THREE.CylinderGeometry(s0 * 0.7071, s1 * 0.7071, len, 4, 6, true); geo.rotateY(Math.PI / 4); geo.scale(w, 1, d); rr = [s0 * Math.max(w, d) * 0.5, s1 * Math.max(w, d) * 0.5]; }
+  else { const [r0, r1] = o.radius || [0.3, 1.2]; geo = new THREE.CylinderGeometry(r0, r1, len, 24, 6, true); rr = [r0, r1]; }
   geo.translate(0, -len / 2, 0);
-  const U = fogUniforms({ uCol: { value: col(o.color ?? 0xffe2b8).multiplyScalar(o.intensity ?? 0.5) }, uT: shared.time, uLen: { value: len }, uFloor: { value: o.floorY ?? -1e4 }, uDust: { value: o.dust ?? 1 } });
+  const U = fogUniforms({ uCol: { value: col(o.color ?? 0xffe2b8).multiplyScalar(o.intensity ?? 0.5) }, uT: shared.time, uLen: { value: len }, uFloor: { value: o.floorY ?? -1e4 }, uDust: { value: o.dust ?? 1 }, uFade: { value: 1 } });
   const m = new THREE.Mesh(geo, new THREE.ShaderMaterial({
     uniforms: U, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: true,
     vertexShader: `varying vec3 vW; varying vec3 vN; varying float vL; uniform float uLen;
@@ -3973,7 +4049,7 @@ export function lightShaft(o = {}) {
         vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
-    fragmentShader: `uniform vec3 uCol; uniform float uT, uFloor, uDust; varying vec3 vW; varying vec3 vN; varying float vL;
+    fragmentShader: `uniform vec3 uCol; uniform float uT, uFloor, uDust, uFade; varying vec3 vW; varying vec3 vN; varying float vL;
       ${GLSL_NOISE}
       #include <fog_pars_fragment>
       void main(){
@@ -3981,7 +4057,7 @@ export function lightShaft(o = {}) {
         float along = smoothstep(0.0, 0.15, vL) * pow(1.0 - vL, 2.2);
         float dust = 0.7 + 0.6 * rzFbm2(vW.xz * 1.3 + vec2(vW.y * 0.7 - uT * 0.05, uT * 0.03)) * uDust;
         float fl = smoothstep(uFloor, uFloor + 1.6, vW.y);
-        vec3 c = uCol * edge * along * dust * fl * 0.5;
+        vec3 c = uCol * edge * along * dust * fl * 0.5 * uFade;
         gl_FragColor = vec4(c, 1.0);
         #ifdef USE_FOG
           #include <fog_fragment>
@@ -3992,7 +4068,27 @@ export function lightShaft(o = {}) {
   m.position.copy(a);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), b.clone().sub(a).normalize());
   m.renderOrder = 5; m.userData.noCapture = true; m.name = 'lightShaft'; m.frustumCulled = true;
+  // shape for camera-proximity fading (lightShaftFade): radius at the source / the far end, length (local -y)
+  m.userData.shaft = { r0: rr[0], r1: rr[1], len };
+  // fades out while the rendering camera is inside / next to the cone (no hard faceted band across the view)
+  m.onBeforeRender = (r, sc, cam) => { U.uFade.value = lightShaftFade(m, cam.getWorldPosition(_shC)); };
   return m;
+}
+const _shC = new THREE.Vector3();
+const _shP = new THREE.Vector3(), _shM = new THREE.Matrix4();
+/**
+ * 0..1 visibility of a light shaft for a camera position: 0 inside the cone (its back faces would draw a hard,
+ * faceted band across the view), rising to 1 once the camera is `margin` metres outside its surface.
+ */
+export function lightShaftFade(shaft, camPos, margin = 1.5) {
+  const S = shaft?.userData?.shaft; if (!S) return 1;
+  _shP.copy(camPos).applyMatrix4(_shM.copy(shaft.matrixWorld).invert());
+  const t = Math.min(1, Math.max(0, -_shP.y / S.len));
+  const radial = Math.hypot(_shP.x, _shP.z) - (S.r0 + (S.r1 - S.r0) * t);
+  const axial = Math.max(_shP.y, -_shP.y - S.len, 0);   // beyond either end cap
+  const d = Math.max(radial, axial);
+  const x = Math.min(1, Math.max(0, d / margin));
+  return x * x * (3 - 2 * x);
 }
 
 /**
@@ -4301,7 +4397,7 @@ export function roadPaint(o = {}) {
 // types), so setWetness() is a global switch with no recompiles. Dry (amount 0) costs one uniform branch.
 const WET_A = { x: 0, y: 0, z: 0, w: 0 };          // amount, time (s), puddles, detail (ripples + streaks)
 const WET_B = { x: 0, y: 0.4, z: 0.22, w: 0.56 };  // ground y, puddle max height above ground, puddle scale (1/m), coverage threshold
-const ENV_S = { x: 1, y: 0.1, z: 0, w: 0 };         // x: image-based specular multiplier (see setEnvSpecular), y: puddle roughness
+const ENV_S = { x: 1, y: 0.1, z: 0, w: 0 };         // x: image-based specular multiplier (see setEnvSpecular), y: puddle roughness, z: rough-material exemption, w: diffuse IBL desaturation (setEnvDiffuseSaturation)
 /**
  * Global multiplier on the image-based specular of every MeshStandard / MeshPhysical material (default 1). The engine
  * lowers it when a dark place's probe was brightened to the studio level the scene was authored for: diffuse ambient
@@ -4310,6 +4406,11 @@ const ENV_S = { x: 1, y: 0.1, z: 0, w: 0 };         // x: image-based specular m
  * their image-based specular reads as soft ambient sheen (cloth, skin, plaster), so it keeps the authored level.
  */
 export function setEnvSpecular(k = 1, rough) { ENV_S.x = Math.max(0, k); if (rough !== undefined) ENV_S.z = Math.max(0, Math.min(1, rough)); return ENV_S.x; }
+/**
+ * Saturation of the diffuse image-based light of every MeshStandard / Physical material, relative to the environment
+ * (1 = as the environment is, default; 0 = grey). Reflections keep the environment's colour. Global, no recompiles.
+ */
+export function setEnvDiffuseSaturation(s = 1) { ENV_S.w = 1 - Math.max(0, Math.min(1, s)); return 1 - ENV_S.w; }
 /**
  * Global wet-weather state: setWetness({ amount: 0..1, puddles: 0..1, detail: 0..1, ground: y, height: m, scale: 1/m,
  * coverage: 0..1 (fraction of flat ground under water, default ~0.3), mirror: puddle roughness (default 0.1: point lights stretch into streaks instead of hot dots), time: s }).
@@ -4395,7 +4496,7 @@ if ( rzWetA.x > 0.001 ) {
  *   probe.start(scene, camera.position, { hide: o => !!o.userData.character, normalize: { luminance: 0.6, strength: 0.5 } });
  *   each frame: probe.step(1)  (true when done), or probe.finish() to complete at once
  * start() options: hide(o) -> bool, normalize (see captureEnvironment, plus fill: 0..0.9 = share of the mean radiance
- * spread evenly as bounce light), measure, scale, clamp (max radiance, 32), saturation (1 = as captured; < 1 keeps a
+ * spread evenly as bounce light, floor: 0..1 = minimum radiance in every direction as a share of normalize.luminance), measure, scale, clamp (max radiance, 32), saturation (1 = as captured; < 1 keeps a
  * strongly tinted place, e.g. an orange sunset sky, from tinting every surface twice over),
  * shadows: true re-renders shadow maps per face (default false: the current maps are reused, the probe sees the
  * frame's shadows). Objects with userData.noCapture are always hidden. probe.ms = cost of the last capture.
@@ -4442,11 +4543,14 @@ export class EnvProbe {
     }
     if (J.face >= 6) {
       const clamp = J.opts.clamp ?? 32;
-      let scale = J.opts.scale ?? 1, lum = null, add = 0;
+      let scale = J.opts.scale ?? 1, lum = null, add = 0, floor = 0;
       if (J.opts.normalize || J.opts.measure) {
         lum = cubeLuminance(r, this.rt, clamp);
         const N = J.opts.normalize;
         if (N && N.luminance > 0) {
+          // floor: no direction darker than this share of the reference luminance (a floor under a black ceiling, the
+          // legs of a character above a black floor keep a readable ambient in a blacked-out room)
+          floor = Math.max(0, Math.min(1, N.floor ?? 0)) * (this.floorRT ? N.luminance / Math.max(this.floorLum, 1e-5) : N.luminance);
           scale *= Math.min(N.max ?? 6, Math.max(N.min ?? 0.25, Math.pow(N.luminance / Math.max(lum, 1e-5), N.strength ?? 0.5)));
           // fill: part of the mean radiance spread evenly (bounce light), so faces turned away from every light
           // (a floor under a dark ceiling) keep some ambient instead of going black; the mean is unchanged
@@ -4454,7 +4558,7 @@ export class EnvProbe {
           if (fill > 0) { add = lum * scale * fill; scale *= 1 - fill; }
         }
       }
-      sanitizeCube(r, this.rt, clamp, scale, this.clean, add, J.opts.saturation ?? 1);
+      sanitizeCube(r, this.rt, clamp, scale, this.clean, add, J.opts.saturation ?? 1, floor, floor > 0 && this.floorRT ? this.floorRT.texture : null);
       this.target = this.pm.fromCubemap(this.clean.texture, this.target);
       r.setRenderTarget(prevRT, prevFace, prevMip);
       this.luminance = lum; this.scale = scale; this.position.copy(J.pos); this.version++;
@@ -4466,9 +4570,19 @@ export class EnvProbe {
   }
   /** Complete the pending capture now. */
   finish() { while (this.job) this.step(6); return this; }
+  /**
+   * Keep the last capture (call right after fill(), e.g. of three's RoomEnvironment with measure: true) as the shape of
+   * the normalize.floor option: a direction is then kept no darker than floor x that capture there (a 32^2 copy).
+   */
+  keepAsFloor() {
+    this.floorRT?.dispose();
+    this.floorRT = sanitizeCube(this.renderer, this.rt, 32, 1, new THREE.WebGLCubeRenderTarget(32, { type: THREE.HalfFloatType, generateMipmaps: false }));
+    this.floorLum = this.luminance ?? cubeLuminance(this.renderer, this.rt, 32);
+    return this;
+  }
   /** Capture `scene` (e.g. three's RoomEnvironment) at `position` (default origin) right away. */
   fill(scene, position = [0, 0, 0], opts = {}) { this.start(scene, position, opts); return this.finish(); }
-  dispose() { this.rt.dispose(); this.clean.dispose(); this.target?.dispose(); this.pm.dispose(); this.job = null; }
+  dispose() { this.rt.dispose(); this.clean.dispose(); this.target?.dispose(); this.floorRT?.dispose(); this.pm.dispose(); this.job = null; }
 }
 
 /**
@@ -4629,6 +4743,7 @@ export class StaticBatcher {
     this.cell = opts.cell ?? 50; this.smallRadius = opts.smallRadius ?? 2; this.smallCull = opts.smallCull ?? 90;
     this.minMembers = opts.minMembers ?? 2; this.maxVerts = opts.maxVerts ?? 60000;
     this.atlas = opts.atlas ?? true; this.atlasSize = opts.atlasSize ?? 2048;   // texture atlas for unlit canvas-textured meshes (signs)
+    this.smallShadows = opts.smallShadows ?? true;   // false: batches of small props (radius < smallRadius) cast no shadow
     this.scene = null; this.batches = []; this.members = new Map(); this.anc = new Map(); this.mats = new Map();
     this.seen = new WeakMap(); this.stats = { batches: 0, members: 0, unbatched: 0, ms: 0, scans: 0 };
   }
@@ -4759,7 +4874,7 @@ export class StaticBatcher {
     if (rects) { mat.map = rects.texture; b.atlasTex = rects.texture; }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = 'rzBatch'; mesh.matrixAutoUpdate = false; mesh.matrixWorldAutoUpdate = true; mesh.updateMatrix();
-    mesh.castShadow = m0.castShadow; mesh.receiveShadow = m0.receiveShadow; mesh.renderOrder = m0.renderOrder;
+    mesh.castShadow = m0.castShadow && (!G.small || this.smallShadows); mesh.receiveShadow = m0.receiveShadow; mesh.renderOrder = m0.renderOrder;
     mesh.userData.rzBatch = b; mesh.userData.noBatch = true;
     mesh.raycast = () => {};   // picking and camera rays hit the originals
     b.mesh = mesh; scene.add(mesh);

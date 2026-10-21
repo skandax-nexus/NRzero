@@ -94,26 +94,65 @@ function humanParams(look) {
 }
 
 // ---------- 3D cast allocation: story role -> template (realistic MakeHuman-based people with mocap animation) ----------
+// Every template is an era-correct costume build (docs/COSTUMES.md, assets/models/cast_index.json). Named people use their
+// own build; everyone else is drawn from the pool of their era, so nobody shows up in the wrong year.
 export const ROLE_TEMPLATE = {
-  kai: 'town_m3', mira: 'town_f3', witness: 'town_m1', rook: 'town_m6', sera: 'town_f4', niko: 'sefa', tala: 'town_f2',
-  iven: 'town_m4', jun: 'pell', hale: 'hale', brandt: 'roe', child: 'town_kid',
+  kai: 'kai', mira: 'mira', witness: 'witness', rook: 'rook', sera: 'sera', niko: 'niko', tala: 'tala', iven: 'iven',
+  jun: 'jun', hale: 'hale', brandt: 'brandt', child: 'child', anja: 'anja', mara: 'mara', orren: 'orren',
+  caretaker: 'caretaker', ingrid: 'caretaker', oskar: 'oskar', oskar26: 'oskar26', lotte: 'lotte', kid_kai: 'kid_kai',
+  kid_mira: 'kid_mira', neighbor: 'neighbor', potter: 'potter', iru: 'potter', villager: 'villager',
 };
+// era pools: m / f adults, old (58+), kids; `umbrella` = builds that carry an LED umbrella (rainy streets)
 const POOLS = {
-  // city people avoid period pieces (top hats, aprons, headscarves) until the era-specific costume build replaces them
-  m: ['town_m2', 'arin', 'wren', 'town_m5'], f: ['odile', 'edda', 'town_f1'], oldM: ['ignatz', 'town_m6'], oldF: ['ilse', 'ondine'],
-  kidM: ['town_kid', 'wren'], kidF: ['town_kid', 'maren'], settleM: ['calder', 'keeper', 'keeper_b'], settleF: ['vossel', 'mirela', 'oriel'],
+  2049: { m: ['c49_m1', 'c49_m2', 'c49_m4', 'c49_m6', 'c49_m3'], f: ['c49_f1', 'c49_f2', 'c49_f3', 'c49_f4', 'c49_f6'], oldM: ['c49_m5', 'c49_m3'], oldF: ['c49_f5', 'c49_f3'],
+    kidM: ['c49_kid_m'], kidF: ['c49_kid_f'], umbM: ['c49_m2', 'c49_m2', 'c49_m5'], umbF: ['c49_f3', 'c49_f3', 'c49_f5'], umbKid: ['c49_kid_f'] },
+  2026: { m: ['c26_m1', 'c26_m2'], f: ['c26_f1', 'c26_f2'], oldM: ['c26_m3'], oldF: ['c26_f3'], kidM: ['kid_kai'], kidF: ['lotte'], umbF: ['c26_f3'] },
+  2196: { m: ['surv_m1', 'surv_m1', 'surv_m2'], f: ['surv_f1', 'surv_f2'], oldM: ['surv_m2'], oldF: ['surv_f2'], kidM: ['kid_kai'], kidF: ['lotte'] },
+  ancient: { m: ['anc_m1', 'anc_m3', 'anc_m4'], f: ['anc_f1', 'anc_f2', 'anc_f3'], oldM: ['anc_m2'], oldF: ['anc_f4'], kidM: ['anc_kid_m'], kidF: ['anc_kid_f'] },
 };
-function pickTemplate(look) {
-  if (look.template && cast.ids.includes(look.template)) return look.template;
-  if (look.role && ROLE_TEMPLATE[look.role]) return ROLE_TEMPLATE[look.role];
-  const h = hashStr(JSON.stringify([look.skin, look.hair, look.top, look.pants, look.height, look.seed]));
-  const fem = femaleness(look) > 0.5;
-  const kid = look.child || (look.height ?? 1.75) < 1.4;
-  const grey = new THREE.Color(look.hair ?? 0).getHSL({}).l > 0.45;
-  const settler = look.sash != null || look.pantsType === 'wraps' || look.era === 'ancient';
-  const pool = kid ? (fem ? POOLS.kidF : POOLS.kidM) : settler ? (fem ? POOLS.settleF : POOLS.settleM) : grey || (look.age ?? 30) > 58 ? (fem ? POOLS.oldF : POOLS.oldM) : fem ? POOLS.f : POOLS.m;
-  return pool[h % pool.length];
+// uniformed groups inside an era (look.faction, or inferred: lab coat, security vest, Continuum armour)
+const FACTIONS = {
+  helix: { m: ['helix_sci_m'], f: ['helix_sci_f'] }, security: { m: ['helix_sec_1'], f: ['helix_sec_2'] },
+  transit: { m: ['transit_worker'], f: ['transit_worker'] }, tech: { m: ['technician'], f: ['technician'] },
+  continuum: { m: ['continuum_1'], f: ['continuum_2'] },
+};
+const ERA = { past: '2026', 2026: '2026', present: '2049', 2049: '2049', unwritten: '2049', future: '2196', 2196: '2196', ancient: 'ancient', settlement: 'ancient' };
+export function eraOf(look) {
+  if (look.era != null) return ERA[String(look.era).toLowerCase()] || '2049';
+  return look.sash != null || look.pantsType === 'wraps' ? 'ancient' : '2049';
 }
+function factionOf(look, era) {
+  if (look.faction) return FACTIONS[look.faction] ? look.faction : null;
+  if (era === '2196' && look.armor) return 'continuum';
+  if (era === '2049' && (look.coatKind === 'lab' || look.coat === 0xe8eaec)) return 'helix';
+  return null;
+}
+const has = id => id && cast.ids.includes(id);
+function pickTemplate(look) {
+  if (has(look.costume)) return look.costume;                   // mission extras name their costume build
+  if (has(look.template)) return look.template;
+  if (look.role && has(ROLE_TEMPLATE[look.role])) return ROLE_TEMPLATE[look.role];
+  if (has(look.role)) return look.role;
+  const h = hashStr(JSON.stringify([look.skin, look.hair, look.top, look.pants, look.height, look.seed, look.hairStyle]));
+  const fem = femaleness(look) > 0.5, era = eraOf(look);
+  const kid = look.child || (look.height ?? 1.75) < 1.4;
+  const old = new THREE.Color(look.hair ?? 0).getHSL({}).l > 0.45 || (look.age ?? 30) > 58;
+  const P = POOLS[era], fac = !kid && factionOf(look, era);
+  let pool = fac ? FACTIONS[fac][fem ? 'f' : 'm'] : kid ? (fem ? P.kidF : P.kidM) : old ? (fem ? P.oldF : P.oldM) : fem ? P.f : P.m;
+  // two in three umbrella carriers get a build that holds one (the rest wear a sealed rain shell instead)
+  const umb = look.umbrella && !fac && (kid ? P.umbKid : fem ? P.umbF : P.umbM);
+  if (umb && (h >>> 8) % 2) pool = umb;
+  pool = pool.filter(has);
+  if (!pool.length) return cast.ids[h % cast.ids.length];
+  // a street of strangers deals the pool round-robin (from a random start), so builds repeat as little as possible
+  const k = pool.join(), n = dealt.get(k) ?? h;
+  dealt.set(k, n + 1);
+  return pool[n % pool.length];
+}
+const dealt = new Map();
+// glow level of a gadget switched on (docs/COSTUMES.md); anything else: 2
+const GADGET_ON = { chronolith_band: 3, chronolith_cuff_thin: 2.4, ar_monocle: 2.6, ar_half_visor: 2.4, shoulder_lamp: 4, echo_emitter: 3, belt_scanner: 2.2, earpiece: 2 };
+const LAMP_POWER = 20;   // candela at full beam
 const proxyBone = () => new THREE.Object3D(); // writes from old mission code land here harmlessly
 
 // ---------- the humanoid ----------
@@ -177,21 +216,89 @@ export class Character {
     this.legs = [['R', -1], ['L', 1]].map(([S, side]) => ({ th: proxyBone(), kn: proxyBone(), ft: B['foot_' + S] || proxyBone(), side }));
     this.eyes = []; this.mats = {};
     this.template = id; this.scale3d = scale;
-    if (look.wristMark && B.forearm_L && B.hand_L) {
+    // gadgets (docs/COSTUMES.md): glow levels are driven through setGadget(); the Chronolith band answers era switches
+    this.gadgetLv = {}; this.gadgetTo = {};
+    const band = ['chronolith_band', 'chronolith_cuff_thin'].find(t => person.gadgets[t]?.slot != null || person.gadgets[t]?.glow.length);
+    if (band) this.wrist = { gadget: band };
+    else if (look.wristMark && B.forearm_L && B.hand_L) {     // a build without the band: a thin glowing ring
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.0035, 8, 28), new THREE.MeshStandardMaterial({ color: 0x0b2a33, emissive: 0x2fd8ff, emissiveIntensity: 1.6, roughness: 0.3 }));
       const hp = B.hand_L.position.clone(); ring.position.copy(hp).multiplyScalar(0.86);
       ring.lookAt(hp.clone().multiplyScalar(2)); B.forearm_L.add(ring); this.wrist = ring;
     }
-    if (look.umbrella) this.addUmbrella(look.umbrella);
-    this.root.traverse(o => { if (o.isMesh) { o.castShadow = this.shadows !== false; o.receiveShadow = !look.lod; this.meshes.push(o); } });
+    // the build's own umbrella is shown only for an umbrella look (indoors, portraits: folded away)
+    if (person.gadgets.led_umbrella) person.showProp('led_umbrella', !!look.umbrella);
+    this.lodWant = 0; this.lodT = Math.random() * 0.5;
+    this.root.traverse(o => { if (o.isMesh) { if (this.shadows === false) o.castShadow = false; o.receiveShadow = !look.lod; this.meshes.push(o); } });
     this.update(0);
+  }
+
+  /** Has this person's costume build got gadget `name` (e.g. 'shoulder_lamp', 'ar_monocle')? */
+  hasGadget(name) { return !!this.person?.gadgets[name]; }
+  /**
+   * Switch a gadget's glow on / off (true / false) or to a level (number). Off returns it to the build's idle level.
+   * Levels ease in update(). 'shoulder_lamp' also drives its SpotLight when attachLamp() gave it one.
+   * Returns false when this person has no such gadget.
+   */
+  setGadget(name, on) {
+    const g = this.person?.gadgets[name];
+    if (!g) return false;
+    this.gadgetTo[name] = typeof on === 'number' ? on : on ? (GADGET_ON[name] ?? 2) : g.idle;
+    if (!(name in this.gadgetLv)) this.gadgetLv[name] = g.level;
+    if (name === 'shoulder_lamp' && this.lamp) this.lamp.on = !!on;
+    return true;
+  }
+
+  /**
+   * A real SpotLight in the shoulder lamp (the player in dark scenes; one per scene on phones). opts.shadow: cast
+   * shadows (high tier only). Kept in the scene while available and dimmed to 0 when off, so toggling never recompiles
+   * shaders. Returns the light, or null when the build has no lamp.
+   */
+  attachLamp(opts = {}) {
+    const P = this.person;
+    if (!P || !P.gadgets.shoulder_lamp || !P.bones.chest) return null;
+    if (!this.lamp) {
+      const chest = P.bones.chest, L = new THREE.SpotLight(0xe8f4ff, 0, 16, 0.44, 0.6, 1.3);
+      L.name = 'shoulderLamp'; L.userData.noShaft = true; L.userData.noCapture = true;
+      L.shadow.mapSize.set(512, 512); L.shadow.bias = -0.0006; L.shadow.normalBias = 0.02; L.shadow.camera.near = 0.15;
+      chest.add(L, L.target);
+      this.lamp = { light: L, on: false, k: 0 };
+      this.placeLamp();
+    }
+    const L = this.lamp.light;
+    L.castShadow = !!opts.shadow; L.shadow.autoUpdate = false;
+    return L;
+  }
+  detachLamp() {
+    if (!this.lamp) return;
+    const L = this.lamp.light; L.parent?.remove(L); L.target.parent?.remove(L.target); L.dispose?.();
+    this.lamp = null;
+  }
+  // the light sits on the lamp lens (centre of its glow vertices) and aims ahead and a little down
+  placeLamp() {
+    const P = this.person, L = this.lamp.light, chest = P.bones.chest;
+    this.root.updateMatrixWorld(true);
+    const at = new THREE.Vector3(), v = new THREE.Vector3();
+    let n = 0;
+    for (const o of P.meshes) {
+      const gid = o.geometry.attributes._gid;
+      if (!gid || !o.userData.gadgets) continue;
+      const slot = JSON.parse(o.userData.gadgets).indexOf('shoulder_lamp');
+      for (let i = 0; i < gid.count; i++) if (Math.round(gid.getX(i) * 32) === slot) { o.getVertexPosition(i, v); o.localToWorld(v); at.add(v); n++; }
+    }
+    if (n) at.divideScalar(n); else chest.localToWorld(at.set(0.1, 0.15, 0.14));
+    const fwd = v.set(0, -0.3, 1).applyQuaternion(this.root.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const aim = at.clone().addScaledVector(fwd, 4);
+    at.addScaledVector(fwd, 0.03);
+    L.position.copy(chest.worldToLocal(at)); L.target.position.copy(chest.worldToLocal(aim));
   }
 
   /** Rebuild in place (keeps this.root), e.g. once the 3D cast has finished loading. */
   rebuild() {
     for (const c of [...this.root.children]) this.root.remove(c);
+    const lamp = this.lamp && { shadow: this.lamp.light.castShadow, on: this.lamp.on }; this.detachLamp();
     this.meshes = []; this.person = null; this.headApi = null; this.wrist = null; this.umbrella = null; this.umbrellaPose = false;
     this.build();
+    if (lamp && this.attachLamp({ shadow: lamp.shadow })) this.setGadget('shoulder_lamp', lamp.on);
   }
 
   addCap(color) {
@@ -333,9 +440,44 @@ Character.prototype.update3d = function (dt) {
       }
     }
   }
-  if (this.wrist) this.wrist.material.emissiveIntensity = 1.4 + Math.sin(this.t * 2.2) * 0.6 + (this.wristBoost || 0);
+  // gadget glow: levels ease toward their targets; the Chronolith band flashes on an era switch (temporal.js wristBoost)
+  const band = this.wrist?.gadget, boost = this.wristBoost || 0;
+  for (const name in this.gadgetTo) {
+    const to = this.gadgetTo[name], lv = this.gadgetLv[name];
+    if (lv === to && name !== band) continue;
+    const nv = dt > 0 ? lv + (to - lv) * Math.min(1, dt * 7) : to;
+    this.gadgetLv[name] = Math.abs(nv - to) < 0.003 ? to : nv;
+    if (name !== band) P.setGadget(name, this.gadgetLv[name]);
+  }
+  if (band) {
+    const base = this.gadgetLv[band] ?? P.gadgets[band].level;
+    const lv = base + boost * 0.5;
+    if (lv !== this._bandLv) { this._bandLv = lv; P.setGadget(band, lv); }
+  } else if (this.wrist?.material) this.wrist.material.emissiveIntensity = 1.4 + Math.sin(this.t * 2.2) * 0.6 + boost;
   if (this.wristBoost) this.wristBoost = Math.max(0, this.wristBoost - dt * 6);
+  // shoulder lamp: the beam follows the lens level (eased); the shadow map is only re-rendered while it shines
+  const lamp = this.lamp;
+  if (lamp) {
+    lamp.k += ((lamp.on ? 1 : 0) - lamp.k) * (dt > 0 ? Math.min(1, dt * 9) : 1);
+    if (!lamp.on && lamp.k < 0.01) lamp.k = 0;
+    lamp.light.intensity = LAMP_POWER * lamp.k;
+    lamp.light.shadow.autoUpdate = lamp.light.castShadow && lamp.k > 0;
+  }
+  // crowd level of detail (look.lod people with a low build): far from the camera or on the low character tier
+  if (this.p.lod && P.setLOD) {
+    this.lodT -= dt;
+    if (this.lodT <= 0) {
+      this.lodT = 0.5;
+      const cam = charView.camera;
+      let want = charView.low ? 1 : 0;
+      if (!want && cam) { this.root.getWorldPosition(_v); want = _v.distanceToSquared(cam.position) > charView.far * charView.far ? 1 : 0; }
+      if (want !== P.lod) P.setLOD(want);
+    }
+  }
 };
+
+// Camera and tier for crowd LOD (Game sets them): low = every crowd person on its low build (phones, low tier).
+export const charView = { camera: null, low: false, far: 14 };
 
 // Studio portraits for the dialogue UI and dossier. Rendered lazily on first use (each property is a getter).
 let portraitRenderer = null;
@@ -360,7 +502,9 @@ function renderOne(id, def, size) {
   ch.root.updateMatrixWorld(true);
   const hp = new THREE.Vector3(); ch.head.getWorldPosition(hp);
   const eye = hp.clone().add(new THREE.Vector3(0, ch.person ? 0.09 : 0.07, ch.person ? 0.02 : 0));
-  cam.position.set(eye.x + 0.3, eye.y + 0.05, eye.z + 0.95); cam.lookAt(eye.x, eye.y - 0.02, eye.z);
+  // costume builds: frame head and shoulders with the eyes on the upper third (hats, hoods and visors stay in frame)
+  const d = ch.person ? 1.08 : 0.95, aimY = ch.person ? eye.y - 0.075 : eye.y - 0.02;
+  cam.position.set(eye.x + d * 0.32, eye.y + 0.03, eye.z + d); cam.lookAt(eye.x, aimY, eye.z);
   if (ch.headApi) { ch.headApi.setGaze(cam.position); ch.headApi.update(0); }
   r.render(scene, cam);
   const url = r.domElement.toDataURL('image/jpeg', 0.9);

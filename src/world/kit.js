@@ -82,8 +82,71 @@ export function neonSign(text, color, w = 3, h = 0.75, opts = {}) {
   return m;
 }
 
+// ---------- surface materials (docs/RENDERING.md, stage 3) ----------
+// asphaltMaterial / tileMaterial / stoneMaterial / concreteMaterial keep their signatures and return the same
+// MeshStandardMaterial, now with a GPU-baked albedo, tangent-space normal map and ORM map (realism.textureSet: tile
+// bevels and recessed grout, chamfered stone joints, concrete pores and pour lines, asphalt aggregate and cracks),
+// texture size by tier (256 low, 512 medium / high, the asphalt 1024 on high). The bakes are colour-neutral and
+// shared by every call (one set per kind and variant), the authored colour is material.color, so materials with equal
+// arguments stay equal (static batching merges them) and a mission's palette is kept. 'low' skips the AO map (one
+// texture tap less; the grout and joints are already dark in the albedo). The canvas versions from before the upgrade
+// come back with ?infra=nomat (or off), or at runtime with setKitMaterialsLegacy(scene, true) for A/B captures.
+const NEUTRAL = 0xbcbcbc;   // sRGB 188 = linear 0.5: bakes are made with this colour, material.color = authored / neutral
+const _nl = new THREE.Color(NEUTRAL).r;
+const kitClones = new WeakMap();
+function kitSet(kind, params, variant, hero) {
+  const T = RZ.tier();
+  return RZ.textureSet(kind, params, { size: hero ? (T.kitHero ?? T.texHero) : (T.kitTex ?? T.tex), seed: 11 + variant * 7 });
+}
+// per-repeat clones (shared GPU texture, own uv transform), cached so equal arguments give equal texture objects
+function kitMaps(set, repeat) {
+  let m = kitClones.get(set); if (!m) kitClones.set(set, m = new Map());
+  const k = repeat[0] + ',' + repeat[1];
+  if (!m.has(k)) {
+    const c = t => { const x = t.clone(); x.repeat.set(repeat[0], repeat[1]); x.anisotropy = Math.max(t.anisotropy, 4); return x; };
+    m.set(k, { map: c(set.map), normalMap: c(set.normalMap), orm: c(set.ormMap) });
+  }
+  return m.get(k);
+}
+const tintOf = (hex, mul = 1) => { const c = new THREE.Color(hex); return c.setRGB(c.r / _nl * mul, c.g / _nl * mul, c.b / _nl * mul); };
+// PBR version of a kit material, or null (legacy switch, no renderer to bake with): the caller builds the canvas one
+function kitPBR(kind, params, variant, repeat, o) {
+  if (!infraOn('mat')) return null;
+  let set;
+  try { set = kitSet(kind, params, variant, o.hero); } catch (e) { if (!kitPBR.warned) { kitPBR.warned = true; console.warn('kit: surface bake unavailable, canvas materials', e.message); } return null; }
+  const M = kitMaps(set, repeat), ao = RZ.getQuality() !== 'low';
+  const props = { map: M.map, normalMap: M.normalMap, roughnessMap: M.orm, aoMap: ao ? M.orm : null, color: o.color, roughness: o.roughness, metalness: o.metalness };
+  const mat = new THREE.MeshStandardMaterial({ ...props, envMapIntensity: o.envMapIntensity ?? 1 });
+  mat.normalScale.set(o.normalScale ?? 1, o.normalScale ?? 1);
+  mat.defines = { RZ_SPECAA: '' };   // realism's shared chunk: specular AA on the mapped normal (no sparkle on glossy tiles)
+  mat.userData.rzKitMat = { pbr: { ...props, defines: mat.defines }, legacy: o.legacy };
+  return mat;
+}
+/**
+ * A/B switch for captures and cost measurements: legacy = true gives the scene's kit surface materials (asphalt, tile,
+ * stone, concrete) their canvas textures from before the stage-3 upgrade, false the baked PBR sets again. Returns the
+ * number of materials switched.
+ */
+export function setKitMaterialsLegacy(scene, legacy) {
+  const done = new Set();
+  scene.traverse(o => {
+    if (o.userData.rzBatch) return;   // merged copies (private material clones) are rebuilt by the caller
+    for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+      const K = m.userData?.rzKitMat; if (!K || typeof K.legacy !== 'function' || done.has(m)) continue;
+      done.add(m);
+      if (legacy && !K.legacyProps) K.legacyProps = K.legacy();
+      const P = legacy ? K.legacyProps : K.pbr;
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'aoMap']) m[k] = P[k] || null;
+      if (P.color) m.color.copy(P.color); else m.color.setRGB(1, 1, 1);
+      m.roughness = P.roughness; m.metalness = P.metalness; m.defines = P.defines || {};
+      m.needsUpdate = true;
+    }
+  });
+  return done.size;
+}
+
 // Wet asphalt with puddles: roughness + color variation
-export function asphaltMaterial(repeat = [6, 30]) {
+function asphaltLegacy(repeat) {
   const rough = canvasTex(512, 512, (g, w, h) => {
     g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, w, h);
     const r = rng(7);
@@ -99,10 +162,16 @@ export function asphaltMaterial(repeat = [6, 30]) {
     const r = rng(9);
     for (let i = 0; i < 9000; i++) { const v = 20 + r() * 30; g.fillStyle = `rgb(${v},${v},${v + 3})`; g.fillRect(r() * w, r() * h, 1.5, 1.5); }
   }, 'asphaltC', { repeat });
-  return new THREE.MeshStandardMaterial({ map: col, roughnessMap: rough, roughness: 0.85, metalness: 0.15, envMapIntensity: 1.2 });
+  return { map: col, roughnessMap: rough, roughness: 0.85, metalness: 0.15 };
+}
+export function asphaltMaterial(repeat = [6, 30]) {
+  const pbr = kitPBR('wetAsphalt', { color: 0x2e3033, stone: 0x5e5c5a, puddles: 0.4, cracks: 0.55, wear: 0.45, wet: 0.55 }, 0, repeat,
+    { hero: true, roughness: 0.92, metalness: 0.15, envMapIntensity: 1.2, legacy: () => asphaltLegacy(repeat) });
+  if (pbr) return pbr;
+  return new THREE.MeshStandardMaterial({ ...asphaltLegacy(repeat), envMapIntensity: 1.2 });
 }
 
-export function tileMaterial(base = '#3a3d42', grout = '#202226', repeat = [8, 8], opts = {}) {
+function tileLegacy(base, grout, repeat, opts) {
   const map = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = grout; g.fillRect(0, 0, w, h);
     const r = rng(base.length * 13);
@@ -111,10 +180,18 @@ export function tileMaterial(base = '#3a3d42', grout = '#202226', repeat = [8, 8
       g.fillStyle = '#' + c.getHexString(); g.fillRect(x * 64 + 2, y * 64 + 2, 60, 60);
     }
   }, 'tile' + base + grout, { repeat });
-  return new THREE.MeshStandardMaterial({ map, roughness: opts.roughness ?? 0.35, metalness: opts.metalness ?? 0.1, ...opts.extra });
+  return { map, roughness: opts.roughness ?? 0.35, metalness: opts.metalness ?? 0.1 };
+}
+export function tileMaterial(base = '#3a3d42', grout = '#202226', repeat = [8, 8], opts = {}) {
+  // 4 x 4 tiles per repeat like the canvas version; grout baked at a quarter of the tile (linear), the mission's
+  // grout / tile contrast is kept within that (missions use 0.16-0.31); tile body roughness ~0.45 in the bake
+  const pbr = kitPBR('ceramicTile', { color: NEUTRAL, grout: 0x646464, count: 4, gloss: 0.2, variation: 0.35, lippage: 1, joint: 0.0055 }, 0, repeat,
+    { color: tintOf(base), roughness: Math.min(2.2, (opts.roughness ?? 0.35) / 0.45), metalness: opts.metalness ?? 0.1, legacy: () => tileLegacy(base, grout, repeat, opts) });
+  if (pbr) { if (opts.extra) pbr.setValues(opts.extra); return pbr; }
+  return new THREE.MeshStandardMaterial({ ...tileLegacy(base, grout, repeat, opts), ...opts.extra });
 }
 
-export function stoneMaterial(base = '#9a8466', repeat = [2, 2], seed = 3) {
+function stoneLegacy(base, repeat, seed) {
   const map = canvasTex(256, 256, (g, w, h) => {
     const r = rng(seed);
     g.fillStyle = base; g.fillRect(0, 0, w, h);
@@ -128,19 +205,30 @@ export function stoneMaterial(base = '#9a8466', repeat = [2, 2], seed = 3) {
       }
     }
   }, 'stone' + base + seed, { repeat });
-  const m = new THREE.MeshStandardMaterial({ map, roughness: 0.92, metalness: 0 });
+  return { map, roughness: 0.92, metalness: 0 };
+}
+export function stoneMaterial(base = '#9a8466', repeat = [2, 2], seed = 3) {
+  // ashlar: 6 courses per repeat like the canvas version, two bake variants (by seed parity)
+  const pbr = kitPBR('cutStone', { color: NEUTRAL, joint: 0x8a8a8a, variation: 0.6, weathering: 0.3, rows: 6 }, seed & 1, repeat,
+    { color: tintOf(base, 1.08), roughness: 1.12, metalness: 0, legacy: () => stoneLegacy(base, repeat, seed) });
+  const m = pbr || new THREE.MeshStandardMaterial(stoneLegacy(base, repeat, seed));
   m.userData.rzKit = 'stone';   // box() adds masonry detail to house-sized stone boxes
   return m;
 }
 
-export function concreteMaterial(base = '#6d6e70', repeat = [2, 2], opts = {}) {
+function concreteLegacy(base, repeat, opts) {
   const map = canvasTex(256, 256, (g, w, h) => {
     const r = rng(base.charCodeAt(2));
     g.fillStyle = base; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 3000; i++) { g.fillStyle = `rgba(${r() < 0.5 ? 0 : 255},${r() < 0.5 ? 0 : 255},${r() < 0.5 ? 0 : 255},${r() * 0.05})`; g.fillRect(r() * w, r() * h, 2 + r() * 3, 2 + r() * 3); }
     if (opts.stains) for (let i = 0; i < 8; i++) { const x = r() * w; const grd = g.createLinearGradient(0, 0, 0, h); grd.addColorStop(0, 'rgba(20,30,10,0.0)'); grd.addColorStop(1, 'rgba(20,30,10,0.35)'); g.fillStyle = grd; g.fillRect(x, 0, 6 + r() * 20, h); }
   }, 'conc' + base + !!opts.stains, { repeat });
-  return new THREE.MeshStandardMaterial({ map, roughness: opts.roughness ?? 0.85, metalness: 0.02 });
+  return { map, roughness: opts.roughness ?? 0.85, metalness: 0.02 };
+}
+export function concreteMaterial(base = '#6d6e70', repeat = [2, 2], opts = {}) {
+  const pbr = kitPBR('concrete', { color: NEUTRAL, formwork: 0.35, stains: opts.stains ? 0.95 : 0.2, pores: 0.6, slabs: 0, cracks: 0.45 }, opts.stains ? 1 : 0, repeat,
+    { color: tintOf(base), roughness: (opts.roughness ?? 0.85) / 0.9, metalness: 0.02, legacy: () => concreteLegacy(base, repeat, opts) });
+  return pbr || new THREE.MeshStandardMaterial(concreteLegacy(base, repeat, opts));
 }
 
 export function sky(top, horizon, opts = {}) {

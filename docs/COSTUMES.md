@@ -187,6 +187,14 @@ These sit alongside the existing `glasses` and `mask`.
 - `ROLE_TEMPLATE` maps each story role to its new build id (the ids below). The crowd `POOLS` change to era pools: `c49_*` for 2049 streets, `helix_*` / `transit_worker` / `technician` for Helix and services, `c26_*` for 2026, `surv_*` / `continuum_*` for 2196 and `anc_*` for the settlement. The pool is picked from `look.era`, so no person shows up in the wrong year.
 - `citizenLook` / `settlerLook` recolouring keeps to each era's palette above.
 
+### As integrated (src/core/character.js, src/core/game.js)
+
+- Template choice, first match wins: `look.costume`, `look.template`, `ROLE_TEMPLATE[look.role]`, `look.role` (any of them only when the id is in the cast file), else the era pool. The era comes from `look.era` (`2026` / `past`, `2049` / `present`, `2196` / `future`, `ancient`); looks without one are 2049 unless they wear a sash or leg wraps (ancient). `look.faction` (`helix`, `security`, `transit`, `tech`, `continuum`) picks a uniformed pool; a lab coat in 2049 means `helix` and armour in 2196 means `continuum`. Strangers are dealt round-robin from their pool. Umbrella looks get a build that carries the LED umbrella half the time (the rest wear sealed rain shells); 2026 and 2196 children use `kid_kai` / `lotte`.
+- Look helpers in `src/story/cast.js`: `citizenLook` (2049), `settlerLook` (ancient), `survivorLook` (2196, `opts.faction = 'continuum'` for troops) and `pastLook` (2026).
+- `character.setGadget(type, on)`: `true` lights a gadget at its "on" level, `false` returns it to idle, a number sets the level; levels ease in `update()`. `character.hasGadget(type)`.
+- Hooks: the Chronolith band flashes on every era switch (`temporal.js` sets `wristBoost`); the AR monocle lights while Residue Vision is on (`game.setResidue`); the shoulder lamp is offered in dark scenes (`newScene({ dark })`, or a near-black background; missions can call `game.setLampAvailable(on)`), toggled with L or the touch LAMP button (`game.setLamp(on)`). It is one real SpotLight on the lens (`character.attachLamp`), kept in the scene at zero while off so switching never recompiles shaders; it casts shadows on the high tier only, and its shadow map is only redrawn while it shines.
+- Crowd LOD: people with `look.lod` switch to the 6 000-triangle build beyond 14 m from the camera, and always on tiers whose `characterDetail` hint is `low` (phones).
+
 ## Character specs
 
 Body values follow `src/story/cast.js` and `assets/cast/LIKENESS.md`. Ancestries, ages, builds and hair vary across each pool. Voice-only cast (`voice`, `speaker`, `phone`, `echo`, `echo2049`, `recording`) has no costume.

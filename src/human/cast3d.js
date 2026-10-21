@@ -1,5 +1,5 @@
-// The 3D cast: realistic skinned people (MakeHuman-based bodies with their own textures, clothing and rig, from the
-// owner's AfterZero character pipeline, v1.2) plus shared motion-capture clips retargeted onto every body.
+// The 3D cast: realistic skinned people (MakeHuman-based bodies in era-correct costumes with gadgets, built by
+// tools/characters (CAST=nrzero), see docs/COSTUMES.md and assets/models/cast_index.json) plus shared motion-capture clips retargeted onto every body.
 // assets/models/cast.glb holds every person (one root per template id); assets/models/anims.glb holds the reference rig
 // and clips (idle, walk_slow, walk, jog, run, sprint, crouch, talk, nod, look, sit, work, sad, fall).
 import * as THREE from 'three';
@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
-const T = {};            // id -> { root, clips, speeds, height, townsfolk }
+const T = {};            // id -> { root, clips, speeds, height, box }
 const key = n => n.replace(/_\d+$/, '');
 let lib = null;          // { clips, root, meta }
 export const cast = { ready: false, ids: [], meta: {}, loading: null };
@@ -64,7 +64,7 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
         root.traverse(o => { if (o.isMesh && !o.userData.gadget && !o.userData.lod && !/^g[xlp]_/.test(o.name)) box.expandByObject(o); });
         if (box.isEmpty()) box.setFromObject(root);
         box.max.y = stature;
-        T[root.name] = { root, height: stature, box, clips: null, speeds: {}, townsfolk: /^town_/.test(root.name) };
+        T[root.name] = { root, height: stature, box, clips: null, speeds: {} };
         cast.ids.push(root.name);
       });
       cast.ready = cast.ids.length > 0;
@@ -225,7 +225,7 @@ function glowGroupMaterial(src) {
 }
 
 /**
- * Make a person from template `id`. opts: { seed, clothA, clothB, skin (hex, townsfolk only), shadow, glow (force every gadget level) }.
+ * Make a person from template `id`. opts: { seed, clothA, clothB, skin (hex, builds with a 'skin' slot), shadow, glow (force every gadget level) }.
  * Returns { root, bones, mixer, actions, meshes, height, gadgets, setGadget(type, level), showProp(type, on),
  *           play(name, fade, speed), move(speed, scale, {crouch}), update(dt) }.
  * Gadgets (docs/COSTUMES.md): glow meshes `gx_<type>` (userData.gadget, slot 'glow', idle level, segs, `_gseg` attribute)
@@ -268,7 +268,7 @@ export function makePerson(id, opts = {}) {
       }
       if (slot === 'clothA' && opts.clothA != null) return variant(m, 'a' + opts.clothA, v => v.color.copy(lin(opts.clothA)));
       if (slot === 'clothB' && opts.clothB != null) return variant(m, 'b' + opts.clothB, v => v.color.copy(lin(opts.clothB)));
-      if (slot === 'skin' && opts.skin != null && t.townsfolk) return variant(m, 's' + opts.skin, v => v.color.copy(lin(opts.skin)));
+      if (slot === 'skin' && opts.skin != null) return variant(m, 's' + opts.skin, v => v.color.copy(lin(opts.skin)));
       return m;
     });
     if (o.material.length === 1) o.material = o.material[0];

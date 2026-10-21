@@ -7,7 +7,7 @@ import { Collision } from './collision.js';
 import { Temporal } from './temporal.js';
 import { Player } from './player.js';
 import { TouchControls } from './touch.js';
-import { Character, renderPortraits } from './character.js';
+import { Character, renderPortraits, charView } from './character.js';
 import { loadCast, cast } from '../human/cast3d.js';
 import { CAST } from '../story/cast.js';
 
@@ -25,7 +25,7 @@ export class Game {
     this.touch = new TouchControls(this);
     this.actors = {}; this.interactables = []; this.updaters = []; this.camBlockers = [];
     this.control = false; this.paused = false; this.running = false; this.token = 0;
-    this.time = 0; this.cine = null; this.residueOn = false; this.residueUnlocked = false; this.residueObjs = [];
+    this.time = 0; this.cine = null; this.residueOn = false; this.lampOn = false; this.lampAvailable = false; this.darkScene = false; this.residueUnlocked = false; this.residueObjs = [];
     this.checkpointData = null; this.flags = {}; this.killY = -30;
     this.clock = new THREE.Clock();
     const qp = new URLSearchParams(location.search);
@@ -68,6 +68,13 @@ export class Game {
     if (!new URLSearchParams(location.search).has('procedural')) await loadCast();
     if (cast.ready) this.player.char.rebuild();
     this.ui.portraits = renderPortraits(CAST);
+    // crowd LOD follows the camera; phones / the low tier keep every crowd person on the low build. The lamp's shadow
+    // is a high-tier extra.
+    charView.camera = this.engine.camera;
+    this.onQuality((q, st) => {
+      charView.low = st?.hints?.characterDetail === 'low';
+      if (this.player.char.lamp) this.player.char.attachLamp({ shadow: q === 'high' });
+    });
   }
 
   // ---------- scene lifecycle ----------
@@ -86,6 +93,11 @@ export class Game {
     this.engine.renderer.toneMappingExposure = opts.exposure ?? 1;
     this.engine.bloom.strength = opts.bloom ?? 0.7; this.engine.bloom.threshold = opts.bloomThreshold ?? 0.9;
     this.setResidue(false);
+    // Kai's shoulder lamp: only in dark scenes (opts.dark, or a near-black background); the light stays in the scene
+    // at zero while off so switching it never recompiles shaders
+    const bg = s.background, lum = bg?.isColor ? bg.r * 0.2126 + bg.g * 0.7152 + bg.b * 0.0722 : 0;
+    this.darkScene = opts.dark ?? lum < 0.01;
+    this.setLampAvailable(this.darkScene);
     return s;
   }
 
@@ -158,8 +170,21 @@ export class Game {
     this.ui.detection(0);
   }
 
+  // shoulder lamp (L key / touch LAMP button): available in dark scenes; missions may call setLampAvailable themselves
+  setLampAvailable(on) {
+    const ch = this.player.char;
+    this.lampAvailable = !!on && ch.hasGadget('shoulder_lamp');
+    if (this.lampAvailable) ch.attachLamp({ shadow: this.engine.quality === 'high' }); else ch.detachLamp();
+    this.setLamp(false);
+  }
+  setLamp(on) {
+    this.lampOn = !!on && this.lampAvailable;
+    this.player.char.setGadget('shoulder_lamp', this.lampOn);
+  }
+
   setResidue(on) {
     this.residueOn = on; this.ui.residue(on);
+    this.player.char.setGadget('ar_monocle', on);     // the AR monocle lights while Residue Vision is on
     for (const o of this.residueObjs) o.visible = on && (!o.userData.states || o.userData.states.includes(this.temporal.current));
     if (on) this.audio.sfxPlay('anomaly');
   }
@@ -214,6 +239,7 @@ export class Game {
     this.temporal.update(dt);
     // residue vision
     if (this.residueUnlocked && allow && this.input.hit('KeyF')) this.setResidue(!this.residueOn);
+    if (this.lampAvailable && allow && this.input.hit('KeyL')) { this.setLamp(!this.lampOn); this.audio.sfxPlay('clock'); }
     const fx = this.engine.fx;
     fx.uResidue.value += ((this.residueOn ? 1 : 0) - fx.uResidue.value) * Math.min(1, dt * 5);
     // interactables

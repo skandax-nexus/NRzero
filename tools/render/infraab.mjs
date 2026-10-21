@@ -8,6 +8,8 @@
 //        | probe1 / probe2 (facade shader cut short: plumbing only / wall without windows) | aniso1 (facade walls without anisotropic filtering)
 //        | mipnear / miptri (facade wall textures with LinearMipmapNearest / LinearMipmapLinear filtering)
 //        | fulllight ('low' facades with the full BRDF for direct lights)
+//        | oldmat (stage-3 kit surface materials reverted to their canvas textures; everything else as 'new')
+//        | i0 / i1 / i2 (facades forced to RZ_INTERIOR 0 / 1 / 2)
 //   node tools/render/infraab.mjs m1 m1a_establishing low 844 390 --mobile 6 2 new legacy
 //   --shots=<dir> also saves the first frame of every cfg as <dir>/<view>_<gfx>_<cfg>.png (same frame, same page)
 /* global window */
@@ -41,6 +43,10 @@ for (let k = 0; k < +reps; k++) for (const c of cfgs) {
   const st = await p.evaluate(cfg => {
     const g = window.__game, E = g.engine;
     E.setInfraLegacy(cfg === 'legacy' || cfg === 'batchonly');
+    if (E.setMaterialsLegacy) E.setMaterialsLegacy(cfg === 'oldmat');
+    const iv = /^i(\d)$/.exec(cfg);
+    g.scene.traverse(o => { const m = o.material; if (!m || !m.userData?.facade) return; if (m.userData.i0 === undefined) m.userData.i0 = m.defines.RZ_INTERIOR;
+      const want = iv ? +iv[1] : m.userData.i0; if (String(m.defines.RZ_INTERIOR) !== String(want)) { m.defines.RZ_INTERIOR = want; m.needsUpdate = true; } });
     // probeN: facade shader cut short (realism RZ_FACADE_PROBE: 1 = plumbing only, 2 = wall without windows)
     const pr = /^probe(\d)$/.exec(cfg);
     // fulllight: 'low' facades with the full physical BRDF for direct lights (realism RZ_FACADE_FULL_LIGHT)

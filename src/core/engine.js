@@ -176,8 +176,9 @@ const CinemaShader = {
       #endif
       }
     #else
-      // lens aberration grows toward the frame edge only (the centre stays sharp)
-      col = aberrated(uv, dir, uShift*0.012 + uDamage*0.006 + r2*0.0055);
+      // lens aberration only toward the corners: at most ~1 px of R/B split inside the inner frame, so thin bright lines
+      // (rain, LED strips, window frames) stay one colour; the full 0.0015 is reached in the corners only
+      col = aberrated(uv, dir, uShift*0.012 + uDamage*0.006 + r2*0.0015*smoothstep(0.35, 1.0, r2));
     #endif
     #ifdef BLOOM
       col += texture2D(tBloom, uv).rgb;
@@ -555,7 +556,10 @@ function tierSettings(q, device) {
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
       light: { probe: 128, probeMove: 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
-      infra: { smallCull: 120, atlas: 2048 },
+      // phones on medium: the lite facade (RZ_INTERIOR 0, measured +12 % instead of +23-35 % raster on m1), low's small-prop
+      // cull distance, 1024 sign atlases and no shadows from small batched / street-kit props (m1a <= 250 draw calls)
+      infra: m ? { smallCull: 85, atlas: 1024, facadeInterior: 0, smallShadows: false } : { smallCull: 120, atlas: 2048 },
+      bloomMips: m ? 3 : 5,
       hints: { characterDetail: m ? 'low' : 'high', crowd: 0.6, drawDistance: 0.8, maxLights: 6, particles: 0.6 } },
     low: { dprCap: m ? 1 : 0.75, shadows: false, shadowMapMax: 512, softShadows: false, bloom: false, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: null, dof: false, autoExposure: false,
@@ -674,6 +678,22 @@ export class Engine {
     const onResize = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; this.resize(); }); };
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
+    // WebGL context restored (phones drop it on app switch or under memory pressure): three re-creates its render
+    // targets but not their contents. The scene probe is captured again, the batches rebuilt, eye adaptation restarts.
+    r.domElement.addEventListener('webglcontextrestored', () => this._contextRestored());
+  }
+  _contextRestored() {
+    const L = this._light, old = L.probe;
+    L.probe = null; this._lightingTier();
+    if (this.scene && old && this.scene.environment === old.texture) this.scene.environment = L.probe.texture;
+    if (L.legacyEnv && this.scene?.environment === L.legacyEnv) this.scene.environment = L.probe.texture;
+    L.legacyEnv = null;
+    try { old?.dispose(); } catch { /* resources of the lost context */ }
+    L.captured = false; L.sig = ''; L.frames = 0; L.lastCap = -1e9;
+    this._batch.reset(); this._bFrames = 0;
+    this.exposurePass.release?.(); this._ae.snap = 1; this._ae.ref = 1.2;
+    this._envSwitch();
+    this.stats.contextRestores = (this.stats.contextRestores || 0) + 1;
   }
 
   // q: 'high' | 'medium' | 'low'. opts.adaptive overrides the tier's adaptive-resolution default.
@@ -685,8 +705,8 @@ export class Engine {
     this.autoTier = !!opts.auto;
     const s = this.settings = tierSettings(q, this.device);
     this.quality = q;
-    RZ.setQuality(q);
-    this._batch.smallCull = s.infra.smallCull; this._batch.atlasSize = s.infra.atlas;
+    RZ.setQuality(q, s.infra.facadeInterior !== undefined ? { interior: s.infra.facadeInterior } : undefined);
+    this._batch.smallCull = s.infra.smallCull; this._batch.atlasSize = s.infra.atlas; this._batch.smallShadows = s.infra.smallShadows !== false;
     const r = this.renderer;
     r.shadowMap.enabled = s.shadows;
     r.shadowMap.type = s.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
@@ -703,8 +723,23 @@ export class Engine {
     A.samples.length = 0; A.good = 0; A.cooldown = 0; A.windowStart = 0; A.slow = 0; A.ceiling = 1; A.ceilingUntil = 0; A.raisedAt = 0; A.fails = 0;
     this._sweep = 0;
     this.resize();
-    if (!first && prev !== q) this.refreshMaterials();
+    if (!first && prev !== q) { this._retier(); this.refreshMaterials(); }
     if (!opts.silent && prev !== q) this.emitQuality();
+  }
+
+  // Runtime tier change (Graphics menu, adaptive auto-downgrade): content that is already built follows the new tier.
+  // Facade materials that took their detail from the tier get the new RZ_INTERIOR (going to the lite path frees the
+  // wall normal / ORM arrays), batches and sign atlases are rebuilt at the new atlas size, street-kit shadows follow.
+  _retier() {
+    const scene = this.scene; if (!scene) return;
+    const interior = RZ.tier().interior, seen = new Set();
+    scene.traverse(o => {
+      for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+        if (seen.has(m) || !m.userData?.facade?.followsTier) continue;
+        seen.add(m); RZ.setFacadeInterior(m, interior);
+      }
+    });
+    this._batch.reset(); this._bFrames = 0; this._culls = null;
   }
 
   // Tier-gate the post passes (and free the GPU memory of the ones a tier does not use).
@@ -721,6 +756,12 @@ export class Engine {
     const defs = this.cinema.material.defines;
     const set = (k, on) => { if (on) defs[k] = ''; else delete defs[k]; };
     set('CHEAP', s.cheapPost); set('FXAA', fxaa); set('AUTO_EXPOSURE', ae); set('NO_GRADE', off.has('nograde')); set('BLOOM', s.bloom);
+    // bloom mip count per tier (medium phones: 3, 4 draw calls fewer); the remaining mips carry the dropped ones' weight
+    const B = this.bloom, mips = Math.min(B.renderTargetsHorizontal.length, s.bloomMips ?? 5), bf = B.compositeMaterial.uniforms.bloomFactors.value;
+    B._bf0 = B._bf0 || bf.slice();
+    const kept = B._bf0.slice(0, mips).reduce((a, v) => a + v, 0), all = B._bf0.reduce((a, v) => a + v, 0);
+    for (let i = 0; i < bf.length; i++) bf[i] = i < mips ? B._bf0[i] * all / kept : 0;
+    B.nMips = mips;
     delete defs.FUSED_OUTPUT;
     this._toneKey = -1;   // tone-mapping defines are rebuilt on the next frame
     this.cinema.material.needsUpdate = true;
@@ -919,7 +960,7 @@ export class Engine {
     const old = L.probe, oldTex = old?.texture;
     L.probe = new RZ.EnvProbe(this.renderer, { size });
     const room = new RoomEnvironment();
-    L.probe.fill(room, [0, 0, 0], { measure: true });
+    L.probe.fill(room, [0, 0, 0], { measure: true }).keepAsFloor();
     room.dispose?.();
     L.roomLum = L.probe.luminance || 0.5;
     if (this.scene && oldTex && this.scene.environment === oldTex) { this.scene.environment = L.probe.texture; L.frames = 0; L.sig = ''; L.captured = false; }
@@ -1014,6 +1055,7 @@ export class Engine {
     }
     // probe brightened toward the studio level: diffuse keeps it, reflections at most 4x physical
     RZ.setEnvSpecular(scene.environment === P.texture && L.captured ? Math.min(1, 4 / Math.max(1e-3, P.scale)) : 1);
+    RZ.setEnvDiffuseSaturation(scene.environment === P.texture && L.captured ? L.diffSat ?? 1 : 1);
     // wet weather (global shader state): eases over ~2 s
     const wt = this.lightOn('wet') ? L.wetTarget : 0;
     L.wet += (wt - L.wet) * (dt > 0 ? 1 - Math.exp(-dt / 0.7) : 1);
@@ -1030,6 +1072,7 @@ export class Engine {
       const era = { ruin2196: 1.25, helix2026: 1, rain2049: 0.8, ancient: 0.6, neutral: 0.8 }[this.grade] ?? 0.8;
       const on = this.lightOn('shafts') ? s.shafts : 0;
       for (const sh of L.shafts) {
+        // (the shaft itself fades out while the camera is inside / next to its cone: realism.lightShaftFade)
         const l = sh.userData.light, k = on * haze * era * Math.min(1, l.intensity / 120);
         sh.visible = k > 0.01 && l.visible; sh.material.uniforms.uCol.value.copy(l.color).multiplyScalar(0.55 * k);
       }
@@ -1040,12 +1083,19 @@ export class Engine {
     const L = this._light;
     L.probe.start(this.scene, this.camera.position, {
       hide: o => !!(o.userData.character || o.userData.rzRain || o.isPoints || o.isLineSegments || o.isSprite),
-      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: this.scene.userData.envFill ?? this.settings.light.envFill ?? 0.15 },
+      // floor: no direction darker than half the studio light the scene was authored with in that direction (bright
+      // from above), so a blacked-out room keeps readable floors and characters' legs (up-facing surfaces under a black
+      // ceiling had almost no image-based light); measured on m1b street +14 %, m2b office floor about 2x
+      normalize: { luminance: L.roomLum, strength: this.scene.userData.envNormalize ?? 1, min: 0.5, max: 48, fill: this.scene.userData.envFill ?? this.settings.light.envFill ?? 0.15,
+        floor: this.scene.userData.envFloor ?? this.settings.light.envFloor ?? 0.5 },
       // emissive panels stay bright in reflections without blowing wet floors out; tinted eras keep their hue in the
       // key / hemisphere lights and fog, so the probe adds less of it (an orange sunset would turn green grass brown,
       // a red alarm strip would paint a whole lab red); a rainy street keeps its full neon colour
-      clamp: this.scene.userData.envClamp ?? 8, saturation: this.scene.userData.envSaturation ?? ({ ancient: 0.45, ruin2196: 0.55, helix2026: 0.7 }[gradeForScene(this.scene)] ?? (L.wetTarget > 0 ? 1 : 0.7)),
+      // the diffuse share is desaturated separately (L.diffSat -> realism.setEnvDiffuseSaturation): the valley's
+      // reflections keep the sunset colour while grass and stone are lit by a near-neutral sky (no ochre grass)
+      clamp: this.scene.userData.envClamp ?? 8, saturation: this.scene.userData.envSaturation ?? ({ ancient: 0.75, ruin2196: 0.55, helix2026: 0.7 }[gradeForScene(this.scene)] ?? (L.wetTarget > 0 ? 1 : 0.7)),
     });
+    L.diffSat = this.scene.userData.envDiffuseSaturation ?? ({ ancient: 0.3 }[gradeForScene(this.scene)] ?? 1);
     L.lastCap = t;
   }
   _probeDone() {
@@ -1054,9 +1104,11 @@ export class Engine {
     this.stats.probeLum = +(L.probe.luminance ?? 0).toFixed(4); this.stats.probeScale = +L.probe.scale.toFixed(2); this.stats.roomLum = +L.roomLum.toFixed(3);
     // the rig's program variants (light count + 1 / + 2) compile in the background now, not at the first close-up
     // (without KHR_parallel_shader_compile this is a plain compile at scene start, under the mission intro)
-    if (!L.rig.warm.has(this.scene) && this.settings.light.rig > 0) {
+    // On 'low' without KHR_parallel_shader_compile it is skipped: a synchronous compile of every visible material would
+    // be a hitch at gameplay start on a weak phone; the variants then compile at the first close-up, which starts with a cut.
+    const r = this.renderer, par = r.extensions?.has?.('KHR_parallel_shader_compile');
+    if (!L.rig.warm.has(this.scene) && this.settings.light.rig > 0 && (par || this.quality !== 'low')) {
       L.rig.warm.add(this.scene);
-      const r = this.renderer, par = r.extensions?.has?.('KHR_parallel_shader_compile');
       try { this._rigAttach(true); if (par) r.compileAsync(this.scene, this.camera).catch(() => {}); else r.compile(this.scene, this.camera); } catch { /* optional */ } finally { this._rigAttach(false); }
     }
   }
@@ -1126,6 +1178,7 @@ export class Engine {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h);
+    RZ.shared.viewH.value = Math.max(1, Math.round(h * pr));   // thin facade emitters are widened to ~1.5 px of this
     this.composer.setPixelRatio(pr);   // also resizes every pass at the new pixel ratio
     this.composer.setSize(w, h);
     this.fx.uAspect.value = w / h;
@@ -1211,7 +1264,19 @@ export class Engine {
     this.stats.batches = B.stats.batches; this.stats.batched = B.stats.members; this.stats.batchMs = B.stats.ms;
     // street kit: distance culling of small instanced props (userData.rzCullDist, scaled by the tier) and animated
     // props (userData.rzAnimate + update(t): traffic lights), collected every 60 frames
-    if (f === 1 || f % 60 === 0) { const c = [], a = []; s.traverse(o => { if (o.userData.rzCullDist) c.push(o); if (o.userData.rzAnimate) a.push(o); }); this._culls = c; this._anims = a; }
+    if (f === 1 || f % 60 === 0 || !this._culls) {
+      const c = [], a = [], shadows = this.settings.infra.smallShadows !== false;
+      s.traverse(o => {
+        if (o.userData.rzCullDist) {
+          c.push(o);
+          // medium phones: small street-kit props cast no shadow (their shadow-pass draws), restored on other tiers
+          if (o.userData.rzCast0 === undefined) o.userData.rzCast0 = o.castShadow;
+          o.castShadow = shadows && o.userData.rzCast0;
+        }
+        if (o.userData.rzAnimate) a.push(o);
+      });
+      this._culls = c; this._anims = a;
+    }
     if (this._culls?.length) {
       const k = this.settings.infra.smallCull / 120, cam = this.camera.position;
       for (const o of this._culls) { const r = o.boundingSphere || o.geometry?.boundingSphere; if (!r) continue; _infraV.copy(r.center).applyMatrix4(o.matrixWorld); o.visible = cam.distanceTo(_infraV) - r.radius < o.userData.rzCullDist * k; }
@@ -1226,6 +1291,15 @@ export class Engine {
     const n = KIT.setInfraLegacy(s, legacy);
     if (legacy) { this._batch.reset(); this.batchOn = false; }
     else { this.batchOn = KIT.infraOn('batch'); this._batch.reset(); if (this.batchOn) { this._batch.scan(s); this._batch.update(s, this.camera, this._bFrames); } }
+    return n;
+  }
+
+  // A/B for the stage-3 surface materials: legacy = true gives the kit's asphalt / tile / stone / concrete materials
+  // their canvas textures from before stage 3 (same page, same frame), false the baked PBR sets; batches are rebuilt.
+  setMaterialsLegacy(legacy) {
+    const s = this.scene; if (!s) return 0;
+    const n = KIT.setKitMaterialsLegacy(s, legacy);
+    this._batch.reset(); if (this.batchOn && s.userData.batch !== false) { this._batch.scan(s); this._batch.update(s, this.camera, this._bFrames); }
     return n;
   }
 

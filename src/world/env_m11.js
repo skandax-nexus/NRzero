@@ -204,7 +204,7 @@ export const TEX = {
   }),
   closed: () => plate('closed', 512, 256, (g) => {
     lines(g, ['HALDEN SECURITY'], 18, 26, 20, '#fff', 1, 700); g.fillStyle = '#b03a2e'; g.fillRect(0, 48, 512, 92);
-    lines(g, ['EAST WING CLOSED'], 22, 110, 52, '#fff', 1, 700);
+    lines(g, ['EAST WING CLOSED'], 22, 110, 44, '#fff', 1, 700);
     lines(g, ['System failure · 19.10.2049 · 08:14', 'By order of the Helix medical liaison'], 22, 182, 24, '#1a2a2e', 1.35);
   }, '#eef0ee', '#1a2a2e'),
   chapel: () => plate('chapel', 512, 160, (g) => { lines(g, ['CHAPEL · QUIET ROOM'], 20, 96, 44, '#163a40', 1, 700); lines(g, ['All faiths and none'], 22, 136, 20, '#3a5a60'); }),

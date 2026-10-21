@@ -23,6 +23,7 @@ const ICON = {
   board: svg('<rect x="3.5" y="4" width="7" height="7.5" rx="1"/><rect x="13.5" y="4" width="7" height="5" rx="1"/><rect x="13.5" y="12" width="7" height="8" rx="1"/><rect x="3.5" y="14.5" width="7" height="5.5" rx="1"/>'),
   jump: svg('<path d="M6.5 12.5 12 7l5.5 5.5"/><path d="M6.5 18 12 12.5l5.5 5.5" opacity=".55"/>'),
   crouch: svg('<path d="M6.5 6 12 11.5 17.5 6" opacity=".55"/><path d="M6.5 11.5 12 17l5.5-5.5"/>'),
+  lamp: svg('<path d="M9 4.5h6l1.6 5H7.4z"/><path d="M8.6 9.5h6.8v2.2H8.6z"/><path d="M12 14.5v2M7.2 15.6l-1.2 1.6M16.8 15.6l1.2 1.6M12 19.5v.5" opacity=".7"/>'),
   residue: svg('<path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.1"/>'),
   hand: svg('<path d="M8.2 12.6V6.3a1.45 1.45 0 0 1 2.9 0v5.2M11.1 11.2V4.9a1.45 1.45 0 0 1 2.9 0v6.3M14 11.4V6.6a1.45 1.45 0 0 1 2.9 0v7.2c0 4.1-2.6 6.9-6.1 6.9-2.3 0-3.8-1-5-2.8l-2.3-3.6a1.4 1.4 0 0 1 2.3-1.6l2.4 2.6"/>'),
 };
@@ -93,6 +94,7 @@ export class TouchControls {
       </div>
       <div class="tc-eras"></div>
       <button class="tc-btn tc-residue hidden" data-tc="residue" aria-label="Residue Vision">${ICON.residue}<span>RESIDUE</span></button>
+      <button class="tc-btn tc-lamp hidden" data-tc="lamp" aria-label="Shoulder lamp">${ICON.lamp}<span>LAMP</span></button>
       <button class="tc-btn tc-crouch" data-tc="crouch" aria-label="Crouch">${ICON.crouch}<span>CROUCH</span></button>
       <button class="tc-btn tc-jump" data-tc="jump" aria-label="Jump">${ICON.jump}<span>JUMP</span></button>
       <div class="tc-act">
@@ -106,7 +108,7 @@ export class TouchControls {
     const q = s => root.querySelector(s);
     this.el = {
       stick: q('.tc-stick'), base: q('.tc-base'), knob: q('.tc-knob'), eras: q('.tc-eras'),
-      residue: q('.tc-residue'), crouch: q('.tc-crouch'), jump: q('.tc-jump'),
+      residue: q('.tc-residue'), lamp: q('.tc-lamp'), crouch: q('.tc-crouch'), jump: q('.tc-jump'),
       act: q('.tc-act'), label: q('.tc-act-label b'), ring: q('.tc-ring .p'),
     };
   }
@@ -224,6 +226,7 @@ export class TouchControls {
       case 'jump': inp.press('Space'); break;
       case 'crouch': inp.press('KeyC'); break;
       case 'residue': inp.press('KeyF'); break;
+      case 'lamp': inp.press('KeyL'); break;
       case 'era': {
         const T = g.temporal;
         if (T.current !== btn.dataset.id && !T.canSwitch(btn.dataset.id)) this.buzz([30, 40, 30]);
@@ -269,6 +272,8 @@ export class TouchControls {
     this.toggle(this.el.crouch, 'on', g.player.crouching);
     this.toggle(this.el.residue, 'hidden', !g.residueUnlocked);
     this.toggle(this.el.residue, 'on', !!g.residueOn);
+    this.toggle(this.el.lamp, 'hidden', !g.lampAvailable);
+    this.toggle(this.el.lamp, 'on', !!g.lampOn);
     this.syncEras();
   }
 

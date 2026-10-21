@@ -12,7 +12,7 @@ import { renderPortraits } from '../core/character.js';
 import { Drone } from '../world/props.js';
 import { glowMat } from '../world/kit.js';
 import { EchoStep } from '../systems/echostep.js';
-import { buildHelixWest, registerM12Cast, registerM12Themes, musicState, P, FRAGS, SHARDS, NOTES, ROUTE, SEGS, LANDINGS, TEX, GUARD49F } from '../world/env_m12.js';
+import { buildHelixWest, registerM12Cast, registerM12Themes, musicState, P, FRAGS, SHARDS, NOTES, ROUTE, SEGS, LANDINGS, HUB, TEX, GUARD49F } from '../world/env_m12.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const ERA_NAME = { '2026': 'PAST', '2049': 'PRESENT', '2196': 'FUTURE' };
@@ -78,7 +78,7 @@ export default {
     function applyLook() {
       const e = T.current, z = zone;
       const open = e === '2196' && (z === 'atrium' || z === 'hub' || z === 'lobby');
-      const L = e === '2196' ? { fog: open ? [0x161c24, 0.016] : [0x0c1014, 0.035], env: open ? 0.7 : 0.4, hemi: [0x8aa0c0, 0x0c0e10, open ? 0.35 : 0.18], exp: 1.12 }
+      const L = e === '2196' ? { fog: open ? [0x161c24, 0.014] : [0x0c1014, 0.03], env: open ? 0.85 : 0.45, hemi: [0x8aa0c0, 0x1a1c1e, open ? 0.6 : 0.24], exp: open ? 1.3 : 1.15 }
         : e === '2026' ? { fog: [0x1a1610, 0.032], env: 0.5, hemi: [0xffd8b0, 0x1a1410, 0.2], exp: 1.06 }
           : { fog: [0x10141a, z === 'gallery' ? 0.012 : 0.02], env: 0.62, hemi: [0xd8e4ea, 0x22262a, 0.28], exp: 1.0 };
       scene.fog.color.set(L.fog[0]); scene.fog.density = L.fog[1];
@@ -140,12 +140,12 @@ export default {
     };
 
     // ---------- people ----------
-    const witness = game.actor('witness', null, P.witnessHall[0], 0, P.witnessHall[2], 0);
-    if (witness.wrist) { witness.wrist.material.emissive.setHex(0xff6a4a); witness.wrist.material.color.setHex(0x331008); }
+    const witness = game.actor('witness', { ...CAST.witness.look, era: '2049' }, P.witnessHall[0], 0, P.witnessHall[2], 0);
+    const wristMat = witness.wrist?.material; if (wristMat?.emissive) { witness.wrist.material = wristMat.clone(); witness.wrist.material.emissive.setHex(0xff6a4a); witness.wrist.material.color?.setHex(0x331008); }
     let wEra = '2049', wShown = true;
     // the Witness bleeding through from the state he is in: a faint red-orange outline when Kai is in another one
-    const wGhost = game.actor('m12wghost', { ...CAST.witness.look, lod: true }, 0, -50, 0, 0); wGhost.setGhost(0xff6a4a);
-    const fragGhost = game.actor('m12frag', { ...CAST.witness.look, lod: true }, 0, -50, 0, 0); fragGhost.setGhost(0xff8a5a); fragGhost.root.visible = false;
+    const wGhost = game.actor('m12wghost', { ...CAST.witness.look, era: '2049', lod: true }, 0, -50, 0, 0); wGhost.setGhost(0xff6a4a);
+    const fragGhost = game.actor('m12frag', { ...CAST.witness.look, era: '2049', lod: true }, 0, -50, 0, 0); fragGhost.setGhost(0xff8a5a); fragGhost.root.visible = false;
     const setAlpha = (ch, a) => { const u = ch.ghostMat?.uniforms; if (u?.uAlpha) u.uAlpha.value = a; };
     game.onUpdate(() => {
       witness.root.visible = wShown && T.current === wEra;
@@ -153,7 +153,13 @@ export default {
       if (wGhost.root.visible) { wGhost.root.position.copy(witness.root.position); wGhost.root.rotation.y = witness.root.rotation.y; wGhost.speed = witness.speed; wGhost.pose = witness.pose; setAlpha(wGhost, 0.38); }
     });
     const scarMat = new THREE.MeshStandardMaterial({ color: 0xc89080, roughness: 0.55 });
-    const addScar = (ch) => { const w = ch.wrist; if (!w?.parent) return; const s = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.007, 6, 24), scarMat); s.position.copy(w.position).multiplyScalar(0.9); s.quaternion.copy(w.quaternion); s.scale.set(1, 1, 0.6); w.parent.add(s); };
+    // the scar sits at the left wrist joint, just past the band (hand_L bone; old builds: next to the ring)
+    const wristNode = (ch) => { const hb = ch.arms?.[1]?.hand; if (hb?.parent) return hb; if (ch.wrist?.isObject3D) return ch.wrist; return ch.head; };
+    const addScar = (ch) => {
+      const hb = ch.arms?.[1]?.hand;
+      if (hb?.parent) { const s = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.006, 6, 24), scarMat); s.rotation.x = Math.PI / 2; s.position.set(0, 0.022, 0); s.scale.set(1, 0.85, 1); hb.add(s); return; }
+      const w = ch.wrist; if (!w?.isObject3D || !w.parent) return; const s = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.007, 6, 24), scarMat); s.position.copy(w.position).multiplyScalar(0.9); s.quaternion.copy(w.quaternion); w.parent.add(s);
+    };
     addScar(kai); addScar(witness);
     // walk a character along a path (each point [x, y, z]); resolves at the end
     const walkTo = (ch, path, speed = 1.5) => new Promise(res => {
@@ -166,7 +172,7 @@ export default {
       });
     });
     const witnessSwitch = async (toEra) => {
-      audio.sfxPlay('switch'); if (witness.wrist) witness.wrist.material.emissiveIntensity = 8;
+      audio.sfxPlay('switch'); witness.wristBoost = 8;
       const flare = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 10), new THREE.MeshBasicMaterial({ color: 0xff6a4a, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
       flare.position.copy(witness.root.position).add(V(0, 1.1, 0)); scene.add(flare);
       await tween(0.7, u => { flare.scale.setScalar(1 + u * 2.4); flare.material.opacity = 0.5 * (1 - u); });
@@ -188,7 +194,7 @@ export default {
     // the drone in the north corridor
     const drone = new Drone(game, [[6, 2.5, -42], [-19, 2.5, -42]], { speed: 1.9, range: 9.5 });
     drone.mesh.visible = false; drone.disabled = true; drone.pool.visible = false; T.only(drone.mesh, '2049');
-    window.__m12 = { S, W, echo, drone, witness, ben, ife, guards: [guardA, guardB], P };
+    window.__m12 = { S, W, echo, drone, witness, ben, ife, guards: [guardA, guardB], P, FRAGS };
 
     // ---------- collectibles: shards and notes ----------
     const shardAt = (i, era, enabled = () => true) => {
@@ -242,8 +248,8 @@ export default {
 
     // ---------- the man behind the glass ----------
     cine(true);
-    pl.place(0.4, 0, -6.6, Math.PI);
-    await game.shot([-2.2, 1.7, -3.4], [0.4, 1.4, -8.6], 1.2, { fov: 42 });
+    pl.place(1.8, 0, -6.6, Math.PI);
+    await game.shot([-0.8, 1.7, -3.4], [1.8, 1.4, -8.6], 1.2, { fov: 42 });
     audio.sfxPlay('blip');
     await game.talk([
       ['m12rook', 'Varen. Or whoever is wearing his face this week. You have four minutes left.'],
@@ -253,15 +259,15 @@ export default {
     // the hall lights come up on a man standing at the glass
     wShown = true; witness.root.position.set(...P.witnessHall); witness.root.rotation.y = 0; witness.lookTarget = kai.head;
     audio.silence(1.4); audio.sfxPlay('heartbeat');
-    await game.shot([2.8, 1.6, -13.4], [0.6, 1.55, -9.0], 2.4, { fov: 34 });
+    await game.shot([3.4, 1.6, -13.6], [1.8, 1.55, -8.4], 2.4, { fov: 34 });
     lockMusic('m12-glass', 0.6);
-    await game.shot([-0.6, 1.62, -6.9], [1.3, 1.62, -10.4], 1.8, { fov: 30 });
+    await game.shot([1.0, 1.66, -6.5], [2.0, 1.62, -10.4], 1.8, { fov: 30 });
     await game.say('kai', 'A long coat.');
     // he taps the glass three times: the three notes of the motif
     witness.pose = 'look';
     for (const n of [76, 71, 69]) { if (audio.ctx) audio.glass(n, audio.ctx.currentTime, 0.08); game.shake = 0.02; await game.wait(0.55); game.shake = 0; }
     witness.pose = null;
-    await game.shot([1.6, 1.5, -12.4], [0.2, 1.6, -7.2], 1.6, { fov: 32 });
+    await game.shot([2.6, 1.5, -12.6], [1.8, 1.6, -7.2], 1.6, { fov: 32 });
     await game.talk([
       ['kai', 'Those three notes. Mira used to hum those.'],
       ['m12rook', 'That man is not one of mine. Varen. Who is in my test hall?'],
@@ -349,7 +355,7 @@ export default {
         if (game.collision.blocked(eye, pl.pos, chest, '2049')) continue;
         seen = Math.max(seen, 1.4 - d / 12);
       }
-      watch.det = Math.max(0, Math.min(1, watch.det + (seen > 0 ? dt * (0.6 + seen) : -dt * 0.4)));
+      watch.det = Math.max(0, Math.min(1, watch.det + (seen > 0 ? dt * (0.35 + seen * 0.6) : -dt * 0.4)));
       ui.detection(watch.det);
       if (watch.det >= 1) {
         S.detained++; F.m12detained = S.detained; watch.det = 0;
@@ -590,7 +596,7 @@ export default {
     const stencilCard = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending })); stencilCard.visible = false; scene.add(stencilCard);
     let loopT = 0, loopF = null;
     game.onUpdate((dt, t) => {
-      for (const f of FRAGS) { f.g.visible = S.phase === 'hub' && game.residueOn && T.current === f.era; f.g.rotation.y = t * 0.6; f.g.children[0].material.opacity = f.read ? 0.3 : 0.7 + 0.2 * Math.sin(t * 4); }
+      for (const f of FRAGS) { f.g.visible = S.phase === 'hub' && game.residueOn && T.current === f.era && !S.playing; f.g.rotation.y = t * 0.6; f.g.children[0].material.opacity = f.read ? 0.3 : 0.7 + 0.2 * Math.sin(t * 4); }
       // the nearest fragment in this state repeats its few seconds on a loop (one ghost, reused)
       if (S.playing) return;
       let best = null, bd = 9;
@@ -599,7 +605,7 @@ export default {
       fragGhost.root.visible = !!best;
       if (best) {
         loopT = (loopT + dt) % 5;
-        const u = Math.min(1, loopT / 3.2), dir = V(Math.sin(best.yaw), 0, Math.cos(best.yaw));
+        const u = best.act === 'walk' ? Math.min(1, loopT / 3.2) : 0.5, dir = V(Math.sin(best.yaw), 0, Math.cos(best.yaw));
         fragGhost.root.position.set(best.pos[0] - dir.x * 1.4 + dir.x * 2.8 * u, 0, best.pos[2] - dir.z * 1.4 + dir.z * 2.8 * u); fragGhost.root.rotation.y = best.yaw;
         fragGhost.speed = best.act === 'walk' && loopT < 3.2 ? 1.2 : 0; fragGhost.pose = loopT > 3.4 ? 'look' : null;
         setAlpha(fragGhost, Math.min(1, loopT * 2, (5 - loopT) * 2) * 0.6);
@@ -607,14 +613,19 @@ export default {
     });
     const playFragment = async (f) => {
       S.playing = true; cine(true);
-      const dir = V(Math.sin(f.yaw), 0, Math.cos(f.yaw)), side = V(dir.z, 0, -dir.x);
+      const dir = V(Math.sin(f.yaw), 0, Math.cos(f.yaw)), inward = V(HUB.x - f.pos[0], 0, HUB.z - f.pos[2]).normalize();
+      if (inward.lengthSq() < 0.5) inward.set(0, 0, 1);
       fragGhost.root.visible = true; fragGhost.root.position.set(f.pos[0] - dir.x * 1.4, 0, f.pos[2] - dir.z * 1.4); fragGhost.root.rotation.y = f.yaw; setAlpha(fragGhost, 0.7);
-      if (f.landing) { stencilCard.material.map = TEX.stencil(f.landing, f.era); stencilCard.material.needsUpdate = true; stencilCard.position.set(f.pos[0] + side.x * 1.3 + dir.x * 0.6, 1.5, f.pos[2] + side.z * 1.3 + dir.z * 0.6); stencilCard.lookAt(f.pos[0] - side.x * 3, 1.5, f.pos[2] - side.z * 3); stencilCard.visible = true; }
-      const camP = [f.pos[0] - side.x * 3.2 + dir.x * 1.2, 1.7, f.pos[2] - side.z * 3.2 + dir.z * 1.2];
+      const perp = V(inward.z, 0, -inward.x), kp = [f.pos[0] + inward.x * 1.9 + perp.x * 1.3, f.pos[2] + inward.z * 1.9 + perp.z * 1.3];
+      pl.place(kp[0], 0, kp[1], Math.atan2(f.pos[0] - kp[0], f.pos[2] - kp[1]));
+      const camP = [f.pos[0] + inward.x * 3.6 - perp.x * 1.0, 1.75, f.pos[2] + inward.z * 3.6 - perp.z * 1.0];
+      if (f.landing) { stencilCard.material.map = TEX.stencil(f.landing, f.era); stencilCard.material.needsUpdate = true; stencilCard.position.set(f.pos[0] - inward.x * 0.9 - dir.x * 1.2, 1.6, f.pos[2] - inward.z * 0.9 - dir.z * 1.2); stencilCard.lookAt(camP[0], 1.6, camP[2]); stencilCard.visible = true; }
       await game.shot(camP, [f.pos[0], 1.3, f.pos[2]], 1.0, { fov: 40 });
       audio.sfxPlay('rewind');
       fragGhost.speed = f.act === 'walk' ? 1.2 : 0;
-      await tween(2.4, u => { fragGhost.root.position.set(f.pos[0] - dir.x * 1.4 + dir.x * 2.8 * u, 0, f.pos[2] - dir.z * 1.4 + dir.z * 2.8 * u); });
+      const mv = f.act === 'walk' ? 1 : 0;
+      if (!mv) fragGhost.root.position.set(f.pos[0], 0, f.pos[2]);
+      await tween(2.4, u => { if (mv) fragGhost.root.position.set(f.pos[0] - dir.x * 1.4 + dir.x * 2.8 * u, 0, f.pos[2] - dir.z * 1.4 + dir.z * 2.8 * u); });
       fragGhost.speed = 0; fragGhost.pose = 'look';
       await game.say('m12band', 'Fragment ' + (f.landing ? 'landing ' + f.landing + ' · ' + f.era : 'arrival · ' + f.era) + ' · his band: ' + f.band + (f.repeat ? ' · repeat' : ''));
       await game.say('kai', f.line);
@@ -622,7 +633,7 @@ export default {
       cine(false); S.playing = false;
     };
     FRAGS.forEach(f => {
-      game.interact({ pos: [f.pos[0], 1.0, f.pos[2]], radius: 2.0, prompt: 'Read the fragment', once: false, states: [f.era], enabled: () => game.residueOn && !f.read && !S.playing, onUse: async () => {
+      f.it = game.interact({ pos: [f.pos[0], 1.0, f.pos[2]], radius: 2.0, prompt: 'Read the fragment', once: false, states: [f.era], enabled: () => game.residueOn && !f.read && !S.playing, onUse: async () => {
         if (f.read) return; f.read = true; S.fragsRead.add(f.id); musicState.frags = S.fragsRead.size; F.m12frags = S.fragsRead.size;
         await playFragment(f);
         ev('Fragment: ' + (f.landing ? 'landing ' + f.landing : 'arrival') + (f.repeat ? ' (repeat)' : ''), `Seen in ${f.era}, in Residue Vision, in Core Ring B: the Witness ${f.landing ? 'on landing ' + f.landing + ' of the sublevel stair' : 'arriving in the ring'}. His band reads ${f.band}. ${f.line}`, 'HIS ROUTE · ' + f.era);
@@ -687,7 +698,7 @@ export default {
         setTimeout(() => ui.subtitle('kai', `Flight ${seg + 1}. He crossed it in ${ROUTE[seg]}.`, 2600), 1500);
       }
       // the curtains glow calmer in the state each flight holds in, once Kai has crossed it
-      W.curtains.forEach((c, i) => { const k = i >> 1; c.material.uniforms.uS.value = (k < lastLanding && T.current === ROUTE[k]) ? 0.12 : 0.32; });
+      W.curtains.forEach((c, i) => { const k = i >> 1; c.material.uniforms.uS.value = (k < lastLanding && T.current === ROUTE[k]) ? 0.05 : 0.13; });
     });
     hint(() => S.phase === 'descent' && S.inst > 0.3, 4, () => ui.subtitle('kai', 'Wrong year for this flight. Switch.', 1800));
     await game.waitFor(() => pl.pos.z < -126.4 && pl.pos.y < -7.5);
@@ -742,7 +753,7 @@ export default {
     // the wrist: his band, and under it the same burn
     witness.pose = 'look';
     const wristShot = async (ch, dist, fov) => {
-      const wp = V(); (ch.wrist || ch.head).getWorldPosition(wp);
+      const wp = V(); wristNode(ch).getWorldPosition(wp);
       await game.shot([wp.x + dist, wp.y + 0.22, wp.z + dist * 0.6], [wp.x, wp.y, wp.z], 1.6, { fov });
     };
     await wristShot(witness, 0.55, 22);

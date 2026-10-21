@@ -493,12 +493,12 @@ export default {
     // =====================================================================================
     const recIt = (pos, prompt, k, fn, r = 1.8, cond = () => true) => game.interact({ pos, radius: r, once: false, prompt, enabled: () => !S.records.has(k) && cond(), onUse: async () => { if (S.records.has(k)) return; await fn(); } });
     recIt([P.census[0], 1.1, -15.2], 'Read the Ward 4 census', 'census', async () => {
-      cine(true); pl.place(P.census[0] - 0.9, 0, -15.7, Math.PI); await game.shot([P.census[0] + 0.5, 1.55, -16.0], [P.census[0], 1.1, -14.44], 1.0, { fov: 32 });
+      cine(true); pl.place(P.census[0] - 0.9, 0, -15.7, 0); await game.shot([P.census[0] + 0.5, 1.55, -16.0], [P.census[0], 1.1, -14.44], 1.0, { fov: 32 });
       await game.talk([['kai', 'Ward 4 census, tonight. Osei in 4-01, Bell in 4-03, Kovac in 4-05.'], ['kai', '"4-07: unoccupied since 19.10.2026." Twenty-three years empty.']]);
       S.records.add('census'); ev('Ward 4 census', 'Tonight\'s census: three patients (Osei 4-01, Bell 4-03, Kovac 4-05). Bay 4-07 is listed "unoccupied since 19.10.2026".', 'MEDICAL RECORDS · 2049'); cine(false);
     });
     recIt([P.pharmacy[0], 1.1, -15.2], 'Read the dispensing log', 'pharmacy', async () => {
-      cine(true); pl.place(P.pharmacy[0] - 0.9, 0, -15.7, Math.PI); await game.shot([P.pharmacy[0] + 0.5, 1.55, -16.0], [P.pharmacy[0], 1.1, -14.44], 1.0, { fov: 32 });
+      cine(true); pl.place(P.pharmacy[0] - 0.9, 0, -15.7, 0); await game.shot([P.pharmacy[0] + 0.5, 1.55, -16.0], [P.pharmacy[0], 1.1, -14.44], 1.0, { fov: 32 });
       await game.talk([['kai', 'Pharmacy. Bed 4-07, every night since October 2026. Eight thousand four hundred and four doses. None returned.'], ['kai', 'Ordered by the Helix medical liaison. For an empty bed.']]);
       S.records.add('pharmacy'); ev('Dispensing log, bed 4-07', '8,404 nightly doses (neural stabiliser, saline, sedative) to bed 4-07 since 19.10.2026, none returned. Ordered by the Helix medical liaison; countersigned automatically.', 'MEDICAL RECORDS · PHARMACY'); cine(false);
     });

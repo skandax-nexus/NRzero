@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Load time</title>
+<script type="importmap">{ "imports": { "three": "../../vendor/three.module.min.js", "three/addons/": "../../vendor/addons/" } }</script>
+</head><body>
+<script type="module">
+import { loadCast, cast, makePerson } from '../../src/human/cast3d.js';
+const t0 = performance.now();
+await loadCast();
+const t1 = performance.now();
+let n = 0; const per = {};
+for (const id of cast.ids) { const a = performance.now(); makePerson(id); per[id] = Math.round(performance.now() - a); n++; }
+const t2 = performance.now();
+const a = performance.now(); for (let i = 0; i < 20; i++) makePerson('c49_m1'); const t3 = performance.now();
+window.LAB_INFO = { loadCastMs: Math.round(t1 - t0), firstMakeAllMs: Math.round(t2 - t1), n, repeatMakeMs: +((t3 - a) / 20).toFixed(1), slowest: Object.entries(per).sort((x, y) => y[1] - x[1]).slice(0, 4) };
+window.LAB_DONE = true;
+</script></body></html>
