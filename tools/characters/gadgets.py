@@ -1171,28 +1171,46 @@ def g_ar_glasses(g):
 
 @gadget("glasses", "head")
 def g_glasses(g):
-    """Plain glasses (2026 / 2196): thin round wire frames, a keyhole bridge and wire temples; no HUD, no pods, no
-    lens plane. clip=True adds a clip-on magnifier over the right lens (Mara's repaired pair)."""
+    """Plain glasses (2026 / 2196). shape='round' (thin wire, a keyhole bridge), 'rect' (rounded-rectangle frame:
+    wire=0.0009 thin metal, 0.0018 acetate). Mara's repaired pair (rect, taped=True, mismatch=<hex>, clip=True): a
+    thick rectangular frame with tape wound round the bridge, one temple from another pair, and a small hinged
+    rectangular magnifier flipped up above the right lens. No HUD, no pods, no lens plane."""
+    import math as _m
     K, o = g.K, g.o
     k = K.k
     col = o.get("color", "2a2620")
-    nseg = 18 if K.lod else 12
-    lw, lh = 0.044 * k, 0.037 * k
+    shape = o.get("shape", "round")
+    wire = float(o.get("wire", 0.0010 if shape == "round" else 0.0016))
+    nseg = (18 if K.lod else 12) if shape == "round" else 16
+    lw, lh = (0.044 * k, 0.037 * k) if shape == "round" else (0.051 * k, 0.031 * k)
     inner = {}
     for sd in "LR":
         s = 1 if sd == "L" else -1
         M = rot(lens_frame(K, sd, fwd=0.022, dz=-0.001, dx=0.001), "Y", -s * 0.1)
-        pts = [M @ V((math.cos(2 * math.pi * i / nseg) * lw / 2, math.sin(2 * math.pi * i / nseg) * lh / 2, 0)) for i in range(nseg)]
-        g.part(tube(pts + [pts[0]], 0.0010, n=4, caps=False), col, 0.65, smooth=True)
-        if o.get("clip") and sd == "R":   # repaired glasses: a clip-on magnifier lens over the right eye
-            g.part(cyl(lh * 0.42, 0.003, n=10, bev=0.0008, M=local(M, 0, 0.002, 0.005)), "2a2620", 0.4, smooth="auto")
-            g.part(cyl(lh * 0.34, 0.0015, n=10, M=local(M, 0, 0.002, 0.0075)), GLASS, 0.95, smooth="auto")
-            g.part(box(0.004, 0.006, 0.003, M=local(M, 0, lh / 2 + 0.001, 0.002)), "2a2620", 0.4)
+        pts = []
+        for i in range(nseg):
+            a_ = 2 * _m.pi * i / nseg
+            c_, s_ = _m.cos(a_), _m.sin(a_)
+            if shape != "round":       # superellipse |x|^4 + |y|^4 = 1: a rounded rectangle
+                c_, s_ = _m.copysign(abs(c_) ** 0.5, c_), _m.copysign(abs(s_) ** 0.5, s_)
+            pts.append(M @ V((c_ * lw / 2, s_ * lh / 2, 0)))
+        g.part(tube(pts + [pts[0]], wire, n=4 if wire < 0.0013 else 6, caps=False), col, 0.65 if wire < 0.0013 else 0.45, smooth=True)
+        if o.get("clip") and sd == "R":   # the flip-up magnifier: hinged at the top of the right lens, raised
+            Mh = local(M, 0, lh / 2 + wire + 0.0012, 0.003)
+            g.part(cyl(0.0016, lw * 0.42, n=6, M=rot(Mh, "Y", _m.pi / 2)), "4a4640", 0.6, smooth="auto")      # hinge pin
+            Mf = rot(Mh, "X", 1.4)          # raised almost level: from the front a slim bar with a glint of lens
+            g.part(box(lw * 0.6, lh * 0.66, 0.0018, bev=0.0004, M=local(Mf, 0, lh * 0.36, 0)), "3a3630", 0.45)
+            g.part(box(lw * 0.5, lh * 0.54, 0.001, M=local(Mf, 0, lh * 0.36, 0.0009)), "7f9aa4", 0.95)
         inner[sd] = M @ V((-s * lw / 2, lh * 0.12, 0.0))
         tip = M @ V((s * (lw / 2 + 0.001), lh * 0.25, -0.002))
-        arm_from_ear(g, sd, tip, col, w=0.0026)
+        tcol = o.get("mismatch") if (o.get("mismatch") and sd == "L") else col
+        arm_from_ear(g, sd, tip, tcol, w=0.0026 if wire < 0.0013 else 0.0034)
     b0, b1 = inner["L"], inner["R"]
-    g.part(tube([b0, (b0 + b1) / 2 + V((0, -0.002, 0.004)), b1], 0.0011, n=4), col, 0.65, smooth=True)
+    mid = (b0 + b1) / 2 + V((0, -0.002, 0.004))
+    g.part(tube([b0, mid, b1], max(wire, 0.0011), n=4), col, 0.65, smooth=True)
+    if o.get("taped"):         # a repair: cloth tape wound round the bridge
+        Mb = mat_axes((b1 - b0).normalized(), V((0, 0, 1)), (b1 - b0).normalized().cross(V((0, 0, 1))), mid)
+        g.part(cyl(0.0032, 0.009, n=8, bev=0.0006, M=rot(Mb, "Y", _m.pi / 2)), "b8b0a0", 0.05, smooth="auto")
     g.idle = 0.0
 
 
@@ -1271,7 +1289,7 @@ def g_cont_visor(g):
         N.append(d)
     P, N = _smooth_open(P, N)
     side = [V((0, 0, 1))] * len(P)
-    gv, gf = ribbon(P, N, 0.0045 * k, 0.0008, side=side)
+    gv, gf = ribbon(P, N, 0.0075 * k, 0.0008, side=side)
     g.light((gv, gf), smooth=True)
     _seg_u(g.glow, len(gv))
     g.seg_mode = "u"
@@ -1281,7 +1299,7 @@ def g_cont_visor(g):
             if isinstance(h.get("src"), dict):
                 h["src"]["glow_level"] = 0.0
     g.glow_hex = (o.get("glow") or "ffd27a").lstrip("#")
-    g.idle = float(o.get("idle", 0.6))
+    g.idle = float(o.get("idle", 0.85))
 
 
 def strap_round_head(K, z_front, z_back, fams=HEADH, lift=0.002, n=20):
@@ -1802,12 +1820,17 @@ def g_rugged_slate(g):
     k = K.k
     if o.get("hand"):
         return _hand_slate(g, opt_side(o, "R"), (0.09 * k, 0.15 * k, 0.014), o.get("color", "2a2e33"), bumper=o.get("bumper", "3a3f46"))
-    pc, nc = K.front(0.0, K.J["chest"].z - 0.01 * k, r=0.03)
-    M = frame(pc + nc * 0.004, (nc + V((0, 0, 0.25))).normalized(), UP)
-    bw, bh = 0.17 * k, 0.11 * k
-    g.part(box(bw, bh, 0.016, bev=0.006, M=M), o.get("bumper", "3a3f46"), 0.3)
-    g.part(box(bw - 0.014, bh - 0.014, 0.017, bev=0.002, M=M), GRAPH, 0.6)
-    g.light(box(bw - 0.026, bh - 0.026, 0.0006, M=local(M, 0, 0, 0.017)))
+    pc, nc = K.front(0.0, K.J["chest"].z - 0.03 * k, r=0.03)
+    # carried on the chest straps tilted up toward the wearer's eyes (a device, not a lit sign on the chest): a thick
+    # rubber bumper, a recessed dim screen inside a bezel, side keys
+    M = frame(pc + nc * 0.012, (nc + V((0, 0, 1.0))).normalized(), UP)
+    bw, bh = 0.15 * k, 0.1 * k
+    g.part(box(bw, bh, 0.018, bev=0.007, M=M), o.get("bumper", "3a3f46"), 0.3)
+    g.part(box(bw - 0.016, bh - 0.016, 0.019, bev=0.002, M=M), GRAPH, 0.6)
+    g.part(box(bw - 0.03, bh - 0.03, 0.0012, M=local(M, 0, 0, 0.0186)), "0e1114", 0.9)
+    for i in range(3):
+        g.part(box(0.004, 0.012, 0.004, bev=0.001, M=local(M, bw / 2 + 0.001, (i - 1) * 0.016, 0.009)), GUN, 0.5)
+    g.light(box(bw - 0.036, bh - 0.036, 0.0006, M=local(M, 0, 0, 0.0193)))
     for s in (1, -1):
         a = M @ V((s * (bw / 2 - 0.01), bh / 2, 0.004))
         sh = K.J["shoulder_" + ("L" if s > 0 else "R")]
@@ -1817,7 +1840,7 @@ def g_rugged_slate(g):
         if len(P) >= 2:
             strap(g, resample(P, 10), [N[min(i * len(N) // 10, len(N) - 1)] for i in range(10)], 0.02 * k, 0.002, "2a2a2a")
     g.glow_hex = (o.get("glow") or "bfe8ff").lstrip("#")
-    g.idle = float(o.get("idle", 0.45))
+    g.idle = float(o.get("idle", 0.28))
 
 
 @gadget("radio_chest_rig", "chest")
@@ -1893,20 +1916,24 @@ def g_cont_chest(g):
         r_ = min(range(len(P_)), key=lambda r: abs(P_[r][col_].z - p.z))
         p, n = P_[r_][col_] - N_[r_][col_] * PLATE_LIFT, N_[r_][col_].normalized()
         top = PLATE_LIFT + PLATE_THICK + 0.0012     # a hair proud of the plate: the bezel reads flush, nothing z-fights
+    # a proud hex boss (the plate is curved: a flush well only broke the surface on one side as a dark blob)
+    top += 0.0035
     M = rot(frame(p, n, UP), "Z", math.pi / 6)
-    g.part(cyl(0.031 * k, top + 0.0004, n=6, bev=0.0012, M=local(M, 0, 0, -0.001)), "2a2d32", 0.7, smooth=False)        # hex well rim
-    g.part(cyl(0.024 * k, 0.001, n=6, M=local(M, 0, 0, top - 0.0016)), "121418", 0.85, smooth=False)                  # recessed floor
-    g.part(cyl(0.012 * k, 0.0012, n=6, M=local(M, 0, 0, top - 0.0012)), GLASS, 0.95, smooth=False)                    # core
-    g.light(torus(0.0275 * k, 0.0011, n=6, m=3, M=local(M, 0, 0, top + 0.0003)), smooth=False)                        # thin hex ring
+    g.part(cyl(0.031 * k, top + 0.0035, n=6, bev=0.0015, M=local(M, 0, 0, -0.0035)), "2a2d32", 0.7, smooth=False)        # hex bezel
+    g.part(cyl(0.0255 * k, 0.001, n=6, M=local(M, 0, 0, top - 0.0008)), "15171b", 0.85, smooth=False)                 # recessed floor
+    g.light(cyl(0.013 * k, 0.0014, n=12, M=local(M, 0, 0, top - 0.0006)), smooth=False)                                # glowing lens core
+    g.light(torus(0.0275 * k, 0.0013, n=6, m=3, M=local(M, 0, 0, top + 0.0005)), smooth=False)                        # thin hex ring
     for i in range(3):     # three slot vents below the emitter
-        g.part(box(0.022 * k, 0.0028, 0.0012, bev=0.0004, M=local(frame(p, n, UP), 0, -(0.042 + 0.008 * i) * k, top - 0.0008)), "1a1c20", 0.6)
+        g.part(box(0.022 * k, 0.0028, 0.0012, bev=0.0004, M=local(frame(p, n, UP), 0, -(0.045 + 0.008 * i) * k, top - 0.002)), "1a1c20", 0.6)
     g.glow_hex = (o.get("glow") or "ffd27a").lstrip("#")
-    g.idle = float(o.get("idle", 0.4))
+    g.idle = float(o.get("idle", 0.55))
 
 
 # ---------------- Continuum armour: rigid ceramic plates ----------------
-PEARL, PEARL_EDGE, PLATE_GAP = "dadde0", "8d9298", "2c2f34"
-PLATE_LIFT, PLATE_THICK = 0.0042, 0.0058       # torso plates: their top stands 10 mm off the suit (no suit poking through when posed)
+# off-white pearl (pure white read as a toy under ACES), a worn grey chamfer, graphite gaps; gloss 0.62 ~ roughness 0.35
+PEARL, PEARL_EDGE, PLATE_GAP = "c9cdd0", "7d8288", "24272b"
+PLATE_LIFT, PLATE_THICK = 0.0042, 0.0078       # torso plates: their top stands 12 mm off the suit (an 8 mm plate with a bevelled rim)
+GROOVE = "3a3d42"
 
 
 def _squircle_map(u, v, e=4.0):
@@ -1918,7 +1945,37 @@ def _squircle_map(u, v, e=4.0):
     return u * m / q, v * m / q
 
 
-def rigid_plate(g, P, N, thick=0.005, inset=0.0036, bone=None, col=PEARL, edge=PEARL_EDGE, side=PLATE_GAP, gloss=0.76):
+def plate_groove(g, P, N, thick, along, at, bone, width=0.0028, t0=0.08, t1=0.92):
+    """A panel-line groove on a rigid plate: a thin dark strip just above its top surface, along the grid's rows
+    (along='r': across the plate at column `at`, a float index) or columns ('c': at row `at`), from t0 to t1."""
+    R, C = len(P), len(P[0])
+    pts, nrm, side = [], [], []
+    n_ = R if along == "r" else C
+    for i in range(n_):
+        t = i / max(n_ - 1, 1)
+        if t < t0 - 1e-6 or t > t1 + 1e-6:
+            continue
+        a0 = int(math.floor(at))
+        a1 = min(a0 + 1, (C if along == "r" else R) - 1)
+        f = at - a0
+        if along == "r":
+            p = P[i][a0].lerp(P[i][a1], f)
+            n = N[i][a0].lerp(N[i][a1], f).normalized()
+            sd = (P[i][a1] - P[i][a0])
+        else:
+            p = P[a0][i].lerp(P[a1][i], f)
+            n = N[a0][i].lerp(N[a1][i], f).normalized()
+            sd = (P[a1][i] - P[a0][i])
+        pts.append(p + n * (thick + 0.0003))
+        nrm.append(n)
+        side.append(sd.normalized() if sd.length > 1e-9 else V((1, 0, 0)))
+    if len(pts) < 2:
+        return
+    gv, gf = ribbon(pts, nrm, width, 0.0003, side=side)
+    g.part((gv, gf), GROOVE, 0.2, smooth=False, wt=bone, recalc=False)
+
+
+def rigid_plate(g, P, N, thick=0.005, inset=0.0036, bone=None, col=PEARL, edge=PEARL_EDGE, side=PLATE_GAP, gloss=0.62):
     """A rigid ceramic plate from a rows x cols grid of lifted surface points P (Vectors) and normals N: a smooth top
     (pearl), a chamfer ring (a darker edge, reads as edge wear / AO), a short graphite side wall down into the suit.
     Weighted 100 % to `bone` (it never bends at a joint)."""
@@ -2005,7 +2062,7 @@ def _torso_plate(g, x_half, z0, z1, back=False, rows=7, cols=7, bone="chest", li
     return P, N
 
 
-def _limb_plate(g, j0, j1, t0, t1, a0, a1, front, fams, bone, rows=5, cols=7, lift=0.005, thick=0.0052, e=5.0):
+def _limb_plate(g, j0, j1, t0, t1, a0, a1, front, fams, bone, rows=5, cols=7, lift=0.005, thick=0.0068, e=5.0):
     """A plate wrapping part of a limb: rows along the bone (t0..t1 between joints j0, j1), cols round it (angles a0..a1
     radians from the `front` direction)."""
     K = g.K
@@ -2046,8 +2103,16 @@ def g_cont_armor(g):
     J = K.J
     ch, sp, sh = J["chest"].z, J["spine"].z, J["shoulder_L"].z
     K.chest_plate = _torso_plate(g, lambda z: (0.118 - 0.03 * max(0.0, (ch + 0.02 * k - z) / (0.1 * k))) * k, ch - 0.055 * k, sh - 0.045 * k, bone="chest", rows=8, cols=9)
+    if K.chest_plate:      # panel lines: a sternum seam below the emitter, a pectoral line each side
+        Pc, Nc = K.chest_plate
+        plate_groove(g, Pc, Nc, PLATE_THICK, "r", 4.0, "chest", t0=0.04, t1=0.42)
+        for a_ in (1.6, 6.4):
+            plate_groove(g, Pc, Nc, PLATE_THICK, "r", a_, "chest", t0=0.12, t1=0.86)
+        plate_groove(g, Pc, Nc, PLATE_THICK, "c", 1.4, "chest", t0=0.26, t1=0.74)
     for i, (z0, z1) in enumerate(((sp + 0.035 * k, ch - 0.068 * k), (sp - 0.03 * k, sp + 0.027 * k))):
-        _torso_plate(g, (0.082 - 0.008 * i) * k, z0, z1, bone="spine" if i == 0 else "hips", rows=4, cols=7, e=6.0, lift=0.0055, thick=0.005)
+        lm = _torso_plate(g, (0.082 - 0.008 * i) * k, z0, z1, bone="spine" if i == 0 else "hips", rows=4, cols=7, e=6.0, lift=0.0055, thick=0.0065)
+        if lm:
+            plate_groove(g, lm[0], lm[1], 0.0065, "r", 3.0, "spine" if i == 0 else "hips", t0=0.15, t1=0.85)
     for s in (1, -1):        # the back plate is split down the spine (the stabilizer mount sits in the gap)
         _torso_plate(g, 0.058 * k, ch - 0.07 * k, sh - 0.03 * k, back=True, bone="chest", rows=6, cols=5, x_off=s * 0.07 * k)
     sides = o.get("pauldrons", "LR")
@@ -2059,7 +2124,9 @@ def g_cont_armor(g):
         if sd in o.get("bracers", "L"):
             _limb_plate(g, "elbow_" + sd, "wrist_" + sd, 0.2, 0.8, -1.5, 1.5, -K.hand(sd)["palm"], frozenset(("arm" + sd,)), "forearm_" + sd, rows=5, cols=7)
         fl = frozenset(("leg" + sd,))
-        _limb_plate(g, "hip_" + sd, "knee_" + sd, 0.2, 0.82, -0.95, 0.95, V((s * 0.25, -1, 0)), fl, "thigh_" + sd, rows=6, cols=7)
+        tp = _limb_plate(g, "hip_" + sd, "knee_" + sd, 0.2, 0.82, -0.95, 0.95, V((s * 0.25, -1, 0)), fl, "thigh_" + sd, rows=6, cols=7)
+        if tp:
+            plate_groove(g, tp[0], tp[1], 0.0068, "c", 2.5, "thigh_" + sd, t0=0.15, t1=0.85)
         _limb_plate(g, "knee_" + sd, "ankle_" + sd, 0.13, 0.74, -0.9, 0.9, V((0, -1, 0)), fl, "shin_" + sd, rows=6, cols=7)
         _limb_plate(g, "knee_" + sd, "ankle_" + sd, -0.07, 0.07, -0.75, 0.75, V((0, -1, 0)), fl, "shin_" + sd, rows=3, cols=5, lift=0.004, thick=0.006)  # knee cop
     g.idle = 0.0
@@ -2139,8 +2206,9 @@ def g_baton(g):
     k = K.k
     sd = opt_side(o, "R")
     s = 1 if sd == "L" else -1
-    p, n = K.front(s * 0.1 * k, K.belt_z - 0.04 * k, back=True, r=0.015)
-    M = rot(frame(p + n * 0.012, n, UP), "Z", s * 0.4)
+    # high on the back hip (kidney), angled across the body and close to it: it no longer swings out behind the thigh
+    p, n = K.front(s * 0.075 * k, K.belt_z - 0.005 * k, back=True, r=0.015)
+    M = rot(frame(p + n * 0.008, n, UP), "Z", s * 1.0)
     g.part(box(0.04 * k, 0.11 * k, 0.012, bev=0.004, M=local(M, 0, -0.01 * k, -0.012)), BLACK, 0.3)
     ax = rot(local(M, 0, 0, 0.006), "X", -math.pi / 2)
     g.part(cyl(0.0145 * k, 0.12 * k, n=10, bev=0.002, M=local(ax, 0, 0, 0.0)), o.get("grip", RUBBER), 0.2, smooth="auto")
@@ -2288,61 +2356,106 @@ def back_mount(K, z, dz=0.0, r=0.04):
     return frame(p - n * 0.004, n, UP)
 
 
+def softbox(w, h, d, M=None, e=0.3, nu=16, nv=10, taper=0.0, bulge=0.06):
+    """A soft, rounded pack shell (superellipsoid, exponent e: 0.3 ~ a box with 2-3 cm rounded edges): width w (x),
+    height h (y), depth d (z, from the back panel at z=0 out to z=d), the top `taper` narrower, the outer face a little
+    pillowed. Returns (verts, faces) in M's frame (a closed quad mesh)."""
+    sg = lambda x, m: math.copysign(abs(x) ** m, x)
+    verts, faces = [], []
+    for j in range(nv + 1):
+        v = -math.pi / 2 + math.pi * j / nv
+        for i in range(nu):
+            u = 2 * math.pi * i / nu
+            cx, sy = sg(math.cos(v), e) * sg(math.cos(u), e), sg(math.cos(v), e) * sg(math.sin(u), e)
+            sz = sg(math.sin(v), e)
+            tw = 1 - taper * (sz * 0.5 + 0.5)
+            x = cx * w / 2 * tw
+            y = sz * h / 2
+            z = (sy * 0.5 + 0.5) * d
+            z += bulge * d * max(sy, 0.0) * (1 - abs(cx) ** 2) * (1 - abs(sz) ** 2)        # pillowed outer face
+            verts.append((x, y, z))
+    for j in range(nv):
+        for i in range(nu):
+            a, b = j * nu + i, j * nu + (i + 1) % nu
+            faces.append([a, b, b + nu, a + nu])
+    verts = [(0.0, -h / 2, d / 2)] + verts + [(0.0, h / 2, d / 2)]
+    faces = [[f_ + 1 for f_ in f] for f in faces]
+    top = len(verts) - 1
+    faces = [[0, 1 + (i + 1) % nu, 1 + i] for i in range(nu)] + faces + [[1 + nv * nu + i, 1 + nv * nu + (i + 1) % nu, top] for i in range(nu)]
+    return (_xf(verts, M) if M is not None else verts), faces
+
+
+def seam_line(g, M, pts, col, w=0.004, lift=0.0012):
+    """A thin stitched seam / zip strip through local points (on a soft pack's surface)."""
+    P = [M @ V(p) for p in pts]
+    g.part(tube(P, w / 2, n=4, caps=False), col, 0.3, smooth=True)
+
+
 @gadget("cube_backpack", "chest")
 def g_cube(g):
-    """Insulated courier cube backpack with a green delivery-status light bar."""
+    """Insulated courier backpack: a soft, rounded thermal shell (not a hard cube) with a zip seam round the lid,
+    two compression straps, a small reflective tab and a green delivery-status light line."""
     K, o = g.K, g.o
     k = K.k
     M = back_mount(K, K.J["chest"].z + 0.0 * k)
-    w, h, d = 0.36 * k, 0.38 * k, 0.26 * k
-    col = o.get("color", "1f2226")
-    g.part(box(w, h, d, bev=0.03, seg=2 if K.lod else 1, M=local(M, 0, -0.02, 0)), col, 0.35)
-    g.part(box(w * 0.92, 0.012, d * 0.5, M=local(M, 0, h * 0.5 - 0.02, d * 0.3)), "2c3035", 0.4)
-    g.part(box(w * 0.7, h * 0.12, 0.004, M=local(M, 0, -0.02 - h * 0.25, d)), "c8ccd0", 0.6)
-    g.light(box(w * 0.5, 0.008, 0.0012, M=local(M, 0, -0.02 + h * 0.3, d)))
-    pack_straps(g, M, w, h, BLACK)
+    w, h, d = 0.33 * k, 0.37 * k, 0.21 * k
+    col = o.get("color", "26292e")
+    Mb = local(M, 0, -0.02, 0)
+    g.part(softbox(w, h, d, Mb, e=0.32, bulge=0.05), col, 0.3, smooth=True)
+    seam_line(g, Mb, [(-w * 0.44, h * 0.44, d * 0.15), (-w * 0.46, h * 0.44, d * 0.85), (0, h * 0.47, d * 1.02), (w * 0.46, h * 0.44, d * 0.85), (w * 0.44, h * 0.44, d * 0.15)], "15171a")
+    for f in (-0.27, 0.27):        # compression straps over the front with gunmetal side releases
+        seam_line(g, Mb, [(w * f, h * 0.42, d * 0.96), (w * f, 0.0, d * 1.05), (w * f, -h * 0.42, d * 0.96)], "15171a", w=0.022 * k * 0.5)
+        g.part(box(0.026 * k, 0.018 * k, 0.006, bev=0.002, M=local(Mb, w * f, h * 0.12, d * 1.05)), GUN, 0.5)
+    g.part(box(w * 0.22, h * 0.07, 0.003, bev=0.001, M=local(Mb, w * 0.22, -h * 0.3, d * 1.04)), "a8acb0", 0.6)       # reflective tab
+    g.light(box(w * 0.42, 0.006, 0.0012, M=local(Mb, -w * 0.08, h * 0.3, d * 1.035)))
+    pack_straps(g, M, w, h, "15171a")
     g.glow_hex = (o.get("glow") or "4dff8a").lstrip("#")
-    g.idle = float(o.get("idle", 0.8))
+    g.idle = float(o.get("idle", 0.6))
 
 
 @gadget("school_backpack", "chest")
 def g_school(g):
-    """Small school backpack with a front pocket and a keyring charm (tablet=True: a lit tablet sleeve strip)."""
+    """Small school backpack: a soft rounded shell with a front pocket, a zip seam, side mesh pocket and a keyring
+    charm (tablet=True: a lit tablet sleeve strip)."""
     K, o = g.K, g.o
     k = K.k
     M = back_mount(K, K.J["chest"].z - 0.02 * k)
-    w, h, d = 0.27 * k, 0.32 * k, 0.12 * k
+    w, h, d = 0.26 * k, 0.31 * k, 0.12 * k
     col = o.get("color", "3a5a9a")
-    g.part(box(w, h, d, bev=0.035 * k, seg=2 if K.lod else 1, M=M, taper=0.12), col, 0.2)
-    g.part(box(w * 0.7, h * 0.4, 0.035, bev=0.012, M=local(M, 0, -h * 0.18, d - 0.01)), o.get("pocket", "2a2e36"), 0.2)
-    ch = local(M, w * 0.22, h * 0.05, d + 0.02)
+    g.part(softbox(w, h, d, M, e=0.4, taper=0.12, bulge=0.12), col, 0.18, smooth=True)
+    Mp = local(M, 0, -h * 0.17, d * 0.82)
+    g.part(softbox(w * 0.72, h * 0.42, 0.045, Mp, e=0.4, nu=12, nv=6, bulge=0.15), o.get("pocket", "2a2e36"), 0.18, smooth=True)
+    seam_line(g, M, [(-w * 0.42, h * 0.3, d * 0.75), (0, h * 0.46, d * 1.02), (w * 0.42, h * 0.3, d * 0.75)], "1c1e22", w=0.0035)
+    ch = local(M, w * 0.22, h * 0.05, d + 0.025)
     g.part(torus(0.008, 0.0015, n=8, m=4, M=rot(ch, "Y", math.pi / 2)), STEEL, 0.8, smooth=True)
     g.part(box(0.022, 0.026, 0.008, bev=0.004, M=local(ch, 0, -0.022, -0.004)), o.get("charm", "e8b923"), 0.4)
     if o.get("tablet") or K.era == "2049":
-        g.light(box(w * 0.5, 0.006, 0.001, M=local(M, 0, h * 0.18, d - 0.003)))
+        g.light(box(w * 0.5, 0.006, 0.001, M=local(M, 0, h * 0.2, d * 1.03)))
         g.idle = float(o.get("idle", 0.4))
     pack_straps(g, M, w, h, o.get("strap", "1f2226"), width=0.032)
 
 
 @gadget("salvage_backpack", "chest")
 def g_salvage(g):
-    """A big patched salvage pack with a bedroll on top, a side canister and webbing."""
+    """A big patched salvage rucksack: a soft rounded canvas body and lid, a bedroll on top, compression straps with
+    buckles, a side canister. Dusty olive by default."""
     K, o = g.K, g.o
     k = K.k
     M = back_mount(K, K.J["chest"].z - 0.03 * k)
-    w, h, d = 0.32 * k, 0.42 * k, 0.17 * k
-    col = o.get("color", "5a4a38")
-    g.part(box(w, h, d, bev=0.04 * k, seg=1, M=M, taper=0.1), col, 0.08)
-    g.part(box(w * 0.75, h * 0.3, 0.04, bev=0.014, M=local(M, 0, -h * 0.2, d - 0.012)), "4a4232", 0.08)
-    g.part(box(w * 0.3, h * 0.25, 0.004, M=local(M, -w * 0.15, h * 0.12, d - 0.008)), "6a5a40", 0.05)
-    br = rot(local(M, -w * 0.5, h * 0.5 + 0.045 * k, d * 0.45), "Y", math.pi / 2)
-    g.part(cyl(0.05 * k, w, n=10, bev=0.012, M=br), o.get("roll", "6a6a54"), 0.05, smooth="auto")
+    w, h, d = 0.31 * k, 0.42 * k, 0.17 * k
+    col = o.get("color", "5e6248")
+    g.part(softbox(w, h, d, M, e=0.38, taper=0.08, bulge=0.1), col, 0.06, smooth=True)
+    Mp = local(M, 0, -h * 0.2, d * 0.85)
+    g.part(softbox(w * 0.74, h * 0.3, 0.05, Mp, e=0.4, nu=12, nv=6, bulge=0.15), "4e5240", 0.06, smooth=True)          # front pocket
+    g.part(box(w * 0.3, h * 0.22, 0.003, M=local(M, -w * 0.16, h * 0.1, d * 1.07)), "6a6450", 0.05)                    # patch
+    g.part(softbox(w * 1.04, h * 0.2, d * 0.62, local(M, 0, h * 0.44, d * 0.25), e=0.4, nu=12, nv=6, bulge=0.1), "50543e", 0.06, smooth=True)   # lid
+    br = rot(local(M, -w * 0.5, h * 0.5 + 0.05 * k, d * 0.45), "Y", math.pi / 2)
+    g.part(cyl(0.05 * k, w, n=12, bev=0.014, M=br), o.get("roll", "6a6a54"), 0.05, smooth="auto")
     for f in (0.22, 0.78):
         g.part(torus(0.052 * k, 0.004, n=10, m=4, M=local(br, 0, 0, w * f)), "2a2620", 0.2, smooth=True)
-    g.part(box(w * 1.04, h * 0.2, d * 0.55, bev=0.018 * k, M=local(M, 0, h * 0.42, d * 0.5)), "4e4030", 0.08)      # lid
     for f in (-0.28, 0.28):                                                   # compression straps with buckles
-        g.part(box(0.026 * k, h * 0.92, 0.004, M=local(M, w * f, -h * 0.02, d + 0.001)), "2e2820", 0.15)
-        g.part(box(0.034 * k, 0.03 * k, 0.006, bev=0.002, M=local(M, w * f, h * 0.18, d + 0.002)), GUN, 0.5)
+        seam_line(g, M, [(w * f, h * 0.4, d * 0.95), (w * f, 0.0, d * 1.1), (w * f, -h * 0.42, d * 0.95)], "2e2820", w=0.012 * k)
+        g.part(box(0.034 * k, 0.03 * k, 0.006, bev=0.002, M=local(M, w * f, h * 0.18, d * 1.08)), GUN, 0.5)
     sc = rot(local(M, w * 0.5 + 0.03, -h * 0.1, d * 0.45), "X", -math.pi / 2)
     g.part(cyl(0.03 * k, 0.2 * k, n=10, bev=0.006, M=local(sc, 0, 0, -0.1 * k)), "6a6e66", 0.35, smooth="auto")
     g.part(cyl(0.031 * k, 0.012, n=10, bev=0.002, M=local(sc, 0, 0, 0.09 * k)), "3a3a32", 0.3, smooth="auto")
@@ -2559,18 +2672,20 @@ def g_coat_tech_panel(g):
     P, N = _smooth_open(P, N)
     side = [V((1, 0, 0))] * len(P)
     w = 0.042 * k
-    g.part(ribbon(P, N, w + 0.004, 0.0012, side=side), o.get("trim", "8a9098"), 0.55, smooth=True, wt="soft")   # bevelled trim
-    g.part(ribbon(P, [n for n in N], w, 0.0022, side=side), o.get("color", "1a1e24"), 0.5, smooth=True, wt="soft")
+    g.part(ribbon(P, N, w + 0.005, 0.0016, side=side), o.get("trim", "8a9098"), 0.55, smooth=True, wt="soft")   # bevelled trim
+    g.part(ribbon(P, [n for n in N], w, 0.0038, side=side), o.get("color", "1a1e24"), 0.5, smooth=True, wt="soft")
+    # a recessed glass screen inside the panel's frame (the panel reads as a device, not a slab)
+    g.part(ribbon([p + n * 0.0026 for p, n in zip(P[1:-1], N[1:-1])], N[1:-1], w * 0.72, 0.0012, side=side[1:-1]), GLASS, 0.95, smooth=True, wt="soft")
     top = len(P) - 2
-    Mr = frame(P[top] + N[top] * 0.0024, N[top], UP)
+    Mr = frame(P[top] + N[top] * 0.0042, N[top], UP)
     g.light(torus(0.0095 * k, 0.0011, n=16, m=3, M=Mr), smooth=True)
     g.light(box(0.0018, 0.012 * k, 0.0005, M=local(Mr, 0, 0, 0.0)))
-    Pl = [p + n * 0.0024 + V((-s * (w / 2 - 0.004), 0, 0)) for p, n in zip(P[1:top - 1], N[1:top - 1])]
+    Pl = [p + n * 0.0042 + V((-s * (w / 2 - 0.004), 0, 0)) for p, n in zip(P[1:top - 1], N[1:top - 1])]
     if len(Pl) >= 2:
         g.light(tube(Pl, 0.0006, n=3), smooth=True)
     for f in (0.25, 0.45):
         i = int(f * (len(P) - 1))
-        g.part(cyl(0.0026, 0.0012, n=8, M=frame(P[i] + N[i] * 0.0022 + V((s * 0.008 * k, 0, 0)), N[i], UP)), "8a9098", 0.7, smooth="auto")
+        g.part(cyl(0.0026, 0.0012, n=8, M=frame(P[i] + N[i] * 0.004 + V((s * 0.008 * k, 0, 0)), N[i], UP)), "8a9098", 0.7, smooth="auto")
     g.glow_hex = (o.get("glow") or "38c8c0").lstrip("#")
     g.idle = float(o.get("idle", 0.55))
 
@@ -2976,10 +3091,12 @@ def g_umbrella(g):
         return
     hand_prop(g, sd)
     ax = h["axis"]
-    up_dir = -ax
+    s_ = 1 if sd == "L" else -1
+    # carried a little out over the hand-side shoulder and tilted back, so the head shows beside the canopy from behind
+    up_dir = (-ax + V((s_ * 0.28, 0.17, 0))).normalized()
     kid = K.B.H < 1.45
-    L = 0.85 * k if not kid else 0.72         # a child's umbrella is small, but its shaft still clears her head
-    R = 0.5 * k if not kid else 0.36
+    L = 0.94 * k if not kid else 0.76        # a child's umbrella is small, but its shaft still clears her head
+    R = 0.47 * k if not kid else 0.34
     c = h["grip"]
     top = c + up_dir * L
     # a straight telescopic handle: it ends just below the fist in a small cap (2049: a lit LED ring), no crook
@@ -2990,8 +3107,8 @@ def g_umbrella(g):
     if led:
         g.light(torus(0.0118 * k, 0.0013, n=10, m=3, M=frame(hb - up_dir * 0.0045, up_dir, UP)), smooth=True)
     Mt = frame(top, up_dir, V((0, -1, 0)))
-    nr = 16 if K.lod else 12
-    rings = [(R, -0.16 * R), (R * 0.82, 0.04 * R), (R * 0.45, 0.2 * R), (0.0, 0.26 * R)]
+    nr = 16                                # 8 gores, each scalloped between two rib tips
+    rings = [(R, -0.2 * R), (R * 0.86, 0.0), (R * 0.58, 0.16 * R), (R * 0.26, 0.25 * R), (0.0, 0.28 * R)]
     verts, faces = [], []
     for ri, (rr, z) in enumerate(rings):
         if rr == 0:
@@ -2999,8 +3116,10 @@ def g_umbrella(g):
         else:
             for i in range(nr):
                 t = 2 * math.pi * i / nr
-                sag = 0.03 * R * (1 - math.cos(nr / 2 * t)) * 0.5 if ri < 2 else 0.0
-                verts.append((rr * math.cos(t), rr * math.sin(t), z - sag))
+                rib = (i % 2 == 0)
+                sc_ = 1.0 if rib else (0.95 if ri == 0 else 0.985)      # the cloth pulls in between the ribs
+                sag = (0.045 * R if not rib else 0.0) * (1.0 if ri == 0 else 0.4 if ri == 1 else 0.0)
+                verts.append((rr * sc_ * math.cos(t), rr * sc_ * math.sin(t), z + sag))
     for ri in range(len(rings) - 2):
         a, b = ri * nr, (ri + 1) * nr
         faces += [[a + i, a + (i + 1) % nr, b + (i + 1) % nr, b + i] for i in range(nr)]
@@ -3008,15 +3127,20 @@ def g_umbrella(g):
     a = (len(rings) - 2) * nr
     faces += [[a + i, a + (i + 1) % nr, pole] for i in range(nr)]
     nv = len(verts)
-    verts += [(x, y, z - 0.004) for (x, y, z) in verts]
+    verts += [(x, y, z - 0.003) for (x, y, z) in verts]
     faces += [[nv + i for i in f[::-1]] for f in faces[:]]
     faces += [[i, nv + i, nv + (i + 1) % nr, (i + 1) % nr] for i in range(nr)]
     g.part((_xf(verts, Mt), faces), col, 0.35, smooth=True)
-    if led:
-        rim = [Mt @ V((R * 1.002 * math.cos(2 * math.pi * i / nr), R * 1.002 * math.sin(2 * math.pi * i / nr), -0.16 * R - 0.002)) for i in range(nr)]
-        g.light(tube(rim + [rim[0]], 0.0035, n=4, caps=False), smooth=True)
+    for i in range(0, nr, 2):        # ribs under the canopy, tip caps at the rim
+        t = 2 * math.pi * i / nr
+        rib = [Mt @ V((rr * math.cos(t), rr * math.sin(t), z - 0.006)) for rr, z in rings[:-1]] + [Mt @ V((0.0, 0.0, rings[-1][1] - 0.01))]
+        g.part(tube(rib[::-1], 0.0016, n=4, caps=False), GRAPH, 0.6, smooth=True)
+    if led:   # a soft LED edge just inside the rim (thin, dimmer: a glow, not a hard outline)
+        rim = [Mt @ V((R * 0.965 * (1.0 if i % 2 == 0 else 0.955) * math.cos(2 * math.pi * i / nr), R * 0.965 * (1.0 if i % 2 == 0 else 0.955) * math.sin(2 * math.pi * i / nr),
+                       -0.19 * R + (0.0 if i % 2 == 0 else 0.04 * R) - 0.004)) for i in range(nr)]
+        g.light(tube(rim + [rim[0]], 0.0019, n=4, caps=False), smooth=True)
     g.glow_hex = (o.get("glow") or "8ad8ff").lstrip("#")
-    g.idle = float(o.get("idle", 0.7 if led else 0.0))
+    g.idle = float(o.get("idle", 0.45 if led else 0.0))
 
 
 # ----------------------------------------------------------------------------------------------------------------

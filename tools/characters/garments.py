@@ -65,8 +65,9 @@ def box_edge(a, a0, a1, b, b0, b1, w=0.0016, inset=0.0):
 # catalogue
 # ----------------------------------------------------------------------------------------------------------------
 def T(**kw):
+    # (inflate / loose / ease halved after review: sleeves and shoulders ballooned, the silhouette went soft)
     d = dict(cat="top", role="outer", z=50, neck=(0.02, 0.03), collar=None, hem=-0.05, sleeve="long", cuff=None, thick=0.010,
-             loose=8, inflate=0.8, fab="shell", gloss=0.3, det=[], tail=None, rim=0.004, ease=0.009)
+             loose=6, inflate=0.5, fab="shell", gloss=0.3, det=[], tail=None, rim=0.004, ease=0.005)
     d.update(kw)
     return d
 
@@ -112,53 +113,55 @@ STAND = lambda h, flare=0.0, lean=0.0, kind="stand": dict(kind=kind, h=h, flare=
 
 GARMENTS = {
     # ---------------- 2049 outer layers ----------------
-    "techshell": T(neck=(0.03, 0.018), collar=STAND(0.056, 0.002, -0.002), hem=-0.065, cuff="sealed", thick=0.0115, fab="shell", gloss=0.28, ease=0.012,
+    "techshell": T(neck=(0.03, 0.018), collar=STAND(0.056, 0.002, -0.002), hem=-0.065, cuff="sealed", thick=0.0115, fab="shell", gloss=0.28, ease=0.006,
                    det=["taped_seams", "zip:storm", "pocket:chest_lam", "elbow_darts", "hem_cord"], hood_ok=True),
-    "longshell": T(neck=(0.032, 0.018), collar=STAND(0.06, 0.006, -0.001), hem=-0.03, cuff="sealed", thick=0.012, fab="shell", gloss=0.28, ease=0.012,
+    "longshell": T(neck=(0.032, 0.018), collar=STAND(0.06, 0.006, -0.001), hem=-0.03, cuff="sealed", thick=0.012, fab="shell", gloss=0.28, ease=0.006,
                    tail=dict(end=0.30, flare=0.2, split=0.012, vent=0.11), det=["taped_seams", "zip:placket", "pocket:hip_slash", "elbow_darts", "belt_line"]),
-    "cropped_techjacket": T(neck=(0.03, 0.02), collar=STAND(0.05, 0.003), hem=0.075, cuff="sealed", thick=0.0105, fab="shell", gloss=0.38, inflate=0.85,
+    "cropped_techjacket": T(neck=(0.03, 0.02), collar=STAND(0.05, 0.003), hem=0.075, cuff="sealed", thick=0.0105, fab="shell", gloss=0.38, inflate=0.55,
                             det=["taped_seams", "zip", "led:zip", "pocket:sleeve", "hem_band"]),
-    "smart_parka": T(neck=(0.034, 0.02), collar=STAND(0.07, 0.012, 0.004, "funnel"), hem=-0.09, cuff="rib", thick=0.019, loose=10, inflate=1.0, fab="nylon",
+    "smart_parka": T(neck=(0.034, 0.02), collar=STAND(0.07, 0.012, 0.004, "funnel"), hem=-0.09, cuff="rib", thick=0.019, loose=10, inflate=0.75, fab="nylon",
                      gloss=0.3, det=["quilt_h", "zip:placket", "pocket:hip_flap"]),
-    "armored_jacket": T(neck=(0.03, 0.02), collar=STAND(0.03), hem=-0.035, cuff="sealed", thick=0.0085, loose=6, inflate=0.55, fab="softshell", gloss=0.22,
+    "armored_jacket": T(neck=(0.03, 0.02), collar=STAND(0.03), hem=-0.035, cuff="sealed", thick=0.0085, loose=6, inflate=0.4, fab="softshell", gloss=0.22,
                         det=["princess_seams", "quilt_side", "led:princess", "zip:hidden", "elbow_darts"], gorget=True, shoulder_caps=True),
     "duty_shell": T(neck=(0.03, 0.02), collar=STAND(0.05, 0.002), hem=-0.05, cuff="sealed", thick=0.011, fab="shell", gloss=0.36,
                     det=["taped_seams", "zip:placket", "sleeve_stripe", "chevrons:sleeve"], epaulettes=True, c3="a8262e"),
     "responder_shell": T(neck=(0.03, 0.02), collar=STAND(0.052, 0.003), hem=-0.065, cuff="sealed", thick=0.0115, fab="shell", gloss=0.36,
                          det=["two_tone", "taped_seams", "zip:placket", "reflective:torso,arms", "chevrons:back"], c2="2a2f36", c3="c8ccd0"),
-    "labcoat49": T(neck=(0.024, 0.018), collar=STAND(0.03, 0.0, -0.001, "mandarin"), hem=-0.035, cuff="band", thick=0.0095, loose=5, inflate=0.4, ease=0.006,
-                   fab="coated_twill", gloss=0.12, tail=dict(end=0.31, flare=0.16, split=0.03, vent=0.13, panel=0.6),
-                   det=["placket:concealed", "bonded_seams", "pocket:hip_slash", "drape_ao"], c2="1a1e24", c3="38c8c0"),
-    "labcoat26": T(neck=(0.02, 0.17), collar=STAND(0.02, 0.016, 0.0, "notch"), hem=-0.03, cuff=None, thick=0.0085, loose=9, inflate=0.85, fab="cotton",
+    "labcoat49": T(neck=(0.024, 0.018), collar=STAND(0.03, 0.0, -0.001, "mandarin"), hem=-0.035, cuff="band", thick=0.0085, loose=3, inflate=0.12, ease=0.004,
+                   fab="lab_twill", gloss=0.08, tail=dict(end=0.31, flare=0.12, split=0.03, vent=0.13, panel=0.6),
+                   det=["placket:concealed", "piping:princess", "piping:placket", "piping:collar", "bonded_cuffs", "bonded_seams", "pocket:hip_slash"],
+                   c2="3a4048", c3="38c8c0"),
+    "labcoat26": T(neck=(0.02, 0.17), collar=STAND(0.02, 0.016, 0.0, "notch"), hem=-0.03, cuff=None, thick=0.0085, loose=6, inflate=0.45, fab="cotton",
                    gloss=0.0, tail=dict(end=0.31, flare=0.2, split=0.02, vent=0.12), open_front=0.045, det=["lapels", "pocket:patch_hip", "pocket:patch_chest", "buttons"]),
-    "hoodie": T(neck=(0.02, 0.02), collar=None, hem=-0.055, cuff="rib", thick=0.0085, inflate=0.85, fab="fleece", gloss=0.0, det=["kangaroo", "rib_hem", "raglan"],
+    "hoodie": T(neck=(0.02, 0.02), collar=None, hem=-0.055, cuff="rib", thick=0.0085, inflate=0.6, fab="fleece", gloss=0.0, det=["kangaroo", "rib_hem", "raglan"],
                 hood_auto="hood_down"),
-    "bomber": T(neck=(0.024, 0.024), collar=STAND(0.026, 0.0, 0.0, "rib"), hem=0.045, cuff="rib", thick=0.012, inflate=0.95, fab="nylon", gloss=0.32,
+    "bomber": T(neck=(0.024, 0.024), collar=STAND(0.026, 0.0, 0.0, "rib"), hem=0.045, cuff="rib", thick=0.012, inflate=0.6, fab="nylon", gloss=0.32,
                 det=["zip", "rib_hem", "pocket:sleeve", "pocket:welt"]),
-    "puffer": T(neck=(0.03, 0.02), collar=STAND(0.05, 0.006), hem=-0.05, cuff="band", thick=0.022, loose=10, inflate=1.0, fab="nylon", gloss=0.38,
+    "puffer": T(neck=(0.03, 0.02), collar=STAND(0.05, 0.006), hem=-0.05, cuff="band", thick=0.022, loose=10, inflate=0.75, fab="nylon", gloss=0.38,
                 det=["quilt_h:0.075", "zip"]),
     "utility_jacket": T(neck=(0.016, 0.05), collar=STAND(0.03, 0.02, 0.0, "shirt"), hem=-0.05, cuff="band", thick=0.0095, fab="canvas", gloss=0.0,
                         det=["placket", "pocket:utility4", "side_seams", "topstitch"]),
-    "padded_jacket": T(neck=(0.02, 0.03), collar=STAND(0.028, 0.012, 0.0, "shirt"), hem=-0.05, cuff="band", thick=0.013, inflate=0.95, fab="nylon", gloss=0.25,
+    "padded_jacket": T(neck=(0.02, 0.03), collar=STAND(0.028, 0.012, 0.0, "shirt"), hem=-0.05, cuff="band", thick=0.013, inflate=0.6, fab="nylon", gloss=0.25,
                        det=["quilt_diamond", "placket", "pocket:hip_flap"]),
-    "car_coat": T(neck=(0.02, 0.14), collar=STAND(0.022, 0.018, 0.0, "notch"), hem=-0.03, cuff=None, thick=0.012, loose=10, inflate=1.0, fab="wool", gloss=0.0,
+    "car_coat": T(neck=(0.02, 0.14), collar=STAND(0.022, 0.018, 0.0, "notch"), hem=-0.03, cuff=None, thick=0.012, loose=7, inflate=0.55, fab="wool", gloss=0.0,
                   tail=dict(end=0.40, flare=0.16, split=0.03, vent=0.1), det=["lapels", "placket:concealed", "buttons:3", "pocket:hip_flap", "side_seams"],
                   button="2a1e16"),
-    "rain_mac": T(neck=(0.02, 0.07), collar=STAND(0.04, 0.025, 0.0, "shirt"), hem=-0.03, cuff="strap", thick=0.0105, loose=10, inflate=1.0, fab="gabardine", gloss=0.12,
+    "rain_mac": T(neck=(0.02, 0.07), collar=STAND(0.04, 0.025, 0.0, "shirt"), hem=-0.03, cuff="strap", thick=0.0105, loose=7, inflate=0.6, fab="gabardine", gloss=0.12,
                   tail=dict(end=0.30, flare=0.22, split=0.02, vent=0.12), det=["storm_flap_trench", "placket:double", "belt_line", "pocket:hip_slash"], belt=True, epaulettes=True),
     "field_jacket_worn": T(neck=(0.024, 0.03), collar=STAND(0.032, 0.012, 0.0, "shirt"), hem=-0.06, cuff="band", thick=0.011, fab="canvas", gloss=0.0,
                            det=["placket", "pocket:utility4", "patches", "wear", "elbow_patches", "side_seams"], hood_auto="hood_down", wear=0.85, c2="8a6a3a"),
     "poncho_hooded": T(neck=(0.03, 0.02), collar=None, hem=-0.02, sleeve="poncho", thick=0.016, loose=14, inflate=1.0, fab="canvas", gloss=0.0, z=80,
                        det=["patches", "wear", "fray"], poncho=dict(front=0.43, back=0.24, side=0.37), hood_auto="hood_up", wear=0.9, c2="6a5a44"),
-    # a long sleeveless hooded cloak-coat (2196 survivors): open front, wide arm slits so the sleeves under it show,
-    # felted and patched; hood down it lies as a roll that wraps round to the front of the neck
-    "cloak_hooded": T(neck=(0.03, 0.05), collar=None, hem=-0.02, sleeve="none", thick=0.014, loose=12, inflate=0.9, fab="felt", gloss=0.0, z=80,
-                      det=["wear", "fray", "stitch_edges", "patches"], tail=dict(end=0.2, flare=0.16, split=0.07, vent=0.12),
-                      open_front=0.035, hood_auto="hood_up", hood_wrap=112, wear=0.6, c2="5a5446"),
+    # the 2196 survivors' long hooded cloak: open down the front (about 20 cm, the jerkin / vest and trousers show
+    # through), a short cape over the shoulders and upper arms, knee-length in front and calf-length behind, a full
+    # hood lying on the upper back, a leather clasp strap at the hips; felted, patched, frayed along the opening
+    "cloak_hooded": T(neck=(0.03, 0.05), collar=None, hem=-0.02, sleeve="cape", thick=0.012, loose=10, inflate=0.7, fab="felt", gloss=0.0, z=80,
+                      det=["wear", "fray", "stitch_edges", "patches", "clasp_band"], tail=dict(end=0.2, end_front=0.3, flare=0.14, open=0.1, vent=0.12),
+                      open_front=0.1, open_full=True, hood_auto="hood_up", hood_wrap=96, hood_T=0.068, hood_D=0.22, wear=0.6, c2="4a3a2a"),
     # graphite under-suit, matte satin (roughness ~0.62); the ceramic plates are rigid gadget geometry (continuum_armor)
-    "continuum_suit": T(neck=(0.04, 0.03), collar=STAND(0.045, 0.0, -0.003, "gorget"), hem=-0.06, cuff=None, thick=0.0035, loose=3, inflate=0.35, fab="softshell", gloss=0.27,
+    "continuum_suit": T(neck=(0.04, 0.03), collar=STAND(0.045, 0.0, -0.003, "gorget"), hem=-0.06, cuff=None, thick=0.0035, loose=3, inflate=0.35, fab="softshell", gloss=0.1,
                         det=["suit_lines"], plates=False, c2="e6e8ea", c3="d9a441"),
-    "tunic": T(neck=(0.012, 0.035), collar=None, hem=-0.035, sleeve="short", thick=0.006, loose=18, inflate=0.85, fab="linen", gloss=0.0,
+    "tunic": T(neck=(0.012, 0.035), collar=None, hem=-0.035, sleeve="short", thick=0.006, loose=12, inflate=0.45, fab="linen", gloss=0.0,
                tail=dict(end=0.27, flare=0.2, split=0.0, vent=0.0, slits=0.11), det=["border", "dye", "neck_roll"]),
     # ---------------- inner tops ----------------
     "mock_neck": I(neck=(0.045, 0.035), collar=STAND(0.028, 0.0, -0.002, "rib"), det=["rib_cuffs"]),
@@ -211,7 +214,7 @@ GARMENTS = {
     "tech_shorts": Bt(shape="shorts", fab="softshell", det=["side_seams", "pocket:cargo_short"], thick=0.008, loose=6),
     "leg_wraps": Bt(z=18, shape="leg_wraps", fab="linen", det=["wraps", "dye"], thick=0.0035, loose=2, rim=0.002, ease=0.0),
     "canvas_trousers": Bt(fab="canvas", det=["fly", "side_seams", "patches", "wear"], thick=0.008, loose=6, wear=0.8),
-    "suit_trousers": Bt(fab="softshell", det=["suit_lines"], thick=0.0032, loose=2, gloss=0.27, rim=0.0, ease=0.0),
+    "suit_trousers": Bt(fab="softshell", det=["suit_lines"], thick=0.0032, loose=2, gloss=0.1, rim=0.0, ease=0.0),
     "soft_trousers": Bt(fab="linen", det=["side_seams"], thick=0.0075, loose=8),
     # ---------------- skirts ----------------
     "tech_skirt": dict(cat="skirt", shape="pleated", fab="shell", gloss=0.3, length=0.25, pleats=14, det=["hem_band_thin"], z=26),
@@ -240,12 +243,20 @@ GARMENTS = {
     "transit_cap": Hd(kind="peaked", fab="twill", gloss=0.2, badge=True),
     "tactical_cap": Hd(kind="cap", fab="cordura", gloss=0.05, crown=0.065, bill=0.062, patch=True),
     "beanie": Hd(kind="beanie", fab="knit"),
-    "continuum_helmet": Hd(kind="helmet", fab="ceramic", gloss=0.85, visor="slit"),
-    "continuum_helmet_officer": Hd(kind="helmet", fab="ceramic", gloss=0.85, visor="open"),
+    "continuum_helmet": Hd(kind="helmet", fab="ceramic", gloss=0.62, visor="slit"),
+    "continuum_helmet_officer": Hd(kind="helmet", fab="ceramic", gloss=0.62, visor="open"),
     "head_wrap": Hd(kind="head_wrap", fab="linen", gloss=0.0),
     "woven_headband": Hd(kind="headband", fab="woven", gloss=0.0),
 }
 HAIR_STYLES = ["waves", "curls", "puffs", "locs", "undercut", "fade", "pixie"]
+
+
+def plant_dye(hx):
+    import colorsys
+    r, gg, b = hexc(hx)
+    h, s, v = colorsys.rgb_to_hsv(r, gg, b)
+    r, gg, b = colorsys.hsv_to_rgb(h, s * 0.72, v * 0.92)
+    return "%02x%02x%02x" % tuple(int(round(min(max(x, 0), 1) * 255)) for x in (r, gg, b))
 
 
 def resolve(c):
@@ -263,6 +274,12 @@ def resolve(c):
         g.update({k: v for k, v in opt.items() if k not in ("det_add", "det_del")})
         g["type"] = t
         g["color"] = col or g.get("color", "444a55")
+        if str(c.get("era")) == "ancient":       # plant dyes: about 25 % less saturated and a little darker, soiled
+            for kk in ("color", "c2", "c3"):
+                if g.get(kk):
+                    g[kk] = plant_dye(g[kk])
+            if g.get("cat") in ("top", "bottom", "over", "skirt") and "soil" not in g["det"]:
+                g["det"] = g["det"] + ["soil"]
         g.setdefault("glow", c.get("glow"))
         g.setdefault("glow_level", c.get("glowLevel", 0.5))
         g.setdefault("wear", c.get("wearLevel", 0.0))
@@ -312,11 +329,12 @@ FAB = {  # base roughness feel is per vertex (gloss); here: luminance texture k 
     "shell": dict(n=0.035, f=90, h=0.00008), "nylon": dict(n=0.04, f=120, h=0.0001), "softshell": dict(n=0.05, f=200, h=0.00012),
     "ripstop": dict(n=0.05, f=160, grid=0.011), "cordura": dict(n=0.07, f=260, h=0.00015), "knit": dict(n=0.07, f=240, rib=0.0045),
     "fleece": dict(n=0.07, f=180, h=0.0002), "jersey": dict(n=0.05, f=220, h=0.0001), "cotton": dict(n=0.045, f=180, h=0.00008),
-    "coated_twill": dict(n=0.08, f=160, twill=True, tw=0.09, h=0.00012), "twill": dict(n=0.06, f=180, twill=True), "stretch_twill": dict(n=0.05, f=170, twill=True),
+    "coated_twill": dict(n=0.08, f=160, twill=True, tw=0.09, h=0.00012),
+    "lab_twill": dict(n=0.018, f=220, twill=True, tw=0.022, h=0.00016),     # Helix lab coat: crisp, fine twill (no mottling) "twill": dict(n=0.06, f=180, twill=True), "stretch_twill": dict(n=0.05, f=170, twill=True),
     "denim": dict(n=0.1, f=150, twill=True, denim=True), "chambray": dict(n=0.08, f=200, h=0.0001), "flannel": dict(n=0.07, f=140, h=0.0002),
     "canvas": dict(n=0.09, f=130, weave=0.004), "waxed_canvas": dict(n=0.1, f=110, weave=0.004), "wool": dict(n=0.08, f=150, h=0.0002),
     "felt": dict(n=0.11, f=90, h=0.0003), "gabardine": dict(n=0.05, f=180, twill=True), "linen": dict(n=0.08, f=100, linen=True),
-    "leather": dict(n=0.1, f=260, h=0.0002), "hard_leather": dict(n=0.12, f=220, h=0.0003), "polymer": dict(n=0.04, f=60, h=0.00005),
+    "leather": dict(n=0.1, f=260, h=0.0002), "suede": dict(n=0.13, f=200, h=0.0003), "hard_leather": dict(n=0.12, f=220, h=0.0003), "polymer": dict(n=0.04, f=60, h=0.00005),
     "ceramic": dict(n=0.012, f=40, h=0.0), "satin": dict(n=0.03, f=120, h=0.00005), "metal": dict(n=0.03, f=300, h=0.0),
     "webbing": dict(n=0.05, f=300, web=True), "hivis": dict(n=0.03, f=160, h=0.00006, weave=0.0024), "stretch": dict(n=0.03, f=200, h=0.00005),
     "cord": dict(n=0.1, f=400, h=0.0002), "woven": dict(n=0.1, f=200, weave=0.003), "mesh": dict(n=0.06, f=300, h=0.0001),
@@ -459,6 +477,52 @@ def paint(g, X, seed):
                 if arg == "storm":   # the flap closes over the zip toward the right: a shadow line at its edge
                     seam(line(d0 + 0.028, 0.0018), 0.0007, 0.65)
                     h = h + 0.0006 * ss(0.03, 0.026, -d0) * ss(-0.002, 0.002, -d0)
+        elif name == "piping":     # thin contrast piping in c2 (lab coat: princess seams, front edge, collar edge)
+            if arg == "princess":
+                m = line(np.abs(X.x) - princess_x(X), 0.0022, 0.0006) * tor * (y < J["shoulder_L"][1] - 0.02)
+            elif arg == "placket":
+                m = line(np.where((front > 0) & ((tor + X.tail) > 0.5), X.x - 0.022, 9.0), 0.0018, 0.0006) * (y < J["neck"][1] - 0.04)
+            else:
+                m = line(X.f - 0.0035, 0.0018, 0.0006) * X.collar
+            mix(m * 0.9, c2)
+            h = h + 0.00015 * m
+        elif name == "wrap_cross":     # a closed crossed wrap: the overlap edge runs from the left collarbone to the right hip
+            nb_, hp_ = J["neck"][1] - 0.03, J["pelvis"][1]
+            tt = np.clip((nb_ - y) / max(nb_ - hp_, 1e-3), 0, 1.4)
+            d = X.x - (0.075 - 0.2 * tt)
+            ok = front * (tor + X.tail) * (y < nb_ + 0.01)
+            seam(line(d, 0.0022, 0.0008) * ok, 0.0009, 0.62)
+            shade(ss(0.0, -0.025, d) * ss(-0.05, -0.025, d) * ok, 0.88)       # the under-layer's shadow beside the edge
+            h = h + 0.0012 * ss(-0.002, 0.004, d) * ok
+        elif name == "soil":       # worn plant-dyed cloth: earth at the hems and over the knees, a little everywhere
+            hem_m = ss(0.1, 0.0, X.f) * (y < J["chest"][1])
+            knee = np.exp(-((y - 0.285 * X.H) / 0.055) ** 2) * (leg if leg is not None else 0) * front
+            m = np.clip(0.55 * hem_m + 0.4 * knee + 0.12, 0, 1) * (0.5 + 0.5 * vnoise(X.q, 30, seed + 21))
+            mix(m * 0.42, hexc("6e5c44") * (0.9 + 0.2 * vnoise(X.q, 90, seed + 22)[:, None]))
+        elif name == "soot_tips":      # a smith's hide glove: soot and scorch darkening toward the fingertips
+            m = ss(0.06, 0.17, X.f) * (0.75 + 0.25 * vnoise(X.q, 60, seed + 8))
+            mix(m * 0.8, hexc("1c1610") * (0.85 + 0.3 * vnoise(X.q, 140, seed + 9)[:, None]))
+            shade(ss(0.6, 0.8, vnoise(X.q, 90, seed + 10)) * 0.5, 1.12)                       # worn, lighter scuffs
+        elif name == "lace_wrap":      # a rawhide lace wound round the gauntlet cuff
+            d = X.f - 0.03
+            band = box(d, -0.016, 0.016, X.x, -9, 9, 0.002)
+            ru = X.u if X.u is not None else X.q[:, 0]
+            lace = line(np.sin((ru * 60.0 + X.f * 180.0)) * 0.01, 0.0035, 0.001) * band
+            mix(lace, hexc("a08860"))
+            h = h + 0.0006 * lace
+        elif name == "clasp_band":     # the leather strap closing an open-front cloak at the hem loop (c2), a buckle
+            hy = g.get("_hem_y", J["pelvis"][1])
+            m = box(y, hy - 0.004, hy + 0.036, np.abs(X.x), 0, 0.2, 0.0015) * front * tor
+            mix(m, c2 * (0.9 + 0.2 * vnoise(X.q, 200, seed + 4)[:, None]))
+            h = h + 0.0008 * m
+            bk = box(np.abs(X.x) - 0.11, -0.016, 0.016, y, hy, hy + 0.032, 0.001) * front * tor
+            mix(bk * 0.9, hexc("6a645a"))
+            h = h + 0.0012 * bk
+        elif name == "bonded_cuffs":   # bonded dark cuff band with a thin emissive seam (the coat stays 2049)
+            m = ss(0.052, 0.048, X.f) * arm
+            mix(m, c2 * (0.96 + 0.04 * vnoise(X.q, 300, seed + 3)[:, None]))
+            h = h + 0.0003 * m
+            lit(line(X.f - 0.05, 0.0012, 0.0005) * arm, rgb=c3, level=0.45)
         elif name == "placket":
             d0 = np.where((front > 0) & (tor > 0.5), X.x, 9.0)
             if arg == "concealed":
@@ -662,6 +726,10 @@ def paint(g, X, seed):
                 lit(np.ones(n) * X.collar, level=glvl * 0.6)
             elif arg == "hood":
                 lit(line(X.f - 0.005, 0.006, 0.002))
+            elif arg == "sleeve":      # a thin seam light down the outer sleeve (shoulder to cuff)
+                lit(line(np.radians(X.aa - 85) * X.ra, 0.0022, 0.0008) * arm * (X.sa > 0.04), level=glvl * 0.8)
+            elif arg == "collar_edge":
+                lit(line(X.f - 0.004, 0.0022, 0.0008) * X.collar, level=glvl * 0.8)
             elif arg == "cords":
                 pass
         elif name in ("rib", "rib_cuffs", "rib_hem", "rib_ankle", "hem_band", "hem_band_thin"):
@@ -855,8 +923,10 @@ def paint(g, X, seed):
             seam(groove, 0.002, 0.4)
             rivet = (np.hypot(((X.x + 0.33) / px_ % 1 - 0.5) * px_ - 0.0, 0) < 1) * 0
             _ = rivet
-            stencil = (cid == 2) * box(X.x, -0.1, 0.05, y, ch - 0.04, ch + 0.01) * (hash01(X.q, 120, seed) > 0.55) * front
-            mix(stencil * 0.8, hexc("c8ccd0"))
+            # a salvaged Helix security plate: real stencil letters, half scraped off (no pseudo-glyphs)
+            st_ = text_mask(X.x, y, str(g.get("stencil", "HELIX SEC")), -0.12, 0.04, ch - 0.038, ch - 0.006, 0.017) * front * tor
+            scrape = ss(0.48, 0.62, vnoise(X.q, 70, seed + 11)) + ss(0.6, 0.75, vnoise(X.q, 260, seed + 12))
+            mix(st_ * np.clip(1 - scrape, 0, 1) * 0.85, hexc("c8ccd0") * (0.9 + 0.1 * vnoise(X.q, 400, seed)[:, None]))
             road = (cid == 3) * (np.sin((X.x + y) * 2 * math.pi / 0.07) > 0.55)
             mix(road * 0.45, hexc("c8bfa8"))
         elif name == "lames":
@@ -878,16 +948,19 @@ def paint(g, X, seed):
             lit(line((fr - 0.5) * 0.03, 0.0016, 0.0008) * (np.abs(X.x) < 0.075) * two)
             k = k * (0.92 + 0.12 * fr)
         elif name == "wraps":
+            # a hand-wound spiral: the pitch wanders (irregular overlap), each turn lies over the previous one (a step,
+            # not an evenly ribbed hose), turns differ a little in tone
+            wob = 0.006 * (vnoise(X.q, 14, seed + 5) - 0.5) * 2
             if X.leg is not None and np.any(X.leg > 0.5):
-                ph = (X.sl / 0.034 + X.la / 360.0)
+                ph = ((X.sl + wob) / 0.036 + X.la / 360.0)
             else:
-                ph = X.sa / 0.034 + X.aa / 360.0
-            ph = np.where(arm > 0.5, X.sa / 0.034 + X.aa / 360.0, ph)
+                ph = (X.sa + wob) / 0.036 + X.aa / 360.0
+            ph = np.where(arm > 0.5, (X.sa + wob) / 0.036 + X.aa / 360.0, ph)
             fr = ph - np.floor(ph)
             band = np.floor(ph)
-            k = k * (0.92 + 0.12 * hash01(np.stack([band, band * 0.3, band * 0.7], 1), 1.0, seed))
-            seam(ss(0.85, 0.98, fr), 0.0009, 0.7)
-            h = h + 0.0009 * np.sin(np.pi * fr)
+            k = k * (0.9 + 0.16 * hash01(np.stack([band, band * 0.3, band * 0.7], 1), 1.0, seed))
+            seam(ss(0.9, 0.99, fr) * (0.6 + 0.4 * vnoise(X.q, 40, seed + 6)), 0.0011, 0.68)
+            h = h + 0.0012 * fr ** 1.5
         elif name in ("dye", "border", "fold_lines", "neck_roll", "tooling", "stitch_edges", "clay", "cape_trim", "tool_loops", "shards", "fray", "wear", "scratches"):
             if name == "dye":       # natural dye unevenness
                 k = k * (0.94 + 0.12 * vnoise(X.q, 9, seed + 11))

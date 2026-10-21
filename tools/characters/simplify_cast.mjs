@@ -111,22 +111,22 @@ for (const scene of root.listScenes()) for (const top of scene.listChildren()) {
   if (!atlas || !budget) { report.push(`${id}: ${total} tris (no budget)`); continue; }
   const prim = atlas.getMesh().listPrimitives()[0], before = total, mine = tris(prim);
   const target = budget - (total - mine);
-  let err = 0;
+  let err = 0, unlocked = false;
   if (mine > target) {
     const r = simplify(prim, target);
     err = r.err; compact(prim, r.idx);
     if (tris(prim) > target * 1.02) {     // the locked borders stopped it short: let the borders go too (still seam-safe)
-      const r2 = simplify(prim, target, false); err = r2.err; compact(prim, r2.idx);
+      const r2 = simplify(prim, target, false); err = r2.err; compact(prim, r2.idx); unlocked = true;
     }
   }
   total = 0; walk(top, n => { total += meshTris(n); });
-  report.push([top, id, atlas, prim, before, total, budget, err]);
+  report.push([top, id, atlas, prim, before, total, budget, err, unlocked]);
 }
 // vertex cache / fetch order now, before the LODs share LOD0's vertex buffers (reorder would duplicate shared ones)
 await doc.transform(reorder({ encoder: MeshoptEncoder, target: 'size' }));
 for (let i = 0; i < report.length; i++) {
   if (typeof report[i] === 'string') continue;
-  const [top, id, atlas, prim, before, total, budget, err] = report[i];
+  const [top, id, atlas, prim, before, total, budget, err, unlocked] = report[i];
   const ex = top.getExtras() || {};
   let lod = '';
   const lodT = +ex.lod_tris || (FALLBACK[id] || [])[1] || 0;
@@ -144,7 +144,7 @@ for (let i = 0; i < report.length; i++) {
     const par = atlas.getParentNode(); (par || top).addChild(ln);
     lod = ` lod ${li.length / 3}`;
   }
-  report[i] = `${id}: ${before} -> ${total} tris (budget ${budget}, err ${err.toFixed(4)})${lod}`;
+  report[i] = `${id}: ${before} -> ${total} tris (budget ${budget}, err ${err.toFixed(4)}${unlocked ? ', borders unlocked' : ''})${lod}`;
 }
 await io.write(out, doc);
 console.log(report.join('\n'));

@@ -63,7 +63,7 @@ export default {
     // ---------- sky, sun, wet streets, drizzle ----------
     let sun = null;
     try {
-      const sky = RZ.skyEnvironment(renderer, scene, { preset: 'overcast', elevation: 16, azimuth: 115, envIntensity: 0.9 });
+      const sky = RZ.skyEnvironment(renderer, scene, { preset: 'overcast', elevation: 16, azimuth: 300, envIntensity: 0.9 });
       sun = sky.addSun(scene, { shadow: true, area: low ? 26 : 38, distance: 70, intensity: 1.5, mapSize: low ? 512 : 1024 });
       scene.fog = RZ.heightFog({ color: 0x9aa4ae, density: 0.0075, falloff: 0.03, base: 0 });
       RZ.setWetness?.({ amount: 0.65, puddles: 0.55 });
@@ -575,7 +575,7 @@ export default {
     game.interact({ pos: [P.officer[0] + 1.2, 1.2, P.officer[2]], radius: 2.2, prompt: 'Talk to the officer without a helmet', once: false, enabled: () => rhee.root.visible && loop.window(RHEE[0], RHEE[1]) && !S.alarm && !S.talkingRhee, onUse: async () => {
       S.talkingRhee = true; rhee.lookTarget = kai.head; kai.lookTarget = rhee.head;
       cine(true);
-      await game.shot([P.officer[0] + 2.4, 1.8, P.officer[2] + 1.6], [P.officer[0], 1.6, P.officer[2]], 1.2, { fov: 38 });
+      { const rp = rhee.root.position; await game.shot([rp.x + 2.6, 1.8, rp.z + 1.8], [(rp.x + pl.pos.x) / 2, 1.55, (rp.z + pl.pos.z) / 2], 1.2, { fov: 40 }); }
       if (!S.seen.rhee1) {
         await game.talk([
           ['rhee', 'Stay where you are. — No. Don\'t. Sit down. You make me tired.'],
@@ -779,7 +779,7 @@ export default {
     S.final = true; S.phase = 'end';
     cine(true); lockMusic('m9-outside');
     pl.place(P.anchor[0], 48, P.anchor[2] + 1.0, Math.PI);
-    await game.shot([P.anchor[0] + 0.6, 49.7, P.anchor[2] + 2.9], [P.anchor[0] - 0.2, 49.0, P.anchor[2]], 1.4, { fov: 38 });
+    await game.shot([P.anchor[0] + 0.62, 49.55, P.anchor[2] + 0.95], [P.anchor[0], 49.05, P.anchor[2]], 1.4, { fov: 40 });
     kai.pose = 'work'; audio.sfxPlay('switch'); shiftPulse = 0.6; kai.wristBoost = 8;
     await game.talk([
       ['kai', 'A band in the ring. Worn through to the metal. Somebody scratched letters into it.'],
@@ -831,11 +831,11 @@ export default {
     ]);
     // the long coat on the station tower: he didn't reset either
     figure.root.visible = true; figure.lookTarget = null;
-    await game.shot([-36.0, 51.0, -88.2], [-35, 21.9, -30], 2.4, { fov: 10 });
+    await game.shot([-36.0, 51.0, -88.2], [-35, 21.9, -30], 2.4, { fov: 5 });
     audio.sfxPlay('motif');
     await game.talk([['kai', 'On the station clock. A long coat. He\'s not moving back with the rest of them, either.']]);
     await tween(1.6, u => { figure.root.position.y = 20.9 - u * 0.02; }); figure.root.visible = false;
-    await game.shot([P.anchor[0] + 0.5, 49.9, P.anchor[2] + 3.3], [P.anchor[0] - 0.5, 49.2, P.anchor[2] - 0.8], 1.4, { fov: 42 });
+    await game.shot([P.anchor[0] - 0.9, 49.8, P.anchor[2] + 3.6], [P.anchor[0] - 0.6, 49.3, P.anchor[2] - 1.0], 1.4, { fov: 42 });
     await game.talk([
       ['m9command', 'Meridian array to all units. Two signatures outside the loop. Meridian Tower ring.'],
       ['m9command', 'They remember. Retrieve them.'],

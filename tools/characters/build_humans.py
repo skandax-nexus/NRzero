@@ -942,6 +942,8 @@ def set_cell_uvs(o, cell, proj="xz", per_face=None):
         a_, b_ = ax[proj[0]], ax[proj[1]]
         a = (co[li, a_] - lo[a_]) / span[a_]
         b = (co[li, b_] - lo[b_]) / span[b_]
+    if o.name.startswith(("pouch", "buckle", "panel")):     # small hard pieces: a clean flat patch of the cell (the whole
+        a, b = 0.45 + 0.1 * a, 0.45 + 0.1 * b              # cell squeezed onto a pouch showed its texels as blocky squares)
     uv = cell_uv(cell, a, b)
     if per_face is not None:
         for p in me.polygons:
@@ -1218,7 +1220,9 @@ def paint(c, B, cov, res, path_out):
         ax_ = np.abs(pos[:, 0])
         my = np.interp(0, xs, ys)
         top_b = np.interp(ax_, [0, 0.012, 0.03, 0.048, 0.062, 0.08], [my + 0.017, my + 0.013, my + 0.012, my + 0.026, L.eye[1] - 0.034, L.eye[1] - 0.012])
-        reg = ss(-0.002, 0.008, top_b - pos[:, 1]) * ss(-0.1, -0.06, rel[:, 2]) * ss(my - 0.13, my - 0.10, pos[:, 1]) * isface * (earf < 0.5)
+        # feathered over ~1.5 cm along its upper edge, faded out before the sideburn / ear and under the jaw
+        reg = (ss(-0.004, 0.014, top_b - pos[:, 1]) * ss(-0.1, -0.055, rel[:, 2]) * ss(my - 0.135, my - 0.095, pos[:, 1]) * isface * (earf < 0.5)
+               * ss(0.088, 0.064, ax_))
         reg *= 1 - lipm
         reg *= 1 - 0.85 * g2(t ** 2 + ((d + 0.0) / 0.012) ** 2, 1.0) * (np.abs(t) < 1.2)
         dots = (hash01(pos, 2600, seed) > 0.55).astype(float) * 0.7 + 0.3
@@ -1229,7 +1233,7 @@ def paint(c, B, cov, res, path_out):
         brd = c.get("beard", 0.0)
         if brd:
             bc_ = hexc(c.get("beardColor", c.get("hairColor", "2e2119")))
-            edge = ss(-0.001, 0.007, top_b - pos[:, 1]) * ss(my - 0.115, my - 0.085, pos[:, 1])
+            edge = ss(-0.003, 0.012, top_b - pos[:, 1]) * ss(my - 0.12, my - 0.085, pos[:, 1])
             strands = vnoise(pos * np.array([3.0, 0.6, 3.0]), 900, seed + 2.3)
             fine = hash01(pos, 3800, seed + 1.1)
             ab = np.clip(brd * reg * edge * (0.62 + 0.3 * strands + 0.12 * (fine - 0.5)), 0, 0.93)
@@ -1258,15 +1262,19 @@ def paint(c, B, cov, res, path_out):
     if hcov is not None:
         st = hair_strands(c, rel, style, seed, fine=1.6)
         st2 = hair_strands(c, rel, style, seed + 1.7, fine=3.0)
-        band = (hcov < 0) & (hcov > -0.007) & ~ears
-        u = ss(-0.007, 0.0, hcov)
-        fa = (u ** 1.3 * ss(0.8 - 0.22 * u, 0.86 - 0.22 * u, st2) * 0.75 + 0.1 * u ** 3) * band   # sparse fine hairs
-        over(fa, hair_c * 0.9 + skin * 0.1)
+        band = (hcov < 0) & (hcov > -0.008) & ~ears
+        u = ss(-0.008, 0.0, hcov)
+        # a soft density gradient outside the hairline (no discrete strokes: they read as a row of stitches), with a
+        # faint, low-contrast strand modulation
+        fa = (0.4 * u ** 1.7) * (0.85 + 0.15 * st2) * band
+        over(fa, hair_c * 0.8 + skin * 0.2)
         under = (hcov >= 0) & ~ears
-        # inside the hairline the density fades in over ~8 mm: short strokes along the growth direction, skin between
-        fade_in = ss(0.0, 0.008, hcov) * ss(0.35, 0.65, st2 + 0.5 * ss(0.0, 0.008, hcov))
+        # inside the hairline the density fades in smoothly over ~9 mm
+        fade_in = ss(-0.001, 0.009, hcov) * (0.88 + 0.12 * st2)
         st3 = hair_strands(c, rel, style, seed + 4.1, fine=2.2)
         k = 0.6 + 0.32 * st ** 1.2 + 0.16 * st3 - 0.06
+        if hair_c.mean() > 0.42:     # grey / blond: the regular strand stripes read as a knitted (woolly hat) rib
+            k = 0.8 + 0.1 * st ** 1.2 + 0.08 * st3 + 0.08 * (vnoise(rel * np.array([1.0, 3.0, 1.0]), 140, seed + 6.2) - 0.5) - 0.04
         roots = 1 - 0.1 * ss(0.012, 0.0, hcov)
         hcol = hair_c[None, :] * (k * roots)[:, None]
         sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
@@ -2316,6 +2324,8 @@ def build(c, tex_dir):
             taubin(Lh, 3, pin=Lh.cov <= 0.0005)
             seed = (sum(map(ord, c["id"])) % 97) * 0.37
             clumps = hair_strands(c, rel, style, seed, fine=0.6) - 0.5     # combed clumps: relief along the strands
+            if hexc(c.get("hairColor", "2e2119")).mean() > 0.42:            # light hair shows every ridge: softer clumps
+                clumps = clumps * 0.45
             relief = costume.hair_relief(style, rel, seed)
             offset_layer(Lh, B, 0.0004 + (vol * (shape + 0.45 * clumps) + relief) * ss(0.0, 0.03, Lh.cov))
             taubin(Lh, 2, pin=Lh.cov <= 0.0005)
@@ -2403,7 +2413,7 @@ def build(c, tex_dir):
     mesh.name = c["id"] + "_mesh"
     cloth_tris = sum(len(p.vertices) - 2 for o in cloth + gx for p in o.data.polygons)
     decimate_protected(mesh, B, budget(c) - cloth_tris if costume_mode else budget(c), face_keep=0.75 if budget(c) <= 9000 else 1.0,
-                       tex=tex["base"] if costume_mode and tex else None, hero=budget(c) >= 16000)
+                       tex=tex["base"] if costume_mode and tex else None, hero=budget(c) >= 16000, costume=costume_mode)
     if cloth:
         mesh = join([mesh] + cloth)
         print("  + cloth", cloth_tris, "tris", flush=True)
@@ -2597,9 +2607,12 @@ def join_uv_seams(mesh):
     bm.free()
 
 
-def decimate_protected(mesh, B, target, face_keep=1.0, tex=None, hero=False):
-    """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest."""
-    feat = feature_group(mesh, tex) if tex else None
+def decimate_protected(mesh, B, target, face_keep=1.0, tex=None, hero=False, costume=False):
+    """Full density on the face (eyes, lids, lips, nose), less on the rest of the head, the body takes the rest.
+    costume=True (the costume pipeline): no collapse here unless BLENDER_DEC=1 (simplify_cast.mjs lands the budget);
+    only the cleanup (uv clamp, helper attributes removed) runs."""
+    use = not costume or os.environ.get("BLENDER_DEC")
+    feat = feature_group(mesh, tex) if tex and use else None
     vgk = dict(use_vertex_group=True, invert_vertex_group=True, vertex_group_factor=float(os.environ.get("FEATF", "2.5"))) if feat is not None else {}
     e = to_bl(B.L.eye)
     hc = to_bl(B.L.eye + np.array([0, 0.02, -0.08]))
@@ -2636,7 +2649,9 @@ def decimate_protected(mesh, B, target, face_keep=1.0, tex=None, hero=False):
     n, kept = counts()
     target = max(target - kept, 2000)          # protected cloth tails are not decimated
     total = sum(n.values())
-    if total > target:
+    # costume builds leave the collapse to simplify_cast.mjs (meshoptimizer, attribute-aware, borders and uv seams
+    # locked): Blender's collapse left stray dark triangles on faces and faceted ears; BLENDER_DEC=1 brings it back
+    if total > target and use and not os.environ.get("NODEC"):
         crowd = face_keep < 1.0       # crowds / children (budget <= 9000): seen from further away, many on screen at once
         face_min = float(os.environ.get("CROWD_FACEK", "0.23")) if crowd else (0.4 if hero else 0.34)
         head_k = 0.6 if target >= 15000 else 0.36 if not crowd else 0.3

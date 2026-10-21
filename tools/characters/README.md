@@ -50,8 +50,20 @@ To add a character, add an entry to `CAST`, rebuild, and (for a named role) add 
   the outer item claims its own uv footprint (`layer_texels`), and the last 2.5 cm of a top / vest stand 3 mm clear
   of what they cover. Skirts stay inside any top worn over them.
 - Glow is dilated into empty padding only (a baked glow swatch used to light the gadget swatch next to it).
-- Crowds and children (budget 9 000) decimate further: body floor 0.36, hands 0.19, face 0.23
-  (`CROWD_BODYK`, `CROWD_HANDK`, `CROWD_FACEK`).
+- Triangle budgets (docs/COSTUMES.md "Mobile budgets": Kai 16 000, named NPCs 11 000, crowds and children 9 000 plus
+  a 6 000-triangle low LOD) are landed by `simplify_cast.mjs` (run by `compress_cast.sh`), not by Blender: costume
+  builds export the full-density mesh (Blender's collapse left stray dark triangles on faces and faceted ears;
+  `BLENDER_DEC=1` brings the old in-Blender decimation back). meshoptimizer's attribute-aware simplifier locks open
+  borders (hems, cuffs, hairline, hair shell edge) and keeps uv seams, and weighs normal, uv, the shading mask and a
+  skin-weight embedding, so plain cloth goes first and painted detail, skin / cloth edges and joints hold. The
+  armature root carries `tris_budget`, `lod_tris` (crowds and children) and `stature` (standing height, metres).
+- Crowd low LOD: `<id>_lod`, a second index list over the same vertex buffers (only an index buffer more; hidden,
+  extras `lod: 1`); `person.setLOD(1)` in cast3d.js swaps it in. It samples the same atlas (its mip chain stands in
+  for the 512 LOD atlas).
+- Bound edges (`costume.bind_edges`): for 2026 / 2049 cloth, the faces along a garment's own hem loops sample a
+  gradient swatch keyed on the distance from the hem (the coverage field), so every hem ends in a crisp, even
+  binding (hi-vis vests: a dark 7 mm bound edge) instead of sharing texels with the layer below (a fuzzy fringe).
+  Worn 2196 and ancient cloth keep their frayed hems.
 - One material per character: `baseColorTexture`, `normalTexture` and, when anything glows, `emissiveTexture` with
   `emissiveFactor` 1 (three.js shows it as `emissiveMap`). The glow colour is in the material's `extras.glow`.
 
@@ -77,16 +89,20 @@ region, and weighted 100 % to one bone (straps and cords copy the cloth weights 
 limb at both edges and never straddle a sleeve hem (under a loose sleeve they sit on the skin and peek out).
 
 glTF output the runtime uses (`src/human/cast3d.js` → `person.gadgets`, `setGadget(type, level)`, `showProp(type, on)`):
-- `gx_<type>`: the emissive part, its own skinned node; node extras `gadget`, `slot: 'glow'`, `idle` (rest level),
-  `segs`, `seg_mode`, `bone`; material `<id>_glow_<hex>` (extras `slot: 'glow'`, `glow: <hex>`, one per colour);
-  vertex attribute `_gseg` = segment index (chronolith glyphs 0..6, echo vents 0..1, shard / vial index).
+- `gx_<id>`: the character's one glow group (one draw call): every gadget's emissive part and smoked lens in one
+  skinned mesh. Per vertex `_gcol` = the glow colour (linear rgb, black on a lens) and `_gid` = (gadget index / 32,
+  glow segment / 32, opacity: 1 glow, 0.34 lens). Node extras: `slot: 'glow'`, `gadgets` (JSON list of types in index
+  order), `idle` (JSON list of rest levels), `props`, `glass`. Material `<id>_glow` (alpha-blended when the group holds
+  a lens). The runtime drives one level and one visibility per gadget index through a uniform array (all glow
+  colours share the one material / shader program).
 - `gp_<type>`: hand props (staff, spear, umbrella, phone, scanner, jar ...), extras `gadget`, `prop: 'hand'`.
-- `gl_<type>`: see-through smoked lens planes (AR glasses, the AR monocle), extras `gadget`, `slot: 'glass'`; material
-  `<id>_glass` (alpha-blended, glTF `alphaMode: BLEND`). Crowds with baked glow leave the lens out (one draw call).
+- Smoked lens planes (AR glasses, the AR monocle) are part of the glow group (opacity in `_gid`.z). Crowds with baked
+  glow leave the lens out (one draw call).
 - `continuum_armor`: the Continuum's ceramic plates as rigid gadget geometry (chamfered pearl plates with a darker edge
   and a graphite side wall, each weighted 100 % to one bone), so no plate bends at a joint.
 - The armature root carries `gadgets`: JSON [{type, bone, glow, idle, segs, seg_mode, prop, node, color, baked}].
 - Budgets under 11 000 triangles (crowds, children) bake glow into the atlas emissive at its idle level: no gx_ nodes.
+- Long hand props (umbrella, staff, spear) hide themselves while the crouch or sit clip plays (cast3d.js).
 
 The build log prints each gadget's triangle cost. Viewer close-ups: `tools/cast.html?base=...&ids=kai&cols=1&focus=head&d=0.5`
 (`focus=<bone>` aims at a bone, `fy` lifts the aim, `glow=<level>` lights every gadget). `GADGET_DEBUG=1` prints the

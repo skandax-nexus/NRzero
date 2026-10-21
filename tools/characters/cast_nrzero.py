@@ -3,7 +3,7 @@ the costume pipeline (`wear=[...]`, garments.py / costume.py) and the gadget kit
 
     cd tools/characters
     CAST=nrzero MH_DATA=.../makehuman/data ../../../tools/venv/bin/python build_humans.py OUT_DIR
-    npx --yes @gltf-transform/cli meshopt OUT_DIR/cast.glb ../../assets/models/staging/cast.glb
+    ./compress_cast.sh OUT_DIR/cast.glb ../../assets/models/staging/cast.glb
 
 Template ids are the spec ids (kai, mira, c49_m1, anc_f2 ...). Each entry carries `era` (2049 / 2026 / 2196 /
 ancient / unwritten: garments and gadgets are checked against it), `group` and `role` (written to cast_index.json).
@@ -12,10 +12,9 @@ Bodies: `macro` (MakeHuman gender / muscle / weight / ancestry mix), `years` (ag
 `metres` (standing height; the MakeHuman height parameter is solved for it once and cached in
 cast_nrzero_heights.json). Faces come from softened detail modifiers (see the end of the file), so every face is
 distinct and pleasant without extremes. Painted face extras: stubble, beard, freckles, scars (build_humans.paint).
-Budgets (decimation targets): Kai 16 000 triangles (2048 atlas); named NPCs 11 000 (gadget glow meshes); crowds and
-children 9 000 (gadget glow baked into the atlas emissive, no extra draw calls). The decimator keeps the body and its
-garments at 42 % or more and the hands / face at fixed ratios, so the built counts land above the targets (about 12 k
-to 20 k; kai 19.6 k, sera 20.3 k) rather than tearing cloth; a low-LOD pass is the place to cut further.
+Budgets: Kai 16 000 triangles (2048 atlas); named NPCs 11 000 (one glow group mesh); crowds and children 9 000
+(gadget glow baked into the atlas emissive, no extra draw call) plus a 6 000-triangle low LOD. The build exports full
+density; compress_cast.sh (simplify_cast.mjs, meshoptimizer) lands every character on its budget.
 """
 import json
 import os
@@ -71,7 +70,9 @@ CAST = [
                   **sym(cheek_bones=0.35)},
          skin="b98463", lip="9a5a4c", eyes="3a2a1c", hair="waves", hairColor="141110", stubble=0.85, browThick=0.8,
          glow="5fe6ff", glowLevel=0.6, metalColor="8a9098", tris=16000,
-         wear=[("mock_neck", "2a2c2f"), ("techshell", "16181c"), ("hood_down", None), ("chest_harness", "3a3f46"),
+         # a desaturated teal-grey shell over the charcoal base, with a thin cyan seam light along the zip, collar and
+         # sleeves: the player reads apart from the black 2049 crowd on a rainy street
+         wear=[("mock_neck", "2a2c2f"), ("techshell", "34454f", dict(det_add=["led:zip", "led:collar_edge", "led:sleeve"])), ("hood_down", None), ("chest_harness", "23272c"),
                ("tech_trousers", "2e3237"), ("tech_boots", "1b1611", dict(sole="6a6e74")), ("gloves", "1d1a17", dict(side="R", fingerless=True))],
          gear=["chronolith_band", ("ar_monocle", dict(idle=0.12)), "earpiece", "belt_scanner", "shoulder_lamp", "echo_emitter", "harness_pouches", "chest_slate_pocket"]),
     # ---- Mira Varen: armoured softshell with gorget and shoulder caps; carries nothing ----
@@ -112,7 +113,7 @@ CAST = [
          details={"head/head-oval": 0.4, "head/head-scale-vert-decr|incr": 0.25, "forehead/forehead-scale-vert-decr|incr": 0.3, "nose/nose-scale-vert-decr|incr": 0.3,
                   "nose/nose-point-width-decr|incr": -0.2, "mouth/mouth-upperlip-volume-decr|incr": -0.3, **sym(eye_bag=0.2)},
          skin="d3a487", lip="a8706a", eyes="7a8c9a", hair="swept", hairColor="d6d0c6", glow="f2f6ff", glowLevel=0.3,
-         wear=[("mock_neck", "2f3542"), ("labcoat49", "d6d8d4"), ("chinos", "2a2e36"), ("derby_boots", "14151a")],
+         wear=[("mock_neck", "2f3542"), ("labcoat49", "e9ecec"), ("chinos", "2a2e36"), ("derby_boots", "14151a")],
          gear=[("coat_tech_panel", dict(glow="38c8c0")), ("ar_glasses", dict(rimless=True, glow="f2f6ff", idle=0.3)), ("id_badge", dict(mount="clip", edge="gold")),
                ("earpiece", dict(color="e6e8ea", small=True)), ("wrist_slate", dict(color="e6e8ea"))]),
     # ---- Niko, keeper of the settlement: flax tunic, madder sash, tally cords ----
@@ -190,14 +191,17 @@ CAST = [
          skin="e0b8a0", lip="b07a70", eyes="6a7a7a", hair="crop", hairColor="b8b2a8", glow="b6ff8a", glowLevel=0.3, wearLevel=0.7,
          wear=[("knit_sweater", "48443c", dict(det_add=["wear", "elbow_patches"], c2="5a5040")), ("jerkin", "2a2a28"), ("cloak_hooded", "6a6a64"), ("hood_down", None),
                ("canvas_trousers", "8a7458"), ("wrapped_boots", "3a2a1c")],
-         gear=[("glasses", dict(clip=True, color="3a3430")), "shard_bandolier", "crank_lamp", "archive_reader"]),
+         gear=[("glasses", dict(shape="rect", wire=0.0019, taped=True, mismatch="6a5a44", clip=True, color="2e2a26")), "shard_bandolier", "crank_lamp", "archive_reader"]),
     # ---- Orren, guide of the Unwritten Second: eraless ash wrap, no seams, no tech ----
     dict(id="orren", group="Principals", era="unwritten", role="Orren, guide of the Unwritten Second", years=50, metres=1.78,
          macro=M(muscle=0.5, weight=0.42, caucasian=0.6, african=0.2, asian=0.2),
          details={"head/head-oval": 0.4, **sym(cheek_bones=0.3)},
          skin="b88560", lip="8a5a4c", eyes="4a3a2a", hair="crop", hairColor="2a2420", glow="e8eef8", glowLevel=0.2,
-         wear=[("tunic", "b8b4ac", dict(sleeve="long", det=[], tail=None)), ("cloak_hooded", "8a8a86", dict(det=["stitch_edges"])), ("hood_down", None),
-               ("soft_trousers", "8a8a86"), ("wrapped_boots", "5a5a56", dict(det=[]))],
+         # a closed, crossed ash-grey wrap (two value steps under the Helix white), darker soft trousers: no lab-coat column
+         wear=[("tunic", "9a968c", dict(sleeve="long", det=[], tail=None)),
+               ("cloak_hooded", "66665f", dict(det=["stitch_edges", "wrap_cross"], open_full=False, open_front=0.03, sleeve="cape",
+                                               tail=dict(end=0.13, flare=0.12, slits=0.24), hood_T=0.06, hood_D=0.2)), ("hood_down", None),
+               ("soft_trousers", "3f3f3b"), ("wrapped_boots", "4a4a46", dict(det=[]))],
          gear=[("chronolith_cuff_thin", dict(color="b8bcc4", glow="e8eef8", idle=0.25))]),
 
     # ============================================ MISSION EXTRAS ==============================================
@@ -206,7 +210,7 @@ CAST = [
          skin="cf9f82", lip="a8706a", eyes="5a6a6a", hair="pixie", hairColor="7a6a5a", glow="7fd8d0", glowLevel=0.35,
          wear=[("knit_sweater", "3b4441"), ("smart_parka", "3d4842", dict(fab="softshell", det=["taped_seams", "zip:placket", "pocket:hip_flap"])),
                ("hood_down", None), ("cargo_trousers", "272b30"), ("tech_boots", "1b1d20")],
-         gear=[("glasses", dict(color="2a2c30")), ("earpiece", dict(glow="7fd8d0")), ("rugged_slate", dict(glow="7fd8d0")), ("keycard_reel", dict(header="7fd8d0"))]),
+         gear=[("glasses", dict(shape="rect", wire=0.0009, color="8a9098")), ("earpiece", dict(glow="7fd8d0")), ("rugged_slate", dict(glow="7fd8d0")), ("keycard_reel", dict(header="7fd8d0"))]),
     dict(id="oskar", group="Mission extras", era="2049", role="Oskar Hensel, clockmaker of the Old Quarter (mission 6)", years=78, metres=1.70,
          macro=M(muscle=0.4, weight=0.4, **EU), details={"head/head-oval": 0.3, "nose/nose-scale-vert-decr|incr": 0.2, **sym(eye_bag=0.3)},
          skin="e6bea4", lip="b07a70", eyes="5a6a7a", hair="swept", hairColor="e4e0da", stubble=1.0, beard=0.9, beardColor="e8e4de", glow="ffc070",
@@ -238,7 +242,7 @@ CAST = [
     dict(id="neighbor", group="Mission extras", era="2049", role="Neighbour, clock quarter (mission 6)", years=46, metres=1.76,
          macro=M(muscle=0.5, weight=0.5, caucasian=0.8, african=0.2), details={"head/head-rectangular": 0.3},
          skin="c89a7a", lip="9a6a5a", eyes="3a2a1c", hair="short", hairColor="2a1f19", stubble=0.7, glow="f2f6ff", glowLevel=0.3,
-         wear=[("knit_sweater", "262c32"), ("techshell", "2a3038"), ("hood_down", None), ("tech_trousers", "1c2026"), ("tech_boots", "141210")],
+         wear=[("knit_sweater", "262c32"), ("techshell", "3b4441"), ("hood_down", None), ("tech_trousers", "1c2026"), ("tech_boots", "141210")],
          gear=[("wrist_device", dict(idle=0.35)), "earbuds", ("led_umbrella", dict(color="1e2a36"))]),
     dict(id="potter", group="Mission extras", era="ancient", role="Iru, potter of the upper terrace (mission 5)", years=46, metres=1.60,
          macro=F(muscle=0.62, weight=0.55, **ANC), details={"head/head-round": 0.3, "mouth/mouth-laugh-lines-in|out": 0.3, **sym(cheek_volume=0.2)},
@@ -262,7 +266,7 @@ CAST = [
     dict(id="c49_m2", group="Crowd 2049 civilians", era="2049", role="Civilian: commuter", years=38, metres=1.84,
          macro=M(muscle=0.62, weight=0.45, **AF), details={"head/head-oval": 0.3, "nose/nose-scale-horiz-decr|incr": 0.25, **sym(cheek_bones=0.3)},
          skin="6b4029", lip="5a3028", eyes="2a1a10", hair="fade", hairColor="141010", stubble=0.9, beard=0.6, glow="f2f6ff", glowLevel=0.3,
-         wear=[("mock_neck", "1d2026"), ("longshell", "2a2f36"), ("tech_trousers", "1a1d22"), ("ankle_boots", "141210")],
+         wear=[("mock_neck", "1d2026"), ("longshell", "6f6656"), ("tech_trousers", "1a1d22"), ("ankle_boots", "141210")],
          gear=["wrist_device", ("led_umbrella", dict(color="22262c"))]),
     dict(id="c49_m3", group="Crowd 2049 civilians", era="2049", role="Civilian: shop owner", years=55, metres=1.72,
          macro=M(muscle=0.5, weight=0.6, **SA), details={"head/head-round": 0.3, "nose/nose-scale-vert-decr|incr": 0.2},
@@ -272,13 +276,13 @@ CAST = [
     dict(id="c49_m4", group="Crowd 2049 civilians", era="2049", role="Civilian: bike courier", years=31, metres=1.86,
          macro=M(muscle=0.6, weight=0.36, **EU), details={"head/head-rectangular": 0.3, "chin/chin-prominent-decr|incr": 0.2},
          skin="f1c6a8", lip="b8786a", eyes="5a7a9a", hair="swept", hairColor="c8a060", stubble=0.4, glow="6affc8",
-         wear=[("leggings", "1a1d22"), ("tech_shorts", "1d2430"), ("techshell", "2d3640"), ("chest_harness", "c8ccd0"),
+         wear=[("leggings", "1a1d22"), ("tech_shorts", "1d2430"), ("techshell", "1d2a44"), ("chest_harness", "4a5058"),
                ("sneakers", "202020", dict(shaft=0.06, sole="3a3a3a"))],
          gear=["cube_backpack", "ar_visor_clip", "wrist_device"]),
     dict(id="c49_m5", group="Crowd 2049 civilians", era="2049", role="Civilian: retired engineer", years=67, metres=1.70,
          macro=M(muscle=0.42, weight=0.48, **ME), details={"head/head-oval": 0.3, "nose/nose-hump-decr|incr": 0.25, **sym(eye_bag=0.25)},
          skin="d9a585", lip="a8706a", eyes="3a2a1c", hair="swept", hairColor="c8c4bc", glow="f2f6ff", glowLevel=0.2,
-         wear=[("turtleneck", "6a6e74"), ("longshell", "202833", dict(fab="wool", gloss=0.1, det=["zip:placket", "pocket:hip_slash"])), ("chinos", "23262b"),
+         wear=[("turtleneck", "6a6e74"), ("longshell", "4a4e54", dict(fab="wool", gloss=0.1, det=["zip:placket", "pocket:hip_slash"])), ("chinos", "23262b"),
                ("leather_work_shoes", "141210")],
          gear=[("ar_glasses", dict(color="2a2c30", idle=0.2)), ("fitness_band", dict(idle=0.2)), ("led_umbrella", dict(closed=True, color="1d2430"))]),
     dict(id="c49_m6", group="Crowd 2049 civilians", era="2049", role="Civilian: street-food vendor", years=45, metres=1.78,
@@ -299,7 +303,7 @@ CAST = [
     dict(id="c49_f3", group="Crowd 2049 civilians", era="2049", role="Civilian: office worker", years=48, metres=1.68,
          macro=F(muscle=0.45, weight=0.55, **EU), details={"head/head-round": 0.3},
          skin="e8b996", lip="b8706a", eyes="5a7a5a", hair="bob", hairColor="7a3a1e", glow="f2f6ff", glowLevel=0.3,
-         wear=[("mock_neck", "2a2f36"), ("smart_parka", "1d2430"), ("wide_trousers", "2d2a26"), ("tech_boots", "141210")],
+         wear=[("mock_neck", "2a2f36"), ("smart_parka", "2e3a4e"), ("wide_trousers", "2d2a26"), ("tech_boots", "141210")],
          gear=["earpiece", ("led_umbrella", dict(color="2a2a30")), "tablet_bag"]),
     dict(id="c49_f4", group="Crowd 2049 civilians", era="2049", role="Civilian: student", years=22, metres=1.62,
          macro=F(muscle=0.45, weight=0.36, caucasian=0.6, asian=0.25, african=0.15), details={"head/head-oval": 0.3, **sym(cheek_bones=0.3)},
@@ -333,13 +337,13 @@ CAST = [
     dict(id="helix_sci_m", group="Crowd 2049 Helix and services", era="2049", role="Helix scientist", years=36, metres=1.79,
          macro=M(muscle=0.5, weight=0.45, **ME), details={"head/head-oval": 0.3, "nose/nose-scale-vert-decr|incr": 0.2},
          skin="c8916c", lip="8a5a4c", eyes="3a2a1c", hair="short", hairColor="1a1512", stubble=0.9, beard=0.55, glow="38c8c0",
-         wear=[("knit_sweater", "6a6e74"), ("labcoat49", "d6d8d4"), ("chinos", "23262b"), ("sneakers", "d8dce0")],
-         gear=[("coat_tech_panel", dict(glow="38c8c0")), ("ar_glasses", dict(glow="38c8c0")), ("id_badge", dict(header="38c8c0")), ("rugged_slate", dict(hand=True))]),
+         wear=[("knit_sweater", "6a6e74"), ("labcoat49", "e9ecec"), ("chinos", "23262b"), ("sneakers", "d8dce0")],
+         gear=[("coat_tech_panel", dict(glow="38c8c0")), ("ar_glasses", dict(glow="38c8c0")), ("id_badge", dict(header="38c8c0", mount="clip")), ("rugged_slate", dict(hand=True))]),
     dict(id="helix_sci_f", group="Crowd 2049 Helix and services", era="2049", role="Helix scientist", years=44, metres=1.63,
          macro=F(muscle=0.45, weight=0.38, **EA), details={"head/head-oval": 0.35, "eyes/l-eye-epicanthus-in|out": 0.2, "eyes/r-eye-epicanthus-in|out": 0.2},
          skin="f1c6a8", lip="b8706a", eyes="2a1c14", hair="bob", hairColor="1a1818", glow="38c8c0",
-         wear=[("mock_neck", "1d2430"), ("labcoat49", "d6d8d4", dict(tail=dict(end=0.37, flare=0.14, split=0.03, vent=0.12, panel=0.6))), ("chinos", "4a4e54"), ("sneakers", "e6e2da")],
-         gear=[("coat_tech_panel", dict(glow="38c8c0")), ("headset_neck", dict(worn="head")), "wrist_slate", ("id_badge", dict(header="38c8c0"))]),
+         wear=[("mock_neck", "1d2430"), ("labcoat49", "e9ecec", dict(tail=dict(end=0.37, flare=0.14, split=0.03, vent=0.12, panel=0.6))), ("chinos", "4a4e54"), ("sneakers", "e6e2da")],
+         gear=[("coat_tech_panel", dict(glow="38c8c0")), ("headset_neck", dict(worn="head")), "wrist_slate", ("id_badge", dict(header="38c8c0", mount="clip"))]),
     dict(id="helix_sec_1", group="Crowd 2049 Helix and services", era="2049", role="Helix security guard", years=32, metres=1.88,
          macro=M(muscle=0.8, weight=0.55, **AF), details={"head/head-square": 0.4, "chin/chin-width-decr|incr": 0.3},
          skin="5a3622", lip="4a2a22", eyes="2a1a10", hair="crop", hairColor="141010", glow="ff4d5e",
@@ -380,7 +384,7 @@ CAST = [
          macro=M(muscle=0.42, weight=0.4, **SA), details={"head/head-oval": 0.3, **sym(eye_bag=0.2)},
          skin="a16d4c", lip="7a4a3c", eyes="2a1a10", hair="short", hairColor="9a968e",
          wear=[("knit_sweater", "6a6e74"), ("car_coat", "b08a5a"), ("chinos", "2d2a26"), ("leather_work_shoes", "2a1d14")],
-         gear=[("glasses", dict(color="2a2420")), "smartphone"]),
+         gear=[("glasses", dict(shape="rect", wire=0.0017, color="1c1a18")), "smartphone"]),
     dict(id="c26_f1", group="Crowd 2026", era="2026", role="2026 civilian: student", years=24, metres=1.62,
          macro=F(muscle=0.45, weight=0.36, **EA), details={"head/head-oval": 0.4, "eyes/l-eye-epicanthus-in|out": 0.2, "eyes/r-eye-epicanthus-in|out": 0.2},
          skin="e8c0a0", lip="c27a72", eyes="2a1c14", hair="long", hairColor="141010",
@@ -395,7 +399,7 @@ CAST = [
          macro=F(muscle=0.45, weight=0.45, **EU), details={"head/head-oval": 0.3, **sym(eye_bag=0.15)},
          skin="f1c6a8", lip="b8706a", eyes="5a7a8a", hair="bob", hairColor="d8c8a0",
          wear=[("tshirt", "e8e4dc", dict(sleeve="long")), ("rain_mac", "1d2430"), ("chinos", "2d2a26"), ("loafers", "3a2a1c")],
-         gear=[("glasses", dict(color="2a2420")), ("smartphone", dict(mount="pocket")), ("led_umbrella", dict(closed=True, color="1d2430"))]),
+         gear=[("glasses", dict(shape="rect", wire=0.0018, color="5a3a24")), ("smartphone", dict(mount="pocket")), ("led_umbrella", dict(closed=True, color="1d2430"))]),
 
     # =============================================== CROWD 2196 ===============================================
     dict(id="surv_m1", group="Crowd 2196", era="2196", role="Survivor: scavenger", years=41, metres=1.78,
@@ -426,13 +430,13 @@ CAST = [
     dict(id="continuum_1", group="Crowd 2196", era="2196", role="Continuum trooper", years=30, metres=1.88,
          macro=M(muscle=0.72, weight=0.45, caucasian=0.5, asian=0.5), details={"head/head-oval": 0.3},
          skin="d8a888", eyes="3a2a1c", hair="fade", hairColor="141010", glow="ffd27a",
-         wear=[("continuum_suit", "202328"), ("suit_trousers", "202328"), ("service_boots", "202328"), ("gloves", "202328"), ("continuum_helmet", "e6e8ea")],
+         wear=[("continuum_suit", "2a2d32"), ("suit_trousers", "2a2d32"), ("service_boots", "202328"), ("gloves", "202328"), ("continuum_helmet", "c9cdd0")],
          gear=["continuum_armor", "continuum_chest_emitter", "continuum_forearm_emitter", "continuum_visor", "stabilizer_fins"]),
     dict(id="continuum_2", group="Crowd 2196", era="2196", role="Continuum officer", years=33, metres=1.76,
          macro=F(muscle=0.62, weight=0.4, caucasian=0.5, asian=0.5), details={"head/head-oval": 0.4, **sym(cheek_bones=0.35)},
          skin="e8c0a0", lip="b06a62", eyes="2a1c14", hair="bun", hairColor="141010", glow="ffd27a",
-         wear=[("continuum_suit", "202328"), ("suit_trousers", "202328"), ("service_boots", "202328"), ("gloves", "202328"), ("half_cape", "2a2c30"),
-               ("continuum_helmet_officer", "e6e8ea")],
+         wear=[("continuum_suit", "2a2d32"), ("suit_trousers", "2a2d32"), ("service_boots", "202328"), ("gloves", "202328"), ("half_cape", "2a2c30"),
+               ("continuum_helmet_officer", "c9cdd0")],
          gear=[("continuum_armor", dict(pauldrons="R")), "continuum_chest_emitter", ("continuum_forearm_emitter", dict(slate=True)),
                ("continuum_visor", dict(parked=True)), "rank_bar"]),
 
@@ -457,7 +461,7 @@ CAST = [
          macro=M(muscle=0.78, weight=0.55, **ANC), details={"head/head-square": 0.35, "neck/neck-scale-horiz-decr|incr": 0.3},
          skin="5a3622", lip="4a2a22", eyes="2a1a10", hair="crop", hairColor="141010", stubble=1.0, beard=0.85,
          wear=[("tunic", "8a6a4a", dict(sleeve="cap")), ("leather_hipwrap", "4a3220", dict(det=["stitch_edges"])), ("leg_wraps", "5a4632"), ("sandals", "4a3220"),
-               ("gloves", "2a2018", dict(side="R", fab="leather"))],
+               ("gloves", "5a3e28", dict(side="R", fab="suede", gloss=0.0, thick=0.0042, gauntlet=0.07, det=["soot_tips", "lace_wrap", "stitch_edges"]))],
          gear=[("period:bronze_armlet", dict(color="c9a050"))]),
     dict(id="anc_f1", group="Crowd ancient settlement", era="ancient", role="Settler: water carrier", years=25, metres=1.62,
          macro=F(muscle=0.52, weight=0.38, **ANC), details={"head/head-oval": 0.4, **sym(cheek_bones=0.35)},
@@ -546,9 +550,9 @@ def _solve_heights(cast):
 _solve_heights(CAST)
 
 INDEX = [dict(id=c["id"], era=c["era"], group=c["group"], role=c["role"], sex="m" if c["macro"]["gender"] >= 0.5 else "f", age=c["years"],
-              height=c["metres"]) for c in CAST]
+              height=c["metres"], tris=c.get("tris", 11000), lod=6000 if c.get("tris", 11000) <= 9000 else 0) for c in CAST]
 
-if __name__ == "__main__":     # python cast_nrzero.py OUT.json: the cast index (id, era, group, role, sex, age, height)
+if __name__ == "__main__":     # python cast_nrzero.py OUT.json: the cast index (id, era, group, role, sex, age, height, tris, lod)
     import sys
     json.dump(dict(cast="nrzero", count=len(INDEX), characters=INDEX), open(sys.argv[1], "w"), indent=1)
     print(len(INDEX), "->", sys.argv[1])

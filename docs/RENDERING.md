@@ -593,6 +593,14 @@ The 2196 lab street with overgrowth along the road and both pavements (195 insta
 street kit before culling): low 73 calls / 47k tris (was 61 / 40k), high 159 / 135k (was 130 / 119k), container idle.
 Captures `<scratch>/render/infra/lab/og_2196_{high,low}.png` (compare `final_2196_*`).
 
+Playthrough check (2026-10-21, idle container, `?gfx=low`, 960×540, `tools/drive.mjs` with the long-timeout copies of
+tools/tests/m1-m4 in `<scratch>/render/infra/verify/`): missions 1, 2, 3 and 4 all play through to the next mission
+with the stage-4 kit and batching on (m1 1088 s → mission 2 title, m2 117 s, m3 113 s → mission 4, m4 103 s with all
+six evidence items including "A card from 2049, three thousand years old"). Two test-harness timing notes, not
+caused by this stage: m1.json waits for 6 evidence items but mission 1 now awards 5 (3 anomalies, badge, Mira),
+and m4.json's pedestal step can race the pedestal prompt at SwiftShader frame rates (`m4_robust.json` waits for
+the prompt first).
+
 ### Cost (stage 4)
 
 Same-frame A/B in one page (`tools/render/infraab.mjs`, `new` vs `legacy` = everything as before stage 4), median of
