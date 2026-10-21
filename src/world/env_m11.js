@@ -432,7 +432,7 @@ export function buildHospital(game, scene) {
   const bal = new THREE.Mesh(new THREE.PlaneGeometry(28, 1.0), glass); bal.position.set(0, 4.2, 1.4); scene.add(bal);
   for (let x = -12; x <= 12; x += 4) lightPanel(x, 0, 3.38, 1.4, 0.4, ceilLight);
   for (const z of [5, 10]) for (let x = -10; x <= 10; x += 5) lightPanel(x, z, LH - 0.02, 1.6, 1.6, ceilLight);
-  src(0, 5.8, 7.5, 0xf2f6ff, 26, 18, 'lobby'); src(-8, 3.2, 3, 0xfff0dc, 10, 10, 'lobby'); src(9, 3.2, 3, 0xe8f2ff, 10, 10, 'lobby');
+  src(0, 5.8, 7.5, 0xf2f6ff, 12, 16, 'lobby'); src(-8, 3.2, 3, 0xfff0dc, 10, 10, 'lobby'); src(9, 3.2, 3, 0xe8f2ff, 10, 10, 'lobby');
   // reception desk (curved by segments)
   for (let k = 0; k < 7; k++) { const a = -0.6 + k * 0.2, cx = -6 + Math.sin(a) * 3.2, cz = 2.6 + Math.cos(a) * 1.2; B.boxc(white, cx, 0.55, cz, 1.0, 1.1, 0.5, a); B.boxc(deskTop, cx, 1.12, cz, 1.05, 0.05, 0.62, a); }
   blk(-9.6, 0, 2.6, -2.4, 1.1, 4.2);

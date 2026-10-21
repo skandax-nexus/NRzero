@@ -212,7 +212,7 @@ export default {
     const kidKai = game.actor('kidkai11', { ...KID_KAI }, -18.6, 0, 9.4, -Math.PI / 2); kidKai.pose = 'sit'; kidKai.setGhost(0xffd8a8);
     game.residue(mother.root); game.residue(kidKai.root);
     const tech = game.actor('techghost', TECH_GHOST, 47.0, 0, -22.2, -Math.PI / 2); tech.pose = 'work'; tech.setGhost(0x9fe8ff); game.residue(tech.root);
-    const miraGhost = game.actor('miraghost', { ...CAST.mira.look, role: 'mira' }, P.bed407[0], 0.3, -11.5, 0); miraGhost.setGhost(0x9a7bff); miraGhost.root.visible = false;
+    const miraGhost = game.actor('miraghost', { ...CAST.mira.look, role: 'mira' }, 54.24, 0.3, -12.3, Math.PI / 2); miraGhost.setGhost(0x9a7bff); miraGhost.root.visible = false;
 
     // ---------- collectibles: temporal shards ----------
     const shardMesh = [];
@@ -235,12 +235,12 @@ export default {
     pl.place(...P.start); game.checkpoint(...P.start);
     applyZone('out'); audio.setTheme(null);
     cine(true);
-    game.engine.camera.position.set(-26, 16, 60);
-    await game.shot([-26, 16, 60], [12, 9, 6], 0.01, { fov: 50 });
+    game.engine.camera.position.set(-34, 24, 38);
+    await game.shot([-34, 24, 38], [18, 10, 0], 0.01, { fov: 50 });
     await ui.fade(0, 2600);
     lockMusic('m11-rain', 2);
     const cc = ui.chapterCard('ACT II · THE NINE-MINUTE WAR', 'The Inverted Hospital', 'Halden General · East Wing · Rain City · 22.10.2049', 4400);
-    await game.shot([-8, 9, 44], [20, 10, 8], 6.5, { fov: 44 });
+    await game.shot([-6, 8, 40], [22, 9, 6], 6.5, { fov: 44 });
     await cc;
     await game.shot([24, 1.4, 25], [34, 9, 15], 3.2, { fov: 40 });
     await game.shot([-2.2, 1.7, 49.4], [-3.4, 1.55, 45.6], 1.6, { fov: 40 });
@@ -653,7 +653,7 @@ export default {
     await game.shot([40.6, 1.6, -19.0], [38.6, 1.2, -20.2], 1.2, { fov: 40 });
     await tween(0.8, u => { W.drawer.position.x = 38.32 + 0.45 * u; });
     await game.say('kai', 'One slim file. And a terminal that wants it.');
-    pl.place(40.6, 0, -23.4, Math.PI);
+    pl.place(39.5, 0, -23.7, Math.PI * 0.9); objective('');
     W.screens.file.material.color.setScalar(1.15);
     await game.shot([41.3, 1.6, -22.6], [40.6, 1.4, -24.84], 1.6, { fov: 34 });
     await game.talk([
@@ -685,17 +685,17 @@ export default {
     for (const tr of corrTracks) { tr.frozen = true; inv.remove(tr); tr.tele.visible = false; }
     for (const z of [zCorr, zWard]) z.dir0 = 1;
     inv.unlock(false); inv.enabled = false;
-    pl.place(53.6, 0, -8.6, Math.PI); kai.lookTarget = null;
+    pl.place(52.5, 0, -8.7, Math.PI - 0.35); kai.lookTarget = null;
     W.screens.monitor.material.map = TEX.monitor(false); W.screens.monitor.material.needsUpdate = true; wardDark = 0.3;
     miraGhost.root.visible = true; miraGhost.pose = 'sit';
     const gm = miraGhost.ghostMat; if (gm?.uniforms?.uAlpha) gm.uniforms.uAlpha.value = 0;
     applyZone('ward');
-    await game.shot([55.2, 1.6, -8.2], [53.6, 1.0, -12.2], 0.01, { fov: 40 });
+    await game.shot([55.6, 1.6, -8.4], [54.0, 1.0, -12.3], 0.01, { fov: 40 });
     await ui.fade(0, 1600);
     audio.sfxPlay('heartbeat');
     await tween(2.2, u => { if (gm?.uniforms?.uAlpha) gm.uniforms.uAlpha.value = u * 0.75; });
     miraGhost.lookTarget = kai.head; F.m11sawMira = true;
-    await game.shot([53.9, 1.25, -9.6], [53.6, 1.05, -12.5], 2.4, { fov: 30 });
+    await game.shot([55.9, 1.35, -10.2], [54.3, 1.15, -12.3], 2.4, { fov: 32 });
     if (audio.ctx) audio.tone(988, 0.14, 'sine', 0.18, audio.sfx, audio.ctx.currentTime, 0.004);
     await game.wait(1.0);
     await game.say('kai', 'Mira?');

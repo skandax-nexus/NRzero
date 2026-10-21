@@ -575,7 +575,8 @@ export default {
     game.interact({ pos: [P.officer[0] + 1.2, 1.2, P.officer[2]], radius: 2.2, prompt: 'Talk to the officer without a helmet', once: false, enabled: () => rhee.root.visible && loop.window(RHEE[0], RHEE[1]) && !S.alarm && !S.talkingRhee, onUse: async () => {
       S.talkingRhee = true; rhee.lookTarget = kai.head; kai.lookTarget = rhee.head;
       cine(true);
-      { const rp = rhee.root.position; await game.shot([rp.x + 2.6, 1.8, rp.z + 1.8], [(rp.x + pl.pos.x) / 2, 1.55, (rp.z + pl.pos.z) / 2], 1.2, { fov: 40 }); }
+      { const rp = rhee.root.position, dx = rp.x - pl.pos.x, dz = rp.z - pl.pos.z, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;   // over Kai's shoulder
+        await game.shot([pl.pos.x - ux * 1.5 - uz * 0.75, 1.75, pl.pos.z - uz * 1.5 + ux * 0.75], [rp.x, 1.5, rp.z], 1.2, { fov: 40 }); }
       if (!S.seen.rhee1) {
         await game.talk([
           ['rhee', 'Stay where you are. — No. Don\'t. Sit down. You make me tired.'],
