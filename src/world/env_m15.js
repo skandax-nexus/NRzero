@@ -487,6 +487,15 @@ export function buildHarrow(game, scene, T) {
     src(17.6, 2.4, -31, 0xb6ff8a, 4, 9, '2196'); src(15, 6, -20, 0xffe0c0, 3, 12, 'all');
     // ---- 2049: the museum ----
     S['2049'].box(M.tileW, -19.6, 0.04, -45.6, 19.6, 0.06, -10.4);
+    {   // 2049 wings: freshly painted gallery walls over the shared (2196-weathered) plaster
+      const clean = pm('plaster', { color: 0xe2e0da, damage: 0, dirt: 0.04 });
+      for (const s of [-1, 1]) {
+        const xo = s * 19.56, xi = s * 12.24, a = Math.min(xo, xi), b = Math.max(xo, xi);
+        S['2049'].box(clean, xo - 0.02, 0.06, -45.56, xo + 0.02, 9, -10.44);
+        S['2049'].box(clean, xi - 0.02, 0.06, -45.56, xi + 0.02, 9, -20.5); S['2049'].box(clean, xi - 0.02, 0.06, -17, xi + 0.02, 9, -10.44); S['2049'].box(clean, xi - 0.02, 3.4, -20.5, xi + 0.02, 9, -17);
+        S['2049'].box(clean, a, 0.06, -45.58, b, 9, -45.54); S['2049'].box(clean, a, 0.06, -10.46, b, 9, -10.42);
+      }
+    }
     for (const [x, z] of [[-6, -16], [6, -16], [-6, -38], [6, -38], [-8, -30], [8, -30]]) { S['2049'].box(M.plasterIn, x - 0.7, 0, z - 0.7, x + 0.7, 1.1, z + 0.7); S['2049'].box(glass, x - 0.6, 1.1, z - 0.6, x + 0.6, 1.9, z + 0.6); box(x - 0.7, 0, z - 0.7, x + 0.7, 1.9, z + 0.7, ['2049']); }
     S['2049'].box(M.wood, -4.6, 0, -14.6, -1.8, 1.1, -13.2); box(-4.6, 0, -14.6, -1.8, 1.1, -13.2, ['2049']);     // welcome desk
     S['2049'].cyl(M.steel, 0, 0.6, -30, 3.4, 1.2, 32); box(-3, 0, -33, 3, 1.2, -27, ['2049']);     // the museum's centrepiece: a model of the city

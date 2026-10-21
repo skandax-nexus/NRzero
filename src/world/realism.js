@@ -1895,6 +1895,8 @@ uniform float rzWTile[7];
 uniform vec3 rzWMean[7];
 uniform float rzLit, rzDay, rzIntI, rzComfort;
 varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz;
+flat varying vec4 vRzK;   // per building, from the vertex shader: wall tint (rgb), frame colour hash (w)
+flat varying vec3 vRzM;   // mean albedo of the wall layer (vertex shader: no per-pixel dynamic uniform indexing)
 // RZ_INTERIOR (from the realism tier): 0 = lite facade with one wall tap ('low'), 1 = lite facade with the PBR wall
 // (albedo + normal + ORM taps: 'medium'), 2 = full interior mapping (ray-box rooms, furniture, curtains: 'high')
 #ifndef RZ_INTERIOR
@@ -2216,6 +2218,15 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
 // octaves, no room ray-box);
 // windows keep their frames, mullions, sills, lit / unlit rooms with a lamp gradient and Fresnel glass, so the
 // buildings read the same from gameplay distance at about the cost of the textured boxes they replace.
+// anti-aliased edges of the lite facade (window boxes, frames, mullions, sills, roof line): linear ramps over the
+// pixel footprint instead of smoothstep (a few ALU less per edge, the same 1-2 px transition)
+#ifdef RZ_LITE_LINAA
+#define rzAS(a, b, x) clamp(((x) - (a)) / ((b) - (a)), 0.0, 1.0)
+float rzBoxA(vec2 p, vec2 mn, vec2 mx, vec2 aa){ vec2 ia = 0.5 / aa; vec2 s = clamp((p - mn) * ia + 0.5, 0.0, 1.0) * clamp((mx - p) * ia + 0.5, 0.0, 1.0); return s.x * s.y; }
+#else
+#define rzAS(a, b, x) smoothstep(a, b, x)
+#define rzBoxA rzBoxM
+#endif
 void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
 #if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 1   // cost probes for tools/render/infraab.mjs (never set in the game)
   alb = vec3(0.3); orm = vec3(1.0, 0.8, 0.0); nW = rzSafeN(vRzWN); emi = vec3(0.0); return;
@@ -2280,22 +2291,22 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
       else { wmin = vec2((bay - ww) * 0.5, sill + (gH - flH) * 0.6); wmax = wmin + vec2(ww, wh); } }
     else { float fy = (P.y - gH) / flH; cid = vec2(floor(P.x / bay), floor(fy)); cl = vec2(P.x - cid.x * bay, (fy - cid.y) * flH); ch = flH;
       wmin = vec2((bay - ww) * 0.5, sill); wmax = wmin + vec2(ww, wh); }
-    zone = 1.0 - smoothstep(topY - aa.y, topY + aa.y, P.y);
+    zone = 1.0 - rzAS(topY - aa.y, topY + aa.y, P.y);
     // far away only the cheap per-cell facade below is drawn (each window a flat lit / dark cell, no frames: a window
     // under ~5 px on 'low', ~3.5 px on 'medium'), skipping the per-window work
     farW = farA;
     // the window mask is exactly 0 outside its box grown by the AA width: wall pixels skip it
-    if (farW < 0.999 && zone > 0.0 && cl.x > wmin.x - aa.x && cl.x < wmax.x + aa.x && cl.y > wmin.y - aa.y && cl.y < wmax.y + aa.y) open = rzBoxM(cl, wmin, wmax, aa) * zone;
+    if (farW < 0.999 && zone > 0.0 && cl.x > wmin.x - aa.x && cl.x < wmax.x + aa.x && cl.y > wmin.y - aa.y && cl.y < wmax.y + aa.y) open = rzBoxA(cl, wmin, wmax, aa) * zone;
   }
   vec3 wall = vec3(0.3); o4 = vec4(1.0, 0.85, 0.0, 0.5);
   if (open < 0.999 || farW > 0.001) {
 #if RZ_INTERIOR == 0 && !defined(RZ_FAR_TAP)
-    float wl = region > 4.5 ? 4.0 : layer; wall = rzWMean[int(wl + 0.5)];
+    float wl = region > 4.5 ? 4.0 : layer; wall = vRzM;
     if (farA < 0.999) wall = mix(rzWall(wl, P, T, B, N, o4, nW), wall, farA);
 #else
     wall = rzWall(region > 4.5 ? 4.0 : layer, P, T, B, N, o4, nW);
 #endif
-    wall *= mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), vFac.w) * (0.88 + 0.24 * rzH12(vec2(bseed * 91.0, 3.0)));
+    wall *= vRzK.rgb;
     wall *= 1.0 - (1.0 - smoothstep(0.0, 1.5, P.y)) * 0.35;
     if (ruin > 0.0) { wall = mix(wall, vec3(dot(wall, vec3(0.3, 0.5, 0.2))), 0.4 * ruin) * (1.0 - 0.3 * ruin); wall = mix(wall, vec3(0.085, 0.13, 0.045), moss * 0.35 * (1.0 - smoothstep(0.0, 4.0, P.y))); }
   }
@@ -2306,7 +2317,7 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   if (!winR) return;
   // sill (below the window, never on shop fronts): exactly 0 outside its box grown by the AA width
   if (!shop && farW < 0.999 && zone > 0.0 && cl.x > wmin.x - 0.07 - aa.x && cl.x < wmax.x + 0.07 + aa.x && cl.y > wmin.y - 0.09 - aa.y && cl.y < wmin.y + aa.y) {
-    float sillM = rzBoxM(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone;
+    float sillM = rzBoxA(cl, vec2(wmin.x - 0.07, wmin.y - 0.09), vec2(wmax.x + 0.07, wmin.y), aa) * zone;
     alb = mix(alb, vec3(0.40, 0.38, 0.35), sillM);
   }
 #if defined(RZ_FACADE_PROBE) && RZ_FACADE_PROBE == 3
@@ -2317,13 +2328,13 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     vec3 V = normalize(vRzWP - cameraPosition);
     float cosv = max(dot(-V, N), 0.0), fr1 = 1.0 - cosv, fr2 = fr1 * fr1, F = 0.04 + 0.96 * fr2 * fr2 * fr1;
     vec2 de = min(cl - wmin, wmax - cl); float fwid = shop ? 0.07 : 0.05;
-    float frameM = 1.0 - smoothstep(fwid - aa.x, fwid + aa.x, min(de.x, de.y));
+    float frameM = 1.0 - rzAS(fwid - aa.x, fwid + aa.x, min(de.x, de.y));
     float mx = (wmin.x + wmax.x) * 0.5, my = wmin.y + (wmax.y - wmin.y) * 0.68;
     if (!shop) {
-      if (st > 0.5 && st < 2.5) frameM = max(frameM, 1.0 - smoothstep(fwid * 0.5 - aa.x, fwid * 0.5 + aa.x, abs(cl.x - mx)));
-      if (st > 1.5) frameM = max(frameM, 1.0 - smoothstep(fwid * 0.5 - aa.y, fwid * 0.5 + aa.y, abs(cl.y - my)));
+      if (st > 0.5 && st < 2.5) frameM = max(frameM, 1.0 - rzAS(fwid * 0.5 - aa.x, fwid * 0.5 + aa.x, abs(cl.x - mx)));
+      if (st > 1.5) frameM = max(frameM, 1.0 - rzAS(fwid * 0.5 - aa.y, fwid * 0.5 + aa.y, abs(cl.y - my)));
     }
-    float fh = rzH12(vec2(bseed * 7.0, 1.0));
+    float fh = vRzK.w;
     vec3 fc = fh < 0.4 ? vec3(0.7, 0.7, 0.68) : (fh < 0.75 ? vec3(0.03, 0.03, 0.032) : vec3(0.16, 0.1, 0.06));
     // room behind the glass: lit or dark, warm / neutral / cool lamp, brighter toward the ceiling, darker at the sill
     bool lit = hS.x < rzLit * (shop ? 1.8 : 1.0) * (1.0 - ruin * 0.95);
@@ -2332,7 +2343,7 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     float xb = 1.0 - abs((cl.x - mx) / max(wmax.x - wmin.x, 0.1)) * 0.8;
     vec3 room = lit ? lc * rzIntI * (0.3 + 0.55 * hS.z) * (shop ? 1.35 : 0.8) * (0.25 + 0.75 * yb * yb) * xb * mix(vec3(1.0), rzPal(fract(hS.z * 7.3)) * 1.35, 0.55) : vec3(0.012, 0.011, 0.01);
     if (!shop && hS.z < 0.35) room *= mix(1.0, 0.28, step(1.0 - hS.y * 0.5, (cl.y - wmin.y) / max(wmax.y - wmin.y, 0.1)));   // a blind pulled part-way down
-    room += rzPal(hS.z) * rzDay * 0.25;
+    if (rzDay > 0.0) room += rzPal(hS.z) * rzDay * 0.25;
     bool broke = ruin > 0.0 && rzH12(cid * 1.91 + vec2(bseed * 23.0, 0.7)) < ruin * 0.75;
     vec3 wAlb = mix(vec3(0.0), fc, frameM), wOrm = mix(vec3(1.0, broke ? 0.95 : 0.04, 0.0), vec3(1.0, 0.45, 0.25), frameM);
     vec3 wEmi = room * (1.0 - F) * (1.0 - frameM);
@@ -2385,6 +2396,13 @@ void RE_Direct_RzFacade(const in IncidentLight directLight, const in vec3 geomet
 #define RE_Direct RE_Direct_RzFacade
 #endif
 `;
+// per-building constants of the lite facade, hashed once per vertex instead of per pixel (same hash as the fragment
+// library's rzH12, so a building keeps its tint and frame colour across tiers)
+const FACADE_VHASH_GLSL = /* glsl */`
+#ifndef RZ_SEED
+#define RZ_SEED vec2(0.0)
+#endif
+float rzH12v(vec2 p){ p += RZ_SEED; vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }`;
 // LED strips (region 6, aWin2.w = 1): a strip thinner than ~1.5 px is widened to that in screen space (across its
 // thin extents, world-space offsets so merged / rotated copies work alike), its emission scaled by the square root of
 // the coverage it gained, so a distant strip reads as a continuous dim line instead of rasterizing as dots and dashes.
@@ -2430,8 +2448,10 @@ export function windowInteriorMaterial(opts = {}) {
     if (lite) shader.uniforms.rzSpecAAOn = { value: 0 };   // the lite facade's normals are flat: no specular AA needed
     // rough walls reuse the diffuse env lookup for their specular (installLightingChunks; A/B: defines.RZ_FULL_IBL)
     if (lite) shader.fragmentShader = '#ifndef RZ_FULL_IBL\n#define RZ_LITE_IBL\n#endif\n' + shader.fragmentShader;
-    patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz; uniform float rzViewH;');
-    patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;\n' + THIN_GLSL);
+    patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz, vRzK; flat varying vec3 vRzM; uniform float rzViewH; uniform vec3 rzWMean[7];\n' + FACADE_VHASH_GLSL);
+    patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;\n' +
+      'vRzK = vec4(mix(vec3(0.93, 0.96, 1.0), vec3(1.07, 1.0, 0.9), aFac.w) * (0.88 + 0.24 * rzH12v(vec2(aFac.y * 91.0, 3.0))), rzH12v(vec2(aFac.y * 7.0, 1.0)));\n' +
+      'vRzM = rzWMean[int((aFac.x > 4.5 ? 4.0 : aFac.z) + 0.5)];\n' + THIN_GLSL);
     decl(shader, FACADE_GLSL);
     patch(shader, 'f', '#include <map_fragment>', `vec3 fAlb, fOrm, fN, fEmi; rzFacade(fAlb, fOrm, fN, fEmi);
       diffuseColor.rgb *= fAlb; rzORM = vec4(fOrm, 0.5); rzNW = fN; rzHasN = true;`, 'replace');
