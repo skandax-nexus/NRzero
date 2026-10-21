@@ -1139,11 +1139,12 @@ export class Engine {
   // Light budget on the phone tiers (ART_SPEC: at most 6 dynamic lights, at most 1 shadow-casting one; tier
   // hints.maxLights = 4 on low, 6 on medium phones): every 45 frames the point and spot lights are ranked by intensity /
   // distance^2 to the camera and how much of their reach is in view, and only the top maxLights of them together stay in
-  // the scene's light loop (at most half of them spots, at most one casting shadows; the dialogue rig and the shoulder
-  // lamp are not ranked). The budget is split once among the kinds of light (type, shadow, cookie) the scene has, from
-  // the first ranking; afterwards the number of lights of each kind never changes while those kinds stay the same, so
-  // swapping which lights shine never changes three's light hash (no shader recompiles): a slot fades its
-  // light out over 0.15 s, then hands over to the newcomer, which fades in. The shoulder lamp leaves the loop while it is
+  // the scene's light loop, the shoulder lamp included (at most half of them spots, at most one casting shadows; the
+  // shoulder lamp and the close-up dialogue rig are not ranked, the rig's key / rim come on top during a dialogue).
+  // The budget is split once among the kinds of light (type, shadow, cookie) the scene has, from the first ranking;
+  // afterwards the number of lights of each kind never changes while those kinds stay the same, so swapping which
+  // lights shine never changes three's light hash (no shader recompiles): a slot fades its light out over 0.15 s, then
+  // hands over to the newcomer, which fades in. The shoulder lamp leaves the loop while it is
   // off (it sits at intensity 0 otherwise) where its variants compile in the background (KHR_parallel_shader_compile,
   // warmed in _probeDone); elsewhere it stays in the loop, so switching it on never recompiles. ?light=nocap or
   // scene.userData.lightCap = false turn the budget off.
@@ -1162,7 +1163,7 @@ export class Engine {
       C.managed.clear(); C.slots.clear(); C.lamp = null;
       return;
     }
-    const cam = this.camera.position, max = this.settings.hints.maxLights;
+    const cam = this.camera.position;
     this.camera.updateMatrixWorld(); _capM.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse); _capF.setFromProjectionMatrix(_capM);
     const live = o => { for (; o; o = o.parent) { if (!o.visible) return false; if (o === this.scene) return true; } return false; };
     const groups = new Map();
@@ -1183,6 +1184,8 @@ export class Engine {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push({ l, score });
     }
+    // the shoulder lamp counts against the budget whenever the scene has one (it is not ranked: the player switches it)
+    const max = Math.max(1, this.settings.hints.maxLights - (C.lamp ? 1 : 0));
     for (const list of groups.values()) list.sort((a, b) => b.score - a.score);
     // split the budget among the kinds present: the best-ranked lights of the whole scene decide how many slots each
     // kind gets (kept until the set of kinds changes, e.g. the mission hides every light of one kind)

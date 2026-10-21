@@ -726,7 +726,7 @@ export function buildReach(game, scene) {
     const k = streetKit({ era: '2196', seed: 96 });
     k.kerb([[-9, 130], [-9, 34]], { weeds: 0.9 }).kerb([[9, 34], [9, 130]], { weeds: 0.9 });
     k.scatter('lamp', [[10.6, 126], [10.6, 40]], { spacing: 18, turn: -Math.PI / 2, y: 0 }).scatter('lamp', [[-10.6, 120], [-10.6, 40]], { spacing: 18, turn: Math.PI / 2, y: 0 });
-    k.car([-3.6, 0, 118, 0.3], 0).van([4.2, 0, 104, Math.PI - 0.5]).car([6.2, 0, 92, 2.2]).car([-5.2, 0, 70, 0.9]).car([5.4, 0, 54, Math.PI + 0.2]).van([-6.4, 0, 40, 0.1]);
+    k.car([-3.6, 0, 118, 0.3], 0).van([4.2, 0, 104, Math.PI - 0.5]).car([6.2, 0, 92, 2.2]).car([-5.2, 0, 70, 0.9]).car([5.4, 0, 54, Math.PI + 0.2]).van([-3.8, 0, 36, 0.2]);
     k.car([-20, 0, -6, 1.1]).car([30, 0, 2, 0.4]).van([-22, 0, -42, 2.4]).car([7, 0, -60, 0.7]);
     k.overgrowth({ area: [-9, 34, 9, 130] }, { density: 0.8, cracks: 0.9 }).overgrowth({ area: [-46, -70, 46, 34] }, { density: 0.55, cracks: 0.7 });
     k.scatter('rubble', { area: [-9, 36, 9, 128] }, { count: 26 }).scatter('rubble', { area: [-30, -36, 10, 10] }, { count: 14 });

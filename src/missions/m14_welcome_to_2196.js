@@ -92,14 +92,19 @@ export default {
       const sp = posOf(speaker), l = posOf(listener), dx = sp.x - l.x, dz = sp.z - l.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d, s2 = sd + (d < 1.8 ? 0.2 : 0);
       return game.shot([l.x - ux * 1.5 + uz * s2, l.y + 1.68, l.z - uz * 1.5 - ux * s2], [sp.x, sp.y + 1.58, sp.z], dur, { fov });
     };
+    // one walk per character: a new walk or stopWalk() ends the previous one (its promise resolves false), so a slow
+    // walk can never drag a character out of a later staged scene
+    const stopWalk = (ch) => { const w = ch._m14walk; ch._m14walk = null; if (w) { w.off(); ch.speed = 0; w.res(false); } };
     const walkTo = (ch, path, speed = 1.5) => new Promise(res => {
+      stopWalk(ch);
       let i = 0;
       const off = game.onUpdate(dt => {
         const p = ch.root.position, t = path[i]; const dx = t[0] - p.x, dz = t[2] - p.z, d = Math.hypot(dx, dz);
-        if (d < 0.08) { i++; if (i >= path.length) { ch.speed = 0; off(); res(); } return; }
+        if (d < 0.08) { i++; if (i >= path.length) { ch.speed = 0; off(); ch._m14walk = null; res(true); } return; }
         const st = Math.min(d, speed * dt); p.x += dx / d * st; p.z += dz / d * st; p.y += (t[1] - p.y) * Math.min(1, dt * 5);
         let dy = Math.atan2(dx, dz) - ch.root.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); ch.root.rotation.y += dy * Math.min(1, dt * 8); ch.speed = speed;
       });
+      ch._m14walk = { off, res };
     });
 
     // ---------- the binding: bleeds while Kai is in the open, steadies at the survivors' waymarks ----------
@@ -640,7 +645,7 @@ export default {
       settlers.forEach((s, i) => { s.lookTarget = null; s.pose = ['sit', 'work', 'work', null, 'work', 'sit'][i]; }); child.lookTarget = null;
       walkTo(joss, [[2.4, 0, -100], [P.beacon[0] + 3.2, 0.4, P.beacon[2] + 4.4]], 1.3).then(() => { joss.root.rotation.y = Math.PI; joss.pose = 'work'; });
       walkTo(wren, [[-2.6, 0, -100], [P.beacon[0] - 3.4, 0.4, P.beacon[2] + 4.2]], 1.4).then(() => { wren.root.rotation.y = Math.PI * 0.8; });
-      walkTo(sera, [[3.6, 0, -100], [P.seraHall[0], 0.4, P.seraHall[2]]], 1.5).then(() => { sera.root.rotation.y = Math.PI * 0.2; });
+      walkTo(sera, [[3.6, 0, -100], [P.seraHall[0], 0.4, P.seraHall[2]]], 1.5).then(ok => { if (ok) sera.root.rotation.y = Math.PI * 0.2; });
       ev('Lantern Hall', 'The survivors\' settlement in the old Central Freight shed: about a hundred and twenty people, gardens in the track bed, a cistern, a market on the east platform, homes on the west. The return beacon stands at the north end. They know Kai\'s face from the square.', 'LANTERN HALL');
       cine(false); lockMusic(null); S.main = false;
       cp(P.gate[0] + 1, 0, -80, Math.PI);
@@ -742,6 +747,7 @@ export default {
     // fitting and tuning
     S.main = true; cine(true); S.drain = false;
     lockMusic('m14-beacon', 1.6); musicState.beacon = 0;
+    for (const ch of [sera, joss, wren]) stopWalk(ch);
     pl.place(P.beacon[0] + 0.6, 0.4, P.beacon[2] + 3.6, Math.PI);
     joss.root.position.set(P.beacon[0] + 2.0, 0.4, P.beacon[2] + 3.2); joss.root.rotation.y = -1.6; joss.pose = null; show(joss, true);
     sera.root.position.set(P.beacon[0] - 2.4, 0.4, P.beacon[2] + 4.6); sera.root.rotation.y = 2.6; show(sera, true);
