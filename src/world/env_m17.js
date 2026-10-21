@@ -129,9 +129,9 @@ export function registerM17Cast() {
       topType: 'uniform', top: 0x3a6a7a, topKind: 'fabric', pantsType: 'trousers', pants: 0x3a6a7a, shoes: 'shoes', boots: 0xe8e8e8 },
     vp: { sex: 'f', pitch: 0.98, rate: 0.98, langs: ['en-GB', 'en-US'] } });
   registerCast('m17kai32', { name: 'KAI VAREN', role: 'Recording 0640 · World 0640, 2049',
-    look: { ...(CAST.kai?.look || {}), role: 'kai', era: '2049', costume: 'kai' }, rimColor: 0xffd8a0, vp: { sex: 'm', pitch: 1.0, rate: 1.0, langs: ['en-GB', 'en-US'] } });
+    look: { ...(CAST.kai?.look || {}), role: 'kai', era: '2049', costume: 'kai', sex: 0, age: 32 }, rimColor: 0xffd8a0, vp: { sex: 'm', pitch: 1.0, rate: 1.0, langs: ['en-GB', 'en-US'] } });
   registerCast('m17witrec', { name: 'THE WITNESS', role: 'Recording 1046 · Room 0001',
-    look: { ...(CAST.witness?.look || {}), role: 'witness', era: '2196', costume: 'witness' }, rimColor: 0xff6a4a, glow: 0x3a1610, vp: { sex: 'm', pitch: 0.82, rate: 0.88, langs: ['en-GB', 'en-US'] } });
+    look: { ...(CAST.witness?.look || {}), role: 'witness', era: '2196', costume: 'witness', sex: 0, age: 58 }, rimColor: 0xff6a4a, glow: 0x3a1610, vp: { sex: 'm', pitch: 0.82, rate: 0.88, langs: ['en-GB', 'en-US'] } });
   registerCast('m17band', { name: 'CHRONOLITH BAND', role: 'Kai\'s wrist', voice: true, vp: { sex: 'f', pitch: 1.18, rate: 1.06, langs: ['en-US', 'en-GB'] } });
   registerCast('m17warden', { name: 'ARCHIVE WARDEN', role: 'The archive\'s security · built from K. Varen', voice: true, vp: { sex: 'm', pitch: 0.7, rate: 0.92, langs: ['en-GB', 'en-US'] } });
   registerCast('m17mimic', { name: 'MIMIC', role: 'A construct that fights like Kai', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 1.0, langs: ['en-GB', 'en-US'] } });
@@ -265,7 +265,8 @@ export const TEX = {
   }, 'm17sten' + t + sub),
   lab: (t, sub) => canvasTex(1024, 256, (g, w, h) => {
     g.fillStyle = '#f4f6f8'; g.fillRect(0, 0, w, h); g.fillStyle = '#1d4a7a'; g.fillRect(0, 0, 26, h);
-    g.fillStyle = '#1b2430'; g.font = `700 76px ${FONT}`; g.fillText(t, 70, 120); g.font = `500 36px ${FONT}`; g.fillStyle = '#4a5a6a'; g.fillText(sub, 72, 190);
+    const fit = (txt, px, weight) => { let f = px; g.font = `${weight} ${f}px ${FONT}`; while (g.measureText(txt).width > w - 110 && f > 12) { f -= 2; g.font = `${weight} ${f}px ${FONT}`; } };
+    g.fillStyle = '#1b2430'; fit(t, 76, 700); g.fillText(t, 70, 120); fit(sub, 36, 500); g.fillStyle = '#4a5a6a'; g.fillText(sub, 72, 190);
   }, 'm17lab' + t + sub),
   doc: (title, body, o = {}) => canvasTex(512, 640, (g, w, h) => {
     g.fillStyle = o.paper || '#ece4d2'; g.fillRect(0, 0, w, h); grain(g, w, h, 1200, 0.06, title.length + 3);
@@ -305,8 +306,8 @@ export function buildArchive(game, scene, T) {
   const col = game.collision, R = rng(1717);
   const pm = (kind, params, o = {}) => RZ.pbrMaterial(kind, { params, mapping: 'world', ...o });
   const M = {
-    conc96: pm('concrete', { color: 0x5e5a54, formwork: 1, stains: 0.85, cracks: 0.7 }),
-    floor96: pm('concrete', { color: 0x4a4640, slabs: 1, stains: 0.7, cracks: 0.6 }),
+    conc96: pm('concrete', { color: 0x5e5a54, formwork: 1, stains: 0.6, cracks: 0.7, pores: 0.05 }),
+    floor96: pm('concrete', { color: 0x4a4640, slabs: 1, stains: 0.4, cracks: 0.6, pores: 0.05 }),
     conc49: pm('concrete', { color: 0x8a8c8e, formwork: 1, stains: 0.25 }),
     floor49: pm('concrete', { color: 0x6a6e72, slabs: 1, stains: 0.2, formwork: 0 }),
     tile26: pm('ceramicTile', { color: 0xe4e6e8, grout: 0xa8aaac, count: 2, gloss: 0.8, variation: 0.05 }),
@@ -315,12 +316,14 @@ export function buildArchive(game, scene, T) {
     woodDark: pm('wood', { color: 0x2e1e14, planks: 4, weathered: 0.3 }),
     steel: pm('brushedMetal', { color: 0x7a7e82, roughness: 0.45 }),
     steelDark: pm('brushedMetal', { color: 0x34383e, roughness: 0.5 }),
-    rust: pm('rust', { color: 0x5a2a12, paint: 0x3a3e40, amount: 0.75 }),
+    rust: pm('rust', { color: 0x3a2418, paint: 0x2e3236, amount: 0.45 }),
     panel49: pm('paintedMetalPanel', { color: 0x9aa0a6, cols: 2, rows: 2, wear: 0.3, grime: 0.3 }),
   };
   const mat = (c, r = 0.8, m = 0, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m, ...o });
   const brass = mat(0xb08a4a, 0.35, 0.85), dark = mat(0x121010, 0.95), paperMat = mat(0xd8ccb0, 0.9), leather = mat(0x4a2a1c, 0.7);
-  const cage = new THREE.MeshStandardMaterial({ color: 0x8a9096, roughness: 0.5, metalness: 0.6, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+  const meshTex = canvasTex(128, 128, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = '#c8ccd0'; g.lineWidth = 3; for (let k = -w; k < w * 2; k += 16) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h, h); g.stroke(); g.beginPath(); g.moveTo(k, h); g.lineTo(k + h, 0); g.stroke(); } g.lineWidth = 6; g.strokeRect(0, 0, w, h); }, 'm17chain', { alpha: true });
+  meshTex.wrapS = meshTex.wrapT = THREE.RepeatWrapping; meshTex.repeat.set(6, 5);
+  const cage = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, map: meshTex, alphaTest: 0.4, roughness: 0.45, metalness: 0.7, side: THREE.DoubleSide });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0xb8c8d0, roughness: 0.05, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide });
   const mirror = new THREE.MeshStandardMaterial({ color: 0x8a96a2, roughness: 0.06, metalness: 1.0, envMapIntensity: 1.4 });
   const amber = glowMat(0xffb060, 2.4), cool = glowMat(0xe8f4ff, 2.6), red = glowMat(0xff6a4a, 2.2), white26 = glowMat(0xf4f8ff, 2.2), violet = glowMat(0x9a7bff, 2.4);
@@ -373,8 +376,8 @@ export function buildArchive(game, scene, T) {
     B96.box(M.rust, -2.6, -0.02, 21, 2.6, 0.06, 28); B49.box(M.steelDark, -2.6, -0.02, 21, 2.6, 0.06, 28);
     W.doors.lift = new THREE.Mesh(new THREE.BoxGeometry(4, 3.4, 0.08), cage); W.doors.lift.position.set(0, 1.7, 20.9); scene.add(W.doors.lift);
     W.doors.liftBox = cbox(-2, 0, 20.6, 2, 3.4, 21.2);
-    plane(TEX.stencil('SITE ZERO · SUB-LEVEL 6', 'Sealed by order 31/07. No entry without the Director.'), 2.6, 0.8, 0, 3.2, 20.32, PI, g49, 0.3);
-    plane(TEX.sign('THE ARCHIVE', 'Everything you were. Please do not stay.', { size: 70 }), 5.2, 0.98, 0, 5.2, 19.68, 0, g96, 0.3);
+    plane(TEX.stencil('SITE ZERO · SUB-LEVEL 6', 'Sealed by order 31/07. No entry without the Director.'), 2.6, 0.8, 0, 4.4, 19.66, PI, g49, 0.3);
+    plane(TEX.sign('THE ARCHIVE', 'Everything you were. Please do not stay.', { size: 70 }), 5.2, 0.98, 0, 5.2, 19.66, PI, g96, 0.3);
     src(0, 3.6, 24.5, 0xffb070, 4, 9, '2196'); src(0, 3.6, 24.5, 0xe8f4ff, 5, 10, '2049');
     B96.box(amber, -0.3, 4.12, 24.2, 0.3, 4.18, 24.8); B49.box(cool, -1, 4.12, 24.4, 1, 4.18, 24.6);
   }
@@ -578,7 +581,7 @@ export function buildArchive(game, scene, T) {
       cbox(x - 1.0, 0, z - 0.45, x + 1.0, 1.05, z + 0.45, ['2196']); W.cover.push([x, z]);
     }
     for (const z of [-47, -55, -63]) { B96.geo(reelsA, new THREE.BoxGeometry(0.5, 6.4, 7.2), [-11.45, 3.2, z]); B96.geo(reelsB, new THREE.BoxGeometry(0.5, 6.4, 7.2), [11.45, 3.2, z]); }
-    for (const [x, z] of [[-6, -48], [6, -48], [-6, -60], [6, -60], [0, -54], [0, -66]]) { src(x, 6.2, z, 0xffd0a0, 3.2, 12, '2196'); B96.box(cool, x - 0.8, 6.9, z - 0.08, x + 0.8, 6.96, z + 0.08); }
+    for (const [x, z] of [[-6, -48], [6, -48], [-6, -60], [6, -60], [0, -54], [0, -66]]) { src(x, 6.2, z, 0xffd0a0, 4.6, 14, '2196'); B96.box(cool, x - 0.8, 6.9, z - 0.08, x + 0.8, 6.96, z + 0.08); }
     plane(TEX.sign('THE MIRROR HALL', 'It learns you. It is meant to.', { size: 60 }), 4.4, 0.83, 3, 4.6, -42.32, PI, g96, 0.3);
     W.doors.gate = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.4, 0.24), M.rust); W.doors.gate.position.set(0, 1.7, -70); g96.add(W.doors.gate);
     W.doors.gateBox = cbox(-1.2, 0, -70.3, 1.2, 3.4, -69.7, ['2196']);
@@ -632,7 +635,7 @@ export function buildArchive(game, scene, T) {
     W.keypadLamp = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.28, 0.05), red); W.keypadLamp.position.set(P.keypad[0], 1.4, P.keypad[2] + 0.36); g26.add(W.keypadLamp);
     B26.box(M.steelDark, P.keypad[0] - 0.14, 1.1, -93.82, P.keypad[0] + 0.14, 1.7, -93.74);
     for (let z = -104; z <= -96; z += 4) { src(0, 2.8, z, 0xf4f8ff, 2.4, 6, '2026'); B26.box(white26, -0.3, 2.96, z - 0.6, 0.3, 3.0, z + 0.6); }
-    plane(TEX.lab('TEST HALL ZERO', 'Open day demonstration · keep behind the rope'), 2.2, 0.55, 0, 2.4, -105.8, 0, g26, 0.3);
+    plane(TEX.lab('TEST HALL ZERO', 'Open day demonstration · keep behind the rope'), 2.4, 0.6, 0, 3.7, -106.34, PI, g26, 0.3);
   }
 
   // ================= the Cable Vault (2196 pocket + 2026) =================
@@ -687,6 +690,12 @@ export function buildArchive(game, scene, T) {
     W.consoleScreen = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.62, 0.01), glowMat(0x7ac8ff, 1.2)); W.consoleScreen.position.set(kx, 1.4, kz - 0.36); W.consoleScreen.rotation.x = -0.25; g26.add(W.consoleScreen);
     B26.box(mat(0x2a3a5a, 0.6), 4.4, 0, -113.6, 7.6, 1.0, -112.6); cbox(4.4, 0, -113.6, 7.6, 1.0, -112.6, ['2026']);
     plane(TEX.lab('HELIX OPEN DAY', 'Sunday 19.10.2026 · Meet the ring that remembers'), 6.0, 1.5, 0, 6.4, -131.6, 0, g26, 0.3);
+    // open-day dressing (2026): visitor benches, a safety line round the cradle, cable trays, a press camera
+    for (const x of [-6.2, -2.6, 2.6, 6.2]) { B26.box(mat(0x2a3a5a, 0.6), x - 1.2, 0.42, -109.6, x + 1.2, 0.5, -108.9); for (const sx of [-1, 1]) B26.box(M.steel, x + sx * 1.05 - 0.04, 0, -109.5, x + sx * 1.05 + 0.04, 0.42, -109.0); cbox(x - 1.2, 0, -109.6, x + 1.2, 0.5, -108.9, ['2026']); }
+    const yellow = mat(0xe0b820, 0.6);
+    B26.box(yellow, -4.4, 0, P.ring[2] + 1.9, 4.4, 0.012, P.ring[2] + 2.02); B26.box(yellow, -4.4, 0, P.ring[2] - 1.9, -4.28, 0.012, P.ring[2] + 2.02); B26.box(yellow, 4.28, 0, P.ring[2] - 1.9, 4.4, 0.012, P.ring[2] + 2.02);
+    for (const x of [-8, 8]) { B26.box(M.steelDark, x - 0.3, 7.6, -131, x + 0.3, 7.7, -107); for (let z = -130; z <= -108; z += 4) B26.box(M.steelDark, x - 0.02, 7.7, z - 0.02, x + 0.02, 9, z + 0.02); }
+    B26.cyl(dark, -4.2, 0.85, -114.8, 0.02, 1.7, 5, [0.25, 0, 0]); B26.cyl(dark, -4.2, 0.85, -114.8, 0.02, 1.7, 5, [-0.25, 0, 0.22]); B26.box(dark, -4.42, 1.64, -114.95, -3.98, 1.92, -114.6); B26.cyl(mat(0x202830, 0.2, 0.6), -4.2, 1.78, -115.02, 0.08, 0.18, 12, [PI / 2, 0, 0]);
     // observation window (2026) high on the east wall
     B26.box(glass, 11.6, 3.4, -124, 11.7, 5.6, -110); B26.box(M.steel, 11.5, 3.3, -124, 11.7, 3.4, -110); B26.box(M.steel, 11.5, 5.6, -124, 11.7, 5.7, -110);
     for (const [x, z] of [[-7, -112], [7, -112], [-7, -126], [7, -126], [0, -116]]) { src(x, 8.4, z, 0xf4f8ff, 6, 16, '2026'); B26.box(white26, x - 1.2, 8.96, z - 0.2, x + 1.2, 9.0, z + 0.2); }
@@ -698,6 +707,7 @@ export function buildArchive(game, scene, T) {
     cbox(wx - 1.2, 0, wz - 0.6, wx + 1.2, 0.96, wz + 0.6, ['2196']);
     B96.box(paperMat, wx - 0.6, 0.96, wz - 0.3, wx - 0.1, 0.98, wz + 0.2); B96.cyl(brass, wx + 0.6, 1.1, wz, 0.2, 0.04, 16);
     W.chair0 = [wx + 0.2, 0, wz + 1.1];
+    B96.box(leather, wx - 0.2, 0, wz + 0.85, wx + 0.6, 0.46, wz + 1.55); B96.box(leather, wx - 0.2, 0.46, wz + 1.45, wx + 0.6, 1.15, wz + 1.6); cbox(wx - 0.2, 0, wz + 0.85, wx + 0.6, 0.46, wz + 1.6, ['2196']);
     for (let k = 0; k < 30; k++) { const z = -129 + (k % 10) * 2.1, y = 1.4 + Math.floor(k / 10) * 0.9; B96.geo(paperMat, new THREE.PlaneGeometry(0.4, 0.55), [-11.66, y + R() * 0.2, z + R() * 0.4], [0, PI / 2, (R() - 0.5) * 0.3]); }
     B96.box(mat(0x5a4a3a, 0.95), 8.6, 0, -130.6, 10.8, 0.45, -128.8); cbox(8.6, 0, -130.6, 10.8, 0.45, -128.8, ['2196']);
     const rock = mat(0x4a4640, 0.95); for (let k = 0; k < 10; k++) B96.geo(rock, new THREE.DodecahedronGeometry(0.5 + R() * 0.7, 0), [-0.6 + (R() - 0.5) * 3, 0.3 + R() * 1.6, -106.6 + R() * 0.6], [R() * 3, R() * 3, 0]);
@@ -721,7 +731,7 @@ export function buildArchive(game, scene, T) {
     else { m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), brass); }
     m.position.set(x, y, z); m.rotation.y = ry; G[era].add(m); W.items[key] = m; return m;
   };
-  const [ax, , az] = P.cages[0], [bx2, , bz2] = P.cages[1], [cx3, , cz3] = P.cages[2];
+  const [ax, az] = P.cages[0], [bx2, bz2] = P.cages[1], [cx3, cz3] = P.cages[2];
   itemMesh('run01', 'doc', ax + 0.8, 1.42, az - 0.5, '2049'); itemMesh('run00', 'doc', ax + 0.8, 1.42, az + 0.5, '2049', 0.3);
   itemMesh('green', 'doc', bx2 + 0.8, 1.42, bz2 - 0.5, '2049', -0.2); itemMesh('black', 'doc', bx2 + 0.8, 1.42, bz2 + 0.5, '2049');
   itemMesh('cert', 'doc', cx3 + 0.8, 1.42, cz3, '2049');
@@ -743,7 +753,8 @@ export function buildArchive(game, scene, T) {
   const dustN = low ? 220 : 600, dg = new THREE.BufferGeometry(), dp = new Float32Array(dustN * 3);
   for (let i = 0; i < dustN; i++) { dp[i * 3] = (R() - 0.5) * 26; dp[i * 3 + 1] = R() * 8; dp[i * 3 + 2] = 20 - R() * 150; }
   dg.setAttribute('position', new THREE.BufferAttribute(dp, 3));
-  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffd8a8, size: 0.035, transparent: true, opacity: 0.5, depthWrite: false })); g96.add(dust); W.dust = dust;
+  const dotTex = canvasTex(32, 32, (g, w, h) => { const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, 'm17dot', { alpha: true });
+  const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xffd0a0, map: dotTex, size: 0.016, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })); g96.add(dust); W.dust = dust;
 
   W.update = (dt, t) => {
     for (const d of W.spin) d.rotation.y += dt * 0.05;

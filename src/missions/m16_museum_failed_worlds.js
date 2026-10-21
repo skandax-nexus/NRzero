@@ -51,8 +51,8 @@ export default {
     };
     let musicLock = null, lookReady = false;
     T.configure([
-      { id: '2049', key: '2', name: 'PRESENT', year: 'STORE B-3 · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm16-store', apply: () => { if (lookReady) applyLook(); } },
-      { id: '2196', key: '3', name: 'FUTURE', year: 'THE MUSEUM · 2196', glyph: '◑', color: '#ffc890', theme: 'm16-museum', apply: () => { if (lookReady) applyLook(); } },
+      { id: '2049', key: '2', name: 'PRESENT', year: 'STORE · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm16-store', apply: () => { if (lookReady) applyLook(); } },
+      { id: '2196', key: '3', name: 'FUTURE', year: 'MUSEUM · 2196', glyph: '◑', color: '#ffc890', theme: 'm16-museum', apply: () => { if (lookReady) applyLook(); } },
     ], '2196');
     T.unlocked = false;
 
@@ -241,7 +241,7 @@ export default {
       const kitchen = i === 2;
       const lp = new LocalLoop(game, {
         id: 'm16mem' + MEMS[i].id, label: 'WORLD ' + MEMS[i].world + ' · ' + MEMS[i].name.toUpperCase(), duration: kitchen ? 120 : 129, clock: 8 * 3600 + 12 * 60,
-        restart: kitchen ? KITCHEN : HALL, region: p => p.x > 200, autoStart: false, resetToast: 'THE MORNING SLIPS BACK TO 08:12 · YOU KEEP WHAT YOU NOTICED',
+        restart: kitchen ? KITCHEN : HALL, region: p => p.x > 200, autoStart: false, persist: false, resetToast: 'THE MORNING SLIPS BACK TO 08:12 · YOU KEEP WHAT YOU NOTICED',
       });
       lp.need = 3; lp.memIndex = i;
       memLoops.push(lp);
@@ -631,13 +631,13 @@ export default {
       audio.sfxPlay('door'); W.drawer.position.x -= 0.25;
       await game.say('kai', 'One thing in the drawer. A photograph, face down.');
       try { const pp = renderPortraits({ m16miraold: CAST.m16miraold, m16kaiold: CAST.m16kaiold }, 256); photoTex = photoTexture(pp.m16miraold, pp.m16kaiold); } catch (err) { console.warn('m16 photo', err); photoTex = TEX.photoFrame(); }
-      W.photo.material.map = photoTex; W.photo.material.emissiveMap = photoTex; W.photo.material.emissiveIntensity = 0.22; W.photo.material.needsUpdate = true; W.photo.visible = true;
+      W.photo.material.map = photoTex; W.photo.material.emissiveMap = photoTex; W.photo.material.emissiveIntensity = 0.06; W.photo.material.needsUpdate = true; W.photo.visible = true;
       await game.shot([35.45, 1.5, -39.55], [36.08, 0.88, -39.65], 1.6, { fov: 30 });
       await game.wait(1.2);
-      await game.say('kai', 'Mira. Grey hair. Laughing at whoever\'s holding the camera.');
+      await game.say('kai', 'Mira. Older than I ever saw her. Laughing at whoever\'s holding the camera.');
       await game.say('kai', 'And him. Me. Old. A sea wall behind us.');
       audio.sfxPlay('motif');
-      W.photo.material.map = TEX.photoBack(); W.photo.material.emissiveMap = W.photo.material.map; W.photo.material.needsUpdate = true;
+      W.photo.material.map = TEX.photoBack(); W.photo.material.emissiveMap = W.photo.material.map; W.photo.material.emissiveIntensity = 0.02; W.photo.material.needsUpdate = true;
       await game.shot([35.5, 1.45, -39.6], [36.08, 0.88, -39.65], 1.4, { fov: 28 });
       await game.say('kai', 'M. and K. Haldane sea wall, twenty seventy-four. World 0412.');
       await game.say('kai', 'And in her hand: We had a thousand chances. We only needed one that was ours.');

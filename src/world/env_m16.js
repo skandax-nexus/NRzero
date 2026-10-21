@@ -338,7 +338,14 @@ export function photoTexture(urlA, urlB) {
   base();
   const draw = [];
   const finish = () => {
-    for (const d of draw) if (d.img.complete && d.img.naturalWidth) { g.save(); g.beginPath(); g.ellipse(d.x + 115, d.y + 125, 112, 138, 0, 0, 7); g.clip(); g.drawImage(d.img, 0, 0, d.img.naturalWidth, d.img.naturalHeight, d.x, d.y, 230, 250); g.restore(); }
+    for (const d of draw) if (d.img.complete && d.img.naturalWidth) {
+      const cx = d.x + 115, cy = d.y + 118, iw = d.img.naturalWidth, ih = d.img.naturalHeight;
+      g.save(); g.beginPath(); g.ellipse(cx, cy, 98, 122, 0, 0, 7); g.clip();
+      g.filter = 'brightness(1.35) contrast(0.92) sepia(0.25)';
+      g.drawImage(d.img, iw * 0.12, ih * 0.06, iw * 0.76, ih * 0.84, cx - 110, cy - 128, 220, 272); g.filter = 'none';
+      const fade = g.createRadialGradient(cx, cy - 6, 50, cx, cy, 108); fade.addColorStop(0, 'rgba(214,200,172,0)'); fade.addColorStop(1, 'rgba(214,200,172,1)');
+      g.fillStyle = fade; g.fillRect(cx - 130, cy - 130, 260, 260); g.restore();
+    }
     g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(255,220,170,.5)'; g.fillRect(0, 0, 512, 384); g.globalCompositeOperation = 'source-over';
     vignette(g, 512, 384, 0.55); grain(g, 512, 384, 2500, 0.08, 4);
     g.fillStyle = 'rgba(250,245,235,1)'; g.fillRect(0, 0, 512, 10); g.fillRect(0, 374, 512, 10); g.fillRect(0, 0, 10, 384); g.fillRect(502, 0, 10, 384);
@@ -697,11 +704,11 @@ export function buildMuseum(game, scene, T) {
     B96.box(M.woodDark, dx - 0.5, 0, dz - 1.0, dx + 0.5, 0.8, dz + 1.0); B96.box(M.wood, dx - 0.55, 0.8, dz - 1.05, dx + 0.55, 0.85, dz + 1.05); box(dx - 0.5, 0, dz - 1.0, dx + 0.5, 0.85, dz + 1.0);
     B96.box(mat(0x3a2a20, 0.7), dx + 0.7, 0, dz - 0.3, dx + 1.3, 0.48, dz + 0.3); B96.box(mat(0x3a2a20, 0.7), dx + 1.2, 0.48, dz - 0.3, dx + 1.3, 1.1, dz + 0.3);
     const drawer = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.6), mat(0x4a3020, 0.6)); drawer.position.set(dx - 0.52, 0.65, P.drawer[2]); g96.add(drawer); W.drawer = drawer;
-    B96.cyl(brass, dx, 1.05, dz + 0.8, 0.02, 0.4, 6); B96.cyl(amber, dx, 1.28, dz + 0.8, 0.1, 0.1, 10); src(dx - 0.3, 1.8, dz + 0.4, 0xffc27a, 6, 7, '2196');
+    B96.cyl(brass, dx, 1.05, dz + 0.8, 0.02, 0.4, 6); B96.cyl(amber, dx, 1.28, dz + 0.8, 0.1, 0.1, 10); src(dx - 0.4, 2.3, dz + 1.0, 0xffc27a, 3.6, 7, '2196');
     for (let k = 0; k < 4; k++) B96.box(paperMat, dx - 0.4 + R() * 0.4, 0.85, dz - 0.8 + k * 0.3, dx - 0.1 + R() * 0.4, 0.86 + k * 0.003, dz - 0.55 + k * 0.3);
     // the photograph: face down in the drawer until found
     const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.225), new THREE.MeshStandardMaterial({ map: TEX.photoFrame(), roughness: 0.6, emissive: 0xffffff, emissiveMap: TEX.photoFrame(), emissiveIntensity: 0.12, side: THREE.DoubleSide }));
-    photo.rotation.x = -Math.PI / 2; photo.rotation.z = 0.12; photo.position.set(dx - 0.12, 0.886, dz - 0.05); photo.visible = false; g96.add(photo); W.photo = photo;
+    photo.rotation.x = -Math.PI / 2; photo.rotation.z = -Math.PI / 2 + 0.12; photo.position.set(dx - 0.12, 0.886, dz - 0.05); photo.visible = false; g96.add(photo); W.photo = photo;
     // the lectern with the register of iterations
     const [lx, , lz] = P.lectern;
     B96.box(M.woodDark, lx - 0.3, 0, lz - 0.3, lx + 0.3, 1.1, lz + 0.3); box(lx - 0.3, 0, lz - 0.3, lx + 0.3, 1.1, lz + 0.3);

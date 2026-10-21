@@ -233,28 +233,148 @@ export function concreteMaterial(base = '#6d6e70', repeat = [2, 2], opts = {}) {
   return pbr || new THREE.MeshStandardMaterial(concreteLegacy(base, repeat, opts));
 }
 
+// Tileable cloud noise for sky(): R = billows (4-64 cells), G = fine detail (16-128 cells); generated once (~15 ms).
+let cloudTex = null;
+function cloudTexture() {
+  if (cloudTex) return cloudTex;
+  const N = 256, out = new Uint8Array(N * N * 4), r = rng(97);
+  const lat = (c) => { const v = new Float32Array(c * c); for (let i = 0; i < v.length; i++) v[i] = r(); return v; };
+  const octs = [4, 8, 16, 32, 64, 128].map(c => ({ c, v: lat(c) }));
+  const vn = (o, x, y) => {   // tileable value noise at texel (x, y)
+    const fx = x * o.c / N, fy = y * o.c / N, ix = Math.floor(fx), iy = Math.floor(fy);
+    let tx = fx - ix, ty = fy - iy; tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+    const c = o.c, x0 = ix % c, y0 = iy % c, x1 = (ix + 1) % c, y1 = (iy + 1) % c, v = o.v;
+    const a = v[y0 * c + x0] + (v[y0 * c + x1] - v[y0 * c + x0]) * tx, b = v[y1 * c + x0] + (v[y1 * c + x1] - v[y1 * c + x0]) * tx;
+    return a + (b - a) * ty;
+  };
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let big = 0, wb = 0, amp = 1;
+    for (let k = 0; k < 5; k++) { big += vn(octs[k], x, y) * amp; wb += amp; amp *= 0.52; }
+    let fine = 0, wf = 0; amp = 1;
+    for (let k = 2; k < 6; k++) { fine += vn(octs[k], x, y) * amp; wf += amp; amp *= 0.55; }
+    const i = (y * N + x) * 4;
+    out[i] = Math.max(0, Math.min(255, ((big / wb - 0.5) * 1.7 + 0.5) * 255));
+    out[i + 1] = Math.max(0, Math.min(255, ((fine / wf - 0.5) * 1.6 + 0.5) * 255)); out[i + 2] = 0; out[i + 3] = 255;
+  }
+  cloudTex = new THREE.DataTexture(out, N, N, THREE.RGBAFormat);
+  cloudTex.wrapS = cloudTex.wrapT = THREE.RepeatWrapping; cloudTex.magFilter = THREE.LinearFilter;
+  cloudTex.minFilter = THREE.LinearMipmapLinearFilter; cloudTex.generateMipmaps = true; cloudTex.needsUpdate = true;
+  return cloudTex;
+}
+
+// Sky dome. opts: sun, sunDir, stars, left (horizon colour on the -x side), radius, and (docs/RENDERING.md section 12)
+// clouds: coverage 0..1 of a drifting cloud deck (default 0.45, 0 = none): undersides lit by the horizon colour (the
+// city glow at night, the haze at dusk), edges and silver linings by the sun colour, the sun and stars hidden behind
+// them, dissolving into the horizon haze. One texture tap in the existing sky draw on every tier; ?infra=nosky
+// (or off) draws the plain gradient.
 export function sky(top, horizon, opts = {}) {
   const geo = new THREE.SphereGeometry(opts.radius || 600, 32, 16);
+  const clouds = infraOn('sky') ? Math.max(0, Math.min(1, opts.clouds ?? 0.45)) : 0;
+  const uClock = { value: 0 }, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uTop: { value: new THREE.Color(top) }, uHor: { value: new THREE.Color(horizon) }, uSun: { value: new THREE.Color(opts.sun || 0x000000) }, uSunDir: { value: new THREE.Vector3(...(opts.sunDir || [0, 0.2, -1])).normalize() }, uStars: { value: opts.stars || 0 }, uTime: { value: 0 }, uLeft: { value: new THREE.Color(opts.left ?? horizon) } },
+    uniforms: { uTop: { value: new THREE.Color(top) }, uHor: { value: new THREE.Color(horizon) }, uSun: { value: new THREE.Color(opts.sun || 0x000000) }, uSunDir: { value: new THREE.Vector3(...(opts.sunDir || [0, 0.2, -1])).normalize() }, uStars: { value: opts.stars || 0 }, uTime: { value: 0 }, uLeft: { value: new THREE.Color(opts.left ?? horizon) },
+      uCloud: { value: clouds }, uCloudTex: { value: clouds > 0 ? cloudTexture() : null }, uClock },
+    defines: { CLOUDS: clouds > 0 ? 1 : 0 },
     vertexShader: `varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform vec3 uTop,uHor,uSun,uSunDir,uLeft; uniform float uStars,uTime; varying vec3 vD;
+    fragmentShader: `uniform vec3 uTop,uHor,uSun,uSunDir,uLeft; uniform float uStars,uTime,uCloud,uClock; uniform sampler2D uCloudTex; varying vec3 vD;
       float h(vec3 p){ return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453); }
       void main(){ float y=max(vD.y,0.0); vec3 hor=mix(uLeft,uHor,smoothstep(-0.6,0.6,vD.x)); vec3 c=mix(hor,uTop,pow(y,0.55));
         float s=max(dot(vD,uSunDir),0.0); c+=uSun*(pow(s,8.0)*0.6+pow(s,300.0)*4.0);
         vec3 q=floor(vD*420.0); float st=step(0.9975,h(q))*uStars*smoothstep(0.05,0.4,vD.y)*(0.6+0.4*sin(uTime*2.0+h(q)*40.0));
         c+=vec3(st);
+        #if CLOUDS
+          if (vD.y > 0.0) {
+            vec2 cuv = vD.xz / (vD.y + 0.12) * 0.5 + vec2(uClock * 0.0016, uClock * 0.0007);
+            vec4 nt = texture2D(uCloudTex, cuv);
+            float n = nt.r * 0.74 + nt.g * 0.26;
+            float dens = smoothstep(1.0 - uCloud, 1.0 - uCloud * 0.35, n) * smoothstep(0.0, 0.2, vD.y);
+            vec3 under = mix(hor * 1.3, mix(hor, uTop, 0.45), smoothstep(0.0, 0.75, vD.y));
+            vec3 cc = under * mix(1.0, 0.72, smoothstep(0.62, 1.0, n)) + uSun * (0.25 + 1.4 * pow(s, 5.0)) * (1.15 - n * 0.6);
+            c = mix(c, cc, dens * 0.9) + uSun * pow(s, 24.0) * dens * (1.0 - dens) * 2.5;
+          }
+        #endif
         gl_FragColor=vec4(c,1.0); }`,
     side: THREE.BackSide, depthWrite: false, fog: false,
   });
   const m = new THREE.Mesh(geo, mat); m.renderOrder = -10; m.frustumCulled = false;
+  if (clouds > 0) m.onBeforeRender = () => { uClock.value = ((typeof performance !== 'undefined' ? performance.now() : 0) - t0) / 1000; };
   return m;
 }
 
-// Rain as streak lines around the camera. Can freeze (Zero Second).
+// Rain around the camera. Can freeze (Zero Second). Same API as before the rendering upgrade (count, area, color;
+// .mesh, .update(dt, cam), .frozen), but drawn as camera-facing streak quads animated on the GPU (docs/RENDERING.md,
+// section 12): no per-frame CPU loop or buffer upload, width kept >= ~1 px with the alpha scaled by coverage (no 1 px
+// scratches at a constant brightness, distant rain thins out into the fog), per-drop brightness and length variation,
+// and frozen drops shorten into hanging beads. ?infra=norain (or off) builds the legacy line streaks.
+function rainGeometry(count, seed = 42) {
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  const s = new Float32Array(count * 4), r = rng(seed);
+  for (let i = 0; i < s.length; i++) s[i] = r();
+  g.setAttribute('aS', new THREE.InstancedBufferAttribute(s, 4)); g.instanceCount = count;
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+  return g;
+}
+const RAIN_VS = `attribute vec4 aS; uniform float uT, uSpeed, uLen, uW, uViewH; uniform vec3 uArea, uOff; varying float vA; varying float vX;
+  #include <fog_pars_vertex>
+  void main(){
+    float sp = uSpeed * (0.82 + aS.w * 0.36);
+    vec3 vel = vec3(sp * 0.035, -sp, sp * 0.012);
+    vec3 ctr = cameraPosition + uOff;
+    vec3 p = (aS.xyz - 0.5) * uArea + vel * uT;
+    p = mod(p - ctr + uArea * 0.5, uArea) - uArea * 0.5 + ctr;
+    vec3 axis = normalize(vel);
+    vec3 toCam = cameraPosition - p; float dist = length(toCam);
+    vec3 side = normalize(cross(axis, toCam / max(dist, 1e-3)));
+    vec4 vp = viewMatrix * vec4(p, 1.0);
+    // world size of one pixel at this depth; streaks never get thinner than ~1.1 px, their alpha carries the coverage
+    float px = max(-vp.z, 0.05) * 2.0 / (projectionMatrix[1][1] * uViewH);
+    float w = max(uW, px * 1.1);
+    float L = uLen * (0.7 + fract(aS.w * 7.13) * 0.6);
+    vec3 wp = p + side * position.x * w + axis * (position.y - 0.5) * L;
+    vec4 mvPosition = viewMatrix * vec4(wp, 1.0);
+    vA = sqrt(uW / w) * smoothstep(0.6, 2.5, dist) * (0.55 + fract(aS.x * 13.7 + aS.y * 3.1) * 0.9);
+    vX = position.x * 2.0;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }`;
+const RAIN_FS = `uniform vec3 uCol; uniform float uOp; varying float vA; varying float vX;
+  #include <fog_pars_fragment>
+  void main(){
+    float a = 1.0 - vX * vX;
+    gl_FragColor = vec4(uCol, a * uOp * vA);
+    #include <fog_fragment>
+  }`;
 export class Rain {
   constructor(count = 5000, area = 40, color = 0x9fc4dd) {
-    this.count = count; this.area = area; this.frozen = false;
+    this.count = count; this.area = area; this.frozen = false; this.center = new THREE.Vector3();
+    if (!infraOn('rain')) { this._legacy(count, area, color); return; }
+    this.legacy = false; this.vel = new Float32Array(0);
+    this.uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      uT: { value: 0 }, uSpeed: { value: 22 }, uLen: { value: 0.62 }, uW: { value: 0.0045 }, uArea: { value: new THREE.Vector3(area, 30, area) },
+      uOff: { value: new THREE.Vector3(0, 7, 0) }, uCol: { value: new THREE.Color(color) }, uOp: { value: 0.6 },
+    }]);
+    this.uniforms.uViewH = RZ.shared.viewH;   // kept current by the engine
+    this._len = 0.62;
+    const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: RAIN_VS, fragmentShader: RAIN_FS, transparent: true, depthWrite: false, fog: true });
+    this.mesh = new THREE.Mesh(rainGeometry(count), mat);
+    this.mesh.frustumCulled = false; this.mesh.renderOrder = 6; this.mesh.raycast = () => {};
+    // the engine makes the scene wet while rain is visible; env-probe captures and static batching skip the streaks
+    this.mesh.userData.rzRain = true; this.mesh.userData.noCapture = true; this.mesh.userData.noBatch = true;
+  }
+  update(dt, cam) {
+    if (this.legacy) return this._legacyUpdate(dt, cam);
+    const U = this.uniforms;
+    if (cam) this.center.copy(cam.position);
+    // frozen drops keep their place and shorten into hanging beads; they stretch back into streaks when time resumes
+    const k = 1 - Math.exp(-Math.min(dt, 0.25) * 10);
+    U.uLen.value += ((this.frozen ? 0.07 : this._len) - U.uLen.value) * k;
+    if (this.frozen) return;
+    U.uT.value = (U.uT.value + dt) % 3600;
+  }
+  _legacy(count, area, color) {
+    this.legacy = true;
     const pos = new Float32Array(count * 6); this.vel = new Float32Array(count);
     const r = rng(42);
     for (let i = 0; i < count; i++) {
@@ -263,11 +383,10 @@ export class Rain {
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     this.mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.38, depthWrite: false }));
-    this.mesh.frustumCulled = false; this.center = new THREE.Vector3();
-    // the engine makes the scene wet while rain is visible; env-probe captures skip the streaks
+    this.mesh.frustumCulled = false;
     this.mesh.userData.rzRain = true; this.mesh.userData.noCapture = true;
   }
-  update(dt, cam) {
+  _legacyUpdate(dt, cam) {
     const p = this.mesh.geometry.attributes.position.array, A = this.area, cx = cam.position.x, cz = cam.position.z, cy = cam.position.y;
     if (this.frozen) return;
     for (let i = 0; i < this.count; i++) {

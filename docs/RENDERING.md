@@ -760,5 +760,36 @@ other agents' browsers), compared within one page (same-frame A/B) wherever poss
 
 ### Facade cost (finding 9)
 
-Same page, same frame, `fullab.mjs` (SwiftShader GPU-process CPU time per frame, median of 6-8 interleaved reps), new vs
-the pre-upgrade renderer (`legacynocap`: stage-4 infra off, post and scene lighting off, no light budget, no lite IBL):
+Same page, same frame, `fullab.mjs` (`scratchpad/render/fix2/tools`; SwiftShader GPU-process CPU time per frame =
+the GPU-side work, median of 10 interleaved reps of 2 frames; min in brackets), m1a_establishing at 844×390 mobile,
+new vs the pre-upgrade renderer in the same page (`legacynocap`: stage-4 infra off, post and scene lighting off, no
+light budget; it keeps the phones' lite IBL, so it is slightly *cheaper* than the real pre-upgrade build). The review-2
+tree (frozen copy served on :8766) was measured the same way in the same session, so both ratios share the load.
+
+| tier | tree | GPU ms new / pre-upgrade | ratio | wall ms new / pre-upgrade | js submit ms |
+|---|---|---|---|---|---|
+| low | review 2 | 2040 (1890) / 1565 (1500) | **+30 %** | 1742 / 1361 | 8.5 / 13.3 |
+| low | this tree | 1780 (1695) / 1640 (1475) | **+8.5 %** | 1376 / 1335 | 9.7 / 14.1 |
+| medium phones | review 2 | 2180 (2090) / 1645 (1575) | **+33 %** | 2151 / 1542 | 11.2 / 16.3 |
+| medium phones | this tree | 2035 (1875) / 1785 (1600) | **+14 %** | 1507 / 1536 | 13.2 / 24.2 |
+
+Same-page probes behind these numbers (`scratchpad/render/fix4/*.jsonl`, `fix3/aa`, `fix3/perfab2`):
+- per-vertex irradiance (item 9e) alone: low 1865 → 1770 ms (−5 %), medium phones 2195 → 1965 ms (−10 %); the
+  images are identical (`fix4/virr_shots`, max channel difference 1/255).
+- where the remaining low-tier cost sits (8 reps): new 1660, no post 1660, no scene lighting 1625, stage-4 infra off
+  1430, pre-upgrade 1545 ms: the post chain and scene lighting cost ~0-35 ms on low; the whole gap is the facade city,
+  partly paid back by the light budget (8 → 4 lights).
+- facades alone (everything else hidden, low): full lite facade 1317, facade shader cut to a constant 857, walls
+  without windows 1067; far LOD switched 10 m nearer 1300, far cells off 1283, no direct light 1297 ms. Two thirds
+  of the facade cost is three's standard lighting plumbing that any wall pays (lights, fog, wet); windows and wall
+  detail are the last third and no single part of them dominates.
+- overdraw (`tools/render/overdraw.mjs`, the engine's draw order, early-z on): 1.16 fragments per pixel for the frame,
+  1.08 on facades, so sorting or a depth pre-pass would gain nothing.
+- post on medium phones (FXAA / eye adaptation / grade off one at a time): each within the run's noise (±5 %).
+
+Status: on the GPU side the facade city is +8 % (low) / +14 % (medium phones) over the pre-upgrade build on
+SwiftShader, down from +30 % / +33 % in review 2, while the frame's wall clock is level (low +3 %, medium −2 %) and the
+CPU submission time is 31-45 % lower (190-220 draws instead of 420-460). The remainder is per-pixel ALU of the window /
+wall shading, which a phone GPU runs far more cheaply relative to texture bandwidth and draw calls than SwiftShader does
+(section 8, "Reading the numbers"); a device that is GPU-bound there still has `?infra=nofacade` and the adaptive
+resolution scale of the phone tiers.

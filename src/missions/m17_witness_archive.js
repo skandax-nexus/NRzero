@@ -265,13 +265,13 @@ export default {
       if (S.main) return;
       switch (S.phase) {
         case 'hub': {
+          if (S.stacksOpen) { objective(`Cross the shifting Stacks to the Sorting Room (out at C4) · find what answers REC 0233 and REC 1046 (${['pass38', 'pass26', 'notched', 'newband'].filter(k => S.got.has(k)).length}/4)`); break; }
           const parts = [];
           if (nPlayed() < 4) parts.push(`Play the four recordings in the booths (${nPlayed()}/4)`);
           if (nHub() < 4) parts.push(`Search Rook's evidence cages in 2049 (${nHub()}/4)`);
           objective(parts.length ? parts.join(' · ') : 'The Stacks door is open: cross the Stacks to the Sorting Room');
           break;
         }
-        case 'stacks': objective(`Cross the shifting Stacks to the Sorting Room · find what answers REC 0233 and REC 1046 (${['pass38', 'pass26', 'notched', 'newband'].filter(k => S.got.has(k)).length}/4)`); break;
         case 'sort': objective(S.filed ? 'Take the reel from the Concordance, then go through to the Mirror Hall' : `Match each recording to its physical evidence at the Concordance (${nMatched()}/4)`); break;
         case 'mirror': objective(S.fightDone ? 'Go through the gate to the Seal' : S.wave ? `Stop the mimics · wave ${S.wave}/3 · they learn how you fight` : 'Cross the Mirror Hall'); break;
         case 'seal': {
@@ -715,7 +715,7 @@ export default {
       S.echoT = sec; S.echoLens = lens; S.echoes++; lensOn(0, lens === 1); lensOn(1, lens === 2); audio.sfxPlay('rewind'); audio.sfxPlay('anomaly');
       ui.toast(`ECHO RUNNING · 2026 OPEN FOR ${sec} s · SWITCH: 1`, 3000);
     };
-    const lens1 = act({ pos: [P.lens1[0], 1.2, P.lens1[2]], radius: 1.9, states: ['2196'], prompt: 'Load the reel into Echo Lens I', enabled: () => S.reels.has('corr') && S.echoT <= 0, onUse: () => side(async () => {
+    const lens1 = act({ pos: [P.lens1[0], 1.2, P.lens1[2]], radius: 1.9, states: ['2196'], prompt: 'Load the reel into Echo Lens I', enabled: () => S.reels.has('corr'), onUse: () => side(async () => {
       if (S.echoes === 0) {
         S.main = true; cine(true);
         await game.shot([P.lens1[0] + 2.2, 1.8, P.lens1[2] + 1.6], [P.lens1[0], 1.2, P.lens1[2]], 1.2, { fov: 40 });
@@ -729,7 +729,7 @@ export default {
       S.reels.add('vault'); W.items.reelVault.visible = false; audio.sfxPlay('pickup');
       await game.say('kai', 'He slept here. In a cupboard of cables, with a reel of a corridor for a pillow.');
     }) });
-    const lens2 = act({ pos: [P.lens2[0], 1.2, P.lens2[2]], radius: 1.9, states: ['2196'], prompt: 'Load the reel into Echo Lens II', enabled: () => S.reels.has('vault') && S.echoT <= 0, onUse: () => side(async () => {
+    const lens2 = act({ pos: [P.lens2[0], 1.2, P.lens2[2]], radius: 1.9, states: ['2196'], prompt: 'Load the reel into Echo Lens II', enabled: () => S.reels.has('vault'), onUse: () => side(async () => {
       startEcho(2, ECHO_II); lens2.prompt = 'Replay the echo at Lens II';
       game.checkpoint(-12.4, 0, -87.6, 0, () => { S.echoT = 0; });
     }) });
@@ -896,7 +896,7 @@ export default {
     }
     async function ringMemory() {
       S.main = true; cine(true);
-      await game.shot([1.6, 2.2, -117.6], [0, 2.9, -123], 1.6, { fov: 40 });
+      await game.shot([4.2, 2.4, -112.8], [0, 2.6, -123], 1.6, { fov: 46 });
       await game.say('m17band', 'Reading the ring. Biological signature: Varen, Mira, age ten. Ceased: eight-fourteen and nine point six seconds.');
       await game.say('m17band', 'Neural pattern: captured at the same instant. Completeness: sixty-one percent. Status: persisting.');
       await game.say('kai', 'Her body died here. Twenty-three years ago, on this floor.');
@@ -910,7 +910,7 @@ export default {
       await ui.fade(1, 1400);
       unstage('m17mira10', 'm17kai7', 'm17rook26', 'm17mother');
       T.setImmediate('2196'); applyLook();
-      witness.mode = 'here'; witness.root.position.set(P.wDesk0[0] + 0.2, 0, P.wDesk0[2] + 1.1); witness.root.rotation.y = PI * 0.8; witness.pose = 'sit';
+      witness.mode = 'here'; witness.root.position.set(P.wDesk0[0] + 0.2, 0, P.wDesk0[2] + 1.15); witness.root.rotation.y = PI; witness.pose = 'sit';
       pl.place(-4.6, 0, -121.8, -PI * 0.65);
       await game.wait(0.4); await ui.fade(0, 1400);
     }
