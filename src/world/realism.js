@@ -2348,6 +2348,9 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
     // the cell's own room (same hash as the near path, so a window keeps its state when it switches), faded to the
     // average once a cell is smaller than about a pixel (no shimmer)
     float cellK = 1.0 - smoothstep(0.5, 1.2, max(aa.x / bay, aa.y / ch));
+#ifdef RZ_FAR_NOCELL   // A/B cost probe (tools/render captures)
+    cellK = 0.0;
+#endif
     vec3 wallF = wall;
     if (cellK > 0.0) {
       vec3 hF = rzH32(cid + vec2(bseed * 113.0, shop ? 71.0 : 0.0));
@@ -2371,6 +2374,9 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
 const FACADE_LIGHT_GLSL = /* glsl */`
 #ifndef RZ_FACADE_FULL_LIGHT
 void RE_Direct_RzFacade(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
+#ifdef RZ_FACADE_NODIRECT   // A/B cost probe: no direct light at all (tools/render captures)
+  return;
+#endif
   vec3 irr = saturate(dot(geometryNormal, directLight.direction)) * directLight.color;
   reflectedLight.directDiffuse += irr * BRDF_Lambert(material.diffuseColor);
   reflectedLight.directSpecular += irr * material.specularColor * 0.03;
