@@ -590,9 +590,9 @@ export function chronolith(scale = 1, opts = {}) {
 
 // A cable / hose along points. Given an organic material (non-metal, rough, green-dominant: the 2196 vines), medium
 // and high build a vine instead: tapering to about half its radius toward its end, with a slight irregular swell
-// and wobble, a shared bark material (realism 'bark', a little moss, tinted with the authored colour desaturated
-// ~20 %, u around / v along in metres) and, on high, a few ivy leaf cards along it (one shared foliage material: the
-// static batcher merges them). Dark cables (the default black material) and every other material keep the plain tube.
+// and wobble, a shared bark material (realism 'bark' with moss, the authored colour desaturated and pulled toward a
+// woody olive, u around / v along in metres) and, on high, a few ivy leaf cards along it (one shared foliage
+// material: the static batcher merges them). Dark cables (the default black material) and every other material keep the plain tube.
 export function cableCurve(points, radius = 0.05, mat) {
   const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
   const q = RZ.getQuality();
@@ -611,9 +611,12 @@ let vineLeafMat = null, vineSeed = 1;
 function vineMaterial(mat) {
   let v = vineMats.get(mat);
   if (v) return v;
+  // the authored green, desaturated and pulled toward a woody olive brown (old stems lignify; moss keeps the green)
   const c = mat.color.clone(), l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
-  c.lerp(new THREE.Color(l, l, l), 0.2);
-  v = RZ.pbrMaterial('bark', { params: { color: c.getHex(), lichen: 0.15, depth: 0.5 }, mapping: 'uv', scale: 0.75, metalness: 0, roughness: 1, tint: 0xb8c4ac });
+  c.lerp(new THREE.Color(l, l, l), 0.35).lerp(new THREE.Color(0x4a3f2c), 0.35);
+  // bark plates stretched along the stem (u: ~6 narrow strands around a 7 cm stem, v: about one plate per metre), so
+  // it reads as fibrous vine bark, not as a scaled hose
+  v = RZ.pbrMaterial('bark', { params: { color: c.getHex(), lichen: 0.45, depth: 0.6 }, mapping: 'uv', repeat: [2, 0.3], metalness: 0, roughness: 1, tint: 0x8f9a80, normalScale: 0.7 });
   v.userData.rzBatchSafe = true; v.name = 'vineBark';
   vineMats.set(mat, v);
   return v;

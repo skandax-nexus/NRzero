@@ -563,9 +563,10 @@ function tierSettings(q, device) {
       hints: { characterDetail: 'high', crowd: 1, drawDistance: 1, maxLights: 12, particles: 1 } },
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
-      // phones: re-capture after 60 m of travel instead of 40 (each capture is spread over ~14 frames, one cube face
-      // or one prefilter step per frame, the luminance read back asynchronously: EnvProbe.step)
-      light: { probe: 128, probeMove: m ? 60 : 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
+      // phones: no re-capture on travel, as on 'low' (only when the place / lighting changes): a capture re-draws the
+      // scene into the cube faces, +40-90 draw calls a frame while it runs. Every capture is spread over ~14 frames,
+      // one cube face or one prefilter step per frame, the luminance read back asynchronously (EnvProbe.step)
+      light: { probe: 128, probeMove: m ? 0 : 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
       // phones on medium: low's facade path (RZ_INTERIOR 0: m1a +13-24 % raster over the pre-stage-4 city instead of
       // +20-35 % with RZ_INTERIOR 1), about low's small-prop cull distance, 1024 sign atlases (-106 MB texture memory on
       // m1), 200 m batch cells and no shadows from small props / ground slabs (m1a 295 -> 245 draw calls)
@@ -622,7 +623,7 @@ export class Engine {
     // the AO term). engine.postOff can be changed at runtime followed by applyPost().
     const qp = new URLSearchParams(location.search);
     this.postOff = new Set(String(qp.get('post') || '').split(',').filter(Boolean));
-    // Scene-lighting A/B switches: ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts (engine.lightOff + applyLighting()).
+    // Scene-lighting A/B switches: ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts,nocap,noliteibl (engine.lightOff + applyLighting()).
     this.lightOff = new Set(String(qp.get('light') || '').split(',').filter(Boolean));
     this._initLighting();
 
@@ -942,7 +943,7 @@ export class Engine {
 
   // ---------- scene lighting (docs/RENDERING.md, stage 2) ----------
   // Applied to every scene the engine shows; each part is tier-gated and can be switched off for A/B captures with
-  // ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts (or engine.lightOff + applyLighting()):
+  // ?light=noenv,nofog,nowet,nocontact,norig,noshadow,noshafts,nocap,noliteibl (or engine.lightOff + applyLighting()):
   //   env      the scene's own image-based light: an EnvProbe captured at the camera ~8 frames after setScene
   //            (characters, rain and particles hidden), scaled to the mean brightness of the studio light the scene
   //            was authored with (so authored exposure and envIntensity still hold) with 15 % of it spread evenly as
@@ -1100,6 +1101,8 @@ export class Engine {
     // probe brightened toward the studio level: diffuse keeps it, reflections at most 4x physical
     RZ.setEnvSpecular(scene.environment === P.texture && L.captured ? Math.min(1, 4 / Math.max(1e-3, P.scale)) : 1);
     RZ.setEnvDiffuseSaturation(scene.environment === P.texture && L.captured ? L.diffSat ?? 1 : 1);
+    // phone tiers: rough surfaces reuse their diffuse env lookup for the env specular (one cube-UV fetch less a pixel)
+    RZ.setLiteIbl(this.lightOn('liteibl') && (this.quality === 'low' || (this.quality === 'medium' && this.device.mobile)));
     // wet weather (global shader state): eases over ~2 s
     const wt = this.lightOn('wet') ? L.wetTarget : 0;
     L.wet += (wt - L.wet) * (dt > 0 ? 1 - Math.exp(-dt / 0.7) : 1);
@@ -1133,11 +1136,13 @@ export class Engine {
     this._updateRig(dt);
     this._lightCapStep(dt);
   }
-  // Light budget on the phone tiers (ART_SPEC: at most ~6 dynamic lights; tier hints.maxLights = 4 on low, 6 on medium
-  // phones): every 45 frames the point lights are ranked by intensity / distance^2 to the camera and only the top
-  // maxLights stay in the scene's light loop; spot lights likewise with half that budget (the rig and the shoulder lamp
-  // are not ranked). The number of lights of each kind (type, shadow, cookie) never changes while the scene has more than
-  // its budget, so swapping which lights shine never changes three's light hash (no shader recompiles): a slot fades its
+  // Light budget on the phone tiers (ART_SPEC: at most 6 dynamic lights, at most 1 shadow-casting one; tier
+  // hints.maxLights = 4 on low, 6 on medium phones): every 45 frames the point and spot lights are ranked by intensity /
+  // distance^2 to the camera and how much of their reach is in view, and only the top maxLights of them together stay in
+  // the scene's light loop (at most half of them spots, at most one casting shadows; the dialogue rig and the shoulder
+  // lamp are not ranked). The budget is split once among the kinds of light (type, shadow, cookie) the scene has, from
+  // the first ranking; afterwards the number of lights of each kind never changes while those kinds stay the same, so
+  // swapping which lights shine never changes three's light hash (no shader recompiles): a slot fades its
   // light out over 0.15 s, then hands over to the newcomer, which fades in. The shoulder lamp leaves the loop while it is
   // off (it sits at intensity 0 otherwise) where its variants compile in the background (KHR_parallel_shader_compile,
   // warmed in _probeDone); elsewhere it stays in the loop, so switching it on never recompiles. ?light=nocap or
@@ -1178,10 +1183,26 @@ export class Engine {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push({ l, score });
     }
+    for (const list of groups.values()) list.sort((a, b) => b.score - a.score);
+    // split the budget among the kinds present: the best-ranked lights of the whole scene decide how many slots each
+    // kind gets (kept until the set of kinds changes, e.g. the mission hides every light of one kind)
+    const kinds = [...groups.keys()].sort().join(',');
+    if (C.kinds !== kinds || C.max !== max) {
+      C.kinds = kinds; C.max = max; C.alloc = new Map();
+      const all = []; for (const [k, list] of groups) for (const e of list) all.push({ k, s: e.score });
+      all.sort((a, b) => b.s - a.s);
+      const sMax = Math.max(1, Math.floor(max / 2));
+      let n = 0, spots = 0, shad = 0;
+      for (const e of all) {
+        if (n >= max) break;
+        const spot = e.k[0] === 's', sh = e.k.includes('S');
+        if ((spot && spots >= sMax) || (sh && shad >= 1)) continue;
+        C.alloc.set(e.k, (C.alloc.get(e.k) || 0) + 1); n++; spots += spot; shad += sh;
+      }
+    }
     const seen = new Set();
     for (const [key, list] of groups) {
-      const budget = key[0] === 'p' ? max : Math.max(1, Math.floor(max / 2));
-      list.sort((a, b) => b.score - a.score);
+      const budget = C.alloc.get(key) || 0;
       const want = list.slice(0, budget).map(e => e.l), wantSet = new Set(want);
       let slots = C.slots.get(key);
       if (!slots) C.slots.set(key, slots = []);
@@ -1200,6 +1221,8 @@ export class Engine {
       }
       while (slots.length < want.length && free.length) slots.push({ l: free.shift(), k: 1, next: null });
       for (let i = slots.length - 1; i >= 0 && slots.length > want.length; i--) if (!slots[i].l) slots.splice(i, 1);
+      // a kind whose share shrank (new split): its extra slots go at once (the light count changes anyway)
+      while (slots.length > budget) slots.pop();
       for (const sl of slots) if (sl.l) seen.add(sl.l);
     }
     for (const l of C.managed) { if (seen.has(l)) show(l); else hide(l); }

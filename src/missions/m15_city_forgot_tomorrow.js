@@ -1009,7 +1009,7 @@ export default {
       await game.say('kai', 'Thursday. It\'s a good one.');
       // the gate
       pl.place(64.2, 0, 13.8, -Math.PI / 2); anja.root.position.set(63.6, 0, 11.6); anja.root.rotation.y = -Math.PI / 2; anja.pose = null; sera.root.position.set(69.4, 0, 12.6);
-      await game.shot([60.4, 1.8, 17.4], [67, 1.6, 12.6], 2.0, { fov: 42 });
+      await game.shot([58.4, 2.3, 20.4], [66.2, 1.3, 12.6], 2.0, { fov: 44 });
       await convo(sera, [
         ['sera', 'They\'ll never know you were here.'],
         ['kai', 'Someone will. It\'s in the archive now, in the right column.'],
@@ -1051,7 +1051,7 @@ export default {
       pl.place(64.2, 0, 13.8, -Math.PI / 2); anja.root.position.set(63.6, 0, 11.6); anja.root.rotation.y = -Math.PI / 2; anja.pose = null; sera.root.position.set(68.6, 0, 12.6);
       const marchers = [0, 1, 2, 3].map(k => { const ch = loopActors.market[k] || loopActors.station[k]; ch.root.position.set(58 - k * 1.3, 0, 16.4 - (k % 2) * 1.2); ch.root.rotation.y = Math.PI / 2; ch.pose = null; return ch; });
       void marchers;
-      await game.shot([60.4, 1.8, 17.4], [67, 1.6, 12.6], 2.0, { fov: 42 });
+      await game.shot([58.4, 2.3, 20.4], [66.2, 1.3, 12.6], 2.0, { fov: 44 });
       await convo(sera, [
         ['sera', 'You let them remember. Even the parts with your name in them.'],
         ['kai', 'Especially those.'],

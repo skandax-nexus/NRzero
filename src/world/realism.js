@@ -1791,8 +1791,15 @@ export function installLightingChunks() {
   // diffuse image-based light can be desaturated on its own (setEnvDiffuseSaturation): a tinted place (an orange sunset
   // sky) keeps coloured reflections without tinting every lit surface (green grass turning ochre)
   const findI = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
-  if (C.lights_fragment_maps.includes(findI)) C.lights_fragment_maps = C.lights_fragment_maps.replace(findI, `{
+  // Lite image-based specular (the phone facades: RZ_LITE_IBL, above roughness 0.8; every material on the phone tiers:
+  // setLiteIbl, above 0.85): a rough surface takes its image-based specular from this same irradiance lookup instead of
+  // a second cube-UV fetch: at roughness 1 three's reflection vector is the normal and both read the same mip, so the
+  // result differs by a hair on rough surfaces and one textureCubeUV per pixel is saved
+  if (C.lights_fragment_maps.includes(findI)) C.lights_fragment_maps = C.lights_fragment_maps.replace(findI, `
+			vec3 rzIrrRaw = vec3( 0.0 );
+		{
 			vec3 rzIrr = getIBLIrradiance( geometryNormal );
+			rzIrrRaw = rzIrr;
 			if ( rzEnvS.w > 0.0 ) rzIrr = mix( rzIrr, vec3( dot( rzIrr, vec3( 0.2126, 0.7152, 0.0722 ) ) ), rzEnvS.w );
 			iblIrradiance += rzIrr;
 		}`);
@@ -1807,7 +1814,16 @@ export function installLightingChunks() {
   C.lights_fragment_maps = C.lights_fragment_maps.replace(find, `{
 			vec3 rzRv = reflect( - geometryViewDir, geometryNormal );
 			float rzHz = clamp( 1.0 + 1.2 * dot( rzRv, nonPerturbedNormal ), 0.0, 1.0 );
-			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * ( rzHz * rzHz * mix( rzEnvS.x, 1.0, rzEnvS.z * smoothstep( 0.4, 0.9, material.roughness ) ) );
+			float rzKs = rzHz * rzHz * mix( rzEnvS.x, 1.0, rzEnvS.z * smoothstep( 0.4, 0.9, material.roughness ) );
+		#if defined( RE_IndirectDiffuse ) && defined( STANDARD ) && defined( ENVMAP_TYPE_CUBE_UV )
+		#ifdef RZ_LITE_IBL
+			if ( material.roughness > 0.8 ) radiance += rzIrrRaw * ( RECIPROCAL_PI * rzKs );
+		#else
+			if ( material.roughness > rzIblS.x ) radiance += rzIrrRaw * ( RECIPROCAL_PI * rzKs );
+		#endif
+			else
+		#endif
+			radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * rzKs;
 		}`);
   installWetChunks();
 }
@@ -2087,8 +2103,9 @@ void rzFacade(out vec3 alb, out vec3 orm, out vec3 nW, out vec3 emi){
   if (era > 1.5 && era < 2.5 && region < 4.5) {   // 2049 retrofit: newer cladding patches bolted over the old wall, cooler grime
     vec2 pc = floor(P / vec2(vWin.x * 2.0, vWin.y * 3.0) + vec2(0.0, 0.37));
     float ph = rzH12(pc + bseed * 31.0);
-    // (the panel layer is authored near black: lifted to a mid-grey coated metal, so a patch does not read as a hole)
-    if (ph < 0.2 && P.y > vWin2.x) { vec4 o5; vec3 n5; vec3 pw = rzWall(5.0, P, T, B, N, o5, n5) * mix(vec3(1.5, 1.6, 1.72), vec3(2.3), rzH12(pc + 4.0));
+    // (the panel layer is authored near black: lifted to a mid-grey coated metal, albedo ~0.1-0.16, so a patch does not
+    // read as a hole in the night street; the lite phone facades have no patches, their walls stay the base layer)
+    if (ph < 0.2 && P.y > vWin2.x) { vec4 o5; vec3 n5; vec3 pw = rzWall(5.0, P, T, B, N, o5, n5) * mix(vec3(3.0, 3.15, 3.35), vec3(4.4), rzH12(pc + 4.0));
       vec2 lp = fract(P / vec2(vWin.x * 2.0, vWin.y * 3.0) + vec2(0.0, 0.37)); float inr = rzBoxM(lp, vec2(0.02), vec2(0.98), aa / vec2(vWin.x * 2.0, vWin.y * 3.0));
       wall = mix(wall, pw, inr); o4 = mix(o4, o5, inr); n0 = normalize(mix(n0, n5, inr)); }
     wall *= vec3(0.9, 0.93, 1.0);
@@ -2405,6 +2422,8 @@ export function windowInteriorMaterial(opts = {}) {
     ensureWorld(shader);
     if (lite) patch(shader, 'f', '#include <lights_physical_pars_fragment>', FACADE_LIGHT_GLSL, 'after');   // A/B: defines.RZ_FACADE_FULL_LIGHT
     if (lite) shader.uniforms.rzSpecAAOn = { value: 0 };   // the lite facade's normals are flat: no specular AA needed
+    // rough walls reuse the diffuse env lookup for their specular (installLightingChunks; A/B: defines.RZ_FULL_IBL)
+    if (lite) shader.fragmentShader = '#ifndef RZ_FULL_IBL\n#define RZ_LITE_IBL\n#endif\n' + shader.fragmentShader;
     patch(shader, 'v', '#include <common>', 'attribute vec2 aUV; attribute vec4 aFac, aWin, aWin2, aRz; varying vec2 vFUV; flat varying vec4 vFac, vWin, vWin2, vRz; uniform float rzViewH;');
     patch(shader, 'v', '#include <begin_vertex>', 'vFUV = aUV; vFac = aFac; vWin = aWin; vWin2 = aWin2; vRz = aRz;\n' + THIN_GLSL);
     decl(shader, FACADE_GLSL);
@@ -4575,6 +4594,13 @@ export function setEnvSpecular(k = 1, rough) { ENV_S.x = Math.max(0, k); if (rou
  * (1 = as the environment is, default; 0 = grey). Reflections keep the environment's colour. Global, no recompiles.
  */
 export function setEnvDiffuseSaturation(s = 1) { ENV_S.w = 1 - Math.max(0, Math.min(1, s)); return 1 - ENV_S.w; }
+const IBL_S = { x: 2, y: 0, z: 0, w: 0 };          // x: roughness above which the image-based specular reuses the diffuse lookup (2 = never)
+/**
+ * Phone tiers: rough surfaces (roughness > `threshold`, default 0.85) take their image-based specular from the diffuse
+ * environment lookup they already made (one cube-UV fetch per pixel saved on every rough MeshStandard / Physical
+ * surface; at roughness 1 both are the same sample). false = off (default). Global uniform, no recompiles.
+ */
+export function setLiteIbl(on, threshold = 0.85) { IBL_S.x = on ? Math.max(0.5, Math.min(1, threshold)) : 2; return IBL_S.x < 1.5; }
 /**
  * Global wet-weather state: setWetness({ amount: 0..1, puddles: 0..1, detail: 0..1, ground: y, height: m, scale: 1/m,
  * coverage: 0..1 (fraction of flat ground under water, default ~0.3), mirror: puddle roughness (default 0.1: point lights stretch into streaks instead of hot dots), time: s }).
@@ -4599,8 +4625,8 @@ let wetInstalled = false;
 function installWetChunks() {
   if (wetInstalled) return; wetInstalled = true;
   const C = THREE.ShaderChunk, L = THREE.ShaderLib;
-  for (const id of ['standard', 'physical']) if (L[id] && !L[id].uniforms.rzWetA) Object.assign(L[id].uniforms, { rzWetA: { value: WET_A }, rzWetB: { value: WET_B }, rzEnvS: { value: ENV_S } });
-  C.lights_physical_pars_fragment = `uniform vec4 rzWetA; uniform vec4 rzWetB; uniform vec4 rzEnvS;
+  for (const id of ['standard', 'physical']) if (L[id] && !L[id].uniforms.rzWetA) Object.assign(L[id].uniforms, { rzWetA: { value: WET_A }, rzWetB: { value: WET_B }, rzEnvS: { value: ENV_S }, rzIblS: { value: IBL_S } });
+  C.lights_physical_pars_fragment = `uniform vec4 rzWetA; uniform vec4 rzWetB; uniform vec4 rzEnvS; uniform vec4 rzIblS;
 float rzwHash( vec2 p ) { p = fract( p * vec2( 123.34, 456.21 ) ); p += dot( p, p + 45.32 ); return fract( p.x * p.y ); }
 float rzwNoise( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
 	return mix( mix( rzwHash( i ), rzwHash( i + vec2( 1.0, 0.0 ) ), f.x ), mix( rzwHash( i + vec2( 0.0, 1.0 ) ), rzwHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y ); }

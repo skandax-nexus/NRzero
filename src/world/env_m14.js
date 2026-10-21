@@ -667,6 +667,15 @@ export function buildReach(game, scene) {
   });
   B.box(M.wood, BX + 2.6, 0.4, BZ + 2.4, BX + 3.8, 0.85, BZ + 3.4); box(BX + 2.6, 0.4, BZ + 2.4, BX + 3.8, 0.85, BZ + 3.4);  // Joss's bench
   src(BX, 2.6, BZ + 3, 0xb6ff8a, 3, 8);
+  // the beacon's housing: a drum at the mast foot, two Helix field cabinets, collar rings up the mast, cable runs
+  B.cyl(M.steel, BX, 0.75, BZ, 1.5, 0.7, 20); B.cyl(M.rustHeavy, BX, 1.2, BZ, 1.15, 0.22, 20);
+  for (const sx of [-1, 1]) {
+    B.box(M.panel, BX + sx * 2.0 - 0.45, 0.4, BZ + 0.9, BX + sx * 2.0 + 0.45, 2.1, BZ + 1.9); box(BX + sx * 2.0 - 0.45, 0.4, BZ + 0.9, BX + sx * 2.0 + 0.45, 2.1, BZ + 1.9);
+    for (let y = 0.7; y < 1.9; y += 0.18) B.box(M.steel, BX + sx * 2.0 - 0.36, y, BZ + 1.9, BX + sx * 2.0 + 0.36, y + 0.06, BZ + 1.94);
+    B.cyl(M.rust, BX + sx * 1.1, 0.48, BZ + 1.3, 0.07, 1.6, 6, [0, 0, Math.PI / 2]);
+  }
+  for (const y of [4.2, 8.0, 11.6]) B.geo(M.steel, new THREE.TorusGeometry(1.15 - y * 0.02, 0.06, 6, 20), [BX, y, BZ], [Math.PI / 2, 0, 0]);
+  for (let i = 0; i < 3; i++) B.cyl(M.rustHeavy, BX - 0.4 + i * 0.4, 0.46, BZ + 2.9 + i * 0.5, 0.05, 3.2, 6, [0, 0.4 - i * 0.3, Math.PI / 2]);
 
   // ================= waymarks (green lantern cairns) =================
   for (const [x, y, z] of WAYMARKS) {
