@@ -77,7 +77,7 @@ if (era === 'ancient') {
   k.trafficLight([6.5, 0.15, -27], 0, { arm: 4.5 }).trafficLight([-6.5, 0.15, -33], Math.PI, { arm: 4.5 });
   k.shelter([8.6, 0.15, -12], -Math.PI / 2, { width: 4 }).benches([[-9.5, 0.15, -6, Math.PI / 2], [-9.5, 0.15, -52, Math.PI / 2]]).bins([[-7.2, 0.15, -9], [7.4, 0.15, -44], [-7.2, 0.15, -60]]);
   k.kiosk([-10.2, 0.15, -16, Math.PI / 2]).kiosk([10.2, 0.15, -60, -Math.PI / 2]);
-  if (era === '2196') { k.add('rubble', [-3, 0, -12], 0.3, { seed: 2 }).add('rubble', [3.5, 0, -46], 1, { seed: 5 }).add('rubble', [-8, 0.15, -38], 2, { seed: 8 }); k.car([-4.3, 0, -20], 0.2).car([3.5, 0, -62], Math.PI + 0.4).van([-4.2, 0, -70], -0.1); }
+  if (era === '2196') { k.add('rubble', [-3, 0, -12], 0.3, { seed: 2 }).add('rubble', [3.5, 0, -46], 1, { seed: 5 }).add('rubble', [-8, 0.15, -38], 2, { seed: 8 }); k.car([-4.3, 0, -20], 0.2).car([3.5, 0, -62], Math.PI + 0.4).van([-4.2, 0, -70], -0.1); k.overgrowth([[0, 15], [0, -95]], { width: 10, density: 0.5, cracks: 2.5 }).overgrowth({ area: [-10.5, -95, -6.6, 15] }, { density: 0.5, cracks: 0, y: 0.15 }).overgrowth({ area: [6.6, -95, 10.5, 15] }, { density: 0.5, cracks: 0, y: 0.15 }); }
   else {
     k.car([-4.4, 0, -4], 0).car([-4.4, 0, -12], 0).van([-4.3, 0, -46], 0).car([4.4, 0, 2], Math.PI).car([4.4, 0, -40], Math.PI).car([4.4, 0, -48], Math.PI);
     k.scooter([-7.4, 0.15, -21, 0.5]).scooter([-7.6, 0.15, -22.2, 0.5]).scooter([7.5, 0.15, -18, -0.4]);

@@ -121,6 +121,10 @@ scene.add(k.build()); k.collide(game);                     // or use k.colliders
   `car`, `van`, `wreck`, `scooter`, `cone`, `barrier`, `rubble`; ancient: `fence`, `well`, `cart`, `stall`, `pot`,
   `barrel`, `crate`. Merged runs: `kerb`, `markings`, `puddles`, `cables`, `catenary`, `rails`, `railing(path)`.
   `scatter(kind, path | { area: [x0, z0, x1, z1] }, { spacing, count, offset, jitter, turn, y })`.
+- Abandoned / ruined streets: `k.overgrowth(path | { area }, { density, cracks, width, y })` scatters weed clumps and
+  sealed asphalt cracks (kinds `weeds`, `crack`; instanced, culled at 45 / 60 m). With `era: '2196'` kerbs sprout weeds
+  in the gutter and joints by themselves (`kerb(path, { weeds: 0..1 })`, 0 = none) and road paint is faded with
+  missing dashes; `RZ.roadPaint({ ..., wear, drop, seed })` does the same for your own paint.
 - `prop(kind, { era, color })` one prop as a plain Group (one-off placement).
 - Cost: one InstancedMesh per prop part per 48 m cell (a 100 m street of the lab: ~40 draws for all furniture);
   small props are distance-culled by the engine (45-120 m per kind, x1.5 on high, x0.67 on low). 2196 tilts posts, rusts metal and turns

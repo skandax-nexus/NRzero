@@ -120,7 +120,7 @@
 {"shot": "a16_echo_step.png"},
 {"until": "__game.control && document.getElementById('objective-text').textContent.includes('breach')", "timeout": 300000},
 {"eval": "__game.player.place(114.8,0,0,Math.PI/2); null"},
-{"until": "document.getElementById('dlg-text').textContent.includes('afterimage')", "timeout": 300000},
+{"until": "/afterimage|echo step|memorials/i.test(document.getElementById('dlg-text').textContent) || __game.flags.m10done", "timeout": 300000},
 {"wait": 1200},
 {"shot": "a17_ending_sera.png"},
 {"until": "__game.flags.m10done", "timeout": 600000},

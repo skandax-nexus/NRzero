@@ -4267,12 +4267,14 @@ export function contactShadow(o = {}) {
 /**
  * Worn road paint strips (lane lines, crossings) as one mesh with alpha-tested wear.
  *   roadPaint({ strips: [{ x, z, length, width, yaw, dash: [3, 6] }], color: 0xd8d4c8, y: 0.006 })
+ *   opt-in: { wear: 0..1, drop: 0..1 (share of dashes / stripes left out; also per strip), seed }
  */
 export function roadPaint(o = {}) {
-  const P = [], U = [], I = [], N = [];
+  const P = [], U = [], I = [], N = [], dr = rng(o.seed ?? 7);
   for (const sp of o.strips || []) {
-    const [on, off] = sp.dash || [sp.length, 0], step = on + off, cs = Math.cos(sp.yaw || 0), sn = Math.sin(sp.yaw || 0);
+    const [on, off] = sp.dash || [sp.length, 0], step = on + off, cs = Math.cos(sp.yaw || 0), sn = Math.sin(sp.yaw || 0), drop = sp.drop ?? o.drop ?? 0;
     for (let z = -sp.length / 2; z < sp.length / 2 - 0.01; z += step) {
+      if (drop > 0 && dr() < drop) continue;   // opt-in: missing dashes / stripes (abandoned roads)
       const z1 = Math.min(sp.length / 2, z + on), w = sp.width / 2, v0 = P.length / 3;
       for (const [lx, lz] of [[-w, z], [w, z], [w, z1], [-w, z1]]) { const x = sp.x + lx * cs + lz * sn, zz = sp.z - lx * sn + lz * cs; P.push(x, o.y ?? 0.006, zz); U.push(x, -zz); N.push(0, 1, 0); }
       I.push(v0, v0 + 2, v0 + 1, v0, v0 + 3, v0 + 2);

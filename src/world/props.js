@@ -229,6 +229,8 @@ function streetMaterials(era = '2049') {
     stone: std({ color: 0x9a8a72, map: concreteTex(), metalness: 0, roughness: 0.92 }),
     pottery: std({ color: 0x9a5a36, metalness: 0, roughness: 0.75 }),
     cloth: std({ color: 0xffffff, metalness: 0, roughness: 0.9, side: THREE.DoubleSide }),   // * instanceColor: awnings of stalls
+    plant: std({ color: 0xffffff, metalness: 0, roughness: 0.85, side: THREE.DoubleSide }),   // * instanceColor: weeds
+    tar: std({ color: 0x0b0b0b, metalness: 0, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),   // road cracks / sealant
   };
   for (const k in M) M[k].userData.rzStreet = k;
   SMAT.set(era, M);
@@ -411,6 +413,31 @@ function partsOf(kind, era, o = {}) {
       add('concrete', parts);
       break;
     }
+    case 'weeds': {   // clump of grass / weed blades (cracks, gutters, ruins); colour per instance
+      const r = rng(o.seed ?? 11), blades = [], n = o.blades ?? 9, hgt = o.height ?? 0.45;
+      for (let i = 0; i < n; i++) {
+        const a = r() * Math.PI * 2, d = r() * 0.12, h = hgt * (0.45 + r() * 0.75), lean = 0.25 + r() * 0.45;
+        const g = new THREE.ConeGeometry(0.022 + r() * 0.02, h, 3, 1); g.translate(0, h / 2, 0); g.scale(1, 1, 0.35);
+        G.rot(g, lean * Math.cos(a), r() * 3, lean * Math.sin(a)).translate(Math.cos(a) * d, 0, Math.sin(a) * d); blades.push(g);
+      }
+      if (o.leaves !== false) for (let i = 0; i < 3; i++) { const g = new THREE.PlaneGeometry(0.16, 0.07); g.translate(0.08, 0, 0); G.rot(g, -Math.PI / 2 + 0.35, r() * 6.3, 0).translate(0, 0.03, 0); blades.push(g); }
+      add('plant', blades, { color: 0x5a6a34 });
+      break;
+    }
+    case 'crack': {   // branching asphalt crack (flat, sealed dark), ~2 m long
+      const r = rng(o.seed ?? 5), segs = [];
+      const walk = (x, z, a, len, w, depth) => {
+        for (let i = 0; i < 4 + r() * 3; i++) {
+          const l = len * (0.18 + r() * 0.12), nx = x + Math.sin(a) * l, nz = z + Math.cos(a) * l;
+          const g = new THREE.PlaneGeometry(w, l + w); g.rotateX(-Math.PI / 2); g.rotateY(a); g.translate((x + nx) / 2, 0.009, (z + nz) / 2); segs.push(g);
+          if (depth < 2 && r() < 0.3) walk(nx, nz, a + (r() < 0.5 ? -1 : 1) * (0.5 + r() * 0.6), len * 0.5, w * 0.7, depth + 1);
+          x = nx; z = nz; a += (r() - 0.5) * 0.9;
+        }
+      };
+      walk(0, -(o.length ?? 2) / 2, 0, o.length ?? 2, o.width ?? 0.035, 0);
+      add('tar', segs);
+      break;
+    }
     // ---- ancient ----
     case 'fence': {   // wattle fence panel: stakes + woven rods
       const L = o.length ?? 2, stakes = [], rods = [];
@@ -449,13 +476,14 @@ function partsOf(kind, era, o = {}) {
   return P;
 }
 // size class for distance culling (m); 0 = never culled
-const CULL = { bollard: 70, bin: 70, bench: 80, drain: 45, manhole: 55, cone: 50, barrier: 70, railing: 90, kiosk: 110, scooter: 90, pot: 50, barrel: 60, crate: 60, rubble: 90, fence: 100, cart: 110, stall: 120, well: 120 };
+const CULL = { bollard: 70, bin: 70, bench: 80, drain: 45, manhole: 55, cone: 50, barrier: 70, railing: 90, kiosk: 110, scooter: 90, pot: 50, barrel: 60, crate: 60, rubble: 90, weeds: 45, crack: 60, fence: 100, cart: 110, stall: 120, well: 120 };
 
 /**
  * Builder for streets and squares (see the section header). All methods return the builder (chainable).
  *   add(kind, [x, y, z], yaw = 0, { color, glow, ...part options })      any prop of the library
  *   lamps(points, opts) bollards(points) bins(points) benches(points) drains(points) manholes(points) cones(points)
- *   kerb(path, { height, width, gutter, y }) markings({ lanes, edges, crossings, stops, arrows, y }) puddles(list)
+ *   kerb(path, { height, width, gutter, y, weeds }) markings({ lanes, edges, crossings, stops, arrows, y }) puddles(list)
+ *   overgrowth(path | { area }, { density, cracks, width, y })   weeds + asphalt cracks (2196 kerbs and paint wear are automatic)
  *   cables(spans, { sag, radius }) catenary(path, { height, spacing }) rails(path, { gauge, sleepers, embedded })
  *   railing(path, { height }) trafficLight([x, y, z], yaw, { arm }) shelter([x, y, z], yaw, { width })
  *   car / van / wreck / scooter ([x, y, z], yaw, { color }) kiosk(...)  scatter(kind, path | { area: [x0, z0, x1, z1] }, { spacing, count, offset, seed, jitter })
@@ -517,6 +545,8 @@ export function streetKit(opts = {}) {
           const g = G.box(w, h, l, -w / 2, h / 2, 0); G.rot(g, 0, yaw, 0).translate(cx, y, cz);
           tintGeo(g, 0.82 + R() * 0.3); merged.kerb.push(g);
           if (gw > 0) { const gg = G.box(gw, 0.01, l + 0.01, gw / 2, 0.004, 0); G.rot(gg, 0, yaw, 0).translate(cx, y, cz); tintGeo(gg, 0.45 + R() * 0.08); merged.kerb.push(gg); }
+          // 2196: weeds grow out of the gutter and the kerb joints (o.weeds: share of kerb metres, default 0.45; 0 = none)
+          if (era === '2196' && R() < (o.weeds ?? 0.45)) { const off = (R() < 0.7 ? gw * 0.5 : -w * 0.5) + (R() - 0.5) * 0.1, nx = Math.cos(yaw), nz = -Math.sin(yaw); k.add('weeds', [cx + nx * off, y + (off < 0 ? h : 0), cz + nz * off], R() * 6.3, { color: weedColor(R), seed: 1 + Math.floor(R() * 2) }); }
         }
       }
       return k;
@@ -533,6 +563,25 @@ export function streetKit(opts = {}) {
       }
       for (const s of o.stops || []) seg(s.from, s.to, s.width ?? 0.4, null);
       for (const a of o.arrows || []) { const cs = Math.sin(a.yaw ?? 0), cn = Math.cos(a.yaw ?? 0); paint.push({ x: a.at[0], z: a.at[1], length: 2.2, width: 0.18, yaw: a.yaw ?? 0, y }); for (const s of [-1, 1]) paint.push({ x: a.at[0] + cs * 1.0 + s * cn * 0.25, z: a.at[1] + cn * 1.0 - s * cs * 0.25, length: 0.9, width: 0.16, yaw: (a.yaw ?? 0) + s * 0.6, y }); }
+      return k;
+    },
+    // weeds and asphalt cracks along a path (strip of o.width m) or in an area: abandoned / ruined streets (any era)
+    //   overgrowth(path | { area: [x0, z0, x1, z1] }, { density: clumps per m (path) or per 10 m² (area), cracks: per 10 m, width, y })
+    overgrowth(where, o = {}) {
+      const dens = o.density ?? 0.6, crk = o.cracks ?? 0.5, y = o.y ?? 0, wd = o.width ?? 1;
+      const put = (x, z, yaw, crack) => crack ? k.add('crack', [x, y, z], yaw, { seed: 1 + Math.floor(R() * 2) }) : k.add('weeds', [x, y, z], R() * 6.3, { color: weedColor(R), seed: 1 + Math.floor(R() * 2) });
+      if (Array.isArray(where)) {
+        for (let i = 0; i < where.length - 1; i++) {
+          const [x0, z0] = where[i], [x1, z1] = where[i + 1], L = Math.hypot(x1 - x0, z1 - z0), yaw = Math.atan2(x1 - x0, z1 - z0), nx = (z1 - z0) / L, nz = -(x1 - x0) / L;
+          const at = (t, u) => [x0 + (x1 - x0) * t + nx * u, z0 + (z1 - z0) * t + nz * u];
+          for (let j = 0, n = Math.round(L * dens); j < n; j++) { const [x, z] = at(R(), (R() - 0.5) * wd); put(x, z, 0, false); }
+          for (let j = 0, n = Math.round(L / 10 * crk); j < n; j++) { const [x, z] = at(R(), (R() - 0.5) * wd); put(x, z, yaw + (R() - 0.5) * 1.2, true); }
+        }
+      } else if (where && where.area) {
+        const [x0, z0, x1, z1] = where.area, A = Math.abs((x1 - x0) * (z1 - z0)) / 10;
+        for (let j = 0, n = Math.round(A * dens); j < n; j++) put(x0 + R() * (x1 - x0), z0 + R() * (z1 - z0), 0, false);
+        for (let j = 0, n = Math.round(A * crk); j < n; j++) put(x0 + R() * (x1 - x0), z0 + R() * (z1 - z0), R() * 6.3, true);
+      }
       return k;
     },
     puddles(list) { for (const [x, z, r = 1.2, y = 0.012] of list) { const g = G.rot(new THREE.CircleGeometry(r, 20), -Math.PI / 2, 0, 0); g.scale(1, 1, 0.55 + R() * 0.5); G.rot(g, 0, R() * 3, 0).translate(x, y, z); merged.puddle.push(g); } return k; },
@@ -616,7 +665,7 @@ export function streetKit(opts = {}) {
       for (const key in merged) if (merged[key].length) {
         const m = new THREE.Mesh(G.merge(merged[key]), M[key]); m.name = 'street:' + key; m.receiveShadow = true; m.castShadow = key !== 'puddle'; group.add(m);
       }
-      if (paint.length) { const pm = RZ.roadPaint({ strips: paint, y: paint[0].y }); pm.name = 'street:markings'; group.add(pm); }
+      if (paint.length) { const pm = RZ.roadPaint({ strips: paint, y: paint[0].y, ...(era === '2196' ? { color: 0x9c988a, wear: 0.85, drop: 0.3, seed: opts.seed ?? 1 } : {}) }); pm.name = 'street:markings'; group.add(pm); }
       // traffic lights cycle green -> amber -> red (each light its own phase); group.userData.update(t) or the engine drives it
       group.userData.update = (t) => {
         for (const im of updaters) {
@@ -636,6 +685,7 @@ export function streetKit(opts = {}) {
   };
   return k;
 }
+function weedColor(R) { const c = new THREE.Color().setHSL(0.17 + R() * 0.1, 0.35 + R() * 0.2, 0.16 + R() * 0.1); return c.getHex(); }
 function tintGeo(g, v) {
   const n = g.attributes.position.count, c = new Float32Array(n * 3).fill(v);
   g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3));

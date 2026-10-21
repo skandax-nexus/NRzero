@@ -256,10 +256,11 @@ export default {
     const setBars = (i, on) => { W.bars[i].userData.off = !on; W.bars[i].visible = on && T.current === '2196'; W.bars[i].userData.states = on ? ['2196'] : []; W.barBoxes[i].enabled = on; };
 
     // ---------- Sera follows (2196 only) ----------
-    let seraFollow = false;
+    let seraFollow = false, seraWas = false;
     const seraV = V();
     game.onUpdate((dt) => {
-      if (!seraFollow || game.cine || T.current !== '2196') { if (seraFollow) sera.speed = 0; return; }
+      if (!seraFollow || game.cine || T.current !== '2196') { if (seraFollow || seraWas) sera.speed = 0; seraWas = false; return; }
+      seraWas = true;
       const fw = V(Math.sin(pl.yaw), 0, Math.cos(pl.yaw));
       const tgt = pl.pos.clone().addScaledVector(fw, -1.8).add(V(Math.cos(pl.yaw) * 0.9, 0, -Math.sin(pl.yaw) * 0.9));
       const p = sera.root.position, d = Math.hypot(tgt.x - p.x, tgt.z - p.z);
@@ -363,7 +364,9 @@ export default {
     await game.talk([['sera', 'Seventeen. You awake?'], ['kai', 'Who\'s there?']]);
     const seraHead = () => { const h = sera.head ? sera.head.getWorldPosition(V()) : V(0.75, 1.25, 7.4); h.y = Math.max(0.7, Math.min(1.5, h.y + 0.06)); return h; };
     let sh = seraHead();
-    await game.shot([-0.55, sh.y + 0.05, 7.15], [sh.x, sh.y + 0.04, sh.z], 1.8, { fov: 32 });
+    // over Kai's shoulder, through the vent grate (the line of sight passes the open grate at x = 0)
+    const ots = (h, fov, dur) => game.shot([h.x - 1.2, h.y + 0.26, h.z - 0.62], [h.x, h.y + 0.02, h.z], dur, { fov });
+    await ots(sh, 36, 1.8);
     await game.talk([
       ['sera', 'Sera Voss. Cell four. I run the people the Continuum hasn\'t caught yet. Mostly.'],
       ['sera', 'They dragged you in shouting a name. Mira.'],
@@ -372,12 +375,12 @@ export default {
     audio.silence(1.2); await game.wait(1.0);
     await game.talk([['sera', '...Say that again.'], ['kai', 'Kai Varen. Why?']]);
     sh = seraHead();
-    await game.shot([-0.35, sh.y + 0.04, 7.3], [sh.x, sh.y + 0.04, sh.z], 1.2, { fov: 26 });
+    await ots(sh, 28, 1.2);
     audio.sfxPlay('heartbeat');
     await game.say('sera', 'In my time, your face is on every memorial.');
-    await game.shot([0.35, sh.y, 7.5], [-0.75, sh.y - 0.05, 7.4], 1.0, { fov: 26 });
+    { const kh = kai.head ? kai.head.getWorldPosition(V()) : V(-0.33, 1.28, 7.4); await game.shot([kh.x + 1.18, kh.y + 0.2, kh.z + 0.55], [kh.x, kh.y, kh.z], 1.0, { fov: 30 }); }
     await game.say('kai', 'For saving the world?');
-    await game.shot([-0.35, sh.y + 0.04, 7.3], [sh.x, sh.y + 0.04, sh.z], 1.0, { fov: 22 });
+    await ots(sh, 24, 1.0);
     audio.silence(1.4); await game.wait(1.1);
     await game.say('sera', 'For ending it.');
     await game.wait(0.8);
@@ -814,7 +817,7 @@ export default {
     // =====================================================================================================
     cine(true); lockMusic('m10-echo', 2.4);
     seraFollow = false;
-    pl.place(116.4, 0, -0.8, Math.PI / 2); sera.root.position.set(116.2, 0, 1.1); sera.root.rotation.y = Math.PI / 2;
+    pl.place(116.4, 0, -0.8, Math.PI / 2); sera.root.position.set(116.2, 0, 1.1); sera.root.rotation.y = Math.PI / 2; sera.speed = 0; sera.crouch = 0;
     W.skiff.visible = true;
     const skFrom = V(150, 8, 10), skTo = V(124.4, -0.6, 0); W.skiff.position.copy(skFrom);
     { let u = 0; game.onUpdate(dt => { if (u >= 1) return; u = Math.min(1, u + dt / 6); const k = 1 - Math.pow(1 - u, 3); W.skiff.position.lerpVectors(skFrom, skTo, k); W.skiff.position.y += Math.sin(game.time * 1.3) * 0.08; }); }
