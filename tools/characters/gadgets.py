@@ -909,14 +909,14 @@ def g_scav_scanner(g):
 
 @gadget("continuum_forearm_emitter", "forearm_R")
 def g_cont_forearm(g):
-    """Continuum bracer: white ceramic armour section with an emitter nozzle and a gold light strip
+    """Continuum bracer: pearl ceramic armour section with an emitter nozzle and a gold light strip
     (slate=True: the officer's command slate)."""
     K, o = g.K, g.o
     sd = opt_side(o, "R")
     g.bone = "forearm_" + sd
     k = K.k
     R = fitted_ring(K, sd, 0.0, 0.12 * k, n=18, t=0.55)
-    g.part(band_geo(R, 0.12 * k, 0.0075, fit=True), o.get("color", "dfe1e3"), 0.75, smooth=True)
+    g.part(band_geo(R, 0.12 * k, 0.0075, fit=True), o.get("color", PEARL), 0.75, smooth=True)
     M = ring_frame(R, 0.0, t=0.0075)
     if o.get("slate"):
         g.part(box(0.05 * k, 0.08 * k, 0.0045, bev=0.002, M=M), GRAPH, 0.7)
@@ -1931,7 +1931,7 @@ def g_cont_chest(g):
 
 # ---------------- Continuum armour: rigid ceramic plates ----------------
 # off-white pearl (pure white read as a toy under ACES), a worn grey chamfer, graphite gaps; gloss 0.62 ~ roughness 0.35
-PEARL, PEARL_EDGE, PLATE_GAP = "c9cdd0", "7d8288", "24272b"
+PEARL, PEARL_EDGE, PLATE_GAP = "a7acb1", "5c6167", "24272b"   # pearl a step under white: its shading and chamfers read
 PLATE_LIFT, PLATE_THICK = 0.0042, 0.0078       # torso plates: their top stands 12 mm off the suit (an 8 mm plate with a bevelled rim)
 GROOVE = "3a3d42"
 
@@ -2167,7 +2167,10 @@ def g_fins(g):
 
 
 # ---------------- belt / hips ----------------
-def belt_loop(K, z, lift=0.003):
+def belt_loop(K, z, lift=0.003, span=0.0):
+    """A closed loop round the dressed torso at height z. With `span`, each ray is also cast at z +- span / 2 and the
+    loop takes the outermost of the three hits: a wide band then sits on whatever flares out under its lower edge (a
+    vest hem standing clear of the trousers) instead of sinking into it."""
     P, N = [], []
     c = V((0, -float(BH.costume.zc_at(K.B, z)), z))
     for i in range(30):
@@ -2176,8 +2179,17 @@ def belt_loop(K, z, lift=0.003):
         h = K.ray(c + d * 0.5, -d, TORSO, 1.0)
         if h is None:
             continue
-        P.append(h[0] + h[1] * lift)
-        N.append(h[1])
+        p, n = h[0], h[1]
+        if span:
+            r0 = (p - c).dot(d)
+            for dz in (-span / 2, span / 2):
+                cz = c + V((0, 0, dz))
+                h2 = K.ray(cz + d * 0.5, -d, TORSO, 1.0)
+                if h2 is not None:
+                    r0 = max(r0, (h2[0] - cz).dot(d))
+            p = V((c.x + d.x * r0, c.y + d.y * r0, z))
+        P.append(p + n * lift)
+        N.append(n)
     return _smooth_loop(P, N)
 
 
@@ -2234,7 +2246,7 @@ def g_cuffs(g):
 
 def belt_band(g, z, w, t, col, gloss=0.25):
     K = g.K
-    P, N = belt_loop(K, z, lift=0.002)
+    P, N = belt_loop(K, z, lift=0.002, span=w * 0.9)
     if len(P) > 8:
         g.part(ribbon(P, N, w, t, closed=True, side=[V((0, 0, 1))] * len(P)), col, gloss, smooth=True)
 

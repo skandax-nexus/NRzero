@@ -103,6 +103,8 @@ glTF output the runtime uses (`src/human/cast3d.js` → `person.gadgets`, `setGa
 - The armature root carries `gadgets`: JSON [{type, bone, glow, idle, segs, seg_mode, prop, node, color, baked}].
 - Budgets under 11 000 triangles (crowds, children) bake glow into the atlas emissive at its idle level: no gx_ nodes.
 - Long hand props (umbrella, staff, spear) hide themselves while the crouch or sit clip plays (cast3d.js).
+- Belt bands (`belt_band`, the tool belt) sit on the outermost of three ray hits across their width, so a vest hem that
+  flares out under the belt's lower edge no longer pokes through it.
 
 The build log prints each gadget's triangle cost. Viewer close-ups: `tools/cast.html?base=...&ids=kai&cols=1&focus=head&d=0.5`
 (`focus=<bone>` aims at a bone, `fy` lifts the aim, `glow=<level>` lights every gadget). `GADGET_DEBUG=1` prints the

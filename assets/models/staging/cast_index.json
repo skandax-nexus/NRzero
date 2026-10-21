@@ -9,7 +9,9 @@
    "role": "Player: Kai Varen, temporal systems engineer",
    "sex": "m",
    "age": 32,
-   "height": 1.83
+   "height": 1.83,
+   "tris": 16000,
+   "lod": 0
   },
   {
    "id": "mira",
@@ -18,7 +20,9 @@
    "role": "Mira Varen, the impossible sister",
    "sex": "f",
    "age": 29,
-   "height": 1.69
+   "height": 1.69,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "witness",
@@ -27,7 +31,9 @@
    "role": "The Witness, older Kai",
    "sex": "m",
    "age": 58,
-   "height": 1.81
+   "height": 1.81,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "sera",
@@ -36,7 +42,9 @@
    "role": "Sera Voss, resistance leader",
    "sex": "f",
    "age": 34,
-   "height": 1.72
+   "height": 1.72,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "rook",
@@ -45,7 +53,9 @@
    "role": "Dr. Elias Rook, Director of Helix Temporal Research",
    "sex": "m",
    "age": 62,
-   "height": 1.78
+   "height": 1.78,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "niko",
@@ -54,7 +64,9 @@
    "role": "Niko, keeper of the settlement",
    "sex": "m",
    "age": 19,
-   "height": 1.66
+   "height": 1.66,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "tala",
@@ -63,7 +75,9 @@
    "role": "Tala, water keeper",
    "sex": "f",
    "age": 41,
-   "height": 1.64
+   "height": 1.64,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "iven",
@@ -72,7 +86,9 @@
    "role": "Iven Marr, Helix maintenance technician",
    "sex": "m",
    "age": 45,
-   "height": 1.76
+   "height": 1.76,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "jun",
@@ -81,7 +97,9 @@
    "role": "Jun Park, Rain City transit operator",
    "sex": "m",
    "age": 42,
-   "height": 1.74
+   "height": 1.74,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "hale",
@@ -90,7 +108,9 @@
    "role": "Officer Hale, Helix security (night shift)",
    "sex": "m",
    "age": 48,
-   "height": 1.85
+   "height": 1.85,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "brandt",
@@ -99,7 +119,9 @@
    "role": "Officer Brandt, Helix security (Rook's problem-solver)",
    "sex": "m",
    "age": 37,
-   "height": 1.8
+   "height": 1.8,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "child",
@@ -108,7 +130,9 @@
    "role": "The Child in the Station (Rain City)",
    "sex": "f",
    "age": 8,
-   "height": 1.27
+   "height": 1.27,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anja",
@@ -117,7 +141,9 @@
    "role": "Dr. Anja Vale, 2196 temporal scientist",
    "sex": "f",
    "age": 46,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "mara",
@@ -126,7 +152,9 @@
    "role": "Mara Quill, 2196 archivist",
    "sex": "f",
    "age": 61,
-   "height": 1.62
+   "height": 1.62,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "orren",
@@ -135,7 +163,9 @@
    "role": "Orren, guide of the Unwritten Second",
    "sex": "m",
    "age": 50,
-   "height": 1.78
+   "height": 1.78,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "caretaker",
@@ -144,7 +174,9 @@
    "role": "Ingrid Holt, caretaker of Reservoir 7 (mission 5)",
    "sex": "f",
    "age": 57,
-   "height": 1.66
+   "height": 1.66,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "oskar",
@@ -153,7 +185,9 @@
    "role": "Oskar Hensel, clockmaker of the Old Quarter (mission 6)",
    "sex": "m",
    "age": 78,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "oskar26",
@@ -162,7 +196,9 @@
    "role": "Oskar Hensel at 55, clockmaker (mission 6, 2026 state)",
    "sex": "m",
    "age": 55,
-   "height": 1.71
+   "height": 1.71,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "lotte",
@@ -171,7 +207,9 @@
    "role": "Lotte Hensel, the clockmaker's daughter, age 8 (mission 6)",
    "sex": "f",
    "age": 8,
-   "height": 1.27
+   "height": 1.27,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "kid_kai",
@@ -180,7 +218,9 @@
    "role": "Kai at 7 (residue echo, mission 6)",
    "sex": "m",
    "age": 7,
-   "height": 1.22
+   "height": 1.22,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "kid_mira",
@@ -189,7 +229,9 @@
    "role": "Mira at 10 (residue echo, mission 6)",
    "sex": "f",
    "age": 10,
-   "height": 1.36
+   "height": 1.36,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "neighbor",
@@ -198,7 +240,9 @@
    "role": "Neighbour, clock quarter (mission 6)",
    "sex": "m",
    "age": 46,
-   "height": 1.76
+   "height": 1.76,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "potter",
@@ -207,7 +251,9 @@
    "role": "Iru, potter of the upper terrace (mission 5)",
    "sex": "f",
    "age": 46,
-   "height": 1.6
+   "height": 1.6,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "villager",
@@ -216,7 +262,9 @@
    "role": "Villager of the lower village (mission 5 speaker)",
    "sex": "m",
    "age": 52,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 11000,
+   "lod": 0
   },
   {
    "id": "c49_m1",
@@ -225,7 +273,9 @@
    "role": "Civilian: young professional",
    "sex": "m",
    "age": 24,
-   "height": 1.76
+   "height": 1.76,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_m2",
@@ -234,7 +284,9 @@
    "role": "Civilian: commuter",
    "sex": "m",
    "age": 38,
-   "height": 1.84
+   "height": 1.84,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_m3",
@@ -243,7 +295,9 @@
    "role": "Civilian: shop owner",
    "sex": "m",
    "age": 55,
-   "height": 1.72
+   "height": 1.72,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_m4",
@@ -252,7 +306,9 @@
    "role": "Civilian: bike courier",
    "sex": "m",
    "age": 31,
-   "height": 1.86
+   "height": 1.86,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_m5",
@@ -261,7 +317,9 @@
    "role": "Civilian: retired engineer",
    "sex": "m",
    "age": 67,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_m6",
@@ -270,7 +328,9 @@
    "role": "Civilian: street-food vendor",
    "sex": "m",
    "age": 45,
-   "height": 1.78
+   "height": 1.78,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_f1",
@@ -279,7 +339,9 @@
    "role": "Civilian: designer",
    "sex": "f",
    "age": 27,
-   "height": 1.65
+   "height": 1.65,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_f2",
@@ -288,7 +350,9 @@
    "role": "Civilian: nurse off shift",
    "sex": "f",
    "age": 34,
-   "height": 1.74
+   "height": 1.74,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_f3",
@@ -297,7 +361,9 @@
    "role": "Civilian: office worker",
    "sex": "f",
    "age": 48,
-   "height": 1.68
+   "height": 1.68,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_f4",
@@ -306,7 +372,9 @@
    "role": "Civilian: student",
    "sex": "f",
    "age": 22,
-   "height": 1.62
+   "height": 1.62,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_f5",
@@ -315,7 +383,9 @@
    "role": "Civilian: grandmother",
    "sex": "f",
    "age": 62,
-   "height": 1.6
+   "height": 1.6,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_f6",
@@ -324,7 +394,9 @@
    "role": "Civilian: emergency responder",
    "sex": "f",
    "age": 39,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_kid_m",
@@ -333,7 +405,9 @@
    "role": "Civilian child: schoolboy",
    "sex": "m",
    "age": 10,
-   "height": 1.38
+   "height": 1.38,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c49_kid_f",
@@ -342,7 +416,9 @@
    "role": "Civilian child: little girl",
    "sex": "f",
    "age": 6,
-   "height": 1.15
+   "height": 1.15,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "helix_sci_m",
@@ -351,7 +427,9 @@
    "role": "Helix scientist",
    "sex": "m",
    "age": 36,
-   "height": 1.79
+   "height": 1.79,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "helix_sci_f",
@@ -360,7 +438,9 @@
    "role": "Helix scientist",
    "sex": "f",
    "age": 44,
-   "height": 1.63
+   "height": 1.63,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "helix_sec_1",
@@ -369,7 +449,9 @@
    "role": "Helix security guard",
    "sex": "m",
    "age": 32,
-   "height": 1.88
+   "height": 1.88,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "helix_sec_2",
@@ -378,7 +460,9 @@
    "role": "Helix security guard",
    "sex": "f",
    "age": 35,
-   "height": 1.75
+   "height": 1.75,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "transit_worker",
@@ -387,7 +471,9 @@
    "role": "Rain City transit worker",
    "sex": "f",
    "age": 29,
-   "height": 1.64
+   "height": 1.64,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "technician",
@@ -396,7 +482,9 @@
    "role": "Helix / city maintenance technician",
    "sex": "f",
    "age": 38,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c26_m1",
@@ -405,7 +493,9 @@
    "role": "2026 civilian: young man",
    "sex": "m",
    "age": 29,
-   "height": 1.82
+   "height": 1.82,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c26_m2",
@@ -414,7 +504,9 @@
    "role": "2026 civilian: father",
    "sex": "m",
    "age": 47,
-   "height": 1.78
+   "height": 1.78,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c26_m3",
@@ -423,7 +515,9 @@
    "role": "2026 civilian: older man",
    "sex": "m",
    "age": 63,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c26_f1",
@@ -432,7 +526,9 @@
    "role": "2026 civilian: student",
    "sex": "f",
    "age": 24,
-   "height": 1.62
+   "height": 1.62,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c26_f2",
@@ -441,7 +537,9 @@
    "role": "2026 civilian: professional",
    "sex": "f",
    "age": 38,
-   "height": 1.68
+   "height": 1.68,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "c26_f3",
@@ -450,7 +548,9 @@
    "role": "2026 civilian: older woman",
    "sex": "f",
    "age": 55,
-   "height": 1.65
+   "height": 1.65,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "surv_m1",
@@ -459,7 +559,9 @@
    "role": "Survivor: scavenger",
    "sex": "m",
    "age": 41,
-   "height": 1.78
+   "height": 1.78,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "surv_f1",
@@ -468,7 +570,9 @@
    "role": "Survivor: scout",
    "sex": "f",
    "age": 28,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "surv_m2",
@@ -477,7 +581,9 @@
    "role": "Survivor: elder mechanic",
    "sex": "m",
    "age": 63,
-   "height": 1.68
+   "height": 1.68,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "surv_f2",
@@ -486,7 +592,9 @@
    "role": "Survivor: medic",
    "sex": "f",
    "age": 45,
-   "height": 1.66
+   "height": 1.66,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "continuum_1",
@@ -495,7 +603,9 @@
    "role": "Continuum trooper",
    "sex": "m",
    "age": 30,
-   "height": 1.88
+   "height": 1.88,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "continuum_2",
@@ -504,7 +614,9 @@
    "role": "Continuum officer",
    "sex": "f",
    "age": 33,
-   "height": 1.76
+   "height": 1.76,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_m1",
@@ -513,7 +625,9 @@
    "role": "Settler: farmer / builder",
    "sex": "m",
    "age": 32,
-   "height": 1.74
+   "height": 1.74,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_m2",
@@ -522,7 +636,9 @@
    "role": "Settler: elder storyteller",
    "sex": "m",
    "age": 64,
-   "height": 1.68
+   "height": 1.68,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_m3",
@@ -531,7 +647,9 @@
    "role": "Settler: sentry",
    "sex": "m",
    "age": 22,
-   "height": 1.8
+   "height": 1.8,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_m4",
@@ -540,7 +658,9 @@
    "role": "Settler: bronze smith",
    "sex": "m",
    "age": 40,
-   "height": 1.7
+   "height": 1.7,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_f1",
@@ -549,7 +669,9 @@
    "role": "Settler: water carrier",
    "sex": "f",
    "age": 25,
-   "height": 1.62
+   "height": 1.62,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_f2",
@@ -558,7 +680,9 @@
    "role": "Settler: weaver",
    "sex": "f",
    "age": 50,
-   "height": 1.58
+   "height": 1.58,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_f3",
@@ -567,7 +691,9 @@
    "role": "Settler: herbalist / healer",
    "sex": "f",
    "age": 35,
-   "height": 1.66
+   "height": 1.66,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_f4",
@@ -576,7 +702,9 @@
    "role": "Settler: elder",
    "sex": "f",
    "age": 68,
-   "height": 1.55
+   "height": 1.55,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_kid_m",
@@ -585,7 +713,9 @@
    "role": "Settler child: boy",
    "sex": "m",
    "age": 9,
-   "height": 1.3
+   "height": 1.3,
+   "tris": 9000,
+   "lod": 6000
   },
   {
    "id": "anc_kid_f",
@@ -594,7 +724,9 @@
    "role": "Settler child: girl",
    "sex": "f",
    "age": 7,
-   "height": 1.2
+   "height": 1.2,
+   "tris": 9000,
+   "lod": 6000
   }
  ]
 }

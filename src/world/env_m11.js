@@ -549,10 +549,19 @@ export function buildHospital(game, scene) {
     const s = z > 0 ? 1 : -1, wallZp = s * 13.86;
     // bed against the outer wall
     const bz = s * 12.25;
-    solid(M.steel, x - 0.48, 0, bz - 1.05, x + 0.48, 0.62, bz + 1.05);
+    // a real ward bed: deck, side skirts (the load-sensor box), legs on casters, base frame, rails, head/foot boards
+    blk(x - 0.48, 0, bz - 1.05, x + 0.48, 0.62, bz + 1.05);
+    B.box(M.steel, x - 0.45, 0.54, bz - 1.0, x + 0.45, 0.62, bz + 1.0);
+    B.box(white, x - 0.47, 0.34, bz - 0.9, x - 0.45, 0.58, bz + 0.9); B.box(white, x + 0.45, 0.34, bz - 0.9, x + 0.47, 0.58, bz + 0.9);
+    B.box(M.darkSteel, x - 0.36, 0.16, bz - 0.95, x + 0.36, 0.22, bz + 0.95);
+    for (const lx of [-0.4, 0.4]) for (const lz of [-0.92, 0.92]) { B.box(M.steel, x + lx - 0.03, 0.1, bz + lz - 0.03, x + lx + 0.03, 0.54, bz + lz + 0.03); B.box(M.rubber, x + lx - 0.04, 0, bz + lz - 0.05, x + lx + 0.04, 0.1, bz + lz + 0.05); }
     B.box(mattress, x - 0.46, 0.62, bz - 1.0, x + 0.46, 0.74, bz + 1.0);
+    B.box(sheet, x - 0.3, 0.74, bz + s * 0.62, x + 0.3, 0.85, bz + s * 0.94);
     if (id !== '4-07') B.box(sheet, x - 0.47, 0.74, bz - 0.4 * s - 0.6, x + 0.47, 0.78, bz - 0.4 * s + 0.6);
+    else { B.box(sheet, x - 0.475, 0.74, bz - s * 0.98, x + 0.475, 0.755, bz + s * 0.5); B.box(curtain, x - 0.476, 0.7, bz - s * 0.98, x + 0.476, 0.76, bz - s * 0.6); }
+    for (const sx of [-1, 1]) { B.box(M.steel, x + sx * 0.5 - 0.012, 0.8, bz + s * 0.05, x + sx * 0.5 + 0.012, 0.84, bz + s * 0.85); for (const pz of [0.15, 0.75]) B.box(M.steel, x + sx * 0.5 - 0.01, 0.62, bz + s * pz - 0.012, x + sx * 0.5 + 0.01, 0.8, bz + s * pz + 0.012); }
     B.box(M.steel, x - 0.5, 0.6, bz + s * 1.0, x + 0.5, 1.15, bz + s * 1.06);
+    B.box(white, x - 0.47, 0.6, bz - s * 1.06, x + 0.47, 0.92, bz - s * 1.0);
     // headwall: medical gas outlets, a light, a monitor arm
     B.box(white, x - 1.6, 1.3, wallZp - s * 0.06, x + 1.6, 1.62, wallZp); B.box(i % 2 ? green : dimLight, x - 1.2, 1.56, wallZp - s * 0.065, x + 1.2, 1.6, wallZp - s * 0.06);
     // bedside cabinet + chair

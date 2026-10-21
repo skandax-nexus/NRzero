@@ -57,11 +57,11 @@ export default {
     const zoneOf = (p) => p.z > 14.2 ? 'out' : p.x < -14 ? 'chapel' : p.x < 14 && p.z > -2 ? 'lobby' : p.x < 46 && p.z > -2.6 ? 'corr' : p.x < 46 ? 'vault' : p.z > -14 ? 'ward' : 'rec';
     const ZONE = {
       out: { fog: [0x161b22, 0.012], env: 0.8, hemi: [0x8aa0b8, 0x101214, 0.4], exp: 1.08, sky: true },
-      lobby: { fog: [0x1a2024, 0.012], env: 0.65, hemi: [0xd8e4ea, 0x2a2c2c, 0.34], exp: 1.0 },
+      lobby: { fog: [0x1a2024, 0.012], env: 0.6, hemi: [0xd8e4ea, 0x2a2c2c, 0.3], exp: 0.92 },
       chapel: { fog: [0x1a1410, 0.02], env: 0.55, hemi: [0xffd8b0, 0x1a1410, 0.22], exp: 1.08, warm: true },
       corr: { fog: [0x0c1218, 0.03], env: 0.45, hemi: [0x9ab0c8, 0x101216, 0.2], exp: 1.0 },
       ward: { fog: [0x0a0e14, 0.04], env: 0.28, hemi: [0x6a8aa8, 0x08090a, 0.14], exp: 0.95 },
-      rec: { fog: [0x12161a, 0.02], env: 0.65, hemi: [0xd8e0e8, 0x1a1c1e, 0.34], exp: 1.05 },
+      rec: { fog: [0x12161a, 0.02], env: 0.6, hemi: [0xd8e0e8, 0x1a1c1e, 0.3], exp: 0.96 },
       vault: { fog: [0x0c1014, 0.03], env: 0.5, hemi: [0x9ab8d0, 0x0c0e10, 0.22], exp: 1.1 },
     };
     let zone = null, lightT = 0, wardDark = 1;
@@ -88,7 +88,7 @@ export default {
         .map(s => ({ ...s, dd: (s.p[0] - p.x) ** 2 + (s.p[1] - p.y) ** 2 + (s.p[2] - p.z) ** 2 })).sort((a, b) => a.dd - b.dd);
       const dim = z === 'ward' ? 0.55 + 0.45 * (1 - wardDark) : 1;
       const k = list[0];
-      if (k) { key.position.set(...k.p); key.target.position.set(k.p[0], 0, k.p[2] - 0.4); key.color.set(k.c); key.intensity = k.i * 3.0 * dim; key.distance = k.d * 1.6; }
+      if (k) { key.position.set(...k.p); key.target.position.set(k.p[0], 0, k.p[2] - 0.4); key.color.set(k.c); key.intensity = k.i * (z === 'lobby' || z === 'rec' ? 1.7 : 2.4) * dim; key.distance = k.d * 1.6; }
       pts.forEach((l, i) => { const s = list[i + 1]; if (!s) { l.intensity = 0; return; } l.position.set(...s.p); l.color.set(s.c); l.intensity = s.i * dim; l.distance = s.d; });
     };
     game.onUpdate(dt => {
@@ -662,13 +662,13 @@ export default {
     ]);
     audio.silence(1.0); await game.wait(1.0);
     await game.say('records', 'Temporal discontinuity.');
-    await game.shot([40.85, 1.5, -24.25], [40.6, 1.42, -24.84], 1.4, { fov: 24 });
+    await game.shot([40.75, 1.48, -23.45], [40.6, 1.42, -24.84], 1.4, { fov: 26 });
     await game.talk([
       ['kai', 'Age: thirty-two. Admitted the nineteenth of October, 2026. Eight-fourteen.'],
       ['kai', 'This record was made twenty-three years ago. She was ten years old.'],
       ['kai', 'Thirty-two is my age. Now.'],
     ]);
-    await game.shot([40.75, 1.32, -24.4], [40.72, 1.24, -24.84], 1.4, { fov: 18 });
+    await game.shot([40.62, 1.3, -23.94], [40.58, 1.26, -24.84], 1.6, { fov: 26 });
     await game.say('kai', 'Date of death…');
     audio.silence(2.0); await game.wait(2.0);
     await game.say('kai', 'Blank.');

@@ -1269,8 +1269,10 @@ def paint(c, B, cov, res, path_out):
         fa = (0.4 * u ** 1.7) * (0.85 + 0.15 * st2) * band
         over(fa, hair_c * 0.8 + skin * 0.2)
         under = (hcov >= 0) & ~ears
-        # inside the hairline the density fades in smoothly over ~9 mm
-        fade_in = ss(-0.001, 0.009, hcov) * (0.88 + 0.12 * st2)
+        # the density is already full a couple of mm inside the hairline: the hair shell's border sits on the hairline
+        # and samples these texels, so a fade inside it painted the shell's edge skin-pale (a light outline under the
+        # bangs); the soft gradient lives outside the hairline (`fa` above)
+        fade_in = ss(-0.006, 0.002, hcov) * (0.88 + 0.12 * st2)
         st3 = hair_strands(c, rel, style, seed + 4.1, fine=2.2)
         k = 0.6 + 0.32 * st ** 1.2 + 0.16 * st3 - 0.06
         if hair_c.mean() > 0.42:     # grey / blond: the regular strand stripes read as a knitted (woolly hat) rib

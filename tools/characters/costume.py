@@ -2083,8 +2083,8 @@ def buckle_on(P, T, On, n, xy, size, front=True, name="buckle", cell="metal", gl
 
 
 def sash_knot(B, g, P, On, yb):
-    """A soft cloth knot on the sash at the front of the hip (left or right): a squashed torus (a wrapped knot, not a
-    ball) with two narrow tapered ends hanging 15-20 cm, each finished in a few loose fringe threads."""
+    """A soft cloth knot on the sash at the front of the hip (left or right): a squashed, lobed lens (a wrapped knot,
+    not a ball or a button) with two narrow tapered ends hanging 15-20 cm, each finished in a few loose fringe threads."""
     import bmesh
     from mathutils import Vector, Matrix
     s = 1 if g["knot"] == "L" else -1
@@ -2095,27 +2095,37 @@ def sash_knot(B, g, P, On, yb):
     nrm = Vector(nrm).normalized()
     side = Vector((0, 0, 1)).cross(nrm).normalized()
     bm = bmesh.new()
-    R, r, nu, nv = 0.0072, 0.0098, 12, 6      # r > R: the hole closes (a wrapped, pillowy knot)
+    # a wrapped cloth knot: a squashed, lumpy lens (wider than tall, shallow along the normal) with three twisted wrap
+    # lobes, closed at both poles (the old torus with r > R self-intersected and showed a dark dimple: a button)
+    nu, nv = 12, 7
     rings = []
-    for i in range(nu):           # torus in the plane of the body surface, flattened along its normal
-        a_ = 2 * math.pi * i / nu
+    for jv in range(1, nv):
+        b_ = math.pi * jv / nv                       # latitude from the outer pole (0) to the body side (pi)
         ring = []
-        for jv in range(nv):
-            b_ = 2 * math.pi * jv / nv
-            rr = R + r * math.cos(b_)
-            p = side * (math.cos(a_) * rr * 1.15) + Vector((0, 0, 1)) * (math.sin(a_) * rr * 0.9) + nrm * (r * math.sin(b_) * 0.55)
+        for i in range(nu):
+            a_ = 2 * math.pi * i / nu
+            lobe = 1 + 0.16 * math.cos(3 * a_ + 1.4 * b_) + 0.05 * math.cos(5 * a_ + 0.7)
+            rr = math.sin(b_) * lobe
+            p = (side * (math.cos(a_) * rr * 0.017) + Vector((0, 0, 1)) * (math.sin(a_) * rr * 0.0125)
+                 + nrm * (math.cos(b_) * 0.0075 + 0.002))
             ring.append(bm.verts.new(Vector(ctr) + p))
         rings.append(ring)
+    top = bm.verts.new(Vector(ctr) + nrm * 0.0095)
+    bot = bm.verts.new(Vector(ctr) - nrm * 0.0055)
     for i in range(nu):
-        for jv in range(nv):
-            bm.faces.new((rings[i][jv], rings[(i + 1) % nu][jv], rings[(i + 1) % nu][(jv + 1) % nv], rings[i][(jv + 1) % nv]))
+        i2 = (i + 1) % nu
+        bm.faces.new((top, rings[0][i], rings[0][i2]))
+        for jv in range(len(rings) - 1):
+            bm.faces.new((rings[jv][i2], rings[jv][i], rings[jv + 1][i], rings[jv + 1][i2]))
+        bm.faces.new((rings[-1][i2], rings[-1][i], bot))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     o = BH.BC.mesh_obj("knot", bm)
     BH.piece(o, "acc", (0, 0, 0), bone="hips")
     out = [o]
     for dx, ln in ((-0.008, 0.17), (0.01, 0.15)):
         p0 = Vector(ctr) + side * dx + nrm * 0.004 + Vector((0, 0, -0.012))
         path = [p0 + side * (dx * (0.6 * t + 0.8 * t * t)) + nrm * (0.003 * math.sin(t * 3)) + Vector((0, 0, -ln * t)) for t in np.linspace(0, 1, 6)]
-        widths = [(0.0085 * (1 - 0.4 * t), 0.0022) for t in np.linspace(0, 1, 6)]
+        widths = [(0.011 * (1 - 0.35 * t), 0.0022) for t in np.linspace(0, 1, 6)]
         tl = BH.BC.tube("knot_tail", path, widths, seg=6)
         BH.piece(tl, "acc", (0, 0, 0), bone="hips")
         BH.WSTORE[tl.name] = tail_weights(BH.obj_world_verts(tl), B.J, B.H, B.J["spine"].z, long=False)
@@ -2347,7 +2357,7 @@ def helmet(c, B, h, hp, LM):
     def w_open(z):      # open face: a shield-shaped opening, its lower half narrowed by a sculpted jaw guard
         if not open_face:
             return 0.0
-        jaw = 1 - 0.5 * min(max((oz - z) / ohz, 0.0), 1.0)
+        jaw = 1 - 0.6 * min(max((oz - z) / ohz, 0.0), 1.0)
         return oha * math.sqrt(max(0.0, 1 - ((z - oz) / ohz) ** 2)) * jaw
     for z, (cx, cy), R, pad in rings:
         wz = w_open(z)
@@ -2357,6 +2367,10 @@ def helmet(c, B, h, hp, LM):
                 a = -math.pi / 2 + math.copysign(wz, a + math.pi / 2)
             kr = int(((a + math.pi) / (2 * math.pi) * len(R))) % len(R)
             rr = R[kr] + pad
+            if open_face:      # a sculpted jaw guard: the shell below the cheekbones stands forward of the face as a ridge
+                da = abs(a + math.pi / 2)
+                jw = min(max((oz - 0.25 * ohz - z) / (0.55 * ohz), 0.0), 1.0) * max(0.0, 1 - da / 1.35)
+                rr += 0.018 * k * jw ** 0.7
             verts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr, z))
     vb = np.array(verts)
     gridm = BH.from_bl_np(vb).reshape(len(zs), n, 3)
@@ -2369,8 +2383,9 @@ def helmet(c, B, h, hp, LM):
         for m in range(n):
             m2 = (m + 1) % n
             a = -math.pi + (m + 1.0) * 2 * math.pi / n          # the face's middle angle
-            if open_face and abs(a + math.pi / 2) < min(w_open(zs[r]), w_open(zs[r + 1])) + 1e-6:
-                continue
+            wo = min(w_open(zs[r]), w_open(zs[r + 1]))
+            if open_face and wo > 0 and abs(a + math.pi / 2) < wo + 1e-6:     # (wo > 0: the centre-front face above the
+                continue                                                      # opening sits exactly at -pi/2 and stays)
             faces.append([r * n + m, r * n + m2, (r + 1) * n + m2, (r + 1) * n + m])
             uvs.append([enc(r, m), enc(r, m + 1), enc(r + 1, m + 1), enc(r + 1, m)])
     c0 = len(vb)

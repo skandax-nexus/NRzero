@@ -36,6 +36,7 @@ function injectStyle() {
   s.textContent = `
   #touch .tc-btn.cb-invert{width:58px;height:58px;right:calc(172px + var(--sr,0px));bottom:calc(92px + var(--sb,0px));color:#c8e8ff;border-color:rgba(168,216,255,.6)}
   #touch .tc-btn.cb-invert.hide{display:none}
+  #touch.tc-locked .tc-btn.cb-invert{opacity:0!important;pointer-events:none}
   #touch .tc-btn.cb-invert span{font:700 9px var(--ui,system-ui);letter-spacing:.16em}
   .inv-badge{position:absolute;right:22px;top:118px;padding:5px 10px;border-radius:6px;background:rgba(14,18,24,.62);border:1px solid rgba(168,216,255,.35);
     font:700 11px var(--ui,system-ui);letter-spacing:.24em;color:#d8ecff;pointer-events:none;opacity:0;transition:opacity .6s}

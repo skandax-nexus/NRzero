@@ -42,6 +42,8 @@ function injectStyle() {
   st.textContent = `
   .loop-hud{position:absolute;left:28px;top:104px;display:flex;gap:12px;align-items:flex-start;pointer-events:none;opacity:0;transition:opacity .6s;font-family:var(--ui,system-ui)}
   .loop-hud.on{opacity:1}
+  .loop-hud .lh-know,body:has(.loop-hud.on) #objective{transition:opacity .5s}
+  body:has(#letterbox.on):has(.loop-hud.on) .loop-hud .lh-know,body:has(#letterbox.on):has(.loop-hud.on) #objective{opacity:0}
   .loop-hud .lh-ring{position:relative;width:64px;height:64px;flex:none}
   .loop-hud svg{width:100%;height:100%;transform:rotate(-90deg)}
   .loop-hud .lh-bg{fill:rgba(6,10,16,.55);stroke:rgba(230,184,106,.18);stroke-width:4}
