@@ -2408,6 +2408,12 @@ def build(c, tex_dir):
         mesh = join([mesh] + cloth)
         print("  + cloth", cloth_tris, "tris", flush=True)
     arm["character"] = c["id"]
+    # read by compress_cast.sh / simplify_cast.mjs (final triangle budget, crowd low LOD) and by the runtime
+    # (cast3d.js: `stature` is the standing body height without hats, hoods, props or raised hands, for scaling)
+    arm["tris_budget"] = int(budget(c))
+    if budget(c) <= 9000:
+        arm["lod_tris"] = 6000
+    arm["stature"] = float(c.get("metres") or round(float(B.P[:, 1].max() - B.P[:, 1].min()), 3))
     AUX_MODE[0] = False
     return arm, mesh
 

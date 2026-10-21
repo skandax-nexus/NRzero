@@ -581,14 +581,100 @@ def build_layers(c, B, cov):
         layers[key] = L
     cov["_OFF"] = OFF
     band_swatches(stack, layers)
-    for key, L in layers.items():   # cloth tails, then rims (hems with real thickness)
+    for key, L in layers.items():   # cloth tails, then bound edges, then rims (hems with real thickness)
         g = L.g
         if g.get("cat") == "top" and (g.get("tail") or g.get("poncho")):
             extend_tail(L, B, g, LM, cov, layers)
+    bind_edges(c, layers)
     for key, L in layers.items():
         if L.g.get("rim", 0) > 0:
             add_rims(L, B, L.g["rim"])
     return layers
+
+
+BIND_SKIP = ("harness", "strap", "plates", "gorget", "pauldron", "leg_wraps", "leggings", "carrier")
+
+
+def bind_edges(c, layers):
+    """Bound edges for modern cloth (2026 / 2049; worn 2196 and ancient cloth keep their frayed hems): every face on a
+    garment's own open hem loop (neck, armholes, cuffs, hem: not the hide cuts under an outer item) samples a flat
+    swatch of the garment's binding colour (its median painted colour x `bind`, default 0.82; hi-vis vests 0.32: a
+    dark bound edge). Those faces shared their texels with the layer under the garment (one body uv map), so a
+    hem's last row read as a fuzzy two-tone fringe (fur trim on the hi-vis vests). Rims inherit the swatch."""
+    modern = str(c.get("era")) in ("2026", "2049")
+    keys, faces_of, fac = [], {}, []
+    for key, L in layers.items():
+        g = L.g
+        b = g.get("bind")
+        if b is None:
+            b = 0.82 if modern and g.get("cat") in ("top", "over", "bottom") and g.get("shape") not in BIND_SKIP else 0
+        if not b:
+            continue
+        e = L.edges()
+        tm = getattr(L, "tail_mask", None)
+        hemv = set()
+        for (i, j), n in e.items():
+            if n != 1:
+                continue
+            if tm is not None and (tm[i] or tm[j]):
+                continue                  # the tail's own hem (lined, its own uv grid)
+            if L.cov[[i, j]].min() > 0.012:
+                continue                  # a hide cut
+            hemv.update((i, j))
+        if not hemv:
+            continue
+        hit = [fi for fi, f in enumerate(L.faces) if any(v in hemv for v in f) and np.asarray(L.fuv[fi], float)[:, 0].max() < 9.5]
+        if hit:
+            keys.append(key)
+            faces_of[key] = hit
+            fac.append(float(b))
+    if not keys:
+        return
+    cols = 8
+    rows = max(1, int(math.ceil(len(keys) / cols)))
+    cell = 0.03
+    pal = [("%02x%02x%02x" % tuple(int(round(v * 255)) for v in np.clip(G.hexc(layers[k].g["color"]) * f, 0, 1)), 0.0) for k, f in zip(keys, fac)]
+    pid = aux_piece("bindpal", cols * 0.06, rows * 0.012, None, dict(bind_grad=True, palette_bind=pal, cols=cols, rows=rows, band_keys=keys, band_f=fac))
+    for i, key in enumerate(keys):
+        L = layers[key]
+        cx, cy = i % cols, i // cols
+        for fi in faces_of[key]:
+            # u runs along the distance from the hem (the coverage field is metres inside the border, linear across
+            # a face): the binding / cloth step lands at BIND_W whatever the face size (a crisp, even binding)
+            L.fuv[fi] = np.array([aux_uv(pid, (cx + BIND_U0 + BIND_U1 * min(max(float(L.cov[v]), 0.0) / BIND_D, 1.0)) / cols, 1 - (cy + 0.5) / rows)
+                                  for v in L.faces[fi]])
+
+
+BIND_D, BIND_W, BIND_U0, BIND_U1 = 0.022, 0.007, 0.08, 0.84      # gradient span (m), binding width (m), cell margins
+
+
+def paint_bind(pc, img, mask, himg, gimg, spx, res):
+    """Bound-edge gradient cells: binding colour up to BIND_W from the hem, a stitch line, then the cloth colour."""
+    x0, y0, w, h = pc["rect"]
+    fl = pc["flags"]
+    cols, rows = fl["cols"], fl["rows"]
+    keys, fac = fl["band_keys"], fl["band_f"]
+    for i, key in enumerate(keys):
+        cx, cy = i % cols, i // cols
+        u0, u1 = x0 + w * cx / cols, x0 + w * (cx + 1) / cols
+        v1, v0 = y0 + h * (1 - cy / rows), y0 + h * (1 - (cy + 1) / rows)
+        px0, px1 = max(int(math.floor(u0 * res)), 0), min(int(math.ceil(u1 * res)), res)
+        py0, py1 = max(int(math.floor((1 - v1) * res)), 0), min(int(math.ceil((1 - v0) * res)), res)
+        if px1 <= px0 or py1 <= py0:
+            continue
+        cloth = np.clip(BAND_COL.get(key, G.hexc(fl["palette_bind"][i][0]) / max(fac[i], 1e-3)), 0, 1)
+        bind = np.clip(cloth * fac[i], 0, 1)
+        t = ((np.arange(px0, px1) + 0.5) / res - u0) / max(u1 - u0, 1e-9)
+        d = np.clip((t - BIND_U0) / BIND_U1, 0, 1) * BIND_D          # metres from the hem
+        a = ss(BIND_W - 0.0006, BIND_W + 0.0006, d)                    # 0 binding .. 1 cloth
+        col = bind[None, :] * (1 - a[:, None]) + cloth[None, :] * a[:, None]
+        st = np.exp(-((d - BIND_W + 0.0018) / 0.0006) ** 2)          # stitch line inside the binding
+        col = col * (1 - 0.25 * st[:, None])
+        img[py0:py1, px0:px1] = col[None, :, :]
+        mask[py0:py1, px0:px1] = True
+        himg[py0:py1, px0:px1] = (0.00035 * (1 - a) - 0.0002 * st)[None, :]
+        gimg[py0:py1, px0:px1] = 0.0
+        spx[py0:py1, px0:px1] = BIND_D / max((px1 - px0) * BIND_U1, 1)
 
 
 def band_swatches(stack, layers):
@@ -2588,9 +2674,13 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
 def paint_aux(c, B, img, mask, himg, gimg, spx, res, seed):
     """Paint every aux piece (bilinear 3D positions of its grid -> garment painter)."""
     for pc in AUX:
+        if pc["flags"].get("bind_grad") and "rect" in pc:    # bound edges (bind_edges)
+            paint_bind(pc, img, mask, himg, gimg, spx, res)
+            continue
         if pc["flags"].get("band_keys") and "rect" in pc:    # band swatches: each garment's median painted colour
-            pc["flags"]["palette"] = [("%02x%02x%02x" % tuple(int(round(v * 255)) for v in np.clip(BAND_COL[k], 0, 1)), 0.0) if k in BAND_COL else p
-                                      for k, p in zip(pc["flags"]["band_keys"], pc["flags"]["palette"])]
+            bf = pc["flags"].get("band_f") or [1.0] * len(pc["flags"]["band_keys"])
+            pc["flags"]["palette"] = [("%02x%02x%02x" % tuple(int(round(v * 255)) for v in np.clip(BAND_COL[k] * f_, 0, 1)), 0.0) if k in BAND_COL else p
+                                      for k, p, f_ in zip(pc["flags"]["band_keys"], pc["flags"]["palette"], bf)]
         if pc["flags"].get("palette") and "rect" in pc:      # gadget palette swatches (gadgets.py)
             import gadgets
             gadgets.paint_palette(pc, img, mask, himg, gimg, spx, res, seed)

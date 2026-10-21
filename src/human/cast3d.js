@@ -43,18 +43,28 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
             o.castShadow = o.receiveShadow = true; o.frustumCulled = false;
             const g = o.geometry, mk = g.attributes._mask || g.attributes._MASK;
             if (mk) { g.setAttribute('azMask', mk); g.deleteAttribute(g.attributes._mask ? '_mask' : '_MASK'); }
+            for (const n of ['_gcol', '_gid']) { const a = g.attributes[n] || g.attributes[n.toUpperCase()]; if (a && !g.attributes[n]) { g.setAttribute(n, a); g.deleteAttribute(n.toUpperCase()); } }
+            if (o.userData.lod) o.visible = false;      // crowd low LOD (shares the atlas mesh's vertex buffers): setLOD(1) swaps it in
             [].concat(o.material).forEach(m => {
               const t = m.userData.tint; if (t) m.color.setRGB(t[0], t[1], t[2]);
               m.envMapIntensity = 0.8;
               if (mk && m.userData.slot === 'atlas') skinShade(m);
               if (m.userData.slot === 'glass') { o.castShadow = false; m.depthWrite = false; }   // see-through lens: no shadow on the eyes
+              if (m.userData.slot === 'glow' && g.attributes._gid) o.castShadow = false;
             });
           }
         });
         if (!skinned || !hips) return;
         root.updateMatrixWorld(true);
         root.traverse(o => { if (o.isBone) top = Math.max(top, o.getWorldPosition(new THREE.Vector3()).y); });
-        T[root.name] = { root, height: top, box: new THREE.Box3().setFromObject(root), clips: null, speeds: {}, townsfolk: /^town_/.test(root.name) };
+        // stature: the standing body height the generator built (no hat, hood, raised prop or umbrella in it), so a
+        // look.height scales the person, not their umbrella; older files: the head joint + 12 cm
+        const stature = +root.userData.stature || top + 0.12;
+        const box = new THREE.Box3();
+        root.traverse(o => { if (o.isMesh && !o.userData.gadget && !o.userData.lod && !/^g[xlp]_/.test(o.name)) box.expandByObject(o); });
+        if (box.isEmpty()) box.setFromObject(root);
+        box.max.y = stature;
+        T[root.name] = { root, height: stature, box, clips: null, speeds: {}, townsfolk: /^town_/.test(root.name) };
         cast.ids.push(root.name);
       });
       cast.ready = cast.ids.length > 0;
@@ -65,6 +75,7 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
 }
 export const hasTemplate = id => !!T[id];
 export const templateHeight = id => (T[id] ? T[id].height : 1.75);
+// body box of a template: x / z of the dressed body, max.y = its stature (character.js scales look.height by it)
 export const templateBox = id => (T[id] ? T[id].box : null);
 
 // ---------------- retargeting (world-space rotations, pelvis travel scaled, soles kept on the floor) ----------------
@@ -183,6 +194,35 @@ const variant = (m, tag, fn) => {
   return v;
 };
 const lin = c => new THREE.Color(c);
+const POSTURE = new Set(['crouch', 'sit']), LONG = /umbrella|staff|spear|cane|pole|rifle|wand_long/;
+
+// the glow group (`gx_<id>`: every gadget's emissive part and smoked lens in one mesh, one draw call): per vertex
+// `_gcol` = glow colour, `_gid` = (gadget index / 32, segment / 32, opacity). One clone per person holds that person's
+// levels (uniform array azLv) and visibility (azVis); all clones share one shader program.
+function glowGroupMaterial(src) {
+  const m = src.clone();
+  const u = { lv: { value: new Float32Array(32) }, vis: { value: new Float32Array(32).fill(1) } };
+  m.userData = { ...src.userData, az: u };
+  m.emissive.setRGB(0, 0, 0); m.emissiveMap = null; m.vertexColors = false;
+  if (m.transparent) { m.depthWrite = true; m.alphaTest = 0; }
+  m.customProgramCacheKey = () => 'azglow' + (m.transparent ? 't' : 'o');
+  m.onBeforeCompile = sh => {
+    sh.uniforms.azLv = u.lv; sh.uniforms.azVis = u.vis;
+    sh.vertexShader = 'attribute vec3 _gcol;\nattribute vec3 _gid;\nuniform float azLv[32];\nuniform float azVis[32];\nvarying vec3 vAzCol;\nvarying vec3 vAzGlow;\nvarying float vAzA;\n' + sh.vertexShader
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        int azI = int( _gid.x * 32.0 + 0.5 );
+        vAzCol = _gcol; vAzGlow = _gcol * azLv[ azI ]; vAzA = _gid.z;
+        if ( azVis[ azI ] < 0.5 ) transformed = vec3( 0.0 );`);
+    sh.fragmentShader = 'varying vec3 vAzCol;\nvarying vec3 vAzGlow;\nvarying float vAzA;\n' + sh.fragmentShader
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        { float azLens = step( vAzA, 0.99 );
+          diffuseColor.rgb = mix( vAzCol * 0.05 + 0.012, vec3( 0.006, 0.009, 0.014 ), azLens ); diffuseColor.a = vAzA; }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = vAzA > 0.99 ? 0.28 : 0.05;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance = vAzGlow;');
+  };
+  m.needsUpdate = true;
+  return m;
+}
 
 /**
  * Make a person from template `id`. opts: { seed, clothA, clothB, skin (hex, townsfolk only), shadow, glow (force every gadget level) }.
@@ -196,7 +236,7 @@ export function makePerson(id, opts = {}) {
   const root = SkeletonUtils.clone(t.root);
   root.position.set(0, 0, 0); root.rotation.set(0, 0, 0);
   const seed = opts.seed ?? Math.floor(Math.random() * 1e6);
-  const meshes = [], bones = {}, gadgets = {};
+  const meshes = [], bones = {}, gadgets = {}, lods = [], lod0 = [], glowGroups = [];
   root.traverse(o => {
     if (o.isBone) bones[key(o.name)] = o;
     if (!o.isMesh) return;
@@ -205,6 +245,18 @@ export function makePerson(id, opts = {}) {
     if (gt) {
       const g = gadgets[gt] || (gadgets[gt] = { type: gt, glow: [], props: [], level: 0, idle: 0 });
       if (o.userData.prop) g.props.push(o);
+    }
+    if (o.userData.lod) lods.push(o); else if (o.isSkinnedMesh && !gt && !o.geometry.attributes._gid) lod0.push(o);
+    if (o.geometry.attributes._gid && o.userData.gadgets) {       // the character's one glow group (every gadget)
+      const types = JSON.parse(o.userData.gadgets), idle = JSON.parse(o.userData.idle || '[]'), props = JSON.parse(o.userData.props || '[]');
+      const m = glowGroupMaterial([].concat(o.material)[0]), u = m.userData.az;
+      types.forEach((tp, i) => {
+        const g = gadgets[tp] || (gadgets[tp] = { type: tp, glow: [], props: [], level: 0, idle: 0 });
+        g.idle = idle[i] ?? 1; g.level = opts.glow ?? g.idle; g.slot = i; g.group = u; g.prop = props[i] || '';
+        u.lv.value[i] = g.level;
+      });
+      o.material = m; glowGroups.push(o);
+      return;
     }
     o.material = [].concat(o.material).map(m => {
       const slot = m.userData.slot;
@@ -229,8 +281,15 @@ export function makePerson(id, opts = {}) {
   const rnd = k => ((Math.imul(seed + 1, 2654435761) ^ Math.imul(k + 7, 40503)) >>> 0) % 1000 / 1000;
   const pace = 0.93 + 0.14 * rnd(1);
   const h = { root, bones, id: t.root.name, mixer, actions, meshes, gadgets, current: null, height: t.height, speeds: t.speeds };
-  h.setGadget = (type, level) => { const g = gadgets[type]; if (!g) return; g.level = level; g.glow.forEach(m => { m.emissiveIntensity = level; }); };
-  h.showProp = (type, on) => { const g = gadgets[type]; if (g) g.props.forEach(o => { o.visible = on; }); };
+  h.setGadget = (type, level) => { const g = gadgets[type]; if (!g) return; g.level = level; g.glow.forEach(m => { m.emissiveIntensity = level; }); if (g.group) g.group.lv.value[g.slot] = level; };
+  // props: showProp is the caller's wish; long props (umbrella, staff, spear) also hide while crouching or sitting,
+  // where they would sink through the floor
+  const vis = g => { const on = g.shown !== false && !(g.long && POSTURE.has(h.current)); g.props.forEach(o => { o.visible = on; }); if (g.group) g.group.vis.value[g.slot] = on ? 1 : 0; };
+  h.showProp = (type, on) => { const g = gadgets[type]; if (g) { g.shown = on; vis(g); } };
+  for (const t in gadgets) { const g = gadgets[t]; g.long = LONG.test(t) || g.props.some(o => o.userData.long); }
+  // level of detail: 0 = full mesh (+ glow group), 1 = crowd low LOD (6 000 triangles, glow baked); no-op without one
+  h.lod = 0;
+  h.setLOD = n => { if (!lods.length) return; h.lod = n ? 1 : 0; lods.forEach(o => { o.visible = !!n; }); lod0.forEach(o => { o.visible = !n; }); glowGroups.forEach(o => { o.visible = !n; }); };
   h.play = (name, fade = 0.25, speed = 1) => {
     if (!actions[name]) name = LOCO.has(name) && actions.walk ? 'walk' : 'idle';
     const a = actions[name];
@@ -245,6 +304,7 @@ export function makePerson(id, opts = {}) {
     a.play();
     if (prev) prev.crossFadeTo(a, fade, false);
     cur = a; h.current = name;
+    if (POSTURE.has(name) || POSTURE.has(prevName)) for (const t in gadgets) if (gadgets[t].long) vis(gadgets[t]);
   };
   h.move = (speed, scale = 1, mo = {}) => {
     const sp = n => (t.speeds[n] || DEFAULT_SPEED[n] || 1.2) * scale;

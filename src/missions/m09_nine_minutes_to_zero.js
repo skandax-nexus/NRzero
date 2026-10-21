@@ -208,7 +208,7 @@ export default {
       { id: 'B', set: (h, m, s) => W.clocks.B.forEach(c => c.userData.set(h, m + s / 60)), onDesync: () => lamp(W.cabB, true), onResync: () => lamp(W.cabB, false) },
       { id: 'C', set: (h, m, s) => W.clocks.C.forEach(c => c.userData.set(h, m + s / 60)), onDesync: () => lamp(W.nodeCLamp, true), onResync: () => lamp(W.nodeCLamp, false) },
     ]);
-    window.__m9 = { S, W, loop, patrols, clocks, ines, rhee, mother, skip: (t) => loop.skipTo(t) };
+    window.__m9 = { S, W, P, loop, patrols, clocks, ines, rhee, mother, figure, skip: (t) => loop.skipTo(t) };
 
     // ---------- the world inside one repetition ----------
     const setShutter = (u) => { W.shutter.position.y = 2.3 + u * 4.4; W.shutterBox.enabled = u < 0.7; };
@@ -779,7 +779,7 @@ export default {
     S.final = true; S.phase = 'end';
     cine(true); lockMusic('m9-outside');
     pl.place(P.anchor[0], 48, P.anchor[2] + 1.0, Math.PI);
-    await game.shot([P.anchor[0] + 2.4, 49.8, P.anchor[2] + 2.2], [P.anchor[0], 49.0, P.anchor[2]], 1.4, { fov: 36 });
+    await game.shot([P.anchor[0] + 0.6, 49.7, P.anchor[2] + 2.9], [P.anchor[0] - 0.2, 49.0, P.anchor[2]], 1.4, { fov: 38 });
     kai.pose = 'work'; audio.sfxPlay('switch'); shiftPulse = 0.6; kai.wristBoost = 8;
     await game.talk([
       ['kai', 'A band in the ring. Worn through to the metal. Somebody scratched letters into it.'],
@@ -822,7 +822,7 @@ export default {
     const lbl = loop.hud?.querySelector('.lh-label'); if (lbl) lbl.textContent = 'OUTSIDE THE LOOP';
     loop.iterLabel = () => 'YOU: 08:14:01 · THE DISTRICT';
     F.m9outsideLoop = true; F.kaiOutsideLoop = true; F.m9done = true;
-    await game.shot([P.anchor[0] + 1.8, 49.7, P.anchor[2] + 2.6], [P.anchor[0], 49.3, P.anchor[2] + 0.6], 1.6, { fov: 36 });
+    await game.shot([P.anchor[0] - 1.5, 49.6, P.anchor[2] + 3.5], [P.anchor[0] - 0.4, 49.3, P.anchor[2] - 0.6], 1.6, { fov: 34 });
     await game.talk([
       ['kai', 'It reset.'],
       ['kai', 'I didn\'t.'],
@@ -835,7 +835,7 @@ export default {
     audio.sfxPlay('motif');
     await game.talk([['kai', 'On the station clock. A long coat. He\'s not moving back with the rest of them, either.']]);
     await tween(1.6, u => { figure.root.position.y = 20.9 - u * 0.02; }); figure.root.visible = false;
-    await game.shot([P.anchor[0] + 2.2, 49.8, P.anchor[2] + 3.0], [P.anchor[0], 49.2, P.anchor[2]], 1.4, { fov: 40 });
+    await game.shot([P.anchor[0] + 0.5, 49.9, P.anchor[2] + 3.3], [P.anchor[0] - 0.5, 49.2, P.anchor[2] - 0.8], 1.4, { fov: 42 });
     await game.talk([
       ['m9command', 'Meridian array to all units. Two signatures outside the loop. Meridian Tower ring.'],
       ['m9command', 'They remember. Retrieve them.'],

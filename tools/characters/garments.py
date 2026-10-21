@@ -171,7 +171,7 @@ GARMENTS = {
     "jerkin": I(neck=(0.02, 0.03), collar=STAND(0.02), thick=0.009, fab="nylon", det=["quilt_h:0.05", "placket"], sleeve="none", hem=-0.05),
     "wipe_shell": T(neck=(0.03, 0.02), collar=STAND(0.04), hem=-0.06, cuff="band", thick=0.010, fab="shell", gloss=0.5, det=["zip", "sleeve_guards"]),
     # ---------------- over layers ----------------
-    "smart_vest": O(shape="vest", thick=0.0065, fab="hivis", gloss=0.2, det=["reflective:vest", "led:edges", "back_panel"], c3="c8ccd0", hem=-0.04),
+    "smart_vest": O(shape="vest", thick=0.0065, fab="hivis", gloss=0.2, det=["reflective:vest", "led:bands", "back_panel"], c3="d8dce0", hem=-0.04, bind=0.32),
     "plate_carrier": O(shape="carrier", thick=0.016, fab="cordura", gloss=0.05, rim=0.014, det=["molle", "chest_panel", "edge_bind"], pouches=True, c3="c8ccd0"),
     "chest_harness": O(shape="harness", thick=0.0035, fab="webbing", gloss=0.1, rim=0.003, det=["webbing", "edge_bind"], buckles=True, z=65),
     "scav_plate": O(shape="carrier", thick=0.015, fab="polymer", gloss=0.2, rim=0.012, det=["scav_plates", "wear", "scratches"], wear=0.9, pouches=False,
@@ -318,7 +318,7 @@ FAB = {  # base roughness feel is per vertex (gloss); here: luminance texture k 
     "felt": dict(n=0.11, f=90, h=0.0003), "gabardine": dict(n=0.05, f=180, twill=True), "linen": dict(n=0.08, f=100, linen=True),
     "leather": dict(n=0.1, f=260, h=0.0002), "hard_leather": dict(n=0.12, f=220, h=0.0003), "polymer": dict(n=0.04, f=60, h=0.00005),
     "ceramic": dict(n=0.012, f=40, h=0.0), "satin": dict(n=0.03, f=120, h=0.00005), "metal": dict(n=0.03, f=300, h=0.0),
-    "webbing": dict(n=0.05, f=300, web=True), "hivis": dict(n=0.03, f=160, h=0.00006), "stretch": dict(n=0.03, f=200, h=0.00005),
+    "webbing": dict(n=0.05, f=300, web=True), "hivis": dict(n=0.03, f=160, h=0.00006, weave=0.0024), "stretch": dict(n=0.03, f=200, h=0.00005),
     "cord": dict(n=0.1, f=400, h=0.0002), "woven": dict(n=0.1, f=200, weave=0.003), "mesh": dict(n=0.06, f=300, h=0.0001),
     "rubber": dict(n=0.02, f=60, h=0.0),
 }
@@ -611,8 +611,11 @@ def paint(g, X, seed):
             if "ankles" in parts:
                 m = m + line(X.sl - X.legcum[2] + 0.12, 0.03, 0.001) * leg
             m = np.clip(m, 0, 1)
-            mix(m, c3 * (0.94 + 0.06 * vnoise(X.q, 400, seed)[:, None]))
+            mix(m, c3 * (0.97 + 0.03 * vnoise(X.q, 400, seed)[:, None]))
             h = h + 0.0002 * m
+            if "vest" in parts:      # retroreflective tape: catches a little light (a faint emissive), smooth
+                glow[:] = np.maximum(glow, m[:, None] * c3[None, :] * 0.07)
+                k = np.where(m > 0.5, 1.0, k)
             seam(line(np.abs(m - 0.5) - 0.48, 0.002) * (m > 0.02), 0.0002, 0.85)
         elif name == "chevrons":
             if arg == "back":
@@ -648,6 +651,9 @@ def paint(g, X, seed):
                 lit(line(np.abs(X.x) - princess_x(X), 0.0035, 0.0015) * tor * (y < J["shoulder_L"][1] - 0.03))
             elif arg == "edges":
                 lit(line(X.f - 0.005, 0.003, 0.001))
+            elif arg == "bands":       # hi-vis vest: a thin LED line along the top edge of each reflective band
+                ch_, sp_ = J["chest"][1], J["spine"][1]
+                lit((line(y - (ch_ - 0.02) - 0.024, 0.0028, 0.0008) + line(y - (sp_ + 0.045) - 0.024, 0.0028, 0.0008)) * tor * ss(0.02, 0.03, X.f))
             elif arg == "hem":
                 lit(line(X.f - 0.008, 0.004, 0.0015) * (y < J["chest"][1]))
             elif arg == "belt":

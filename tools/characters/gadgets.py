@@ -3073,7 +3073,7 @@ def finish(K):
         v = 1 - (cy + 0.35 + 0.3 * b) / rows
         return costume.aux_uv(pid, u, v)
     out = dict(body=[], glow=[], props=[], meta=[], tris=0)
-    glow_mats = {}
+    merge = []
     for g in K.gads:
         body = g.body
         if K.bake and g.glow.f:
@@ -3099,40 +3099,88 @@ def finish(K):
                 out["body"].append(ob)
             out["tris"] += body.tris()
         node = None
-        if g.glow.f:
-            og = make_obj(K, "gx_" + g.typ, g.glow, g, None)
-            og["gadget"] = g.typ
-            og["slot"] = "glow"
-            og["idle"] = float(g.idle)
-            og["segs"] = int(g.segs)
-            og["seg_mode"] = g.seg_mode
-            og["bone"] = g.bone
-            if g.prop:
-                og["prop"] = g.prop
-            hx = g.glow_hex
-            if hx not in glow_mats:
-                glow_mats[hx] = glow_material(c, hx)
-            og.data.materials.clear()
-            og.data.materials.append(glow_mats[hx])
-            out["glow"].append(og)
-            out["tris"] += g.glow.tris()
-            node = og.name
-        if g.glass.f:
-            ol = make_obj(K, "gl_" + g.typ, g.glass, g, None)
-            ol["gadget"] = g.typ
-            ol["slot"] = "glass"
-            if "glass" not in glow_mats:
-                glow_mats["glass"] = glass_material(c)
-            ol.data.materials.clear()
-            ol.data.materials.append(glow_mats["glass"])
-            out["glow"].append(ol)
-            out["tris"] += g.glass.tris()
+        if g.glow.f or g.glass.f:      # merged below into the character's one glow mesh
+            merge.append(g)
+            node = "gx_" + c["id"] if g.glow.f else None
+            out["tris"] += g.glow.tris() + g.glass.tris()
         out["meta"].append(dict(type=g.typ, bone=g.bone, glow=bool(node) or (K.bake and any(isinstance(cc, tuple) for cc in body.col)),
                                 idle=float(g.idle), segs=int(g.segs), seg_mode=g.seg_mode, prop=g.prop or "", node=node or "",
                                 color=g.glow_hex, baked=bool(K.bake)))
+    if merge:
+        out["glow"].append(glow_group(K, merge))
+        for i, m_ in enumerate(out["meta"]):
+            m_["gid"] = next((j for j, g in enumerate(merge) if g.typ == m_["type"]), -1)
     print("  gadgets", len(K.gads), "->", out["tris"], "tris", "(baked glow)" if K.bake else "(%d glow meshes)" % len(out["glow"]),
           " ".join("%s=%d" % (g.typ, g.body.tris() + g.glow.tris()) for g in K.gads), flush=True)
     return out
+
+
+GID_SCALE = 32.0      # `_gid` x = gadget index / 32, y = glow segment / 32 (8-bit normalized in the shipped file)
+
+
+def glow_group(K, gads):
+    """One skinned glow mesh per character (`gx_<id>`, one draw call): every gadget's emissive part and see-through
+    lens. Per vertex `_gcol` = the gadget's glow colour (linear rgb; black on a lens) and `_gid` = (gadget index / 32,
+    segment / 32, opacity: 1 glow, about 0.34 smoked lens). Node extras: slot 'glow', gadgets = [type ...] in gadget
+    index order, idle = [level ...], props = [prop kind or ''], glass = bool. The runtime (cast3d.js) drives one level
+    and one visibility per gadget index through a small uniform array, so setGadget / showProp need no material per
+    gadget, and every glow colour shares the one material."""
+    c = K.c
+    M = Geo()
+    gcol, gid = [], []
+    for i, g in enumerate(gads):
+        for geo, glass in ((g.glow, False), (g.glass, True)):
+            if not geo.f:
+                continue
+            o_ = len(M.v)
+            M.v += geo.v
+            M.f += [[j + o_ for j in f] for f in geo.f]
+            M.col += geo.col
+            M.gl += [0.9] * len(geo.f)
+            M.sm += geo.sm
+            M.wt += [w or g.bone for w in geo.wt]
+            M.seg += geo.seg
+            lc = (0.0, 0.0, 0.0) if glass else tuple(float(x) for x in BH.lin(hexc(g.glow_hex)))
+            gcol += [lc] * len(geo.v)
+            gid += [(i / GID_SCALE, min(float(sg), GID_SCALE - 1) / GID_SCALE, 0.34 if glass else 1.0) for sg in geo.seg]
+    gg = gads[0]
+    og = make_obj(K, "gx_" + c["id"], M, gg, None)
+    for nm, arr in (("_gcol", gcol), ("_gid", gid)):
+        at = og.data.attributes.new(nm, "FLOAT_VECTOR", "POINT")
+        at.data.foreach_set("vector", np.asarray(arr, dtype=np.float32).ravel())
+    if og.data.attributes.get("_gseg"):
+        og.data.attributes.remove(og.data.attributes["_gseg"])
+    og["slot"] = "glow"
+    og["gadgets"] = json.dumps([g.typ for g in gads])
+    og["idle"] = json.dumps([float(g.idle) for g in gads])
+    og["props"] = json.dumps([g.prop or "" for g in gads])
+    og["glass"] = any(g.glass.f for g in gads)
+    og.data.materials.clear()
+    og.data.materials.append(group_material(c, og["glass"]))
+    return og
+
+
+def group_material(c, glass):
+    """The glow group's material: dark lens base, emission from `_gcol` x level (runtime); alpha-blended when the
+    group holds a smoked lens (glTF alphaMode BLEND, opacity per vertex in `_gid`.z)."""
+    import bpy
+    m = bpy.data.materials.new("%s_glow" % c["id"])
+    m.use_nodes = True
+    bsdf = m.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Base Color"].default_value = (0.012, 0.014, 0.018, 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.28
+    bsdf.inputs["Emission Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+    bsdf.inputs["Emission Strength"].default_value = 1.0
+    if glass:
+        bsdf.inputs["Alpha"].default_value = 0.99
+        for attr, val in (("surface_render_method", "BLENDED"), ("blend_method", "BLEND")):
+            try:
+                setattr(m, attr, val)
+            except (AttributeError, TypeError):
+                pass
+    m["slot"] = "glow"
+    m["glow"] = c.get("glow", "")
+    return m
 
 
 def make_obj(K, name, geo, g, uvf):

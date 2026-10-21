@@ -587,6 +587,12 @@ for the valley), view 0, after 14 frames:
 Captures: `<scratch>/render/infra/lab/final_<era>_<tier>.png` (and the earlier review shots `2049_v0/v1`, `2026_v0`,
 `2196_v0`, `ancient_v0`). A complete dressed street stays at well under half the phone budget on low.
 
+Added 2026-10-21: abandoned-street overgrowth (`k.overgrowth()`, instanced weed clumps and sealed asphalt cracks;
+with `era: '2196'` kerbs sprout gutter weeds and road paint is faded with missing dashes, `RZ.roadPaint({ wear, drop })`).
+The 2196 lab street with overgrowth along the road and both pavements (195 instances, 24 draws for the whole
+street kit before culling): low 73 calls / 47k tris (was 61 / 40k), high 159 / 135k (was 130 / 119k), container idle.
+Captures `<scratch>/render/infra/lab/og_2196_{high,low}.png` (compare `final_2196_*`).
+
 ### Cost (stage 4)
 
 Same-frame A/B in one page (`tools/render/infraab.mjs`, `new` vs `legacy` = everything as before stage 4), median of
