@@ -226,6 +226,7 @@ def main():
                 subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', w, '-af', af, '-ac', '1', '-c:a', 'aac', '-b:a', '40k', os.path.join(OUT, f)], check=True)
                 manifest['lines'][k] = f
                 done += 1
+            json.dump(manifest, open(man_path, 'w'), indent=0)  # progress survives an interrupted run
             print('performed', done, '/', len(todo), flush=True)
     manifest['speakers'] = {k: v for k, v in voices.items() if not k.startswith('crowd:')}
     manifest['credit'] = 'Voices: Piper TTS, LibriTTS-high model (LibriTTS dataset, CC BY 4.0, openslr.org/60).'
