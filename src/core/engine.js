@@ -24,6 +24,12 @@ import * as KIT from '../world/kit.js';
 // ---------------------------------------------------------------------------------------------------------------
 
 const _infraV = new THREE.Vector3(), _infraB = new THREE.Box3();
+// camera layer of light shafts drawn by Engine._drawShafts (high): the scene pass and the probe cameras skip them
+const SHAFT_LAYER = 7;
+// camera layer of point / spot lights the phone tiers' light budget left out (Engine._lightCap): no camera sees it, so
+// the light is not in the shader loop, while the mission's own light.visible stays as it set it
+const LIGHT_OFF_LAYER = 6;
+const _capF = new THREE.Frustum(), _capM = new THREE.Matrix4(), _capS = new THREE.Sphere();
 const LUMA_GLSL = 'const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);';
 const RAW_VS = `precision highp float;
   uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix;
@@ -348,7 +354,7 @@ class AOPass extends Pass {
     this.comp.uniforms.tAO.value = this.blurRT.texture; this.comp.uniforms.tDepth.value = this.sceneRT.depthTexture; this.comp.uniforms.tDiffuse.value = this.sceneRT.texture;
     this.quad = new FullScreenQuad(null);
     this._cc = new THREE.Color(); this._clearAO = new THREE.Color(1, 1000, 0);
-    this.intensity = 0.9; this.fog = 0;
+    this.intensity = 0.9; this.fog = 0; this.after = null;
   }
   setSize(w, h) {
     this.sceneRT.setSize(w, h);
@@ -371,6 +377,8 @@ class AOPass extends Pass {
     renderer.setClearColor(this._cc, ca);
     renderer.setRenderTarget(this.blurRT); this.quad.material = this.blur; this.quad.render(renderer);
     renderer.setRenderTarget(this.renderToScreen ? null : readBuffer); this.quad.material = this.comp; this.quad.render(renderer);
+    // depth-aware light shafts are composited here, reading the scene depth this pass owns (Engine._drawShafts)
+    if (this.after) this.after(renderer, this.renderToScreen ? null : readBuffer);
   }
 }
 
@@ -555,7 +563,9 @@ function tierSettings(q, device) {
       hints: { characterDetail: 'high', crowd: 1, drawDistance: 1, maxLights: 12, particles: 1 } },
     medium: { dprCap: m ? 1.5 : 1, shadows: true, shadowMapMax: 1024, softShadows: false, bloom: true, bloomScale: 0.5, cheapPost: true, adaptive: true,
       ao: false, aa: 'fxaa', dof: false, autoExposure: true,
-      light: { probe: 128, probeMove: 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
+      // phones: re-capture after 60 m of travel instead of 40 (each capture is spread over ~14 frames, one cube face
+      // or one prefilter step per frame, the luminance read back asynchronously: EnvProbe.step)
+      light: { probe: 128, probeMove: m ? 60 : 40, puddles: 1, wetDetail: 0, contact: 0.42, rig: 2, pcfRadius: 2, shafts: 0.8 },
       // phones on medium: low's facade path (RZ_INTERIOR 0: m1a +13-24 % raster over the pre-stage-4 city instead of
       // +20-35 % with RZ_INTERIOR 1), about low's small-prop cull distance, 1024 sign atlases (-106 MB texture memory on
       // m1), 200 m batch cells and no shadows from small props / ground slabs (m1a 295 -> 245 draw calls)
@@ -620,6 +630,7 @@ export class Engine {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
     this.aoPass = new AOPass(this.camera);
+    this.aoPass.after = (rr, target) => this._drawShafts(rr, target);
     this.composer.addPass(this.aoPass);
     this.exposurePass = new ExposurePass();
     this.composer.addPass(this.exposurePass);
@@ -689,10 +700,16 @@ export class Engine {
     if (this.scene && old && this.scene.environment === old.texture) this.scene.environment = L.probe.texture;
     if (L.legacyEnv && this.scene?.environment === L.legacyEnv) this.scene.environment = L.probe.texture;
     L.legacyEnv = null;
-    try { old?.dispose(); } catch { /* resources of the lost context */ }
+    // The old probe, its PMREM targets and the merged batch geometry belonged to the lost context: three's dispose
+    // listeners on them would delete those handles on the new context ("object does not belong to this context",
+    // then "too many errors", which hides every later WebGL error of the session). The probe is dropped without
+    // dispose (its GL objects died with the context, the garbage collector takes the rest); the batcher strips the
+    // stale listeners before it lets go of its geometry; the eye-adaptation targets are simply re-created by three on
+    // their next use (empty), so adaptation snaps once.
+    void old;
     L.captured = false; L.sig = ''; L.frames = 0; L.lastCap = -1e9;
-    this._batch.reset(); this._bFrames = 0;
-    this.exposurePass.release?.(); this._ae.snap = 1; this._ae.ref = 1.2;
+    this._batch.reset({ lost: true }); this._bFrames = 0;
+    this._ae.snap = 1; this._ae.ref = 1.2;
     this._envSwitch();
     this.stats.contextRestores = (this.stats.contextRestores || 0) + 1;
   }
@@ -949,7 +966,7 @@ export class Engine {
     this._light = {
       probe: null, roomLum: 0.5, legacyEnv: null, contact: RZ.contactShadows({ max: 48 }),
       rig: { key, rim, target: null, active: null, amount: 0, added: 0, v: new THREE.Vector3(), d: new THREE.Vector3(), r: new THREE.Vector3(), warm: new WeakSet() },
-      wet: 0, wetTarget: 0, casters: [], chars: [], shafts: [], sig: '', sigT: 0, frames: 0, lastCap: -1e9, captured: false, scene: null,
+      wet: 0, wetTarget: 0, casters: [], chars: [], shafts: [], allShafts: [], shaftScene: null, shaftProxy: new WeakMap(), sig: '', sigT: 0, frames: 0, lastCap: -1e9, captured: false, scene: null,
     };
   }
   get envTexture() { return this._light?.probe?.texture || null; }
@@ -970,7 +987,8 @@ export class Engine {
   }
   _lightScene(scene) {
     const L = this._light;
-    L.scene = scene; L.frames = 0; L.sig = ''; L.lastCap = -1e9; L.casters = []; L.chars = []; L.shafts = [];
+    if (L.cap) { for (const l of [...L.cap.managed, L.cap.lamp]) if (l && l.userData.rzCapMask !== undefined) { l.layers.mask = l.userData.rzCapMask; delete l.userData.rzCapMask; } L.cap = null; }
+    L.scene = scene; L.frames = 0; L.sig = ''; L.lastCap = -1e9; L.casters = []; L.chars = []; L.shafts = []; L.allShafts = []; L.shaftScene?.clear();
     L.probe.job = null;
     // a new place starts from the studio placeholder until its own capture is ready (same texture object)
     if (scene.environment === L.probe.texture && L.captured) { const room = new RoomEnvironment(); L.probe.fill(room, [0, 0, 0]); room.dispose?.(); }
@@ -986,16 +1004,23 @@ export class Engine {
   _upgradeFog(scene) {
     const f = scene.fog;
     if (!f || !f.isFogExp2 || f.isHeightFog) return;
-    const h = RZ.heightFogFrom(f, { falloff: this._fogFalloff(scene) });
+    const h = RZ.heightFogFrom(f, { falloff: this._fogFalloff(scene), floor: this._fogFloor(scene) });
     Object.defineProperty(h, 'density', { get: () => f.density, set: v => { f.density = v; }, configurable: true });
     h.userData = { falloff: h.falloff };
     if (!this.lightOn('fog')) h.falloff = 1e-4;
     scene.fog = h;
   }
-  // Height falloff per era (1/m): open valley haze thins slowly, the rainy street lets towers rise out of it.
+  // Height falloff per era (1/m): open valley haze thins slowly; the rainy street thins with height too, but keeps a
+  // floor of its density at any height (_fogFloor), so distant towers stay in the rain haze.
   _fogFalloff(scene) {
     if (scene.userData.fogFalloff !== undefined) return scene.userData.fogFalloff;
-    return { rain2049: 0.05, helix2026: 0.06, ruin2196: 0.04, ancient: 0.022, neutral: 0.04 }[gradeForScene(scene)] ?? 0.04;
+    return { rain2049: 0.04, helix2026: 0.06, ruin2196: 0.04, ancient: 0.022, neutral: 0.04 }[gradeForScene(scene)] ?? 0.04;
+  }
+  // Share of the fog that does not thin with height: the rainy street keeps aerial perspective on its far towers (rain
+  // and spray fill the whole canyon), other eras thin fully. scene.userData.fogFloor overrides.
+  _fogFloor(scene) {
+    if (scene.userData.fogFloor !== undefined) return scene.userData.fogFloor;
+    return { rain2049: 0.55 }[gradeForScene(scene)] ?? 0;
   }
   // What the probe depends on: a change re-captures it (era switch, blackout, lights switched on / off).
   _lightSig(scene) {
@@ -1009,10 +1034,11 @@ export class Engine {
   // Every 45 frames: lights (shadow tuning + snapping list, probe signature), characters (contact shadows), rain (wet).
   _lightSweep() {
     const L = this._light, scene = this.scene; if (!scene || L.scene !== scene) return;
-    const lights = [], chars = []; let rain = false;
+    const lights = [], chars = [], shafts = []; let rain = false;
     scene.traverse(o => {
       if (o.isLight) lights.push(o);
       else if (o.userData.character) chars.push(o);
+      else if (o.isMesh && o.userData.shaft && o.material?.uniforms?.uDepthP) shafts.push(o);
       else if (o.userData.contactShadow) {   // opt-in props: userData.contactShadow = true | radius | { radius, strength, scale }
         const c = o.userData.contactShadow;
         chars.push(typeof c === 'object' ? { object: o, radius: c.radius, strength: c.strength, scale: c.scale } : { object: o, radius: typeof c === 'number' ? c : undefined });
@@ -1020,6 +1046,7 @@ export class Engine {
       if (o.userData.rzRain && o.visible) rain = true;
     });
     this._sigLights = lights;
+    this._lightCap(lights);
     const shadowFix = this.lightOn('shadow');
     L.casters = [];
     for (const l of lights) {
@@ -1036,7 +1063,19 @@ export class Engine {
       const len = from.distanceTo(to); if (!(len > 1.5)) continue;
       const r1 = Math.min(len * 0.9, Math.tan(Math.min(l.angle, 1.2)) * len * 0.75);
       const sh = RZ.lightShaft({ from: from.toArray(), to: to.toArray(), radius: [0.12, r1], color: l.color.getHex(), intensity: 0, floorY: to.y, dust: 0.8 });
-      sh.userData.light = l; l.userData.rzShaft = sh; l.parent.add(sh); L.shafts.push(sh);
+      sh.userData.light = l; l.userData.rzShaft = sh; l.parent.add(sh); L.shafts.push(sh); shafts.push(sh);
+    }
+    // every shaft of the scene (the engine's and the missions' own): on high they are drawn after the scene pass with
+    // its depth (Engine._drawShafts), through proxies in a small scene of their own
+    L.allShafts = shafts;
+    if (shafts.length && !L.shaftScene) { L.shaftScene = new THREE.Scene(); L.shaftScene.matrixWorldAutoUpdate = false; }
+    if (L.shaftScene) {
+      L.shaftScene.clear();
+      for (const sh of shafts) {
+        let p = L.shaftProxy.get(sh);
+        if (!p) { p = new THREE.Mesh(sh.geometry, sh.material); p.matrixAutoUpdate = false; p.onBeforeRender = sh.onBeforeRender; p.renderOrder = sh.renderOrder; p.name = 'lightShaftProxy'; L.shaftProxy.set(sh, p); }
+        L.shaftScene.add(p);
+      }
     }
     L.wetTarget = scene.userData.wet ?? (rain ? 1 : 0);
   }
@@ -1075,11 +1114,146 @@ export class Engine {
       const on = this.lightOn('shafts') ? s.shafts : 0;
       for (const sh of L.shafts) {
         // (the shaft itself fades out while the camera is inside / next to its cone: realism.lightShaftFade)
-        const l = sh.userData.light, k = on * haze * era * Math.min(1, l.intensity / 120);
-        sh.visible = k > 0.01 && l.visible; sh.material.uniforms.uCol.value.copy(l.color).multiplyScalar(0.55 * k);
+        // a saturated key (a red alarm spot) gives a faint haze, a white one a stronger beam: 0.2 .. 0.5 of the light
+        const l = sh.userData.light, k = on * haze * era * Math.min(1, l.intensity / 120), c = l.color;
+        const mx = Math.max(c.r, c.g, c.b, 1e-4), sat = (mx - Math.min(c.r, c.g, c.b)) / mx;
+        sh.visible = k > 0.01 && l.visible; sh.material.uniforms.uCol.value.copy(c).multiplyScalar((0.2 + 0.3 * (1 - sat)) * k);
       }
     }
+    // high: every shaft composited after the scene pass with its depth (soft where it meets characters, walls, floors)
+    const depth = this.aoPass.enabled && L.allShafts.length > 0;
+    for (const sh of L.allShafts) {
+      if (!!sh.userData.rzDepth === depth) continue;
+      sh.userData.rzDepth = depth; sh.layers.set(depth ? SHAFT_LAYER : 0);
+      if (!depth) RZ.setShaftDepth(sh, null);
+    }
     this._updateRig(dt);
+    this._lightCapStep(dt);
+  }
+  // Light budget on the phone tiers (ART_SPEC: at most ~6 dynamic lights; tier hints.maxLights = 4 on low, 6 on medium
+  // phones): every 45 frames the point lights are ranked by intensity / distance^2 to the camera and only the top
+  // maxLights stay in the scene's light loop; spot lights likewise with half that budget (the rig and the shoulder lamp
+  // are not ranked). The number of lights of each kind (type, shadow, cookie) never changes while the scene has more than
+  // its budget, so swapping which lights shine never changes three's light hash (no shader recompiles): a slot fades its
+  // light out over 0.15 s, then hands over to the newcomer, which fades in. The shoulder lamp leaves the loop while it is
+  // off (it sits at intensity 0 otherwise) where its variants compile in the background (KHR_parallel_shader_compile,
+  // warmed in _probeDone); elsewhere it stays in the loop, so switching it on never recompiles. ?light=nocap or
+  // scene.userData.lightCap = false turn the budget off.
+  _lightCapOn() {
+    const s = this.settings;
+    return this.lightOn('cap') && this.scene?.userData.lightCap !== false && (this.quality === 'low' || (this.quality === 'medium' && this.device.mobile)) && (s.hints.maxLights ?? 0) > 0;
+  }
+  _lightCap(lights) {
+    const L = this._light, C = L.cap || (L.cap = { slots: new Map(), managed: new Set(), lamp: null });
+    const rig = L.rig, on = this._lightCapOn();
+    const show = l => { if (l.userData.rzCapMask !== undefined) { l.layers.mask = l.userData.rzCapMask; delete l.userData.rzCapMask; } };
+    const hide = l => { if (l.userData.rzCapMask === undefined) l.userData.rzCapMask = l.layers.mask; l.layers.set(LIGHT_OFF_LAYER); };
+    if (!on) {
+      for (const l of C.managed) show(l);
+      if (C.lamp) show(C.lamp);
+      C.managed.clear(); C.slots.clear(); C.lamp = null;
+      return;
+    }
+    const cam = this.camera.position, max = this.settings.hints.maxLights;
+    this.camera.updateMatrixWorld(); _capM.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse); _capF.setFromProjectionMatrix(_capM);
+    const live = o => { for (; o; o = o.parent) { if (!o.visible) return false; if (o === this.scene) return true; } return false; };
+    const groups = new Map();
+    for (const l of lights) {
+      if (!(l.isPointLight || l.isSpotLight) || l === rig.key || l === rig.rim) continue;
+      if (l.name === 'shoulderLamp') { C.lamp = l; continue; }
+      C.managed.add(l);
+      if (!live(l)) continue;
+      const key = (l.isPointLight ? 'p' : 's') + (l.castShadow ? 'S' : '') + (l.isSpotLight && l.map ? 'M' : '');
+      // what the light adds to this view: its brightness, the size of its reach against its distance, and whether its
+      // reach is on screen at all (a lamp behind the camera lights little that the player sees)
+      const R = l.distance > 0 ? l.distance : 20, d2 = cam.distanceToSquared(l.getWorldPosition(_infraV));
+      // in view: the light itself on screen (its glow and the pool around it are what the player sees), else its near
+      // reach touching the view, else behind / beside the camera
+      _capS.center.copy(_infraV); _capS.radius = R * 0.3;
+      const vis = _capF.containsPoint(_infraV) ? 1 : _capF.intersectsSphere(_capS) ? 0.35 : 0.08;
+      const score = l.intensity * Math.max(l.color.r, l.color.g, l.color.b) * (R * R) / (R * R + d2) * vis;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ l, score });
+    }
+    const seen = new Set();
+    for (const [key, list] of groups) {
+      const budget = key[0] === 'p' ? max : Math.max(1, Math.floor(max / 2));
+      list.sort((a, b) => b.score - a.score);
+      const want = list.slice(0, budget).map(e => e.l), wantSet = new Set(want);
+      let slots = C.slots.get(key);
+      if (!slots) C.slots.set(key, slots = []);
+      // drop slots whose light left the scene / was hidden by the mission; every wanted light is held or queued by at
+      // most one slot; a held light that is no longer wanted queues the best free one (hand-over after its fade-out)
+      for (const sl of slots) { if (sl.l && (!live(sl.l) || !lights.includes(sl.l))) { sl.l = null; sl.next = null; } }
+      const held = new Set(slots.filter(sl => sl.l).map(sl => sl.l)), queued = new Set();
+      for (const sl of slots) {
+        if (sl.next && (!sl.l || wantSet.has(sl.l) || !wantSet.has(sl.next) || held.has(sl.next) || queued.has(sl.next) || !live(sl.next))) sl.next = null;
+        if (sl.next) queued.add(sl.next);
+      }
+      const free = want.filter(l => !held.has(l) && !queued.has(l));
+      for (const sl of slots) {
+        if (!sl.l) { if (free.length) { sl.l = free.shift(); sl.k = 0; sl.next = null; } }
+        else if (!wantSet.has(sl.l) && !sl.next && free.length) sl.next = free.shift();
+      }
+      while (slots.length < want.length && free.length) slots.push({ l: free.shift(), k: 1, next: null });
+      for (let i = slots.length - 1; i >= 0 && slots.length > want.length; i--) if (!slots[i].l) slots.splice(i, 1);
+      for (const sl of slots) if (sl.l) seen.add(sl.l);
+    }
+    for (const l of C.managed) { if (seen.has(l)) show(l); else hide(l); }
+    for (const l of [...C.managed]) if (!lights.includes(l)) { show(l); C.managed.delete(l); }
+  }
+  _lightCapStep(dt) {
+    const C = this._light.cap; if (!C || !C.slots.size && !C.lamp) return;
+    const on = this._lightCapOn(), step = dt > 0 ? dt / 0.15 : 1;
+    for (const slots of C.slots.values()) for (const sl of slots) {
+      if (!sl.l) continue;
+      if (sl.next) {
+        sl.k -= step;
+        if (sl.k <= 0) {   // hand the slot over: same count of this kind of light, no recompile
+          sl.l.userData.rzCapMask === undefined && (sl.l.userData.rzCapMask = sl.l.layers.mask); sl.l.layers.set(LIGHT_OFF_LAYER);
+          sl.l = sl.next; sl.next = null; sl.k = 0;
+          if (sl.l.userData.rzCapMask !== undefined) { sl.l.layers.mask = sl.l.userData.rzCapMask; delete sl.l.userData.rzCapMask; }
+        }
+      } else sl.k = Math.min(1, (sl.k ?? 1) + step);
+    }
+    // the lamp: out of the loop while dark, when its variant could be warmed (parallel compile, or not 'low')
+    const l = C.lamp;
+    if (l) {
+      const warmable = !!this.renderer.extensions?.has?.('KHR_parallel_shader_compile');
+      const out = on && warmable && l.intensity <= 0;
+      if (out && l.userData.rzCapMask === undefined) { l.userData.rzCapMask = l.layers.mask; l.layers.set(LIGHT_OFF_LAYER); }
+      else if (!out && l.userData.rzCapMask !== undefined) { l.layers.mask = l.userData.rzCapMask; delete l.userData.rzCapMask; }
+      if (!l.parent) C.lamp = null;
+    }
+  }
+  // scale the intensity of lights fading in / out of a budget slot for this frame's draw (restored right after it)
+  _lightCapApply(apply) {
+    const C = this._light.cap; if (!C) return;
+    for (const slots of C.slots.values()) for (const sl of slots) {
+      const l = sl.l; if (!l || !(sl.k < 1)) continue;
+      if (apply) { l.userData.rzCapI = l.intensity; l.intensity *= Math.max(0, sl.k); }
+      else if (l.userData.rzCapI !== undefined) { l.intensity = l.userData.rzCapI; delete l.userData.rzCapI; }
+    }
+  }
+  // AOPass.after (high): the shaft proxies drawn into the frame the AO composite just wrote, without depth test, each
+  // clamping its glow to the scene depth (realism.setShaftDepth)
+  _drawShafts(renderer, target) {
+    const L = this._light, S = L.shaftScene, scene = this.scene;
+    if (!S || !L.allShafts.length || !scene || L.scene !== scene) return;
+    const rt = this.aoPass.sceneRT, size = [rt.width, rt.height];
+    let n = 0;
+    const live = o => { for (; o; o = o.parent) { if (!o.visible) return false; if (o === scene) return true; } return false; };
+    for (const sh of L.allShafts) {
+      const p = L.shaftProxy.get(sh); if (!p) continue;
+      p.visible = !!sh.userData.rzDepth && live(sh);
+      if (!p.visible) continue;
+      p.matrixWorld.copy(sh.matrixWorld); RZ.setShaftDepth(sh, rt.depthTexture, size, this.camera); n++;
+    }
+    if (!n) return;
+    S.fog = scene.fog;
+    const ac = renderer.autoClear; renderer.autoClear = false;
+    renderer.setRenderTarget(target); renderer.render(S, this.camera);
+    renderer.autoClear = ac;
   }
   _startProbe(t) {
     const L = this._light;
@@ -1116,6 +1290,17 @@ export class Engine {
     if (!L.rig.warm.has(this.scene) && this.settings.light.rig > 0 && (par || this.quality !== 'low')) {
       L.rig.warm.add(this.scene);
       try { this._rigAttach(true); if (par) r.compileAsync(this.scene, this.camera).catch(() => {}); else r.compile(this.scene, this.camera); } catch { /* optional */ } finally { this._rigAttach(false); }
+    }
+    // the shoulder lamp's variants (the phone light budget keeps the dark lamp out of the light loop): lamp on, and lamp
+    // on with the dialogue rig, compiled in the background
+    const lamp = L.cap?.lamp;
+    if (par && lamp && lamp.userData.rzCapMask !== undefined && !(L.lampWarm ||= new WeakSet()).has(this.scene)) {
+      L.lampWarm.add(this.scene);
+      const mask = lamp.layers.mask; lamp.layers.mask = lamp.userData.rzCapMask;
+      try {
+        r.compileAsync(this.scene, this.camera).catch(() => {});
+        if (this.settings.light.rig > 0) { this._rigAttach(true); r.compileAsync(this.scene, this.camera).catch(() => {}); }
+      } catch { /* optional */ } finally { this._rigAttach(false); lamp.layers.mask = mask; }
     }
   }
   _rigAttach(on) {
@@ -1327,11 +1512,13 @@ export class Engine {
     this.adapt(now);
     if (this._sweep-- <= 0) { this._sweep = 45; this.clampShadows(); this._lightSweep(); }
     this._updatePost(dt);
+    // reset before the probe / batch work so its draws count in engine.stats (budget checks see a capture frame)
+    this.renderer.info.reset();
     this._updateInfra();
     this._updateLighting(dt, t);
-    this.renderer.info.reset();
     this.fx.uTime.value = t;
-    this.composer.render();
+    this._lightCapApply(true);
+    try { this.composer.render(); } finally { this._lightCapApply(false); }
     this.stats.calls = this.renderer.info.render.calls;
     this.stats.triangles = this.renderer.info.render.triangles;
   }

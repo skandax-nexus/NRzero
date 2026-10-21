@@ -588,8 +588,87 @@ export function chronolith(scale = 1, opts = {}) {
   return g;
 }
 
+// A cable / hose along points. Given an organic material (non-metal, rough, green-dominant: the 2196 vines), medium
+// and high build a vine instead: tapering to about half its radius toward its end, with a slight irregular swell
+// and wobble, a shared bark material (realism 'bark', a little moss, tinted with the authored colour desaturated
+// ~20 %, u around / v along in metres) and, on high, a few ivy leaf cards along it (one shared foliage material: the
+// static batcher merges them). Dark cables (the default black material) and every other material keep the plain tube.
 export function cableCurve(points, radius = 0.05, mat) {
   const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+  const q = RZ.getQuality();
+  if (mat && isVineMaterial(mat) && q !== 'low') {
+    try { return vineMesh(curve, radius, mat, q === 'high'); } catch (e) { console.warn('vine', e); }
+  }
   const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, radius, 8, false), mat || new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 }));
   m.castShadow = true; return m;
+}
+function isVineMaterial(m) {
+  if (!m.isMeshStandardMaterial || m.map || (m.metalness ?? 0) > 0.2 || (m.roughness ?? 1) < 0.7 || m.transparent) return false;
+  const c = m.color; return c.g > c.r * 1.15 && c.g > c.b * 1.15;
+}
+const vineMats = new Map();
+let vineLeafMat = null, vineSeed = 1;
+function vineMaterial(mat) {
+  let v = vineMats.get(mat);
+  if (v) return v;
+  const c = mat.color.clone(), l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
+  c.lerp(new THREE.Color(l, l, l), 0.2);
+  v = RZ.pbrMaterial('bark', { params: { color: c.getHex(), lichen: 0.15, depth: 0.5 }, mapping: 'uv', scale: 0.75, metalness: 0, roughness: 1, tint: 0xb8c4ac });
+  v.userData.rzBatchSafe = true; v.name = 'vineBark';
+  vineMats.set(mat, v);
+  return v;
+}
+function vineMesh(curve, radius, mat, leaves) {
+  const TS = 48, RS = 8, r = rng(vineSeed++ * 7919);
+  const frames = curve.computeFrenetFrames(TS, false), len = curve.getLength();
+  const P = [], N = [], U = [], I = [], ph = r() * 6.28, ph2 = r() * 6.28;
+  const p = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i <= TS; i++) {
+    const t = i / TS; curve.getPointAt(t, p);
+    const Nf = frames.normals[i], Bf = frames.binormals[i];
+    // taper, irregular swelling (nodes), a little lateral wobble around the authored path
+    const rr = radius * 1.2 * (1 - 0.55 * t) * (0.9 + 0.12 * Math.sin(t * 23 + ph) + 0.07 * Math.sin(t * 61 + ph2));
+    const wob = radius * 0.8 * Math.sin(t * 9 + ph) * Math.min(1, t * 6);
+    p.addScaledVector(Nf, wob).addScaledVector(Bf, wob * 0.6 * Math.cos(t * 7 + ph2));
+    for (let j = 0; j <= RS; j++) {
+      const a = j / RS * Math.PI * 2;
+      n.copy(Nf).multiplyScalar(Math.cos(a)).addScaledVector(Bf, Math.sin(a));
+      P.push(p.x + n.x * rr, p.y + n.y * rr, p.z + n.z * rr); N.push(n.x, n.y, n.z);
+      U.push(j / RS * Math.PI * 2 * radius, t * len);
+    }
+  }
+  for (let i = 0; i < TS; i++) for (let j = 0; j < RS; j++) {
+    const a = i * (RS + 1) + j, b = a + RS + 1;
+    I.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setIndex(I);
+  const m = new THREE.Mesh(g, vineMaterial(mat)); m.castShadow = true; m.name = 'vine';
+  if (leaves) {
+    // ivy leaf cards: single quads hanging off the stem, more toward the growing end
+    const LP = [], LN = [], LU = [], LC = [], LI = [], nl = Math.max(3, Math.round(len * 1.6));
+    const up = new THREE.Vector3(0, 1, 0), side = new THREE.Vector3(), out = new THREE.Vector3(), q0 = new THREE.Vector3();
+    for (let k = 0; k < nl; k++) {
+      const t = 0.12 + 0.88 * Math.sqrt(r()); curve.getPointAt(t, q0);
+      const fi = Math.min(TS, Math.round(t * TS)), a = r() * Math.PI * 2;
+      out.copy(frames.normals[fi]).multiplyScalar(Math.cos(a)).addScaledVector(frames.binormals[fi], Math.sin(a)).normalize();
+      side.crossVectors(out, up); if (side.lengthSq() < 1e-4) side.set(1, 0, 0); side.normalize();
+      const sz = 0.22 + r() * 0.16, hang = new THREE.Vector3().copy(out).multiplyScalar(0.6).addScaledVector(up, -0.8).normalize();
+      const base = LP.length / 3, c0 = q0.clone().addScaledVector(out, radius);
+      const cn = new THREE.Vector3().crossVectors(side, hang).normalize(), shade = 0.75 + 0.25 * r();
+      for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+        const pp = c0.clone().addScaledVector(side, (u - 0.5) * sz).addScaledVector(hang, v * sz);
+        LP.push(pp.x, pp.y, pp.z); LN.push(cn.x, cn.y, cn.z); LU.push(u, v); LC.push(shade, shade, shade);
+      }
+      LI.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.Float32BufferAttribute(LP, 3)); lg.setAttribute('normal', new THREE.Float32BufferAttribute(LN, 3));
+    lg.setAttribute('uv', new THREE.Float32BufferAttribute(LU, 2)); lg.setAttribute('color', new THREE.Float32BufferAttribute(LC, 3)); lg.setIndex(LI);
+    if (!vineLeafMat) { vineLeafMat = RZ.foliageMaterial('ivy', { flutter: 0.4, color: 0x7a9064, translucency: 0.45 }); vineLeafMat.userData.rzBatchSafe = true; vineLeafMat.name = 'vineLeaves'; }
+    const lm = new THREE.Mesh(lg, vineLeafMat); lm.castShadow = false; lm.name = 'vineLeaves';
+    m.add(lm);
+  }
+  return m;
 }
