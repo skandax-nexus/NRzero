@@ -137,15 +137,15 @@ function lightsChunk() {
     vec3 azIrr = ( vec3( dotNL ) + ( saturate( ( azNL + azW ) / ( 1.0 + azW ) ) - dotNL ) * mix( vec3( 1.0 ), vec3( 1.0, 0.42, 0.3 ), azSkin ) ) * directLight.color;
     // thin skin (ears, nostril wings, lids) lets red light through from behind (medium / high: per-light cost)
     #if AZ_TIER > 0
-    if ( azThin > 0.01 ) {
+    if ( azExtra > 0.5 && azThin > 0.01 ) {
       float azBack = pow( saturate( dot( geometryViewDir, - directLight.direction ) ), 3.0 ) * 0.7 + saturate( - azNL ) * 0.25;
       azIrr += azThin * azBack * vec3( 1.0, 0.28, 0.16 ) * directLight.color;
     }
     #endif`);
   s = s.replace(b, `{ vec3 azSp = irradiance * BRDF_GGX( directLight.direction, geometryViewDir, geometryNormal, material );
     #if AZ_TIER > 0
-    if ( azHair > 0.01 ) azSp = mix( azSp, azHairSpec( directLight.direction, geometryViewDir, geometryNormal ) * directLight.color * saturate( azNL * 0.6 + 0.4 ), azHair * AZ_HAIRK );
-    if ( azEyeK > 0.5 ) azSp += ( 1.0 - azLidK ) * directLight.color * ( pow( saturate( dot( geometryNormal, normalize( directLight.direction + geometryViewDir ) ) ), 900.0 ) * 2.5 * saturate( azNL * 4.0 ) );
+    if ( azExtra > 0.5 && azHair > 0.01 ) azSp = mix( azSp, azHairSpec( directLight.direction, geometryViewDir, geometryNormal ) * directLight.color * saturate( azNL * 0.6 + 0.4 ), azHair * AZ_HAIRK );
+    if ( azExtra > 0.5 && azEyeK > 0.5 ) azSp += ( 1.0 - azLidK ) * directLight.color * ( pow( saturate( dot( geometryNormal, normalize( directLight.direction + geometryViewDir ) ) ), 900.0 ) * 2.5 * saturate( azNL * 4.0 ) );
     #endif
     #if AZ_TIER > 1
     if ( azCloth > 0.01 ) azSp += azCloth * material.diffuseColor * directLight.color * ( pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), 4.0 ) * saturate( azNL + 0.35 ) * 0.5 );
@@ -164,35 +164,57 @@ function lightsChunk() {
 ` + s;
 }
 
-function patch(sh, U, tier, dbg) {
+function patch(sh, U, tier, dbg, far = false) {
   const T = tier;
   Object.assign(sh.uniforms, U);
   sh.defines = sh.defines || {};
   sh.defines.AZ_TIER = T;
   sh.defines.AZ_WRAP = on('light') ? '0.3' : '0.5';
   sh.defines.AZ_HAIRK = on('hair') ? '0.88' : '0.0';
-  if (on('eyes') && U.azEyeC.value.z > 0) sh.defines.AZ_EYES = 1;
+  if (on('eyes') && U.azEyeC.value.z > 0 && !far) sh.defines.AZ_EYES = 1;
+  if (far) sh.defines.AZ_FAR = 1;
   if (on('skin')) sh.defines.AZ_SKIN = 1;
   if (on('pores') && T > 0) sh.defines.AZ_PORES = 1;
   if (on('cloth') && T > 1) sh.defines.AZ_WEAVE = 1;
   if (on('light')) sh.defines.AZ_LIGHT = 1;
   sh.vertexShader = `attribute vec3 azMask; attribute vec4 azFace; attribute vec4 azFace2; attribute vec4 azHairT; attribute float azDet;
-varying vec3 vAzMask; varying vec4 vAzFace; varying vec4 vAzFace2; varying vec4 vAzHairT; varying vec3 vAzRest; varying float vAzDet;
+varying vec3 vAzMask; varying vec4 vAzFace; varying vec4 vAzFace2;
+#if AZ_TIER > 0
+varying vec4 vAzHairT; varying vec3 vAzRest; varying float vAzDet;
+#else
+varying float vAzTip;
+#endif
 uniform vec4 azExpr;
 ` + sh.vertexShader
     .replace('#include <begin_vertex>', `#include <begin_vertex>
-	vAzMask = azMask; vAzFace = azFace; vAzFace2 = azFace2; vAzDet = azDet; vAzRest = position;
+	vAzMask = azMask; vAzFace = azFace; vAzFace2 = azFace2;
+	#if AZ_TIER > 0
+	vAzDet = azDet; vAzRest = position;
+	#else
+	vAzTip = azHairT.w;
+	#endif
 	// micro-expressions on the rest mesh: the brows lift (azExpr.x; skin vertices carry the lift weight in azHairT.w)
 	transformed.y += step( 0.5, azMask.r ) * azHairT.w * azExpr.x * 0.0028;`)
     .replace('#include <skinnormal_vertex>', `#include <skinnormal_vertex>
+	#if AZ_TIER > 0
 	{ vec3 azTo = azHairT.xyz;
 	#ifdef USE_SKINNING
 	  azTo = ( skinMatrix * vec4( azTo, 0.0 ) ).xyz;
 	#endif
-	  vAzHairT = vec4( normalMatrix * azTo, azHairT.w ); }`);
-  let F = `varying vec3 vAzMask; varying vec4 vAzFace; varying vec4 vAzFace2; varying vec4 vAzHairT; varying vec3 vAzRest; varying float vAzDet;
+	  vAzHairT = vec4( normalMatrix * azTo, azHairT.w ); }
+	#endif`);
+  // (the low tier interpolates 11 floats instead of 23: no strand tangent, rest position or texel density)
+  let F = `varying vec3 vAzMask; varying vec4 vAzFace; varying vec4 vAzFace2;
+#if AZ_TIER > 0
+varying vec4 vAzHairT; varying vec3 vAzRest; varying float vAzDet;
+#else
+varying float vAzTip;
+#endif
+#if AZ_TIER == 0
+#define vAzHairT vec4( 0.0, 1.0, 0.0, vAzTip )
+#endif
 uniform vec4 azEye; uniform vec4 azEyeC; uniform vec4 azLid; uniform vec4 azLook; uniform vec3 azHairTint; uniform vec3 azEyeX; uniform vec3 azEyeY; uniform vec3 azEyeZ;
-uniform vec4 azEyeL; uniform vec4 azEyeR; uniform vec4 azCrown;
+uniform vec4 azEyeL; uniform vec4 azEyeR; uniform vec4 azCrown; uniform vec3 azLidSkin; uniform vec3 azLashC; uniform vec3 azIrisC; uniform vec4 azMouth;
 #ifdef AZ_PORES
 uniform sampler2D azPoreMap;
 #endif
@@ -200,7 +222,7 @@ uniform sampler2D azPoreMap;
 uniform sampler2D azWeaveMap;
 #endif
 float azSkin = 0.0; float azGloss = 0.0; float azHair = 0.0; float azCloth = 0.0; float azThin = 0.0; float azCav = 0.0;
-float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0; float azSparkle = 1.0; float azMicro = 1.0; vec3 azTv = vec3( 0.0, 1.0, 0.0 );
+float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0; float azSparkle = 1.0; float azMicro = 1.0; vec3 azTv = vec3( 0.0, 1.0, 0.0 );
 ` + sh.fragmentShader;
   F = F.replace('void main() {', `void main() {
 	azSkin = vAzMask.r; azGloss = vAzMask.g; azHair = vAzMask.b;
@@ -213,9 +235,12 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 	vec4 sampledDiffuseColor = texture2D( map, vMapUv );
 #ifdef AZ_EYES
 	vec2 azE = ( vMapUv - azEyeC.xy ) / azEyeC.z; azE.y = - azE.y;
-	if ( azGloss > 0.9 && azSkin < 0.1 && azHair < 0.1 && dot( azE, azE ) < 1.3 ) {
+	vec2 azS = vec2( 0.0 );
+	bool azIsEye = azGloss > 0.9 && azSkin < 0.1 && azHair < 0.1 && dot( azE, azE ) < 1.3;
+	if ( azIsEye ) {
+		// the iris disc read at the gaze-shifted place (the shell is a sphere: the shift reads as the eye turning)
 		azEyeK = 1.0;
-		vec2 azS = azE - azEye.xy;
+		azS = azE - azEye.xy;
 	#if AZ_TIER > 1
 		// iris depth: the iris sits behind the cornea, so it shifts against the view direction
 		{ vec3 azVw = normalize( ( vec4( normalize( vViewPosition ), 0.0 ) * viewMatrix ).xyz );
@@ -224,9 +249,9 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 	#endif
 		float azSl = length( azS ); if ( azSl > 0.97 ) azS *= 0.97 / azSl;
 		sampledDiffuseColor = texture2D( map, azEyeC.xy + vec2( azS.x, - azS.y ) * azEyeC.z );
-		// the painted catch-light (fixed in the texture) gives way to the iris on the other side of the disc
+		// the painted catch-light (fixed in the texture) gives way to the iris colour
 		vec2 azDc = azS - vec2( -0.17, 0.17 ); float azWc = exp( - dot( azDc, azDc ) / 0.006 );
-		if ( azWc > 0.02 ) sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, texture2D( map, azEyeC.xy + vec2( - azS.x, azS.y ) * azEyeC.z ).rgb, min( 1.0, azWc * 1.5 ) );
+		sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, azIrisC, min( 1.0, azWc * 1.5 ) );
 		// upper lid line (closes with azEye.z, drops when looking down), lid shadow, lash line, tear meniscus
 		float azLy = mix( azLid.x + 0.07, azLid.y - 0.03, azEye.z ) - azEye.w - 0.4 * azE.x * azE.x * ( 1.0 - azEye.z );
 		azLidK = smoothstep( -0.012, 0.012, azE.y - azLy );
@@ -234,9 +259,7 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 		azShade *= 1.0 - 0.3 * smoothstep( 0.35, 0.75, abs( azE.x ) );
 		sampledDiffuseColor.rgb *= azShade;
 		azTear = smoothstep( 0.05, 0.0, abs( azE.y - azLid.y - 0.02 ) ) * ( 1.0 - azLidK );
-		vec3 azLidC = texture2D( map, azEyeC.xy + vec2( 2.5, 0.5 ) * azEyeC.w ).rgb * vec3( 0.86, 0.76, 0.74 );
-		vec3 azLash = texture2D( map, azEyeC.xy + vec2( 1.5, 0.5 ) * azEyeC.w ).rgb;
-		azLidC = mix( azLidC, azLash, smoothstep( 0.05, 0.0, azE.y - azLy ) * 0.85 );
+		vec3 azLidC = mix( azLidSkin * vec3( 0.86, 0.76, 0.74 ), azLashC, smoothstep( 0.05, 0.0, azE.y - azLy ) * 0.85 );
 		sampledDiffuseColor.rgb = mix( sampledDiffuseColor.rgb, azLidC, azLidK );
 		azSkin = max( azSkin, azLidK ); azGloss *= 1.0 - azLidK; azCav = max( azCav, 0.25 * ( 1.0 - azLidK ) );
 	}
@@ -248,7 +271,7 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 	if ( azSkin > 0.01 && azEyeK < 0.5 ) {
 		vec3 azC = diffuseColor.rgb;
 		// blood under the skin: cheeks, nose, ears, knuckles redder; eye sockets darker and cooler; lips; nails paler
-		azC *= mix( vec3( 1.0 ), vec3( 1.07, 0.9, 0.88 ), vAzFace.y * azSkin );
+		azC *= mix( vec3( 1.0 ), vec3( 1.05, 0.93, 0.92 ), vAzFace.y * azSkin );
 		azC *= mix( vec3( 1.0 ), vec3( 0.86, 0.85, 0.9 ), vAzFace.z * azSkin * 0.8 );
 		azC = mix( azC, azC * vec3( 1.04, 0.92, 0.92 ), vAzFace2.x * azSkin * 0.5 );
 		azC = mix( azC, azC * vec3( 1.05, 1.0, 1.0 ) + vec3( 0.035, 0.025, 0.025 ), vAzFace2.w * azSkin );
@@ -257,6 +280,16 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 		{ vec3 azP = vAzRest * 70.0; float azN = sin( azP.x * 1.7 + sin( azP.y * 2.3 ) ) * sin( azP.y * 1.9 + sin( azP.z * 2.9 ) ) * sin( azP.z * 2.1 + sin( azP.x * 3.1 ) );
 		  azC *= 1.0 + azSkin * ( 0.03 * azN - azLook.x * 0.09 * smoothstep( 0.55, 0.9, azN ) );
 		  azC = mix( azC, azC * vec3( 1.04, 0.95, 0.94 ), azSkin * 0.25 * smoothstep( -0.2, 0.6, azN ) ); }
+	#endif
+	#if AZ_TIER > 0 && !defined( AZ_FAR )
+		// speech: the lips part along the mouth line (the closed cast mouth has no interior: a dark opening is shaded in)
+		if ( azMouth.w > 0.01 ) {
+			vec3 azMd = vAzRest - azMouth.xyz;
+			float azSy = 0.0011 + 0.0026 * azMouth.w;
+			float azMo = azMouth.w * exp( - azMd.y * azMd.y / ( azSy * azSy ) ) * ( 1.0 - smoothstep( 0.010, 0.022, abs( azMd.x ) ) ) * step( -0.012, azMd.z );
+			azC = mix( azC, vec3( 0.045, 0.012, 0.01 ), saturate( azMo * 1.3 ) );
+			azCav = max( azCav, saturate( azMo ) );
+		}
 	#endif
 		diffuseColor.rgb = azC;
 	}
@@ -276,6 +309,7 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 		azN *= azSk;
 	#endif
 	#if AZ_TIER > 0
+	#ifndef AZ_FAR
 		if ( AZ_HAIRK > 0.0 && azHair > 0.5 ) {
 			// clumps of strands (~4 mm): the normal rolls across each clump, so the highlight breaks into strands
 			float azSx = azTh * 40.0 + 0.35 * sin( azAl * 1.3 ), azId = floor( azSx ), azFr = fract( azSx );
@@ -287,6 +321,7 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 			float azBd = vAzFace.x * 0.03, azW = abs( azFr - 0.5 ) * 2.0;
 			if ( azBd < 0.014 * azRn * ( 0.2 + 0.8 * azW ) * azCk + 0.0025 * azW * azCk ) discard;
 		}
+	#endif
 	#endif
 		azShift = azV * 0.08 + azN * 0.12; azSparkle = 0.45 + 0.9 * smoothstep( -0.6, 0.8, azN + azV * 0.5 );
 		diffuseColor.rgb *= 1.0 + 0.16 * azN * azHair;
@@ -367,6 +402,13 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 	if ( azEyeK > 0.5 ) { material.roughness = mix( mix( 0.09, 0.06, azTear ), material.roughness, azLidK ); material.specularColor *= mix( 2.2, 1.0, azLidK ); }
 	material.specularColor *= mix( 1.0, azMicro, azSkin );`);
   F = F.replace('#include <lights_physical_pars_fragment>', lightsChunk());
+  // the per-light extras (translucency, strand highlights, the cornea's catch-light) only for directional and spot
+  // lights (sun, moon, the dialogue key and rim): city scenes add up to 19 point lights, each would pay them again
+  {
+    let lb = THREE.ShaderChunk.lights_fragment_begin;
+    const pk = '#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', sk = '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )';
+    if (lb.includes(pk) && lb.includes(sk)) { lb = lb.replace(pk, 'azExtra = 0.0;\n' + pk).replace(sk, 'azExtra = 1.0;\n' + sk); F = F.replace('#include <lights_fragment_begin>', lb); }
+  }
   // ---- indirect light: occlusion in cavities and contacts; a fresnel sheen driven by the scene's own ambient (no
   // constant studio fill: faces darken in the dark and take the place's colour)
   F = F.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
@@ -374,7 +416,7 @@ float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; 
 	  reflectedLight.indirectDiffuse *= azAo; reflectedLight.indirectSpecular *= azAo * azAo * ( 1.0 - 0.55 * azHair );
 	#ifdef AZ_SKIN
 	  // light that travelled under the skin comes out redder (multiple scattering): a small red shift of the ambient
-	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.07, 0.96, 0.92 ), azSkin * ( 1.0 - azEyeK ) );
+	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.04, 0.98, 0.95 ), azSkin * ( 1.0 - azEyeK ) );
 	#endif
 	  float azF = pow( 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ), 4.0 );
 	#ifdef AZ_LIGHT
@@ -394,15 +436,17 @@ let mainCam = null;
 const _m = new THREE.Matrix4(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion();
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-function lookMaterial(src, U, info) {
+// far: the variant for people more than FAR m from the camera (no eye branch, no frayed hair tips: invisible there)
+const FAR = 8;
+function lookMaterial(src, U, info, far = false) {
   const m = src.clone();
-  m.userData = { ...src.userData, azSkin: true, azLook: true };
+  m.userData = { ...src.userData, azSkin: true, azLook: true, azFar: far };
   const tierKey = () => { const t = TIER[tierName()] ?? 1; return t; };
-  m.customProgramCacheKey = () => 'azlook' + tierKey() + '|' + [...look.off].join('') + look.dbg + (U.azEyeC.value.z > 0 ? 'e' : '');
+  m.customProgramCacheKey = () => 'azlook' + tierKey() + '|' + [...look.off].join('') + look.dbg + (U.azEyeC.value.z > 0 && !far ? 'e' : '') + (far ? 'f' : '');
   m.onBeforeCompile = sh => {
     const t = tierKey();
     if (t > 0 && (on('pores') || on('cloth'))) { detailMaps ??= makeDetailMaps(); U.azPoreMap = { value: detailMaps.pores }; U.azWeaveMap = { value: detailMaps.weave }; }
-    patch(sh, U, t, look.dbg);
+    patch(sh, U, t, look.dbg, far);
   };
   void info;
   m.needsUpdate = true;
@@ -417,7 +461,8 @@ export function lookPerson(h, seed = 1) {
   if (look.classic || !h || !h.meshes) return h;
   const atlas = h.meshes.filter(o => o.isSkinnedMesh && [].concat(o.material).some(m => m && m.userData && m.userData.slot === 'atlas'));
   if (!atlas.length) return h;
-  const main = atlas.find(o => !o.userData.lod) || atlas[0];
+  // the body: the biggest non-LOD atlas mesh (hand props such as staffs share the atlas material and come first)
+  const main = atlas.filter(o => !o.userData.lod && !o.userData.gadget).sort((x, y) => y.geometry.attributes.position.count - x.geometry.attributes.position.count)[0] || atlas[0];
   const g = main.geometry;
   const info = g.userData.azLook;
   if (info) return info.failed ? h : applyLook(h, seed, atlas, main, info);
@@ -505,14 +550,20 @@ function applyLook(h, seed, atlas, main, info) {
     azLid: { value: new THREE.Vector4(E ? E.U : 0.12, E ? E.Lo : -0.22, 0, 0) },
     azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, 0, 0, 0) },
     azHairTint: { value: new THREE.Vector3(...Fc.hair) },
+    azLidSkin: { value: new THREE.Vector3(...(E && E.lidC ? E.lidC : [0.4, 0.25, 0.2])) },
+    azLashC: { value: new THREE.Vector3(...(E && E.lashC ? E.lashC : [0.03, 0.02, 0.02])) },
+    azIrisC: { value: new THREE.Vector3(...(E && E.irisC ? E.irisC : [0.05, 0.04, 0.03])) },
     azEyeX: { value: new THREE.Vector3(1, 0, 0) }, azEyeY: { value: new THREE.Vector3(0, 1, 0) }, azEyeZ: { value: new THREE.Vector3(0, 0, 1) },
     azEyeL: { value: E ? new THREE.Vector4(...E.L.c, Fc.u) : new THREE.Vector4(Fc.M[0] + 0.032, Fc.M[1], Fc.M[2], Fc.u) },
     azEyeR: { value: E ? new THREE.Vector4(...E.Rr.c, Fc.u) : new THREE.Vector4(Fc.M[0] - 0.032, Fc.M[1], Fc.M[2], Fc.u) },
     azExpr: { value: new THREE.Vector4(0, 0, 0, 0) },
+    azMouth: { value: new THREE.Vector4(...(Fc.mouth || [0, 0, 0]), 0) },
     azCrown: { value: new THREE.Vector4(Fc.M[0], Fc.M[1] + 2.3 * Fc.u, Fc.M[2] - 1.5 * Fc.u, 0) },
   };
   if (age == null) ageWait.push(() => { const a = AGES[h.id]?.age; if (a != null) U.azLook.value.x = Math.max(0, Math.min(1, (a - 22) / 50)); });
   const mats = new Map(), swaps = [];
+  const pick = (m, far) => { const k = far ? 'f' : 'n'; let e = mats.get(m); if (!e) mats.set(m, e = {}); return e[k] || (e[k] = lookMaterial(m, U, info, far)); };
+  const conv = (mat, far) => (Array.isArray(mat) ? mat.map(m => (m.userData.slot === 'atlas' ? pick(m, far) : m)) : (mat.userData.slot === 'atlas' ? pick(mat, far) : mat));
   for (const o of atlas) {
     if (!o.geometry.attributes.azFace) {
       for (const k in info.attrs) {
@@ -522,16 +573,14 @@ function applyLook(h, seed, atlas, main, info) {
     }
     if (!o.geometry.attributes.azFace) continue;
     const before = o.material;
-    o.material = Array.isArray(o.material)
-      ? o.material.map(m => (m.userData.slot === 'atlas' ? (mats.get(m) || mats.set(m, lookMaterial(m, U, info)).get(m)) : m))
-      : (o.material.userData.slot === 'atlas' ? (mats.get(o.material) || mats.set(o.material, lookMaterial(o.material, U, info)).get(o.material)) : o.material);
-    swaps.push([o, before, o.material]);
+    o.material = conv(before, false);
+    swaps.push([o, before, o.material, conv(before, true)]);
   }
   look.stats.persons++;
   // ---- facial life
   const R = mulberry((seed * 7919 + 13) | 0);
   const S = { t: 0, nextBlink: 0.6 + R() * 2.5, blinkT: -1, gaze: new THREE.Vector2(), want: new THREE.Vector2(), sacc: 0.3 + R(), glance: 2 + R() * 5,
-    glanceOff: new THREE.Vector2(), micro: new THREE.Vector2(), brow: 0, browT: 3 + R() * 6, browTo: 0, frame: -1, far: false, fix: null };
+    glanceOff: new THREE.Vector2(), micro: new THREE.Vector2(), brow: 0, browT: 3 + R() * 6, browTo: 0, frame: -1, far: false, fix: null, on: true, jaw: 0, jawTo: 0, sylT: 0, say: 0 };
   const headBone = main.skeleton ? main.skeleton.bones.findIndex(b => b.name.replace(/_\d+$/, '') === 'head') : -1;
   const eyeMid = E ? new THREE.Vector3((E.L.c[0] + E.Rr.c[0]) / 2, (E.L.c[1] + E.Rr.c[1]) / 2, (E.L.c[2] + E.Rr.c[2]) / 2) : new THREE.Vector3(...Fc.M);
   const blinkCurve = t => (t < 0 ? 0 : t < 0.075 ? t / 0.075 : t < 0.11 ? 1 : t < 0.27 ? 1 - (t - 0.11) / 0.16 : 0);
@@ -539,15 +588,18 @@ function applyLook(h, seed, atlas, main, info) {
   h.face = {
     state: S, uniforms: U, info,
     blink() { if (S.blinkT < 0) S.blinkT = 0; },
+    // speak for `sec` seconds without a Character (tools); a Character's talk timer does the same
+    say(sec) { S.say = Math.max(S.say, sec); },
     // A/B (tools): false puts the classic materials back on this person, true the look's
-    useLook(v) { for (const [o, a, b] of swaps) o.material = v ? b : a; },
+    useLook(v) { S.on = !!v; for (const [o, a, b, c] of swaps) o.material = v ? (S.far ? c : b) : a; },
     // world point to look at (a Vector3), or null: free gaze
     look(p) { S.fix = p ? (p.isVector3 ? p : null) : null; },
   };
   const tick = dt => {
     if (!(dt > 0)) return;
     S.t += dt;
-    const ch = character(), talking = ch && ch.talk > 0;
+    const ch = character(); if (S.say > 0) S.say -= dt;
+    const talking = (ch && ch.talk > 0) || S.say > 0;
     // blinks: every 2-6 s (more often while talking), 75 ms close, 35 ms shut, 160 ms open; sometimes a double blink
     if (S.blinkT >= 0) { S.blinkT += dt; if (S.blinkT > 0.3) { S.blinkT = -1; if (R() < 0.12) S.nextBlink = 0.18; } }
     else if ((S.nextBlink -= dt) <= 0) { S.blinkT = 0; S.nextBlink = (talking ? 1.4 : 2.0) + R() * (talking ? 3 : 4.5); }
@@ -560,15 +612,22 @@ function applyLook(h, seed, atlas, main, info) {
     // micro-expressions: a brow lift now and then (more while talking), easing in and out
     if ((S.browT -= dt) <= 0) { S.browTo = S.browTo > 0 ? 0 : (talking ? 0.6 + R() * 0.4 : 0.25 + R() * 0.35); S.browT = S.browTo > 0 ? 0.5 + R() * 0.9 : (talking ? 1.5 : 4) + R() * 6; }
     S.brow += (S.browTo - S.brow) * Math.min(1, dt * 6);
+    // speech: the mouth opens and closes in syllables (90-220 ms) while the character talks (ui.js onWord keeps
+    // character.talk up); a consonant now and then closes it
+    if (talking) { if ((S.sylT -= dt) <= 0) { S.sylT = 0.09 + R() * 0.13; S.jawTo = R() < 0.22 ? 0 : 0.35 + R() * 0.65; } } else S.jawTo = 0;
+    S.jaw += (S.jawTo - S.jaw) * Math.min(1, dt * 16);
   };
   const up = h.update;
   h.update = dt => { up(dt); tick(dt); };
-  const frame = (renderer, scene, camera) => {
+  const setFar = far => { if (far === S.far) return; S.far = far; if (S.on) for (const [o, , b, c] of swaps) o.material = far ? c : b; };
+  const frame = (renderer, scene, camera, mt) => {
+    if (!mt || !mt.userData || !mt.userData.azLook) return;      // shadow / depth passes and the classic A/B
     const f = renderer.info.render.frame;
     if (S.frame === f) return; S.frame = f;
     const ev = U.azEye.value;
     ev.z = on('face') ? blinkCurve(S.blinkT) : 0;
     U.azExpr.value.x = on('face') ? S.brow : 0;
+    U.azMouth.value.w = on('face') && Fc.mouth ? S.jaw : 0;
     if (!E || headBone < 0 || !on('face')) { ev.x = ev.y = ev.w = 0; return; }
     // rest (mesh) space -> world for the head: matrixWorld * bindMatrixInverse * head * boneInverse * bindMatrix
     const sk = main.skeleton, bone = sk.bones[headBone];
@@ -576,8 +635,9 @@ function applyLook(h, seed, atlas, main, info) {
     const ex = U.azEyeX.value.set(1, 0, 0).transformDirection(_m), ey = U.azEyeY.value.set(0, 1, 0).transformDirection(_m), ez = U.azEyeZ.value.set(0, 0, 1).transformDirection(_m);
     const eye = _v.copy(eyeMid).applyMatrix4(_m);
     if (camera && camera.isPerspectiveCamera && camera.fov < 89) mainCam = camera;
-    if (mainCam && eye.distanceToSquared(mainCam.position) > 144) { S.far = true; ev.x = ev.y = ev.w = 0; return; }
-    S.far = false;
+    const d2 = mainCam ? eye.distanceToSquared(mainCam.position) : 0;
+    setFar(d2 > (S.far ? FAR * FAR * 0.9 : FAR * FAR));      // a little hysteresis
+    if (S.far) { ev.x = ev.y = ev.w = 0; return; }
     // where to look: the face's own fixation (face.look), the character's lookTarget, else ahead along the body
     let tgt = S.fix;
     const ch = character(), lt = ch && ch.lookTarget;
@@ -588,9 +648,10 @@ function applyLook(h, seed, atlas, main, info) {
       const d = _v2.copy(tgt).sub(eye);
       if (d.lengthSq() > 0.04) { const lx = d.dot(ex), ly = d.dot(ey), lz = d.dot(ez); yaw = Math.atan2(lx, Math.max(0.05, lz)); pitch = Math.atan2(ly, Math.hypot(lx, lz)); }
     } else {
-      // free gaze: ahead along the body (the head's sway is cancelled, as real eyes hold a fixation)
+      // free gaze: ahead along the body (the head's sway is partly cancelled, as real eyes hold a fixation)
       h.root.getWorldQuaternion(_q); const fwd = _v2.set(0, -0.12, 1).applyQuaternion(_q);
-      const lx = fwd.dot(ex), ly = fwd.dot(ey), lz = fwd.dot(ez); yaw = Math.atan2(lx, Math.max(0.05, lz)); pitch = Math.atan2(ly, Math.hypot(lx, lz));
+      // (part of it: the eyes lead a head turn and settle, they do not pin to the corners while the head sways)
+      const lx = fwd.dot(ex), ly = fwd.dot(ey), lz = fwd.dot(ez); yaw = 0.55 * Math.atan2(lx, Math.max(0.05, lz)); pitch = 0.55 * Math.atan2(ly, Math.hypot(lx, lz));
     }
     const k = 2 / Math.PI;
     S.want.set(Math.max(-0.34, Math.min(0.34, yaw * k + S.glanceOff.x + S.micro.x)), Math.max(-0.22, Math.min(0.2, pitch * k + S.glanceOff.y + S.micro.y)));
@@ -601,7 +662,7 @@ function applyLook(h, seed, atlas, main, info) {
   };
   for (const o of atlas) {
     const prev = o.onBeforeRender, def = THREE.Object3D.prototype.onBeforeRender;
-    o.onBeforeRender = prev && prev !== def ? function (r, s, c, gm, mt, gr) { frame(r, s, c); prev.call(this, r, s, c, gm, mt, gr); } : (r, s, c) => frame(r, s, c);
+    o.onBeforeRender = prev && prev !== def ? function (r, s, c, gm, mt, gr) { frame(r, s, c, mt); prev.call(this, r, s, c, gm, mt, gr); } : (r, s, c, gm, mt) => frame(r, s, c, mt);
   }
   return h;
 }

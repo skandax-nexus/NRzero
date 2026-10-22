@@ -432,3 +432,120 @@ node tools/feel/analyze.mjs <dir>                           # writes <dir>/metri
 python3 tools/feel/sheet.py <dir> stairs side [--mp4]
 node tools/feel/touch.mjs --out=<dir>                       # phone touch probe (844x390, mission 1)
 ```
+
+## Physics & controls
+
+What was built from the physics half of the plan, with before / after numbers from `tools/feel` (base = the audit's
+`metrics.json`; new = this build; classic = this build with `?phys=classic`, which must match base). Files:
+`src/core/physics.js` (new: the motor and `PHYS`), `src/core/player.js`, `src/core/collision.js`,
+`src/core/touch.js` and `src/core/input.js`. The mission-facing API is in docs/MISSION_GUIDE.md "Physics API".
+
+### How it works
+- **Fixed step.** `Motor.frame()` runs 120 Hz steps from an accumulator (at most 40 per frame, so `dtcap=0.25`
+  still works). The player's `pos` is the simulated feet point. The drawn body, `char.person.root`, gets
+  `player.visOffset`: render interpolation between the last two steps plus a smoothed step offset. The camera uses the
+  same offset. Because `pos` is still `char.root.position`, a mission that writes `pos` is a teleport. The motor sees
+  the change, and there is no smoothing or carry across it.
+- **Capsule against boxes.** The capsule is radius 0.32 m, height 1.75 m (1.1 m crouched).
+  - Walls push it out, and the velocity into the contact normal is removed. The next step's target is projected
+    along the contacts, so pushing into a wall at an angle slides along it, with no jitter.
+  - Ceilings only stop upward motion and never push sideways.
+  - Step-up is 0.45 m on the ground. Snapping holds the ground over drops up to 0.45 m (stairs, ramps, lifts going
+    down). Every vertical snap larger than 3.5 cm is removed from the interpolation and eased back by a critically
+    damped spring (about 0.15 s) on the body and, a little slower, on the camera.
+  - `Collision.addRamp` adds true slopes, and the original `resolve()` also walks them.
+  - Boxes with `carry: true` carry Kai by their per-frame movement.
+- **Movement.**
+  - Acceleration is capped at 20 m/s², easing into the target speed at a rate of 14/s. Braking is 13 m/s² (rate
+    10/s).
+  - A reversal of more than 137 degrees plants and pivots.
+  - The velocity turns at most min(14, 24 / speed) rad/s, which is 7.7 rad/s at a walk and 4.3 rad/s at a sprint.
+    Facing eases at 14/s, up to 12 rad/s.
+  - Gravity is 9.81 m/s² and the jump take-off speed is 4.0 m/s. A sprint take-off keeps 91 % of the run speed.
+  - Air control steers and slows, but never adds speed beyond the take-off speed.
+  - Speeds are the same as before: walk 3.1, sprint 5.6 and crouch 1.7 m/s. Alt walks at 1.5 m/s. There is no
+    stamina.
+- **Forgiveness.**
+  - Coyote time is 0.12 s, but never more than 0.36 m past the edge, or 0.2 m at a sprint. Jump buffering is
+    0.15 s. `grounded` stays honest: it is only true when Kai touches the ground.
+  - An air step-up of 0.42 m (a jump-climb) works while rising or near the apex. It drops to 0.2 m once Kai falls
+    faster than 2.2 m/s, so a long jump no longer "catches" a ledge from 0.42 m below it.
+  - Edge brake: see the Physics API.
+  - Safe respawn after falling below `killY`.
+  - Auto-crouch under ceilings 1.12 m or more above the feet. A crouched jump stands up first if there is headroom.
+  - People are soft cylinders (radius 0.26 m). The target velocity slides around them. When someone stands straight
+    in the way, Kai steps aside at half speed, on a side he keeps while in contact. After 0.8 s of pushing with no
+    progress, he squeezes past.
+- **Camera.**
+  - The spring arm sphere-casts (radius 0.2 m) against the collision boxes as well as `camBlockers`. It pulls in
+    at once and eases back out at a rate of 4/s.
+  - The shoulder offset shrinks when a wall is close on that side.
+  - People between Kai and the camera pull the arm in front of them, over about 0.1 s, to no closer than 0.7 m.
+  - When the arm is shorter than 0.6 m (backed into a wall), Kai's model hides until the arm reaches 0.75 m.
+  - Hard landings (over 2 m/s) dip the pivot gently.
+  - `Collision.rayCast` allocates nothing, so the camera's two casts per frame stay cheap on phones.
+- **Animation interface.** Set on `player.char` every frame: `speed` (the real horizontal speed), `vel`, `accel`,
+  `turnRate`, `grounded`, `airTime` and `landing`. `collision.groundHeight(x, z, yHint, state)` serves foot IK and
+  NPC grounding.
+
+### Before and after
+Physics scenarios at 15, 30, 60 and 144 fps. The ranges cover all four rates; the spread left in the new column
+comes from sampling take-off and landing at frame granularity, not from the simulation.
+
+| Quantity | Base (and classic) | New | Envelope |
+|---|---|---|---|
+| Gravity | 13.0 m/s² | 9.81 m/s² | real |
+| Jump apex | 0.78 to 0.80 m | 0.82 m at every rate | ≥ 0.81 m ✓ |
+| Air time | 0.68 to 0.73 s | 0.81 to 0.87 s | ≥ 0.73 s ✓ |
+| Walk jump distance | 2.12 to 2.27 m | 2.53 to 2.69 m | ≥ 2.27 m ✓ |
+| Sprint jump distance | 3.83 to 4.11 m | 4.16 to 4.43 m | ≥ 4.11 m and ≤ 4.6 m ✓ |
+| Sprinted gap crossed (60 fps, jump on the last grounded frame) | 4.6 m (not 4.8) | 4.6 m (not 4.8) | same ✓ |
+| Sprinted gap crossed with the latest coyote jump | (no coyote time) | 4.8 m (never 5.0) | < 5 m (m07 terrace) ✓ |
+| 0 to 90 % speed, walk / sprint | 0.15 to 0.20 s | 0.19 to 0.20 / 0.27 to 0.33 s | ≤ 0.35 s ✓ |
+| Stop from walk / sprint | 0.17 m, 0.33 s / 0.31 m, 0.4 s | 0.41 m, 0.43 s / 1.24 m, 0.63 s | (real: 0.7 to 1 m / 1.5 to 2.5 m) |
+| Step-up without a jump | 0.42 m | 0.45 m | ≥ 0.42 m ✓ |
+| Step-up pop on screen (0.42 m box, 30 fps) | 42 cm in one frame | 14 cm per frame at most (eased over about 0.15 s) | smooth ✓ |
+| Stairs 0.18 m: largest drawn rise per frame at 15 / 30 / 60 / 144 fps | 26 / 18 / 18 / 18 cm | 18 / 9 / 4 / 2 cm | smooth ✓ |
+| Airborne frames walking down 10 steps | 13 to 136 | 0 | grounded ✓ |
+| Jump-climb walk / sprint / standing | 1.15 / 1.15 / 1.15 m | 1.15 / 1.20 / 1.15 m | ≥ 1.15 m ✓ |
+| Ledge tolerance, key / stick | 0.19 / 0.17 m | 0.19 / 0.18 m | ≥ 0.16 m ✓ |
+| Coyote jump 0.1 s after walking off (30 fps) | lost | jumps ✓ | |
+| Jump pressed 2 frames before landing | lost | jumps ✓ | |
+| Lift down at 2.4 m/s: grounded frames, toggles | 3 of 29, 8 | 29 of 29, 0 | ✓ |
+| Carry platform (3 m along x and back) | Kai left behind | rides along, grounded 150 of 150 | ✓ |
+| True ramp (11 degrees, `addRamp`) | n/a | grounded 108 of 108, 0 cm error | ✓ |
+| Ceiling jump (2.2 m) | 2.32 m sideways teleport | 0 m; the head stops at 2.2 m | ✓ |
+| Walk 30 / 80 degrees into a wall: real speed / speed fed to the animation | 2.21 / 2.55; 0.44 / 2.55 m/s | 2.31 / 2.30; 0.45 / 0.45 m/s | truthful ✓ |
+| Corner: speed fed to the animation | 2.86 m/s (jogging on the spot) | 0 (idle) | ✓ |
+| Tunnelling (sprint into a 5 cm wall, 30 m fall onto a 5 cm slab) | none | none at 15 to 144 fps | ✓ |
+| Walk into a standing NPC | passes through (0 m) | steps around at ≥ 0.33 m/s, never closer than 0.57 m | ✓ |
+| Boxed in by three people (0.47 m gaps) | walks through | squeezes out after 0.8 s | never trapped ✓ |
+| Camera backed into a wall: frames inside the wall | 54 of 90 (27 cm deep) | 0; Kai hides while the arm is under 0.6 m | ✓ |
+| Short push (0.7 s) at a 3 m drop | walks off | stops at the edge | ✓ |
+| Held push at a 3 m drop | walks off | goes over after 0.4 s | intentional drops still work |
+| Coast after releasing a sprint 0.4 m from a 3 m drop | stops (its braking was near instant) | stops at the edge (1.2 m braking is held by the edge brake) | ✓ |
+| Walk at a void edge (kill plane below) | falls, fail and checkpoint | held at the edge for as long as he walks | ✓ |
+| Sprint off into the void | fail and checkpoint | fade back to the last safe spot, 0 fails | ✓ |
+| CPU per game step, Kai / Kai and 12 walkers (no render, loaded machine) | 0.019 / 0.093 ms | 0.028 / 0.143 ms | small |
+
+Clips, contact sheets and data are in
+`/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/phys2/`:
+- `n1` to `n4`: the new physics, without renders
+- `c1`: classic
+- `r1` to `r3`: rendered stairs, NPC bump, camera at a wall, drop and ceiling, with `*_sheet.jpg` sheets
+
+### Touch and keyboard
+- The stick sprints from a push of 0.90 and keeps sprinting down to 0.78 (hysteresis), so a thumb at the rim no
+  longer flickers between 3.1 and 5.6 m/s.
+- The walk curve starts at 0.6 m/s at the dead zone and reaches a full 3.1 m/s jog at 72 % of the travel, which
+  leaves a 10 px full-walk band before the sprint.
+- A slow camera drag turns about 270 degrees across the long side (225 before). A quick swipe turns up to 1.5 times
+  as far, so a half turn fits in one swipe of the right half of the screen.
+- CROUCH sits 12 to 16 px further from JUMP.
+- Jump buffering and coyote time cover late and early taps.
+- Keyboard:
+  - Shift sprints in any direction (before, only forward).
+  - Shift stands a crouched Kai up.
+  - Alt walks.
+  - A jump while crouched stands up and jumps.
+- `?phys=classic` restores the old stick curve, sprint threshold, drag and layout.

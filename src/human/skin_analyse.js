@@ -96,6 +96,19 @@ export function analyseData(D) {
     for (let i = 0; i < n; i++) if (isSkin[i] && wOf(i, HEAD) > 0.5) { const p = P(i), y = Y(p); if (y > -1.0 && y < 0.6) rs.push(red(i)); }
     rs.sort((a, b) => a - b); lipBase = rs.length ? rs[rs.length >> 1] : 0;
   }
+  // eye colours (linear) for the shader, so the eye costs one texture fetch: the lid skin and the lash colour from the
+  // atlas cells beside the eye disc, the iris average (without the painted catch-light, which the shader hides)
+  if (out.eyes && pix) {
+    const E = out.eyes, lin = c => c.map(srgb2lin), at = (du, dv) => lin(pix(E.cu + du, E.cv + dv));
+    E.lidC = at(2.5 * E.cs, 0.5 * E.cs); E.lashC = at(1.5 * E.cs, 0.5 * E.cs);
+    const acc = [0, 0, 0]; let k = 0;
+    for (let rr = 0.14; rr < 0.42; rr += 0.04) for (let a = 0; a < 6.28; a += 0.3) {
+      const x = rr * Math.cos(a), y = rr * Math.sin(a);
+      if ((x + 0.17) ** 2 + (y - 0.17) ** 2 < 0.03) continue;
+      const c = at(x * E.R, -y * E.R); acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; k++;
+    }
+    E.irisC = k ? acc.map(v => v / k) : [0.05, 0.04, 0.03];
+  }
   // hair colour (linear) and hands
   let hairCol = [0.05, 0.035, 0.025], hk = 0;
   if (pix && uv) { const s = [0, 0, 0]; for (let i = 0; i < n; i++) if (isHair[i]) { const c = pix(uv.getX(i), uv.getY(i)); s[0] += srgb2lin(c[0]); s[1] += srgb2lin(c[1]); s[2] += srgb2lin(c[2]); hk++; } if (hk) hairCol = s.map(v => v / hk); }

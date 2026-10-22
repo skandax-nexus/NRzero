@@ -280,7 +280,7 @@
    "id": "s23",
    "group": "g6",
    "mission": 13,
-   "beat": "Montage: 2196, the same yards are a battlefield; shells arc out of the stabilizer's ring.",
+   "beat": "Montage: 2196, the same yards are a battlefield: Unwritten fighters sprint across the rubble while shells arc out of the stabilizer's gold ring and burst in the yard.",
    "url": "index.html?m=12&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && window.__m13 && __game.control && document.getElementById('objective-text').textContent.includes('held district')",
    "setup": [
@@ -293,6 +293,15 @@
     },
     {
      "wait": 2.0
+    },
+    {
+     "eval": "(() => { const g = __game, W = __m13.W; let n = 0;\n  g.scene.traverse(o => { if (o.isMesh && o.material && o.material.color && o.material.color.getHex() === 0x15181d && o.parent && o.parent.visible) { o.visible = false; n++; } });\n  const mats = new Set(W.tracers.map(t => t.m.material)); for (const m of mats) if (!m.__hdr) { m.__hdr = true; m.color.multiplyScalar(3.2); }\n  if (!window.__streaks2) { window.__streaks2 = true;\n    g.onUpdate(() => { for (const tr of W.tracers) { const m = tr.m; if (!m.visible || tr.t >= 1) { m.scale.set(1, 1, 1); tr.__p2 = null; continue; }\n      const p = m.position.clone(); if (tr.__p2) { const v = p.clone().sub(tr.__p2); const d = v.length(); if (d > 1e-4) { m.lookAt(p.clone().add(v)); m.scale.set(1.7, 1.7, Math.max(2, Math.min(40, d * 16))); } } tr.__p2 = p; } }); }\n  W.smokeAt(-7, 18, 40); W.smokeAt(9, 8, 40); W.smokeAt(-2, 28, 40);\n  return n; })()"
+    },
+    {
+     "eval": "(async () => { const THREE = await import('three'); const g = __game, W = __m13.W;\n  for (const b of W.blasts) { b.flash.material.visible = false; b.dust.material.visible = false; b.ring.material.visible = false; }\n  if (window.__boom) return 'ready';\n  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d');\n  const gr = c.createRadialGradient(64, 64, 0, 64, 64, 64);\n  gr.addColorStop(0, 'rgba(255,244,214,1)'); gr.addColorStop(0.18, 'rgba(255,196,120,0.95)'); gr.addColorStop(0.45, 'rgba(230,120,50,0.45)'); gr.addColorStop(0.75, 'rgba(150,70,30,0.12)'); gr.addColorStop(1, 'rgba(90,40,20,0)');\n  c.fillStyle = gr; c.fillRect(0, 0, 128, 128);\n  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;\n  const pool = [0, 1, 2].map(() => {\n    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));\n    sp.visible = false; g.scene.add(sp);\n    const L = new THREE.PointLight(0xffa860, 0, 16, 2); L.castShadow = false; g.scene.add(L);\n    return { sp, L, t: -1 }; });\n  window.__boom = (x, z, size = 1) => { const b = pool.find(q => q.t < 0) || pool[0]; b.t = 0; b.size = size; b.sp.visible = true; b.sp.position.set(x, 1.0, z); b.L.position.set(x, 2.2, z); try { W.smokeAt(x, z, 30); } catch (e) { void e; } return 1; };\n  g.onUpdate(dt => { for (const b of pool) { if (b.t < 0) continue; b.t += dt; const k = b.t, s = (3 + k * 16) * b.size;\n    b.sp.scale.set(s, s * 0.85, 1); b.sp.position.y = 1.0 + k * 3; b.sp.material.color.setScalar(2.4 * Math.max(0, 1 - k * 2.2));\n    b.L.intensity = 2600 * Math.max(0, 1 - k * 2.8) * b.size;\n    if (k > 0.5) { b.t = -1; b.sp.visible = false; b.L.intensity = 0; } } });\n  return 'made'; })()"
+    },
+    {
+     "eval": "(async () => { const g = __game; const { UNWRITTEN } = await import('/src/world/env_m13.js');\n  const R = [[9.0, 31.4, -8, 30.6, 4.6, 0], [11.2, 33.2, -6, 32.2, 4.3, 3], [12.6, 30.2, -5, 29.4, 4.8, 1], [15.0, 32.6, -6, 31.8, 4.5, 2], [17.2, 30.8, -6, 30.2, 4.7, 3], [-10, 27.6, 16, 26.6, 4.4, 1]];\n  const ids = [];\n  R.forEach(([x, z, tx, tz, sp, li], i) => { const id = 'uw' + i; let c = g.actors[id];\n    if (!c) { c = g.ambient({ ...UNWRITTEN[li], seed: 990 + i, lod: false }, x, 0, z, 0); g.actors[id] = c; }\n    c.root.userData.states = ['2196']; c.root.visible = true; c.crouch = 0;\n    c.root.position.set(x, 0, z); c.root.rotation.y = Math.atan2(tx - x, tz - z); TR.walk(id, [[tx, tz]], sp, { turn: 12 }); ids.push(id); });\n  return ids; })()"
     }
    ],
    "frames": 73,
@@ -301,62 +310,114 @@
    "cut_frames": 49,
    "camera": {
     "mode": "path",
+    "ease": "linear",
+    "shake": 0.25,
     "keys": [
      {
       "t": 0,
       "p": [
-       -3,
-       8.5,
-       40
+       4.1,
+       1.3,
+       38.0
       ],
       "l": [
-       0,
-       9,
-       -6
+       0.9,
+       6.6,
+       -2
       ],
-      "fov": 48,
+      "fov": 40,
       "roll": 0,
-      "focus": 46.1
+      "focus": null
      },
      {
-      "t": 3.0,
+      "t": 3.04,
       "p": [
-       -2.5,
-       8.0,
-       36.8
+       3.5,
+       1.48,
+       35.8
       ],
       "l": [
-       0,
-       9,
-       -6
+       0.8,
+       7.0,
+       -2
       ],
-      "fov": 48,
+      "fov": 38.5,
       "roll": 0,
-      "focus": 42.88
+      "focus": null
      }
-    ],
-    "ease": "linear",
-    "shake": 0.12
+    ]
    },
    "actions": [
     {
-     "t": 0.6,
-     "eval": "__m13.W.tracer([0, 9, -2], [-4, 0.5, 42], 1.6, 7)"
+     "t": 0.0,
+     "eval": "(__m13.W.tracer([0, 9, -2], [-2, 0.5, 40], 1.5, 10), 1)"
     },
     {
-     "t": 1.3,
-     "eval": "__m13.W.tracer([0, 9, -2], [3, 0.5, -40], 1.6, 7)"
+     "t": 0.25,
+     "eval": "(__m13.W.tracer([0, 9, -2], [8, 0.5, 36], 1.4, 9), 1)"
+    },
+    {
+     "t": 0.45,
+     "eval": "(__m13.W.tracer([0, 9, -2], [-9, 0.5, 30], 1.3, 8), 1)"
+    },
+    {
+     "t": 0.6,
+     "eval": "__boom(-3, 24, 1)"
+    },
+    {
+     "t": 0.75,
+     "eval": "(__m13.W.tracer([0, 9, -2], [3, 0.5, 44], 1.5, 11), 1)"
+    },
+    {
+     "t": 1.0,
+     "eval": "(__m13.W.tracer([0, 9, -2], [11, 0.5, 30], 1.3, 8), 1)"
+    },
+    {
+     "t": 1.15,
+     "eval": "__boom(9, 20, 1.1)"
+    },
+    {
+     "t": 1.35,
+     "eval": "(__m13.W.tracer([0, 9, -2], [-6, 0.5, 42], 1.5, 10), 1)"
+    },
+    {
+     "t": 1.55,
+     "eval": "(__m13.W.tracer([0, 9, -2], [-5, 0.5, 18], 1.0, 7), 1)"
+    },
+    {
+     "t": 1.7,
+     "eval": "(__m13.W.tracer([0, 9, -2], [6, 0.5, 41], 1.4, 10), 1)"
+    },
+    {
+     "t": 1.9,
+     "eval": "__boom(-6, 17, 1.25)"
+    },
+    {
+     "t": 2.05,
+     "eval": "(__m13.W.tracer([0, 9, -2], [-1, 0.5, 46], 1.5, 11), 1)"
+    },
+    {
+     "t": 2.3,
+     "eval": "(__m13.W.tracer([0, 9, -2], [10, 0.5, 34], 1.3, 9), 1)"
+    },
+    {
+     "t": 2.45,
+     "eval": "__boom(5, 27, 0.9)"
+    },
+    {
+     "t": 2.65,
+     "eval": "(__m13.W.tracer([0, 9, -2], [-8, 0.5, 38], 1.4, 9), 1)"
     }
    ],
    "grade": "ruin2196",
-   "approved": false,
-   "characters": "Unwritten fighters behind the barricade (small)",
-   "lighting": "Smoke and dust, tracer light from the spire.",
+   "approved": true,
+   "characters": "Six Unwritten fighters (the mission's UNWRITTEN looks, spawned at run time): two waves sprinting right to left across the yard 6-9 m from the lens and one running the other way, silhouetted against the dusk haze and the bursts.",
+   "lighting": "Dusk 2196 behind the spire (backlit haze); two shell bursts light the rubble and the fighters (additive glow sprites with a short point-light flash); long HDR tracer streaks.",
    "sound": "",
-   "notes": "",
+   "notes": "Low hand-held camera in the no-man's-land (x 4, z 38 to 36.5, 1.3-1.4 m), clear of the crate at x 5-6.5 / z 37.2-37.9 (an earlier path at x 5.5 grazed its top and filled the lower frame with it). Setup: hides the flat RZ.skyline boxes, makes the mission's tracers HDR and stretches them along their velocity into 4-6 m streaks, adds three smoke volumes (W.smokeAt), hides the mission's hard-edged blast spheres and telegraph rings (its own barrage keeps firing tracers), and creates three soft burst sprites + point lights up front (so no shader recompile happens mid-shot). Actions fire six shells out of the return ring (W.tracer; evals return 1, never the tracer object, which made a look-dev evaluate hang) and four bursts across the 2 s cut (0.6 s at (-3, 24), 1.15 s at (9, 20), 1.9 s at (-6, 17), 2.45 s at (5, 27)); the camera pushes in over the full 73 frames. The burst lights reach 16 m, so they light the fighters and the rubble but not the rust wall 1-2 m left of the lens (at 34 m it flared red at the frame edge).",
    "preview": {
     "status": "ok",
-    "note": "The spire and its field ring at dusk; tracer timing not caught in three stills: check at full rate."
+    "note": "Look-dev: low hand-held in the no-man's-land, the spire and its gold ring backlit at dusk, six shells streak out of the ring, four bursts light the yard, two waves of Unwritten fighters sprint across the rubble. Stills: stills/s23/00012, 00028, 00044, 00060 (before the burst-light range was cut from 34 to 16 m)."
    }
   },
   {
@@ -541,10 +602,10 @@
       ],
       "l": [
        6.65,
-       1.05,
+       0.98,
        46.35
       ],
-      "fov": 29,
+      "fov": 31,
       "roll": 0,
       "focus": null
      },
@@ -557,10 +618,10 @@
       ],
       "l": [
        6.68,
-       1.05,
+       0.98,
        46.3
       ],
-      "fov": 28.5,
+      "fov": 30.5,
       "roll": 0,
       "focus": null
      },
@@ -573,10 +634,10 @@
       ],
       "l": [
        6.7,
-       1.05,
+       0.98,
        46.25
       ],
-      "fov": 28,
+      "fov": 30,
       "roll": 0,
       "focus": null
      }
@@ -585,14 +646,14 @@
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "The held courier (frozen mid-stride, in profile, running screen-left), Kai not in frame (at the cordon).",
    "lighting": "Grey dawn street; the courier against the lit bookshop windows (warm shelves) and a blue HELIX poster; the held drops catch the light as short streaks.",
    "sound": "",
    "notes": "The front three-quarter orbit was replaced: from the street side the courier reads in clean profile with his legs apart (unmistakably stopped mid-stride) and no bus-shelter pole across the frame. The mission's held rain is sparse (7000 drops over 28 x 7 x 104 m) and its round-ish sprites read as snow up close; a setup eval gives the held rain (and 1400 extra held drops in a 9 m box around the courier, kept 0.9 m clear of the camera path and off his body) a thin vertical streak sprite, so the drops read as rain stopped in the air. A 22-degree linear arc (r 4.3 m) from his flank toward his front, focus on him, lead room ahead of him. The incoming 'switch' warp is left to the edit (as for the other switch shots).",
    "preview": {
-    "status": "weak",
-    "note": "A rainy 2049 street; that it is held (people mid-step, rain in the air) does not read at preview size."
+    "status": "ok",
+    "note": "Look-dev: the held courier in clean profile, mid-stride, against the lit bookshop windows and a HELIX poster, rain hanging around him as short streaks; slow 22-degree arc through the drops. Stills: stills/s34/00012, 00024, 00035 (rendered at fov 29 / look y 1.05; the approved framing is 2 degrees wider and 7 cm lower for foot room in the 2.39 band)."
    }
   }
  ]

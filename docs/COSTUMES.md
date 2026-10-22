@@ -197,6 +197,12 @@ These sit alongside the existing `glasses` and `mask`.
 - Continuum squads are dealt one officer (`continuum_2`) in four; the rest are helmeted troopers (`continuum_1`).
 - Speakers registered without a look (a mission's `neighbor`, the station `child`) get their portrait from their role's build on their first line (`portraitFor`).
 - Crowd LOD: people with `look.lod` switch to the 6 000-triangle build beyond 14 m from the camera, and always on tiers whose `characterDetail` hint is `low` (phones).
+- The look at run time (docs/CHARACTER_LOOK.md, "Implementation"): `makePerson()` hands every person to
+  `lookPerson()` (src/human/skin.js), which gives the atlas mesh its skin, eye, hair and cloth shading and the facial
+  life (blinks, saccades, gaze, lids, brows, speech). It needs nothing from the cast file beyond what every build already
+  has (`azMask`, the eye shells, the atlas); a new template is analysed once in a worker the first time it is used.
+  Callers may use the optional `person.face` (`blink()`, `look(point | null)`, `say(sec)`, `useLook(on)`); it appears a
+  moment after the person is made, so feature-detect it. `?look=classic` turns all of it off.
 
 ## Character specs
 

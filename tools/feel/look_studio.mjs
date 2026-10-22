@@ -4,7 +4,7 @@
 //   node tools/feel/look_studio.mjs <outdir> <id1,id2,...> [size=640] [--shots=head,mid,full,hand]
 //        [--light=default,front,side,back,top] (key direction per pass) [--clip=idle] [--t=0.7] [--seq] (head shot every
 //        0.25 s of the idle for 4 s: blink / micro-motion check) [--query=k=v] (extra cast.html params, e.g. look=classic)
-//        [--life=20] (facial life over 20 s, see below) [--shots=eye] (eyes close-up) [--dbg=oily,red,...] (src/human/skin.js analysis channels) [--apply] (call lookPerson by hand)
+//        [--life=20] (facial life over 20 s, see below; --say: talking) [--shots=eye] (eyes close-up) [--dbg=oily,red,...] (src/human/skin.js analysis channels) [--apply] (call lookPerson by hand)
 /* global window */
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import fs from 'fs'; import path from 'path';
@@ -76,14 +76,14 @@ for (const id of ids) {
   if (flag('life')) {    // facial life on one continuously updated person: --life=<seconds> at 30 fps; the lid closure,
     // gaze and brow of every frame go to <id>_life.json, a head shot every 0.1 s for the first 3 s to <id>_lifeNN.png
     const secs = +flag('life') || 20;
-    await p.evaluate(([id]) => window.ST.load(id, 'idle', 0.7), [id]);
+    await p.evaluate(async ([id, say]) => { await window.ST.load(id, 'idle', 0.7); if (say) window.ST.cur.face?.say(1e3); }, [id, !!flag('say')]);
     const rec = [];
     for (let f = 0; f < secs * 30; f++) {
       const shoot = f < 90 && f % 3 === 0;
       const r = await p.evaluate(shoot => {
         const c = window.ST.cur; c.update(1 / 30);
         const url = shoot ? window.ST.shot('head') : (window.ST.shot('none'), null);
-        const u = c.face && c.face.uniforms; return { url, lid: u ? +u.azEye.value.z.toFixed(3) : null, gx: u ? +u.azEye.value.x.toFixed(3) : null, gy: u ? +u.azEye.value.y.toFixed(3) : null, brow: u ? +u.azExpr.value.x.toFixed(3) : null };
+        const u = c.face && c.face.uniforms; return { url, lid: u ? +u.azEye.value.z.toFixed(3) : null, gx: u ? +u.azEye.value.x.toFixed(3) : null, gy: u ? +u.azEye.value.y.toFixed(3) : null, brow: u ? +u.azExpr.value.x.toFixed(3) : null, jaw: u && u.azMouth ? +u.azMouth.value.w.toFixed(3) : null };
       }, shoot);
       if (r.url) fs.writeFileSync(path.join(out, `${id}_life${String(f / 3).padStart(2, '0')}.png`), Buffer.from(r.url.split(',')[1], 'base64'));
       delete r.url; rec.push(r);

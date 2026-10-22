@@ -160,9 +160,9 @@ export class Player {
     const g = this.game, s = this.safe;
     if (this._respawning || g._failing) return;
     if (!s || g.fallRespawn === false || s.scene !== g.scene || s.state !== g.temporal.current || !this.footprintOk(s.x, s.y, s.z)) { g.fail('You fell between states.'); return; }
-    this._respawning = true; g.control = false;
+    const prev = g.control; this._respawning = true; g.control = false;
     g.touch?.buzz?.([40, 40, 60]); g.audio.sfxPlay?.('rewind');
-    const done = () => { this._respawning = false; if (g.control === false && !g._failing) g.control = true; };
+    const done = () => { this._respawning = false; if (g.control === false && !g._failing) g.control = prev; };
     Promise.resolve(g.ui.fade(1, 260)).then(() => {
       if (g.scene === s.scene && !g._failing && s.state === g.temporal.current && this.footprintOk(s.x, s.y, s.z)) this.place(s.x, s.y, s.z, s.yaw);
       else if (!g._failing) { this._respawning = false; g.fail('You fell between states.'); return null; }
