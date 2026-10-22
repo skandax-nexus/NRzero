@@ -14,7 +14,7 @@ import sys
 import numpy as np
 from scipy import signal
 from dsp import (SR, OUT, ROOT, ns, add, noise, lp, hp, bp, resonator, pan, smooth_rand, reverb, fade, tvlp, write_wav,
-                 load_audio, midi_hz, stereo, width, peq, plus)
+                 load_audio, stereo, width, plus)
 import textures as tx
 
 TRAILER = json.load(open(os.path.join(ROOT, 'tools', 'trailer', 'trailer.json')))

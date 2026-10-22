@@ -557,7 +557,7 @@ export default {
       W = buildGorge(game, scene, T); prevRoot.push(W.root); game.onUpdate((dt, t) => W.update(dt, t)); await tick();
       rig(W, {
         '2026': { fog: [0xc8b8a0, 0.006], env: 0.9, hemi: [0xffe8c8, 0x5a4a38, 0.55], sun: [0xffd8a0, 2.4], dir: [-0.55, 0.42, 0.35], exp: 1.0, bg: 0xc8b8a0, beds: { wind: 0.07, water: 0.12 } },
-        '2049': { fog: [0x2a2c3a, 0.012], env: 0.6, hemi: [0x8a90c0, 0x1a1a24, 0.45], sun: [0x9ab0ff, 0.5], dir: [0.4, 0.5, -0.3], exp: 1.08, bg: 0x2a2c3a, beds: { rain: 0.18, wind: 0.14, hum: 0.03, hz: 40 } },
+        '2049': { fog: [0x2a2c3a, 0.012], env: 0.7, hemi: [0x8a90c0, 0x22222c, 0.62], sun: [0x9ab0ff, 0.75], dir: [0.4, 0.5, -0.3], exp: 1.18, bg: 0x2a2c3a, beds: { rain: 0.18, wind: 0.14, hum: 0.03, hz: 40 } },
       }, { '2026': { preset: 'golden-hour', elevation: 16, azimuth: 240, turbidity: 4, cover: 0.35 }, '2049': { preset: 'overcast', elevation: 6, azimuth: 120, cover: 0.96 } });
       themeFor = () => (S.memory ? 'm18-memory' : T.current === '2026' ? 'm18-gorge' : 'm18-tear');
       fallRule(); rewindRule(W.storm);
@@ -1296,8 +1296,8 @@ export default {
       await game.waitFor(() => S.solved && !S.busy);
       // ---------- Mira's message ----------
       S.mira = true; S.main = true; cine(true); lockMusic('m18-mira', 1.5); hudSet(null);
-      audio.sfxPlay('motif'); W.beam.material.opacity = 0.4;
-      await game.shot([7.5, P6.P3y + 0.6, 7.5], [0, P6.P3y + 14, 0], 2.2, { fov: 50 });
+      audio.sfxPlay('motif'); W.beam.material.opacity = 0.8;
+      await game.shot([8.5, P6.P3y + 2.6, 8.5], [0, P6.P3y + 7, 0], 2.2, { fov: 54 });
       await game.say('m18band', `Pattern: Varen, Mira. ${pattern} percent. Transmitting on every clock on Earth.`);
       // south side of the crown, clear of the emitter post and the horns: the beam rises behind them
       const mira = game.actor('m18mira', null, 1.5, P6.P3y, 2.0, -PI / 2); S.byId.m18mira = mira;

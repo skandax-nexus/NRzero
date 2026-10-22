@@ -12,10 +12,22 @@
      "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
     },
     {
-     "eval": "__game.player.place(-1.1, 0, 5.4, Math.PI)"
+     "eval": "(()=>{const g=__game;g.player.place(1.3,0,3.2,Math.atan2(-1.3,-5.2));g.player.char.pose='look';const i=g.actors.iven;i.root.position.set(-6.1,0,5.0);i.root.rotation.y=Math.PI;i.pose='work';i.lookTarget=null;return 'staged'})()"
+    },
+    {
+     "eval": "(()=>{const g=__game,E=g.engine,s=E.scene;E._batch.reset();E.batchOn=false;s.environmentIntensity=0.14;const L=[];s.traverse(x=>{if(x.isLight)L.push(x)});L.forEach(l=>{if(l.isPointLight&&l.color.getHex()===0xdff4ff&&l.position.y>7&&Math.hypot(l.position.x,l.position.z)<10)l.intensity=1.2;if(l.isPointLight&&l.position.y>3.5&&l.position.y<3.7&&l.position.z===0)l.intensity=45;if(l.isHemisphereLight)l.intensity=0.08});s.fog.density=0.03;s.traverse(m=>{const p=m.isMesh&&m.geometry.parameters;if(!p)return;if(p.width===1.2&&p.depth===0.3&&Math.abs(m.position.y-8.7)<0.2)m.material.emissiveIntensity=0.3;if(p.width===1.4&&p.height===0.6&&m.material.emissive)m.material.emissiveIntensity=0.08;if(p.width===4&&p.height===4.5&&Math.abs(m.position.z+12)<0.05){m.material.clearcoatRoughness=0.6;m.material.roughness=0.6}});return 'mood'})()"
+    },
+    {
+     "eval": "(async () => { window.THREE = await import('three');\nwindow.G3reach = (id, side = 0, w = 1, up = -1.25, el = -0.25, dur = 0.6) => {\n  const c = id === 'kai' ? __game.player.char : __game.actors[id]; if (!c) return 'no ' + id;\n  const T = window.THREE;\n  if (!c.__reach) {\n    const orig = c.update3d; c.__reach = { w: 0, to: 0, side, up, el, dur, yaw: 0 };\n    const q = new T.Quaternion(), q2 = new T.Quaternion(), v = new T.Vector3();\n    c.update3d = function (dt) {\n      orig.call(this, dt);\n      const R = this.__reach; if (dt > 0) R.w += Math.sign(R.to - R.w) * Math.min(Math.abs(R.to - R.w), dt / R.dur);\n      if (R.w <= 1e-3) return;\n      const s = R.w * R.w * (3 - 2 * R.w);\n      const a = this.arms[R.side].bone; if (!a.up || !a.el) return;\n      const right = v.set(1, 0, 0).applyQuaternion(this.root.quaternion);\n      for (const [b, ang] of [[a.up, R.up * s], [a.el, R.el * s]]) {\n        b.getWorldQuaternion(q); q2.setFromAxisAngle(right, ang); q.premultiply(q2);\n        b.parent.getWorldQuaternion(q2).invert(); b.quaternion.copy(q2.multiply(q)); b.updateMatrixWorld(true);\n      }\n    };\n  }\n  Object.assign(c.__reach, { to: w, side, up, el, dur });\n  return c.__reach;\n};\n\nwindow.G3frags = (avoid, frames = 140, seed = 7, minR = 0) => {\n  const T = window.THREE, ch = __game.scene.children.find(o => o.userData && o.userData.frags);\n  const F = ch.userData.frags; ch.updateMatrixWorld(true);\n  let s = seed >>> 0; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };\n  const pts = avoid.map(a => ({ p: new T.Vector3(...a.p), q: a.q ? new T.Vector3(...a.q) : null, r: a.r }));\n  const segD = (v, a) => { if (!a.q) return v.distanceTo(a.p); const ab = a.q.clone().sub(a.p), t = Math.max(0, Math.min(1, v.clone().sub(a.p).dot(ab) / ab.lengthSq())); return v.distanceTo(a.p.clone().addScaledVector(ab, t)); };\n  const out = [];\n  F.children.forEach((f, i) => {\n    const g = f.geometry.parameters, R = g.radius, arc = g.arc, e = new T.Euler(), m = new T.Matrix4(), v = new T.Vector3();\n    let best = null;\n    for (let tries = 0; tries < 400; tries++) {\n      const rx = rnd() * 6.283, ry = rnd() * 6.283; let ok = true, mind = 1e9;\n      for (let k = 0; k <= frames && ok; k += 3) {\n        e.set(rx + 0.003 * (i + 1) * k, ry + 0.002 * (i + 1) * k, f.rotation.z);\n        m.makeRotationFromEuler(e).premultiply(F.matrixWorld);\n        for (let j = 0; j <= 24; j++) { const th = arc * j / 24; v.set(R * Math.cos(th), R * Math.sin(th), 0).applyMatrix4(m); for (const a of pts) { const d = segD(v, a) - a.r; if (d < mind) mind = d; if (d < 0) { ok = false; break; } } if (!ok) break; }\n      }\n      if (ok && mind >= minR) { best = [rx, ry, mind]; break; }\n    }\n    if (best) { f.rotation.x = best[0]; f.rotation.y = best[1]; out.push(+best[2].toFixed(2)); } else out.push('none');\n  });\n  return out;\n};\n\nreturn 'helpers'; })()"
+    },
+    {
+     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.45)"
     },
     {
      "wait": 1.0
+    },
+    {
+     "eval": "G3frags([{p:[1.3,0.1,3.2],q:[1.3,1.9,3.2],r:0.55},{p:[2.4,0.75,6.3],q:[3.7,1.4,5.5],r:1.0}],110)"
     }
    ],
    "frames": 98,
@@ -28,34 +40,34 @@
      {
       "t": 0,
       "p": [
-       0.7,
-       1.35,
-       11.4
+       2.4,
+       0.75,
+       6.3
       ],
       "l": [
-       0,
-       3.5,
+       0.3,
+       3.2,
        -2
       ],
       "fov": 46,
       "roll": 0,
-      "focus": 13.59
+      "focus": 4.5
      },
      {
-      "t": 4.1,
+      "t": 4.08,
       "p": [
-       0.35,
-       2.1,
-       8.4
+       3.7,
+       1.4,
+       5.5
       ],
       "l": [
-       0,
-       3.6,
+       -0.3,
+       3.3,
        -2
       ],
       "fov": 43,
       "roll": 0,
-      "focus": 10.51
+      "focus": 4.2
      }
     ],
     "ease": "inOut",
@@ -64,10 +76,10 @@
    "actions": [],
    "grade": "rain2049",
    "approved": false,
-   "characters": "Kai (small, foreground left, looking up at the ring); Iven by the consoles",
-   "lighting": "The ring's cyan core light; the chamber in shadow, its rim light strip on the floor.",
+   "characters": "Kai (foreground silhouette, hands on hips, looking the ring over: the game's 'look' clip); Iven working at a far console (off frame left)",
+   "lighting": "The chamber dimmed at run time (lab lights 1.2, env 0.14, fog 0.03): the ring and its event-horizon disc (power 0.45) are the key; Kai rim-lit against the inner glow.",
    "sound": "Low hum at the ring's frequency (41 Hz bed), one glass partial.",
-   "notes": "",
+   "notes": "Low crane-and-arc reveal: starts low behind Kai, whose silhouette covers the core, and arcs right and up until the ring stands in three-quarter view over him. Halo fragments are re-oriented at the end of setup (G3frags) so no arc crosses Kai or the lens.",
    "preview": {
     "status": "ok",
     "note": "Ring, Kai and Iven read; the clean lab is bright (exposure lowered to 0.82 for all mission 3 shots)."
@@ -85,10 +97,22 @@
      "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
     },
     {
-     "eval": "__game.player.place(0, 0, 0.95, Math.PI)"
+     "eval": "(()=>{const g=__game;g.player.place(0,0,0.95,Math.PI);const i=g.actors.iven;i.root.position.set(3.4,0,2.2);i.root.rotation.y=-2.2;i.pose=null;i.lookTarget=g.player.char.head;return 'staged'})()"
+    },
+    {
+     "eval": "(()=>{const g=__game,E=g.engine,s=E.scene;E._batch.reset();E.batchOn=false;s.environmentIntensity=0.14;const L=[];s.traverse(x=>{if(x.isLight)L.push(x)});L.forEach(l=>{if(l.isPointLight&&l.color.getHex()===0xdff4ff&&l.position.y>7&&Math.hypot(l.position.x,l.position.z)<10)l.intensity=1.2;if(l.isPointLight&&l.position.y>3.5&&l.position.y<3.7&&l.position.z===0)l.intensity=45;if(l.isHemisphereLight)l.intensity=0.08});s.fog.density=0.03;s.traverse(m=>{const p=m.isMesh&&m.geometry.parameters;if(!p)return;if(p.width===1.2&&p.depth===0.3&&Math.abs(m.position.y-8.7)<0.2)m.material.emissiveIntensity=0.3;if(p.width===1.4&&p.height===0.6&&m.material.emissive)m.material.emissiveIntensity=0.08;if(p.width===4&&p.height===4.5&&Math.abs(m.position.z+12)<0.05){m.material.clearcoatRoughness=0.6;m.material.roughness=0.6}});return 'mood'})()"
+    },
+    {
+     "eval": "(async () => { window.THREE = await import('three');\nwindow.G3reach = (id, side = 0, w = 1, up = -1.25, el = -0.25, dur = 0.6) => {\n  const c = id === 'kai' ? __game.player.char : __game.actors[id]; if (!c) return 'no ' + id;\n  const T = window.THREE;\n  if (!c.__reach) {\n    const orig = c.update3d; c.__reach = { w: 0, to: 0, side, up, el, dur, yaw: 0 };\n    const q = new T.Quaternion(), q2 = new T.Quaternion(), v = new T.Vector3();\n    c.update3d = function (dt) {\n      orig.call(this, dt);\n      const R = this.__reach; if (dt > 0) R.w += Math.sign(R.to - R.w) * Math.min(Math.abs(R.to - R.w), dt / R.dur);\n      if (R.w <= 1e-3) return;\n      const s = R.w * R.w * (3 - 2 * R.w);\n      const a = this.arms[R.side].bone; if (!a.up || !a.el) return;\n      const right = v.set(1, 0, 0).applyQuaternion(this.root.quaternion);\n      for (const [b, ang] of [[a.up, R.up * s], [a.el, R.el * s]]) {\n        b.getWorldQuaternion(q); q2.setFromAxisAngle(right, ang); q.premultiply(q2);\n        b.parent.getWorldQuaternion(q2).invert(); b.quaternion.copy(q2.multiply(q)); b.updateMatrixWorld(true);\n      }\n    };\n  }\n  Object.assign(c.__reach, { to: w, side, up, el, dur });\n  return c.__reach;\n};\n\nwindow.G3frags = (avoid, frames = 140, seed = 7, minR = 0) => {\n  const T = window.THREE, ch = __game.scene.children.find(o => o.userData && o.userData.frags);\n  const F = ch.userData.frags; ch.updateMatrixWorld(true);\n  let s = seed >>> 0; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };\n  const pts = avoid.map(a => ({ p: new T.Vector3(...a.p), q: a.q ? new T.Vector3(...a.q) : null, r: a.r }));\n  const segD = (v, a) => { if (!a.q) return v.distanceTo(a.p); const ab = a.q.clone().sub(a.p), t = Math.max(0, Math.min(1, v.clone().sub(a.p).dot(ab) / ab.lengthSq())); return v.distanceTo(a.p.clone().addScaledVector(ab, t)); };\n  const out = [];\n  F.children.forEach((f, i) => {\n    const g = f.geometry.parameters, R = g.radius, arc = g.arc, e = new T.Euler(), m = new T.Matrix4(), v = new T.Vector3();\n    let best = null;\n    for (let tries = 0; tries < 400; tries++) {\n      const rx = rnd() * 6.283, ry = rnd() * 6.283; let ok = true, mind = 1e9;\n      for (let k = 0; k <= frames && ok; k += 3) {\n        e.set(rx + 0.003 * (i + 1) * k, ry + 0.002 * (i + 1) * k, f.rotation.z);\n        m.makeRotationFromEuler(e).premultiply(F.matrixWorld);\n        for (let j = 0; j <= 24; j++) { const th = arc * j / 24; v.set(R * Math.cos(th), R * Math.sin(th), 0).applyMatrix4(m); for (const a of pts) { const d = segD(v, a) - a.r; if (d < mind) mind = d; if (d < 0) { ok = false; break; } } if (!ok) break; }\n      }\n      if (ok && mind >= minR) { best = [rx, ry, mind]; break; }\n    }\n    if (best) { f.rotation.x = best[0]; f.rotation.y = best[1]; out.push(+best[2].toFixed(2)); } else out.push('none');\n  });\n  return out;\n};\n\nreturn 'helpers'; })()"
+    },
+    {
+     "eval": "(()=>{const g=__game;g.player.char.lookTarget=new THREE.Vector3(0,2.0,-1.6);const c=g.scene.children.find(o=>o.userData&&o.userData.disc);c.userData.disc.material.uniforms.uPower.value=0.3;let n=0;g.scene.traverse(m=>{if(m.isMesh&&m.geometry.type==='ConeGeometry'&&m.material.color&&m.material.color.getHex()===0x3a6a2a){m.visible=false;n++}});return n})()"
     },
     {
      "wait": 0.8
+    },
+    {
+     "eval": "G3frags([{p:[0,0.1,0.95],q:[0,1.9,0.95],r:0.55},{p:[0,1.4,0.95],q:[-0.3,1.4,0.2],r:0.35},{p:[-5.6,1.28,3.2],q:[-4.9,1.32,2.5],r:1.0},{p:[3.4,0.1,2.2],q:[3.4,1.9,2.2],r:0.5},{p:[-5.2,1.3,2.8],q:[1.5,1.75,0.2],r:0.35}],140)"
     }
    ],
    "frames": 135,
@@ -101,47 +125,44 @@
      {
       "t": 0,
       "p": [
-       4.6,
-       1.5,
-       4.6
+       -5.6,
+       1.28,
+       3.2
       ],
       "l": [
-       -0.6,
-       2.5,
-       -2.2
+       0.4,
+       1.85,
+       -0.4
       ],
-      "fov": 40,
+      "fov": 37,
       "roll": 0,
-      "focus": 8.62
+      "focus": 6.0
      },
      {
       "t": 5.6,
       "p": [
-       3.9,
-       1.55,
-       3.8
+       -4.9,
+       1.32,
+       2.5
       ],
       "l": [
-       -0.6,
-       2.5,
-       -2.2
+       0.4,
+       1.88,
+       -0.4
       ],
-      "fov": 38,
+      "fov": 36,
       "roll": 0,
-      "focus": 7.56
+      "focus": 5.2
      }
     ],
     "ease": "inOut",
-    "shake": 0.15
+    "shake": 0.15,
+    "focusOn": "kai"
    },
    "actions": [
     {
      "t": 0.8,
-     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.6)"
-    },
-    {
-     "t": 0.8,
-     "eval": "DIR.actor('kai').pose = 'work'; DIR.actor('kai').wristBoost = 12"
+     "eval": "(()=>{const g=__game,c=g.scene.children.find(o=>o.userData&&o.userData.disc);c.userData.disc.material.uniforms.uPower.value=0.6;G3reach('kai',1,1,-1.25,-0.25,0.7);g.player.char.wristBoost=12;return 'reach'})()"
     },
     {
      "t": 1.5,
@@ -178,10 +199,10 @@
    ],
    "grade": "rain2049",
    "approved": false,
-   "characters": "Kai (three-quarter back, hand toward the ring)",
-   "lighting": "2026: amber work lights, scaffolds, plastic sheets; 2049: clean cyan lab; 2196: green-grey ruin. Same ring in all three.",
+   "characters": "Kai in profile from his left, reaching his banded left hand to the ring (run-time arm blend over the idle clip, G3reach); Iven behind him on the right, watching him (2049 only, so he vanishes in 2026 / 2196 and returns)",
+   "lighting": "2049: dimmed lab, ring key, dialogue rig on Kai (focusOn). 2026: amber work lights, scaffolds, plastic sheets. 2196: green-grey ruin, vines, moon shaft (the toy grass cones hidden). Same ring in all three.",
    "sound": "The temporal switch (the game's switch stinger) on each flicker, pitched up each time.",
-   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture).",
+   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture). Switch starts at shot t 1.5 / 2.35 / 3.15 / 3.95 = trailer 41.4 / 42.2 / 43.0 / 43.8 (the sfx table). Halo fragments re-oriented at the end of setup (G3frags) to stay clear of Kai, Iven, the lens and the sight line.",
    "preview": {
     "status": "ok",
     "note": "Iven foreground, Kai at the ring; the 2196 flicker (green growth) reads."
@@ -368,7 +389,10 @@
      "eval": "__game.player.place(0, 0, 4.6, Math.PI); __game.actors.iven.root.visible = false"
     },
     {
-     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.75)"
+     "eval": "(()=>{const g=__game,E=g.engine,s=E.scene;E._batch.reset();E.batchOn=false;s.environmentIntensity=0.14;const L=[];s.traverse(x=>{if(x.isLight)L.push(x)});L.forEach(l=>{if(l.isPointLight&&l.color.getHex()===0xdff4ff&&l.position.y>7&&Math.hypot(l.position.x,l.position.z)<10)l.intensity=1.2;if(l.isPointLight&&l.position.y>3.5&&l.position.y<3.7&&l.position.z===0)l.intensity=45;if(l.isHemisphereLight)l.intensity=0.08});s.fog.density=0.03;s.traverse(m=>{const p=m.isMesh&&m.geometry.parameters;if(!p)return;if(p.width===1.2&&p.depth===0.3&&Math.abs(m.position.y-8.7)<0.2)m.material.emissiveIntensity=0.3;if(p.width===1.4&&p.height===0.6&&m.material.emissive)m.material.emissiveIntensity=0.08;if(p.width===4&&p.height===4.5&&Math.abs(m.position.z+12)<0.05){m.material.clearcoatRoughness=0.6;m.material.roughness=0.6}});return 'mood'})()"
+    },
+    {
+     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.95)"
     },
     {
      "wait": 1.0
@@ -385,33 +409,33 @@
       "t": 0,
       "p": [
        0,
-       1.6,
-       11.6
+       1.0,
+       12.4
       ],
       "l": [
        0,
-       3.0,
+       3.3,
        -2
       ],
-      "fov": 40,
+      "fov": 38,
       "roll": 0,
-      "focus": 13.67
+      "focus": 7.8
      },
      {
       "t": 5.0,
       "p": [
        0,
-       1.66,
-       10.4
+       1.12,
+       11.0
       ],
       "l": [
        0,
-       3.05,
+       3.35,
        -2
       ],
-      "fov": 38,
+      "fov": 37,
       "roll": 0,
-      "focus": 12.48
+      "focus": 6.4
      }
     ],
     "ease": "sine",

@@ -6,9 +6,34 @@ Footage
   Three.js r170 (MIT), vendored in vendor/.
 
 Score
-  Original composition for this trailer, following docs/BIBLE.md section 6 (music bible).
-  Instrument samples: none recorded yet. The score step lists every sample set it uses here:
-  name, version, source URL, licence (CC0 / CC BY / MIT only), what it plays in the score, and the required credit.
+  Original composition for this trailer on the AFTERZERO motif (E-B-A), following docs/BIBLE.md section 6
+  (music bible). Composed and rendered offline in tools/trailer/sound/score.py. The bowed metal, glass harmonics,
+  frame drum, toms, ticks, breath textures and sub drone are our own synthesis (tools/trailer/sound/textures.py).
+  Instrument samples played by the score (fetched and checksum-verified by tools/trailer/sound/fetch_samples.sh,
+  kept outside the repository; no sample file is shipped with the game):
+
+  - Salamander Grand Piano V3 by Alexander Holm
+      Licence: Creative Commons Attribution 3.0 (CC BY 3.0), https://creativecommons.org/licenses/by/3.0/
+      Source:  https://archive.org/details/SalamanderGrandPianoV3
+      Package: npm @audio-samples/piano-velocity2, -velocity4, -velocity6, -velocity8, -velocity12, -release
+               version 1.0.5 (OGG packaging by Jan Forst, MIT, https://github.com/darosh/samples-piano)
+      Plays:   every piano note (the felt-piano motif, the low piano, the final A).
+      Credit:  "Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0)"
+
+  - Versilian Studios Chamber Orchestra 2, Community Edition (VSCO-2 CE)
+      by Versilian Studios / Samuel Gossner and contributors
+      Licence: CC0 1.0 Universal (public domain dedication)
+      Source:  https://github.com/sgossner/VSCO-2-CE
+      Package: npm tiny-orchestra 0.2.0 by Marian Becher (edited excerpts, CC0 1.0,
+               https://github.com/MarianBecher/tiny-orchestra)
+      Plays:   violins, violas, celli (sustained, spiccato and pizzicato), contrabass, harp, flute, horn,
+               timpani and timpani roll.
+      Credit:  not required; "VSCO-2 Community Edition by Versilian Studios (CC0)" given anyway.
+
+Sound design
+  Our own: synthesised from physical recipes in tools/trailer/sound/sfx.py (rain, wind, water, birds, bells,
+  glass, metal, footsteps, doors, impacts, the temporal switch, the causal-consequence resonance). The crowd
+  murmur is a dense, distant babble of the game's own recorded voice lines. No third-party recordings.
 
 Voices
   Piper TTS (MIT, github.com/rhasspy/piper) with the LibriTTS-high voice model.
@@ -16,4 +41,9 @@ Voices
   The game's own character voices (tools/voice/build_voices.py), LibriTTS speaker ids:
     Kai Varen 199 · the PA voice 217 · the station child 359 · Niko 526 · Mira (recording) 515 · Sera Voss 279 ·
     Iven Marr 70 · Oskar Hensel and the 2026 recording: per assets/voice/manifest.json
-  Credit line (end card): "Voices: Piper TTS, LibriTTS voices (CC BY 4.0)"
+  Every trailer line reuses the game's recorded clip (assets/voice/<key>.m4a); tools/trailer/vo.py only
+  trims, de-clicks, levels and places them.
+
+End-card credit line
+  "Voices: Piper TTS, LibriTTS voices (CC BY 4.0) · Piano: Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0) ·
+   Orchestral samples: VSCO-2 Community Edition by Versilian Studios (CC0)"

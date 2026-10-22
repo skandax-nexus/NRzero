@@ -7,7 +7,7 @@ Writes ab/procedural.wav, ab/sampled.wav and ab/ab.png (spectrograms, waveforms 
 import os
 import numpy as np
 from scipy import signal
-from dsp import SR, OUT, ns, lp, add, reverb, write_wav, midi_hz, pan
+from dsp import SR, OUT, ns, add, reverb, write_wav, midi_hz
 from sampler import Piano, Orchestra
 
 PHRASE = [(0.4, 76, 0.42), (1.2, 83, 0.40), (2.3, 81, 0.38), (4.4, 76, 0.36), (5.1, 83, 0.4), (6.0, 84, 0.35), (7.4, 81, 0.3)]

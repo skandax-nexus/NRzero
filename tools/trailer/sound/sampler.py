@@ -11,7 +11,7 @@ Repitching is 4-point cubic Hermite interpolation (shifts are at most a few semi
 import json
 import os
 import numpy as np
-from dsp import SR, SAMPLES, load_audio, lp, hp, ns, pan, noise, fade
+from dsp import SR, SAMPLES, load_audio, lp, ns, pan, noise, fade
 
 PIANO_LAYERS = [2, 4, 6, 8, 12]
 NOTE_NAMES = {'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5, 'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11}

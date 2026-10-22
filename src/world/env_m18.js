@@ -1035,7 +1035,11 @@ export function buildArray(game, scene, T) {
   W.setDial = (i, note, ok) => { const t = TEX.dial(note, ok); W.horns[i].dialMat.map = t; W.horns[i].dialMat.needsUpdate = true; };
   W.emitter = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.1, 10, 36), violet.clone()); W.emitter.position.set(0, P6.P3y + 3.6, 0); W.emitter.rotation.x = PI / 2; W.emitter.userData.noBatch = true; add(W.emitter);
   bat().box(M.rust, -0.12, P6.P3y, -0.12, 0.12, P6.P3y + 3.6, 0.12); box(-0.3, P6.P3y, -0.3, 0.3, P6.P3y + 3.6, 0.3);
-  W.beam = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 1.4, 300, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x9a7bff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  // the carrier beam: bright at the emitter, fading out into the storm (additive, so the vertex colour is its strength)
+  const beamGeo = new THREE.CylinderGeometry(0.3, 1.4, 300, 16, 14, true), bp = beamGeo.attributes.position, bc = [];
+  for (let i = 0; i < bp.count; i++) { const f = Math.pow(1 - (bp.getY(i) + 150) / 300, 3.2); bc.push(f, f, f); }
+  beamGeo.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3));
+  W.beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0x9a7bff, vertexColors: true, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
   W.beam.position.set(0, P6.P3y + 154, 0); W.beam.userData.noBatch = true; add(W.beam);
   W.shard = shardMesh(); W.shard.position.set(...P6.shard); add(W.shard);
   // storm cells on the plateau path; the planetary storm around the hill; the unbuilt city in the clouds (hidden)

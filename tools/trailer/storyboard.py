@@ -394,7 +394,7 @@ EDL = [
     ('card', 'tagline', 2.5, 'dip', 'A SECOND THAT SHOULD NOT EXIST', 'line'),
     ('card', 'title', 4.5, 'dip', 'AFTERZERO\nTHE LAST VERSION OF EARTH', 'title'),
     ('shot', 's36', 2.5, 'dip'),
-    ('card', 'end', 5.0, 'cut', 'AFTERZERO\nPlay on mobile and web\nAn original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0)', 'end'),
+    ('card', 'end', 5.0, 'cut', 'AFTERZERO\nPlay on mobile and web\nAn original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0)\nPiano: Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0) · orchestral samples: VSCO-2 Community Edition (CC0)', 'end'),
 ]
 
 # VO: (trailer time s, speaker, exact line text, mission, clip_in s, clip_out s, notes). The key is FNV-1a("speaker|text")

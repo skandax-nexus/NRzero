@@ -15,7 +15,7 @@ import json
 import os
 import sys
 import numpy as np
-from dsp import SR, OUT, ROOT, ns, add, reverb, compress, write_wav, lp, hp, shelf, peq, pan, fade
+from dsp import SR, OUT, ROOT, ns, add, reverb, compress, write_wav, hp, shelf, peq
 from sampler import Piano, Orchestra
 import textures as tx
 
@@ -359,7 +359,6 @@ def compose(S):
 def montage(S, C, bars, roots, gaps, rev_hits, slip_from, end_beat, vo_quiet=((0, 6),), intensity=1.0):
     """Nine-Minute War: ticks, 3+3+2 string ostinato, frame drum and toms entering bar by bar, distant horns,
     gaps and reversed impacts before the hits, an eighth-note slip from bar 7, the last bar thinned to ticks"""
-    rng = S.rng
     acc = {0: 1.0, 3: 0.75, 6: 0.85}
     cells = {45: (0, 7, 12, 0, 7, 12, 10, 7), 41: (0, 7, 12, 0, 7, 12, 11, 7), 43: (0, 7, 12, 0, 7, 12, 10, 7),
              46: (0, 7, 12, 0, 7, 12, 11, 7), 40: (0, 7, 12, 0, 7, 12, 10, 7)}
@@ -434,7 +433,7 @@ def montage(S, C, bars, roots, gaps, rev_hits, slip_from, end_beat, vo_quiet=((0
 
 
 def tom(vel, f0, seed):
-    """low tom: synthesised membrane layered with a damped VSCO timpani hit"""
+    """low tom: a synthesised membrane with a stick attack (textures.tom)"""
     return tx.tom(vel, f0, seed)
 
 

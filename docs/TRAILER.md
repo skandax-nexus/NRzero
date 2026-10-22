@@ -81,7 +81,7 @@ up to the 1920×1080 output. The store cut gets 27 extra rows at the top and bot
 | c1 | SOMEONE HAS BEEN HERE BEFORE YOU | `line`: one line of small caps, a thin serif, off-white at 80 %, centred in the 2.39 band, 8-frame fade in and out |
 | tagline | A SECOND THAT SHOULD NOT EXIST | `line` |
 | title | AFTERZERO / THE LAST VERSION OF EARTH | `title`: the wordmark (wide-tracked), with the subtitle at 30 % of its size below it. It fades in over the score's suspended chord. No light sweeps and no flashes |
-| end | AFTERZERO / Play on mobile and web / An original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0) | `end`: the wordmark, the platform line, and the credits line in small type |
+| end | AFTERZERO / Play on mobile and web / An original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0) / Piano: Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0) · orchestral samples: VSCO-2 Community Edition (CC0) | `end`: the wordmark, the platform line, and the credits line in small type |
 | black0, black1, silence | (none) | `black`: pure black. black1 carries the voice; `silence` carries nothing at all |
 
 The copy is from the game's own vocabulary. "Someone has been here before you" points at the seventeen arrivals
@@ -143,8 +143,10 @@ music table.
 |---|---|---|
 | Footage | our own: in-engine captures of AFTERZERO (Three.js r170, vendored, MIT) | — |
 | Voices | Piper TTS (MIT) with LibriTTS-high voices (LibriTTS corpus, CC BY 4.0, openslr.org/60) | "Voices: Piper TTS, LibriTTS voices (CC BY 4.0)" on the end card; per-character speaker ids in `assets/trailer/CREDITS.txt` |
-| Score | original composition for this trailer | — |
-| Instrument samples | none yet. The score step records every sample set used here (name, version, URL, licence, what it plays) | as each licence requires |
+| Score | original composition for this trailer (`tools/trailer/sound/score.py`, see "Sound") | — |
+| Instrument samples: piano | Salamander Grand Piano V3 by Alexander Holm, **CC BY 3.0** (archive.org/details/SalamanderGrandPianoV3), via the npm packages `@audio-samples/piano-velocity2/4/6/8/12` and `piano-release` 1.0.5 (packaging by Jan Forst, MIT). Plays every piano note in the score. | "Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0)" on the end card and in `assets/trailer/CREDITS.txt` |
+| Instrument samples: orchestra | Versilian Studios Chamber Orchestra 2 Community Edition (VSCO-2 CE), **CC0 1.0** (github.com/sgossner/VSCO-2-CE), as the edited excerpts in the npm package `tiny-orchestra` 0.2.0 (Marian Becher, CC0 1.0). Plays the strings, harp, flute, horn and timpani. | not required; credited anyway |
+| Sound design | our own: synthesised from physical recipes in `tools/trailer/sound/sfx.py`; the crowd murmur is a babble of the game's own recorded voices | — |
 
 ## Render budget and how to work
 
@@ -159,9 +161,9 @@ music table.
 
 ## Open questions
 
-1. **Score instruments.** Are the game's procedural instruments enough, or should the score step use CC0 / CC BY
-   samples (VSCO 2 Community Edition strings and percussion, Salamander Grand Piano)? The storyboard assumes felt
-   piano, low strings and bowed metal of sample quality.
+1. **Score instruments (resolved).** The score uses sampled piano (Salamander V3, CC BY 3.0) and strings, harp, flute,
+   horn and timpani (VSCO-2 CE, CC0). In an A/B test these clearly beat the game's procedural instruments; the bowed
+   metal, glass, frame drum and breath textures remain our own synthesis. See "Sound".
 2. **Unrecorded line.** Hensel's "Not today." (mission 6) is not in assets/voice: the voice build skips ternary
    lines. The trailer does not use it, but every line it does use is recorded. The key it would get is `1qshwuv`.
 3. **Mission 1 shop windows.** The shop-window canvases show bright random product squares that read as noise in
@@ -225,7 +227,7 @@ Total **117.08 s** (2810 frames at 24 fps), 36 shots, 7 cards. Hits (cuts on the
 | 1:42.58 | 2.50 | *card tagline*: A SECOND THAT SHOULD NOT EXIST | dip |  |  |  |
 | 1:45.08 | 4.50 | *card title*: AFTERZERO / THE LAST VERSION OF EARTH | dip |  |  |  |
 | 1:49.58 | 2.50 | **s36** (M3) Button: Kai lifts his hand to the ring. Iven: "Don't touch it. Varen. Don't—" Cut on the switch. | dip | 109.90 iven: "Don't touch it. Varen. Don't—" | 109.58 **button** | 111.90 temporal switch |
-| 1:52.08 | 5.00 | *card end*: AFTERZERO / Play on mobile and web / An original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0) | cut |  | 112.08 **end card** | 112.08 rain tail |
+| 1:52.08 | 5.00 | *card end*: AFTERZERO / Play on mobile and web / An original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0) / Piano: Salamander Grand Piano V3 by Alexander Holm (CC BY 3.0) · orchestral samples: VSCO-2 Community Edition (CC0) | cut |  | 112.08 **end card** | 112.08 rain tail |
 
 ## Shot list
 
@@ -653,3 +655,153 @@ directors at once. The farm was stopped at frames 30 / 17 and started again; bot
 frame, finished at 8.2 / 8.9 s per frame (load average 20-25) and were encoded to `clips/t_iven.mp4` and
 `clips/t_walk.mp4` (h264, 1280×590, yuv420p, 24 fps, 144 / 120 frames), after which the farm exited by itself.
 Their `approved` flags are back to false so the production farm skips them.
+
+## Sound
+
+Everything the trailer sounds like is rebuilt by one command (outputs outside the repo, in the session scratchpad
+`trailer/audio/`, or `$TRAILER_AUDIO`):
+
+```sh
+tools/trailer/build_audio.sh         # samples, score, sound design, VO, both mixes, verification report (~5 min CPU, nice 10)
+tools/trailer/build_audio.sh mix     # only remix + report from the stems on disk
+FORCE=1 tools/trailer/build_audio.sh # ignore the up-to-date checks
+```
+
+It is resumable: each stage is skipped while its outputs are newer than its inputs (`trailer.json`, its own script and
+the shared DSP modules). It creates the venv `/home/user/tools/trailer-venv` (numpy, scipy, soundfile, matplotlib) if
+it is missing.
+
+| file | what it does |
+|---|---|
+| `tools/trailer/sound/fetch_samples.sh` | `npm pack`s the pinned sample packages, checks their sha256, unpacks each into its own empty folder under `/home/user/tools/trailer-samples` (nothing in them is run) |
+| `tools/trailer/sound/dsp.py` | shared DSP: filters, a stereo algorithmic-hall IR generator (early reflections + band-wise decaying tail; presets room, street, plate, hall 2.8 s, cathedral 5.5 s, space 8 s) used by FFT convolution, a compressor, sidechain ducker, 4×-oversampled true-peak limiter, 24-bit WAV I/O |
+| `tools/trailer/sound/sampler.py` | the multisample player: Salamander piano (5 velocity layers with crossfades, key-release noise, sustain-pedal ring, a `felt` control that darkens the hammer into a felt piano), VSCO-2 CE instruments (loop points, measured per-sample tuning, attack/release envelopes, each note doubled into a small detuned section), cubic Hermite repitching |
+| `tools/trailer/sound/textures.py` | our own synthesis: modal bowed metal, glass harmonics (struck and bowed), sub drone, breath, frame drum, low tom, clock tick, reversed swells, reversed impact tails |
+| `tools/trailer/sound/score.py` | the composition (every note is written out in `compose()`), the humanised players, the bus mix → `stems/music.wav` and per-bus stems `music_{piano,strings,winds,perc,texture,glass,sub}.wav`; `--store` writes the 30 s cue |
+| `tools/trailer/sound/sfx.py` | sound design and ambience on the cue table → `stems/sfx.wav` (= `sfx_amb.wav` + `sfx_fx.wav`); `--store` |
+| `tools/trailer/vo.py` | the voice-over → `stems/vo.wav` + `stems/vo.json` (actual onset, end, source, loudness per line); `--store`; `--check-synth` |
+| `tools/trailer/sound/mix.py` | ducking, bus glue, limiter, two-pass loudness → `trailer_mix.wav/.m4a`, `store_mix.wav/.m4a` |
+| `tools/trailer/sound/analyze.py` | listening proxies and the report: spectrogram + level + VO-against-mix pictures (`pictures/`), `report.json` |
+| `tools/trailer/sound/ab_test.py` | the instrument A/B below (`ab/`) |
+
+Deliverables in `trailer/audio/`: `trailer_mix.wav` (117.083 s, 48 kHz, 24-bit stereo) and `trailer_mix.m4a` (AAC
+256k) for the edit; `store_mix.wav/.m4a` (30.0 s); stems `stems/music.wav`, `stems/sfx.wav`, `stems/vo.wav` (plus
+the per-bus music stems and the ambience/effects split) and `store/{music,sfx,vo}.wav`, all sample-aligned to t = 0 of
+the edit.
+
+### Instruments: procedural or sampled (A/B)
+
+`ab_test.py` plays the same 12 s motif phrase (piano E-B-A over a cello pedal) through a numpy port of the game's
+procedural piano/cello/reverb (`src/core/audio.js`) and through the sampler. Listening proxies (`ab/metrics.txt`,
+`ab/ab.png`):
+
+| | envelope range | sharpest 20 ms rise | spectrum |
+|---|---|---|---|
+| procedural (game) | 17.2 dB | 5.1 dB | five fixed partials per note, a smeared steady-state envelope, the cello a filtered sawtooth |
+| sampled | 29.5 dB | 26.7 dB | real hammer transients, inharmonic and sympathetic partials, a natural decay per note |
+
+The sampled version has real attacks and a recorded instrument's decay and spectrum, which the procedural one cannot
+fake, so the score uses samples for piano and orchestra. The game's own instruments are untouched (no edit to
+`src/core/audio.js` was needed). The temporal colours that no sample library has (bowed metal, glass, breath) are our
+own synthesis, as is the restrained percussion (frame drum, toms, ticks), so nothing sounds like a stock trailer kit.
+
+### The score
+
+One continuous original cue on the AFTERZERO motif **E5-B5-A5** (MIDI 76-83-81, the game's `title` / `memory`
+theme), A minor / Aeolian with suspended and lydian colours, following the music map above to the hundredth of a second.
+Each section has a tempo map whose anchors are the cut times from `trailer.json` (`Clock` in `score.py`), so the hits
+land on the frame even where 24 fps rounds a bar. Humanisation: Gaussian timing jitter (4-12 ms per note, none on
+the hit downbeats), ±5 % velocity, chord notes spread 12 ms like a player's hand, strings started early by a fixed
+bow lag (30-70 ms), rubato written into the hook's note times. 394 notes in the trailer cue, 243 in the store cue.
+
+| time | section | what plays |
+|---|---|---|
+| 1.5-17.5 | hook, rubato ~78 | felt piano alone: E-B-A over A and F roots, pedalled, much air; breath texture; a cello A pedal enters at 7.5 (s02); the piano rests under the child's line; at 12.0 the motif is left hanging on B; a suspended D under the reversed clock |
+| 17.5-19.75 | approach | a muted low-piano ostinato (the "need to fix it" cell) drifting off the grid and speeding up; celli/basses swell; a D♯ in the violas against the train horns; bowed metal |
+| 19.75-20.75 | **silence** | digital zero in every stem and the master |
+| 20.75-27.75 | the held second, free time | sub drone, a bowed-metal swell, five glass harmonics and two bowed-glass sustains, nothing on a beat |
+| 27.75-32.25 | Mira, 64 | the motif on felt piano, closer and darker, a high cello line; B left unresolved; the reversed A5 tail used once, into black |
+| 32.25-35.0 | the voice | a 55 Hz sub and one cello E under the PA voice |
+| 35.0-45.0 | world A, 78 | timpani + basses/celli in octaves on the downbeat; the motif on piano; F, then C (s11's switch, strings open upward), then a G-sus crescendo with timpani roll into the cut |
+| 45.0-51.17 | the past, 78 | harp arpeggios, frame drum on 1 and 3 with hand slaps, a breathy flute counter-line for two bars (the valley alive), pizzicato on the downbeat |
+| 51.17-55.75 | the flood | sforzando-piano low strings and timpani on the switch, flute gone, two piano notes |
+| 55.75-61.17 | night glass | held strings, glass tones, sparse piano |
+| 61.17-68.83 | beautiful catastrophe | wide strings over F (A-C-E, then B-D on top), distant horns, timpani, sparse high piano; at 65.75 a cold B♭ chord under "For ending it." |
+| 68.83-72.71 | the Witness, 54 | bowed basses low and weary, bowed metal, sub, an irregular tom pulse; the register is left clear for the three glass taps (sound design) |
+| 72.71-75.0 | card breath | one reversed glass swell into the montage downbeat |
+| 75.0-97.375 | montage, 118 | 11 bars: clock ticks in 3+3+2, a spiccato string ostinato (celli, violas from bar 3, violins doubling from the half-bar cuts), basses, frame drum from bar 3, toms from bar 4, distant horns from bar 5, distorted breath from bar 7; the ostinato slips an eighth from beat 24; gaps before the hits at beats 8, 16, 24 filled by reversed impacts, reversed impacts before every second half-bar cut; the last bar thins to ticks alone; +2 dB growth across the section |
+| 97.375-98.583 | **silence** | digital zero |
+| 98.58-109.58 | title, 78 | the piano motif alone, then the cello sings it lower; strings bloom under the tagline; at the title (105.08) an F-lydian chord (F C G A E) for basses, celli, violas, violins and horns with timpani and piano, **B5 on top, never resolved**; glass |
+| 109.58-112.08 | button | the score fades out in 0.25 s: only Iven, the ring hum and the switch |
+| 112.08-117.08 | end card | **one low piano A (A1 + A2) ringing out**, unresolved after the B above it, fading over the last second |
+
+Bus mix: piano, strings, winds, perc, texture, glass and sub buses, each with its own reverb send (hall for the
+instruments, cathedral for the textures, an 8 s "space" for the glass, a dry sub), a little extra hall on the
+acoustic buses, gentle bus compression on the percussion, a soft program compressor (1.8:1), a 28 Hz high-pass.
+Silences are gated with 4 ms ramps so nothing clicks or rings into them.
+
+**Store cut.** `score.py --store` re-lays the montage material to the store-cut picture (one bar-anchor per cut at
+~118 BPM), lets it breathe before the last shot and ends on the title chord with the motif's first two notes, fading
+out by 30.0 s.
+
+### Sound design
+
+All synthesised in `sfx.py` from physical recipes (no outside recordings): rain is thousands of droplet impacts and
+puddle bubbles over wet hiss, wind is gusting noise with whistling resonances, water is bubble chirps and lapping,
+birds are FM calls, bells/glass/metal are modal, footsteps, doors and impacts are excitation plus resonance. The crowd
+murmur is a babble of the game's own recorded mission 1 voices, too dense and far to understand. Every cue in the
+sound-design table is placed at its time:
+
+- **Beds:** 2049 Rain City (rain, far traffic, crowd, the station canopy), the held-rain glass shimmer, the 2026 Helix
+  lab hum and muffled alarm, the valley (wind, stream, birds), the drowned reservoir and dam hum, the clockmaker's
+  rain and clocks, 2196 (wind, birds, a far bell, structure groans), the gallery air, a light rain tail on the end card.
+- **Temporal:** the switch effect (a swept band-pass bank with a time-grain stutter, pitched up on each flicker in s11),
+  the causal-consequence resonance (a low inharmonic metal resonance at 55 / 49 Hz with a brief dropout, at 20.75
+  and 51.17), Chronolith glass (the band flare, the three taps E-B-A on the gallery glass at 70.2 / 70.75 / 71.3, the final
+  ring hum), the rewind ripple, the Echo Step swish.
+- **Montage:** restrained physical impacts on the cuts (reversed incoming whistles into dry cracks, a heartbeat, the
+  flood siren's one wail, the tower groan, the storm front with the anchor failing); no braams, no booms.
+- **Silences:** both beats are digital zero (filtered first, gated last, so no tail rings in).
+
+### Voice-over
+
+`vo.py` places the 20 storyboard lines. Every one reuses the game's recorded clip (`assets/voice/<key>.m4a`, the same
+performance the player hears); a line without a clip would be synthesised with the same Piper LibriTTS speaker, pace
+and ffmpeg treatment as the game, by importing `tools/voice/build_voices.py` read-only (its `CHARACTERS`, `FILTERS`,
+`cast_voices`, `clean_for_tts`); `vo.py --check-synth` exercises that path on "The Chronolith.". Per line: the
+storyboard's `clip_in`/`clip_out` trims (snapped to the quietest 20 ms between words), trimmed to the speech with 12 ms
+of lead-in and 120 ms of tail, a 75 Hz high-pass, +1.5 dB presence at 3.2 kHz, a 4 ms / 30 ms fade (de-click), evened to
+-23 LUFS (BS.1770, gated), a touch of 0.55 s room (none on the PA voice, which carries its own cathedral), and placed so
+the first word starts at the beat-map time. A line that runs over a cut is cut with the picture (5 ms ramp); Iven's
+"Don't—" breaks off by itself at 111.92, just before the cut to black at 112.083.
+
+### Mix and loudness
+
+`mix.py`: VO +5 dB; the score ducks 6 dB under every line (sidechain on the VO stem, 50 ms look-ahead, 60 ms attack,
+450 ms release), the sound design 3 dB; a gentle bus glue (1.6:1) and master compressor (1.4:1); the silence beats
+forced to digital zero in the master. Loudness: the gain is iterated against the verifying meter (ffmpeg `ebur128`)
+with a 4×-oversampled true-peak limiter in the loop (ceiling -1.6 dBTP), then ffmpeg `loudnorm` runs its second pass
+in linear mode with the measured values (a pure gain, no dynamic processing), and `ebur128` verifies the written file.
+
+### Verification (`report.json`, `pictures/`)
+
+| | integrated | true peak | LRA | clipped samples | clicks |
+|---|---|---|---|---|---|
+| trailer mix (117.083 s) | -14.0 LUFS | -1.6 dBTP | 8.9 LU | 0 | 0 |
+| store mix (30.0 s) | -14.0 LUFS | -1.6 dBTP | 4.1 LU | 0 | 0 |
+| trailer_mix.m4a (AAC 256k) | -14.1 LUFS | -1.3 dBTP | 9.0 LU | | |
+| store_mix.m4a (AAC 256k) | -14.0 LUFS | -1.6 dBTP | 4.1 LU | | |
+
+- **Silences:** 19.75-20.75 and 97.375-98.583 are digital zero (peak -inf) in the mix.
+- **VO onsets** (first word measured in the mix stem against the beat map): all 20 lines within -2…+62 ms (under
+  1.5 frames), most of the late ones being soft consonants the detector hears after the placed start.
+- **Intelligibility:** speech-band (300-3400 Hz) VO-to-background ratio under every line, after ducking, 18-48 dB;
+  the lowest are "All of them…" (18.4 dB, over the s11 switches) and the recording's "…ninth minute" (18.3 dB, under the
+  glass taps).
+- **Hits:** every hit in `trailer.json` is a music onset within ±10 ms of the cut, or a cut to silence (19.75,
+  97.375), except 112.08 (+17 ms), 98.58 (+27 ms, the piano's soft attack) and 61.17 (+73 ms, a soft string entry).
+- **Pictures:** `pictures/mix_full.png` (spectrogram, peak/RMS, VO against the mix) and the three section pictures,
+  `store_mix.png`, `ab/ab.png`; all were looked at.
+- **Stems:** music -22.8 LUFS, sfx -25.7 LUFS, VO -20.2 LUFS (before the mix gains).
+- **Reproducible:** a `FORCE=1` rebuild into an empty directory (2026-10-22) gave bit-identical mixes and stems (md5);
+  every random choice is seeded.
