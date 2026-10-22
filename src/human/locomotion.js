@@ -24,8 +24,8 @@ import { getQuality } from '../world/realism.js';
 
 const Q = new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '');
 const MQ = (Q.get('motion') || '').split(',').filter(Boolean);
-// DEFAULT_ON: the new motion is the default; false keeps it behind ?motion=new while it is being verified
-const DEFAULT_ON = false;
+// DEFAULT_ON: the new motion is the default (?motion=classic restores the old crossfade player and rigid cloth)
+const DEFAULT_ON = true;
 export const MOTION = {
   classic: MQ.includes('classic') || (!DEFAULT_ON && !MQ.includes('new')),
   off: new Set(MQ.filter(s => s.startsWith('no')).map(s => s.slice(2))),
@@ -243,7 +243,7 @@ export class Motion {
     this.vSm = 0; this.accSm = 0; this.turnSm = 0; this.hero = false;
     this.head = { yaw: { x: 0, v: 0 }, pitch: { x: 0, v: 0 }, gy: 0, gp: 0, gT: 1 + this.rng() * 3, hold: 0 };
     this.breath = this.rng() * 6; this.exert = 0;
-    this.lod = 0; this.lodT = this.rng() * 0.25; this.ikW = 1; this.springs = null; this.lodTick = 0; this.lodPhase = this.rng() < 0.5 ? 0 : 1; this.lodAcc = 0;
+    this.lod = 0; this.lodT = this.rng() * 0.25; this.ikW = 1; this.springs = null;
     this.ground = { boxes: [], x: 1e9, z: 1e9, t: 0, world: null, inWorld: false, wt: 0 };
     this.vy = 0; this.stopping = false; this.err = 0;
     this.rootQ = new THREE.Quaternion();
@@ -312,13 +312,6 @@ export class Motion {
   // ---- the frame ----
   update(dt) {
     const t0 = globalThis.performance ? globalThis.performance.now() : 0;
-    // far crowds (LOD 2) animate at half rate, every other frame, staggered between people
-    if (this.lod === 2 && !this.hero && dt > 0 && dt < 0.1) {
-      this.lodAcc = (this.lodAcc || 0) + dt;
-      if ((this.lodTick = (this.lodTick ^ 1)) !== this.lodPhase) { if (t0) MOTION.stats.ms += globalThis.performance.now() - t0; return; }
-      dt = this.lodAcc;
-    }
-    this.lodAcc = 0;
     try { this.frame(dt); } catch (e) {
       if (!this.err++) console.warn('motion: falling back to the plain mixer for', this.h.id, e && e.message);
       MOTION.stats.errors++;
@@ -507,16 +500,20 @@ export class Motion {
     const ikOn = on('ik') && !this.poseNoIK && this.lod === 0 && !this.inPlace;
     this.ikW = tele ? (ikOn ? 1 : 0) : clamp(this.ikW + (ikOn ? 1 : -1) * dt / 0.3, 0, 1);
     // a far person (LOD 2) with nothing procedural left to do: the clips alone (the renderer updates the matrices)
-    if (this.lod === 2 && this.ikW <= 0 && this.dip.x > -0.002) { if (this.springs) this.springs.rest(); return; }
+    if (this.lod === 2 && this.ikW <= 0 && this.dip.x > -0.002) { if (this.springs) this.springs.rest(); if (this.feet[0].lockW > 0 || this.feet[1].lockW > 0) this.resetFeet(); return; }
     h.root.updateWorldMatrix(true, true);       // parents too: the root moved this frame
     if (this.ikW > 0 || this.dip.x < -0.002) this.legs(dt, tele);
+    else if (this.feet[0].lockW > 0 || this.feet[1].lockW > 0 || this.feet[0].step || this.feet[1].step) this.resetFeet();     // no stale plants when the IK comes back
     // upper body: posture, arm swing, breathing, head
     if (this.lod < 2) this.upper(dt, pose);
-    // secondary motion (springs.js): full dynamics near the camera, collision only further away, nothing on a low LOD
-    if (this.springs && this.h.lod !== 1) {
-      if (tele) this.springs.reset();
-      if (motionWorld.wind) this.springs.wind.copy(motionWorld.wind);
-      this.springs.update(dt, this.lod === 0 && on('spring'));
+    // secondary motion (springs.js): full dynamics near the camera (LOD 0: Kai and people within 12 m, 6 m on the low
+    // tier), the legs pushing the cloth aside but no swing in the middle distance (LOD 1); far away it hangs at rest
+    if (this.springs) {
+      if (this.lod < 2 && this.h.lod !== 1) {
+        if (tele) this.springs.reset();
+        if (motionWorld.wind) this.springs.wind.copy(motionWorld.wind);
+        this.springs.update(dt, this.lod === 0 && on('spring'));
+      } else this.springs.rest();
     }
   }
 

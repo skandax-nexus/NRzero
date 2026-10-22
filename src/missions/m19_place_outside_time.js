@@ -574,6 +574,7 @@ export default {
       const scene = await newPlace({ background: 0xc8d0da, fog: [0xc0c8d4, 0.0085], exposure: 1.0, bloom: 0.5, bloomThreshold: 0.86, envIntensity: 0.85, killY: -6.0 });
       const low = RZ.getQuality() === 'low';
       const M = buildMirror(game, scene, low); await tick();
+      M.door.position.set(PLZ.spots[0][0], 0, PLZ.spots[0][1]); M.door.rotation.y = PLZ.spots[0][2];   // on the concourse from the start
       const Hh = buildHall(game, scene, low); await tick();
       W = { M, Hh, lightSrc: [...M.lightSrc, ...Hh.lightSrc] }; prevRoot.push(M.root, Hh.root);
       game.onUpdate((dt, t) => { M.update(dt, t); if (Hh.root.visible) Hh.update(dt, t); });
@@ -723,7 +724,7 @@ export default {
       hint(() => S.phase === 'door' && !S.arrived && !game.residueOn && !G.residueUsed, 50, () => { ui.subtitle('orren', 'Look the way you look for the past.', 3800); ui.toast('RESIDUE VISION · F (or the eye button)', 3200); });
       hint(() => S.phase === 'door' && !S.arrived && G.residueUsed && S.prog < 6, 70, () => ui.subtitle('orren', 'Not where they walked. Where they didn\'t. The marks on the ground are yours.', 4200));
       game.onUpdate(() => { if (S.phase === 'door' && game.residueOn && once('prints')) side(async () => { await game.say('kai', 'Footprints. Hundreds of them. Every one of me, heading for a door.'); await game.say('kai', 'And a lane nobody stepped in.'); }); });
-      const arrive = () => side(async () => {
+      const arrive = async () => { await game.waitFor(() => !S.busy && game.control && !ui.dlgActive); await side(async () => {
         cine(true); S.main = true;
         placeDoor(...PLZ.final); syncBox(); D.visible = true; audio.sfxPlay('motif');
         await game.shot([pl.pos.x + 2.4, 2.0, pl.pos.z + 3.2], [PLZ.final[0], 1.4, PLZ.final[1]], 1.8, { fov: 44 });
@@ -731,7 +732,7 @@ export default {
         await game.say('kai', 'It stayed.');
         S.main = false; cine(false);
         objective('The door stayed.');
-      });
+      }); S.stayed = true; };
       // optional at the concourse
       talkOrren('fate', 'Ask Orren what happens to him', [-2.4, 0, -58.6], [
         ['kai', 'If I go through that door, what happens to you?'],
@@ -746,7 +747,7 @@ export default {
         await game.shot([0, 2.4, -58], [0, LAKE - 3, -10], 2.4, { fov: 52 });
         await game.say('kai', 'From this side you can see the whole bridge in the water. Every lamp. Nobody ever built a single one of them.');
       }) });
-      await game.waitFor(() => S.arrived && !S.main && !S.busy);
+      await game.waitFor(() => S.stayed && !S.main && !S.busy);
       await new Promise(res => {
         const it = act({ pos: [PLZ.final[0], 1.0, PLZ.final[1] + 1.2], radius: 1.8, prompt: 'Open the door', onUse: () => side(async () => {
           it.done(); cine(true); S.main = true;

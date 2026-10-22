@@ -575,3 +575,149 @@ Clips, contact sheets and data are in
 - Data: `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/phys3/`. This holds
   `new`, `classic` (audit data and `metrics.json`), `r1` and `r2` (rendered sheets: NPC bump, camera at a wall, the
   3 m drop and the 0.40 m risers), `cost.jsonl`, and `play/` (playthroughs).
+
+## Locomotion & secondary motion
+
+What was built from the locomotion half of the plan. It is the default; `?motion=classic` restores the old crossfade
+player and rigid cloth exactly (the classic audit reproduces the base numbers to the digit). Single parts can be
+switched off for A/B: `?motion=noik`, `nolock`, `nolean`, `nowarp`, `noprofile`, `nohead`, `noidle`, `nospring`,
+`notread` (comma separated, e.g. `?motion=noik,nospring`).
+
+Files:
+- `src/human/locomotion.js` (new): the `Motion` class, one per cast person, that drives the animation mixer itself;
+  `gaitProfile()`; `MOTION` (switches and `stats`), `motionWorld` (collision, scene, `wind`), `motionView` (camera, tier).
+- `src/human/ik.js` (new): two-bone leg IK that keeps the knee's bend plane, world-space bone rotation helpers and fast
+  `matrixWorld` reads.
+- `src/human/springs.js` (new): spring bones for loose cloth and long hair.
+- `src/human/cast3d.js`: loads `anims_extra.glb` and the cast index, analyses each template once, rigs its springs,
+  attaches a `Motion` to every person. The classic path is untouched.
+- `src/core/character.js`: `updateMotion()` (the umbrella arm and gadgets on top); `update3d()` stays for classic.
+- `assets/models/anims_extra.glb` (new, 30 KB): our own clips `jump` and `jump_run` on the same rig as `anims.glb`,
+  keyframed by `tools/feel/author_clips.mjs` (joint angles on the idle base pose, eased, 20 fps). `anims.glb` is only
+  read. Re-author with `node tools/feel/author_clips.mjs`.
+
+No mission code changed and the Character API is the same: missions keep setting `speed`, `crouch`, `pose`, `talk`,
+`lookTarget` and moving `root.position` / `rotation.y`.
+
+### How it works
+- **Speed blend space with distance matching.** Every retargeted gait clip is measured once per body
+  (`analyseTemplate`): loop length, gait cycles per loop, left heel strike, foot contact curves, planted ankle and ball
+  heights and the speed a planted foot really moves back at. All gait clips share one gait phase that advances by
+  `ground speed × dt / stride`, so the feet travel as far as the body. walk_slow and walk blend by speed inside the walk
+  family, jog, run and sprint inside the run family. The walk-run switch has hysteresis around a Froude-based speed
+  (2.1 m/s for Kai, by leg length, a little later for older people), and it is quick when the speed is far past it, so
+  a sprint start does not jog through a walk.
+- **Human cadence.** The stride is warped (feet placed further from or nearer to the hips, 0.82 to 1.14) toward a
+  human cadence for the speed, scaled by the gait profile. On stairs and steep ground the steps get shorter and
+  quicker. Crouched, the stride lengthens instead (a sneak, not a scuttle): 157 spm at 1.7 m/s, was 197.
+- **Foot locking.** A foot is pinned where it touches down (no blend-in, it is already there). It rolls on the heel,
+  then on the ball once the clip lifts the heel, keeps its planted heading, and lets go when the clip lifts heel and
+  ball. A foot the body has left behind or turned away from takes a small corrective step (stops, turns on the spot,
+  odd stances). A fast low swing is lifted clear of the floor.
+- **Foot IK and pelvis.** The ground under heel and toe comes from the collision boxes (ramps through `topAt`). The
+  pelvis lowers to the lower foot (at most 0.3 m; deeper, the trailing foot pushes off from its toes), legs are solved
+  with two-bone IK that keeps the clip's knee direction, and a foot landing across a step edge slides onto one tread
+  (heel past the edge or toe short of it, whichever is nearer). The ground under a plant is frozen, or follows the box
+  it stands on (lifts).
+- **Air and landing.** In the air the new `jump` clip (standing) and `jump_run` (a stride in the air) are blended by
+  ground speed and sampled by vertical speed: take-off, apex tuck, legs reaching for the ground. A step off a ledge
+  starts with the legs down. Feet never go through the floor in the air. A landing dips the pelvis by the impact
+  (about 2.2 cm per m/s, at most 15 cm) and folds the trunk with it.
+- **Body dynamics.** Banking into turns (0.62 × atan(v·ω/g)), pitch with acceleration and braking, the head leading
+  turns, breathing that follows exertion. Yaw snaps (a mission facing someone at once, a Walker's 180 at a lane end)
+  are eased over about 0.6 s, including snaps a mission makes after the people were updated (caught in the scene's
+  `onBeforeRender`, so they never show for a frame).
+- **Per-character gait** (`gaitProfile`, from the cast index sex, age, height and the look's build, age and uniform):
+  cadence by leg length, stride, arm swing, stoop, uniform bearing, the walk-run speed, a female pelvic rotation and
+  side sway with the chest counter-rotating, more glances for a child. Examples: Kai cadence ×0.99; Mira ×1.06 with
+  sway; the Witness stride ×0.97, arm swing ×0.90, stoop 0.07 rad; Rook stride ×0.95, arms ×0.86; the child (kid_kai,
+  1.27 m) cadence ×1.26, arms ×1.12, runs from 1.7 m/s. The arm swing is also evened out per side (the mocap swings
+  the left arm 50 % more than the right).
+- **Idle life.** Weight shifts come from the owner's idle clip (with the feet now locked, a shift is a real step),
+  breathing, glances aside and back (fewer while walking or talking), look-at for head and neck (eyes: skin.js).
+- **NPCs.** People moved by missions get speed, acceleration and turn rate from their root motion; a person whose
+  root does not move but who has a `speed` walks on the spot as before. The same system runs for everyone.
+- **Secondary motion** (`springs.js`). The rig has no cloth bones, so each template gets spring bones at run time:
+  a ring of 8 bones hung from the hips for loose cloth (only when there is a real loose garment: coat tails, tunics,
+  skirts, sash ends; the seat and wide trousers keep their leg weights), and 3 bones hung from the head for long
+  hair. The loose cloth below the hip joints and the hair below ear level are re-weighted toward them (more toward
+  the hem). Each bone's tip is a damped Verlet particle: it lags behind the body (starts, stops, turns, landings),
+  is pulled back to its rest shape, keeps its distance to its neighbours (the hem stays a ring) and is pushed out of
+  the thigh capsules, so the cloth never passes through the legs. `motionWorld.wind` (a Vector3) blows it.
+  Templates with springs today: the Witness, Rook, Niko and Tala (coats and tunics) and Mira (hair). Kai's hip-length
+  shell and short hair, Sera, Iven, Hale and the children have none.
+- **Level of detail** (re-chosen every 0.3 s): LOD 0 (Kai always; others within 12 m, 6 m on the low tier) has
+  everything; LOD 1 (to 32 m, 18 m on low) has no IK or foot locks, and the cloth is only pushed aside by the legs;
+  LOD 2 (further, or a crowd person on its low build on the low tier) is the blend space alone, the cloth at rest.
+
+### Before and after
+Same scenarios as the audit, Kai at a fixed 30 fps on the low tier, both columns with today's physics. Classic =
+`?motion=classic` (it reproduces the earlier classic run to the digit); new = the default. Niko and the child were
+measured before the last cost work; everything else is the final build.
+
+| Quantity | Classic | New | Target |
+|---|---|---|---|
+| Steady jog 3.1 m/s: foot slide per step, median / p90 | 5.7 / 8.2 cm | 0 / 3.3 cm | < 2 cm |
+| Stick 20 % (walk): slide median / p90 | 4.3 / 4.9 cm | 2.6 / 3.4 cm | |
+| Stick 50 %: slide median / p90 | 5.2 / 8.6 cm | 0 / 3.9 cm | |
+| Sprint 5.6 m/s: slide median / p90 | 3.5 / 20 cm | 0 / 10 cm | |
+| Circle (banked turn at 3.1 m/s): slide median | 6.7 cm | 0 cm | |
+| Crouch walk 1.7 m/s: slide median, cadence | 1.4 cm, 197 spm | 0.3 cm, 157 spm | a sneak |
+| Worst slide in the first second, keyboard / stick 50 % / sprint | 41 / 43 / 46 cm | 5.3 / 1.9 / 9.4 cm | |
+| Worst slide during the stop, keyboard / stick 50 % / sprint | 37 / 39 / 55 cm | 0 / 0.6 / 3.4 cm | |
+| Turn 90 / 180 degrees: worst slide | 13 / 40 cm | 2.0 / 3.6 cm | |
+| Turn 180: peak bone angular velocity | 31 rad/s | 27 rad/s | |
+| Idle: foot drift L / R | 2.4 / 8.1 cm | 0 / 5.5 cm (one weight-shift step) | locked |
+| Jump in place: clips in the air, landing dip | idle; 3.3 cm | jump; 13 cm | 5-15 cm |
+| Sprint jump: clips in the air, landing dip | run; 6 cm | jump_run; 17 cm | |
+| 3 m drop (6.7 m/s): landing dip | 6 cm | 21 cm (pelvis 15 + trunk) | |
+| Stairs 0.18 m at 3.1 m/s: toe penetration into risers | 26 cm | 2.9 cm | none |
+| Stairs: planted-foot slide median | 7.1 cm | 0 | |
+| Stairs at stick 35 %: penetration, lower foot above its tread p90 | 29 cm, 8.2 cm | 5.2 cm, 1.6 cm | |
+| 0.40 m risers (m13): penetration, slide | 34 cm, 30 cm | 2.0 cm, 0 | |
+| Ramp: penetration, slide | 11 cm, 7 cm | 2.0 cm, 0 | |
+| Walker crowd lane ends: peak bone angular velocity | 94 rad/s | 14 to 22 rad/s | |
+| Walkers within 12 m (high tier): slide median | 4.5 to 5.6 cm | 0.3 to 1.8 cm (LOD 0) | |
+| Mission-style NPCs (root moved, speed set) at LOD 0: slide median / p90 | | Witness 0.6 / 2.5, Mira 1.0 / 2.8, Niko 0.8 / 2.9, child 1.9 / 2.8 cm | |
+
+The within-gait peak bone speeds are 14 to 22 rad/s; the remaining peaks of about 32 rad/s are in the first steps
+of a sprint start and in the jump take-off (base 26 there).
+
+### Frame cost
+CPU of one game step without rendering, the machine under a load average of about 27 (indicative only):
+
+| View | Classic | New |
+|---|---|---|
+| Feel course, Kai alone (low) | 0.023 ms | 0.11 ms |
+| Feel course, Kai + 12 Walkers (low) | 0.14 ms | 0.55 ms |
+| Mission 1 (30 crowd people at LOD 2, low): all Character.update, median | 0.4 ms | 0.5 ms (+0.2 ms Kai) |
+| Mission 6 (6 NPCs, medium): all Character.update, median | 0.1 ms | 0.3 ms (+0.2 ms Kai) |
+
+The GPU work is the same: the same meshes and 4 bone influences per vertex; the spring bones only add 8 or 3 matrices
+to a person's bone texture. SwiftShader render times on this machine (80 ms to 3 s a frame, swinging with the load)
+say nothing about phones and did not change measurably. Measure with `node tools/feel/motion_cost.mjs --m=N --gfx=low
+[--query=motion=classic]` (per-person CPU) and `tools/feel/cost.mjs` (whole frame).
+
+### Evidence
+Below, `$M` stands for `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/motion`.
+- `$M/fc` (classic) and `$M/fn` (new): audit data and `metrics.json` for the table; `$M/summ.py fc fn` prints it.
+- `$M/fr`: rendered Kai clips and sheets: `walk_start_stop_side.mp4`, `start_sheet.jpg`, `stop_sheet.jpg`,
+  `stairs_side.mp4`, `stairs_sheet.jpg`, `circle_sheet.jpg` (banking), `turn180_sheet.jpg`, `crouch_sheet.jpg`,
+  `jump_in_place_side.mp4`, `jump_sprint_side.mp4`.
+- `$M/fh` and `$M/fh3` (high tier): `cast_sheet.jpg` (six principals walked the way missions do it), `crowd_sheet.jpg`,
+  `npc_witness_npc.mp4` and `witness_sheet.jpg` (the coat swinging), `npc_mira_npc.mp4`.
+- Mission 2 played through with the new motion (`tools/tests/m2.json`, no errors): `$M/play_m2`.
+
+New measuring tools: `tools/feel/author_clips.mjs` (writes `anims_extra.glb`), `tools/feel/motion_cost.mjs`,
+`tools/feel/motion_probe.mjs` (what a template's clips measure and the gait profile). `feelhelper.js` gained
+`FEEL.pacer(id, x, z0, z1, speed)` (a mission-style NPC), `FEEL.childLook`, the `npc` view and the motion state per
+sample; `scenarios.mjs` gained `cast_walk` and `npc_<id>`; `analyze.mjs` reports per-NPC slide, turn snaps and pops.
+
+### Limits and notes for the other steps
+- Physics: on stairs Kai keeps his full flat-ground speed (3.1 m/s), so he runs up two to four treads a step; a
+  slower stair speed (people climb at 0.5 to 0.7 m/s horizontally) would let the walk take one tread a step.
+- The rig has no finger, face, hood or strap bones, so hands stay as the mocap holds them and Kai's hood roll and
+  harness do not swing. Spring bones for those would need bones (or tags) from the character generator.
+- Turning on the spot is done with corrective steps, not a turn clip; there is still no anticipation crouch before a
+  jump (the physics takes off on the frame it is pressed, and a delay would cost responsiveness).
+- People at LOD 1 and 2 have no foot locks: 3 to 6 cm of slide per step at 12 m and beyond.

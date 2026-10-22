@@ -133,7 +133,7 @@
 {"shot":"d02_footprints.png"},
 {"until":"IDLE()","timeout":600000},
 {"eval":"window.STRIP=(()=>{const P=[[-4,-57],[-4,-66],[-14,-74],[-12,-86],[2,-92],[12,-100],[10,-110],[2,-116]],out=[];let acc=0;for(let i=0;i<P.length-1;i++){const [ax,az]=P[i],[bx,bz]=P[i+1],L=Math.hypot(bx-ax,bz-az),n=Math.ceil(L/2.5);for(let k=0;k<n;k++)out.push([ax+(bx-ax)*k/n,az+(bz-az)*k/n,acc+L*k/n]);acc+=L;}out.push([2.2,-116.2,acc]);return out})(); window.SK=0; window.WALK=setInterval(()=>{try{if(window.SK>=STRIP.length||__m19.S.arrived){clearInterval(window.WALK);return}if(!IDLE())return;if(window.SK>0&&__m19.S.prog<STRIP[window.SK-1][2]-0.5)return;const [x,z]=STRIP[window.SK++];__game.player.place(x,0,z,Math.PI)}catch(e){}},700); STRIP.length"},
-{"until":"__m19.S.arrived && IDLE()","timeout":1200000},
+{"until":"__m19.S.stayed && IDLE() && __game.interactables.some(i=>i.prompt==='Open the door')","timeout":1200000},
 {"eval":"clearInterval(window.WALK); __game.setResidue(false); ({prog:__m19.S.prog, hops:__m19.G.hops, off:__m19.G.offPath})"},
 {"shot":"d03_door_stayed.png"},
 {"eval":"PL(2,0,-115.6,Math.PI); U('Open the door')"},

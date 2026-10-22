@@ -70,7 +70,8 @@ export function prepareTemplate(t) {
     if (p.y > hipJ.y + 0.02 || p.y < Math.min(ank.L.y, ank.R.y) + 0.06) continue;
     const d = Math.min(segDist(p, thigh.L, knee.L, c), segDist(p, thigh.R, knee.R, c), segDist(p, knee.L, ank.L, c) + 0.012, segDist(p, knee.R, ank.R, c) + 0.012);
     const rl = rLeg * (p.y > lowY ? 1 : 0.8);
-    const s = smooth(rl + 0.02, rl + 0.07, d) * smooth(hipJ.y + 0.02, hipJ.y - 0.16, p.y);
+    // the seat and hips stay with the pelvis; cloth swings more toward the hem
+    const s = smooth(rl + 0.02, rl + 0.07, d) * smooth(hipJ.y - 0.04, hipJ.y - 0.2, p.y);
     if (s > 0.01) { sS[i] = s; ang[i] = Math.atan2(p.x - hips.x, p.z - hips.z); nS++; }
   }
   const chains = [];
@@ -104,8 +105,14 @@ export function prepareTemplate(t) {
     }
     chains.push({ kind, parent: pk, bones: out, first: 0 });
   };
-  if (nS > 60) build('skirt', NSK, hips, hipJ.y + 0.03, 0.05, sS, 'hips', 0.35, 0);
-  if (nH > 40) build('hair', NHAIR, headJ, headJ.y - 0.01, 0.02, sH, 'head', 0.12, Math.PI / 2);
+  // a skirt ring only for a real loose garment (coat tails, tunic, skirt): enough cloth hanging well clear of the
+  // legs; wide trousers and pockets alone keep their leg weights
+  let strongS = 0; for (let i = 0; i < n; i++) if (sS[i] > 0.5) strongS++;
+  if (strongS > 60) build('skirt', NSK, hips, hipJ.y + 0.03, 0.05, sS, 'hips', 0.35, 0);
+  else { sS.fill(0); nS = 0; }
+  let strongH = 0; for (let i = 0; i < n; i++) if (sH[i] > 0.5) strongH++;
+  if (strongH > 40) build('hair', NHAIR, headJ, headJ.y - 0.01, 0.02, sH, 'head', 0.12, Math.PI / 2);
+  else { sH.fill(0); nH = 0; }
   if (!chains.length) return null;
   // spring bone indices after the body's; inverse binds so that, at rest, bone world * inverse = M (like the others)
   let next = bones.length;
@@ -142,7 +149,9 @@ export function prepareTemplate(t) {
   }
   G.setAttribute('skinIndex', new THREE.BufferAttribute(NI, 4));
   G.setAttribute('skinWeight', new THREE.BufferAttribute(NW, 4));
-  t.springRig = { mesh: mesh.name, chains, inverses, rLeg, nS, nH };
+  let y0 = Infinity, y1 = -Infinity, strong = 0;
+  for (let i = 0; i < n; i++) if (sS[i] > 0.01) { y0 = Math.min(y0, pos[i * 3 + 1]); y1 = Math.max(y1, pos[i * 3 + 1]); if (sS[i] > 0.5) strong++; }
+  t.springRig = { mesh: mesh.name, chains, inverses, rLeg, nS, nH, stats: { skirtY: [+(y0 - hipJ.y).toFixed(3), +(y1 - hipJ.y).toFixed(3)], strong } };
   return t.springRig;
 }
 
@@ -169,7 +178,7 @@ export function attachSprings(h, rig) {
   return new Springs(h, S);
 }
 
-const _dir = new THREE.Vector3(), _dir0 = new THREE.Vector3(), _pq = new THREE.Quaternion();
+const _pqi = new THREE.Quaternion(), _dir = new THREE.Vector3(), _dir0 = new THREE.Vector3(), _pq = new THREE.Quaternion();
 const _k1 = new THREE.Vector3(), _k2 = new THREE.Vector3(), _h1 = new THREE.Vector3(), _h2 = new THREE.Vector3();
 const CFG = { skirt: { stiff: 7, damp: 2.2, grav: 0.35, ring: 0.5 }, hair: { stiff: 12, damp: 3.5, grav: 0.25, ring: 0 } };
 
@@ -187,13 +196,15 @@ export class Springs {
     wpos(B.thigh_R, _k2); wpos(B.shin_R, _h2);
     const r = (this.S.rig.rLeg + 0.02) * sc;
     const fresh = !this.valid || !(dt > 0);
-    const steps = fresh ? 1 : Math.min(4, Math.ceil(dt / (1 / 60)));
+    const steps = fresh || !dyn ? 1 : Math.min(4, Math.ceil(dt / (1 / 60)));
     const sdt = fresh ? 0 : dt / steps;
     for (const C of this.S.chains) {
       const cf = CFG[C.kind];
+      // the parent's world rotation, once per chain (the spring bones themselves need no matrix work here: the
+      // renderer updates them before skinning)
+      wquat(C.parent, _pq); _pqi.copy(_pq).invert();
       for (const nd of C.nodes) {
-        nd.bone.quaternion.copy(nd.restQ); nd.bone.updateMatrixWorld(true);
-        nd.o = nd.o || new THREE.Vector3(); wpos(nd.bone, nd.o);
+        nd.o = nd.o || new THREE.Vector3(); nd.o.copy(nd.bone.position).applyMatrix4(C.parent.matrixWorld);
         nd.restTip = nd.restTip || new THREE.Vector3(); nd.restTip.copy(nd.rest.tipLocal).applyMatrix4(C.parent.matrixWorld);
         if (fresh || !dyn || nd.tip.distanceToSquared(nd.restTip) > 1) { nd.tip.copy(nd.restTip); nd.prev.copy(nd.restTip); }
       }
@@ -207,7 +218,7 @@ export class Springs {
           nd.tip.lerp(nd.restTip, 1 - Math.exp(-cf.stiff * sdt));
         }
         // the hem keeps its ring: neighbours stay about as far apart as at rest
-        if (cf.ring && C.nodes.length > 2) for (let k = 0; k < C.nodes.length; k++) {
+        if (dyn && cf.ring && C.nodes.length > 2) for (let k = 0; k < C.nodes.length; k++) {
           const a = C.nodes[k], b = C.nodes[(k + 1) % C.nodes.length];
           const d0 = a.rest.tip.distanceTo(b.rest.tip) * sc, d = a.tip.distanceTo(b.tip);
           if (d > 1e-5) { const corr = (d - d0) / d * 0.5 * cf.ring; _v.subVectors(b.tip, a.tip).multiplyScalar(corr); a.tip.add(_v); b.tip.sub(_v); }
@@ -236,9 +247,9 @@ export class Springs {
       for (const nd of C.nodes) {
         _dir0.subVectors(nd.restTip, nd.o).normalize(); _dir.subVectors(nd.tip, nd.o).normalize();
         _q.setFromUnitVectors(_dir0, _dir);
-        wquat(nd.bone, _q2); _q2.premultiply(_q);
-        wquat(nd.bone.parent, _pq).invert(); nd.bone.quaternion.copy(_pq.multiply(_q2));
-        nd.bone.updateMatrixWorld(true);
+        // world = q * parent * rest; local = parent^-1 * world
+        _q2.copy(_pq).multiply(nd.restQ).premultiply(_q);
+        nd.bone.quaternion.copy(_pqi).multiply(_q2);
       }
     }
     this.valid = true;

@@ -364,7 +364,7 @@ export function buildCalder(game, scene, T) {
   const W = { lightSrc: K.lightSrc, root: K.root, kai: {}, mira: {} };
   const M = {
     asphalt: pm('wetAsphalt', { color: 0x3a3c40, puddles: 0.0 }), pave: pm('ceramicTile', { color: 0x9a948a }), kerb: pm('cutStone', { color: 0xa09a90 }),
-    brick: pm('brick', { color: 0x8a5a44 }), brickIn: pm('plaster', { color: 0xe8dcc8 }), floorWood: pm('wood', { color: 0x9a7048, planks: 6 }), tile: pm('ceramicTile', { color: 0xd8d0c0 }),
+    brick: pm('brick', { color: 0x8a5a44 }), brickIn: pm('plaster', { color: 0xe8dcc8, damage: 0, dirt: 0.06 }), floorWood: pm('wood', { color: 0x9a7048, planks: 6 }), tile: pm('ceramicTile', { color: 0xd8d0c0 }),
     wood: pm('wood', { color: 0x6a4a2a, planks: 2 }), paint: pm('paintedMetalPanel', { color: 0xe8e4da, cols: 1, rows: 1, wear: 0.1, grime: 0.1, gloss: 0.3 }),
     red: pm('paintedMetalPanel', { color: 0x8a1a1a, cols: 1, rows: 3, wear: 0.15, grime: 0.2, gloss: 0.5 }), conc: pm('concrete', { color: 0x8a8680, formwork: 0, stains: 0.6 }),
     grass: pm('grass', { color: 0x5a7a34 }), gravel: pm('gravel', { color: 0x8a8070 }), stone: pm('rock', { color: 0x7a7468 }), steel: pm('brushedMetal', { color: 0x6a6e70, roughness: 0.5 }),

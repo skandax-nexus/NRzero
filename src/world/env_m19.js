@@ -670,17 +670,20 @@ export function buildMirror(game, scene, low) {
   const stone = RZ.pbrMaterial('cutStone', { mapping: 'world', params: { color: 0xb8b0a2 } });
   const rock = RZ.pbrMaterial('rock', { mapping: 'triplanar', params: { color: 0x6a6660 } });
   const stoneO = RZ.pbrMaterial('cutStone', { mapping: 'object', params: { color: 0xc8c0b0 } });
+  // balustrade and rail posts: collected, then drawn as instanced meshes (a few draws instead of ~250)
+  const balPosts = [], railPosts = [];
+  const postRun = (list, w, mat, parent, cast) => { if (!list.length) return; const g = new THREE.BoxGeometry(w, 1.0, w); g.translate(0, 0.5, 0); const im = new THREE.InstancedMesh(g, mat, list.length); const M = new THREE.Matrix4(); list.forEach(([x, z], i) => { M.makeTranslation(x, 0, z); im.setMatrixAt(i, M); }); im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.castShadow = cast; im.receiveShadow = true; parent.add(im); };
   // ---------- the lake (a still mirror) ----------
   const lakeM = new THREE.MeshPhysicalMaterial({ color: 0x0c141c, roughness: 0.03, metalness: 0.0, transparent: true, opacity: 0.6, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.4, depthWrite: false });
   const lake = add(plane(260, 200, lakeM)); lake.rotation.x = -PI / 2; lake.position.set(0, LAKE, -30); lake.renderOrder = 2; lake.userData.noBatch = true; W.lake = lake;
   // ---------- the start terrace and its cliff ----------
-  both(box(30, 8, 20, rock, 0, LAKE, 26.4, { detail: false }));
+  both(box(30, 7.7, 20, rock, 0, LAKE, 26.4, { detail: false }));   // top just under the paving (no coplanar faces)
   const ter = add(box(30, 0.3, 20, stone, 0, -0.3, 26.4, { detail: false })); ter.castShadow = false; refl.add(ter.clone());
   solid(-15, -8, 16.4, 15, 0, 36.4); solid(-15, 0, 36.4, 15, 6, 37); solid(-15.6, 0, 16.4, -15, 6, 36.4); solid(15, 0, 16.4, 15.6, 6, 36.4);
   // balustrade with the gap where the bridge would start, and the arch over the gap
   for (const s of [-1, 1]) {
     both(box(13.4, 0.2, 0.4, stoneO, s * 8.2, 1.0, 16.6, { detail: false }));
-    for (let k = 1.6; k <= 14.6; k += 1.0) both(box(0.16, 1.0, 0.16, stoneO, s * k, 0, 16.6, { detail: false }));
+    for (let k = 1.6; k <= 14.6; k += 1.0) balPosts.push([s * k, 16.6]);
     solid(s > 0 ? 1.5 : -15, 0, 16.4, s > 0 ? 15 : -1.5, 1.2, 16.8);
     both(box(0.9, 5.2, 0.9, stoneO, s * 2.0, 0, 16.6, { detail: false }));
     solid(s * 2.0 - 0.45, 0, 16.15, s * 2.0 + 0.45, 5.2, 17.05);
@@ -705,13 +708,13 @@ export function buildMirror(game, scene, low) {
   BR.deck.forEach(([x0, x1, z0, z1], i) => {
     deck(x0, x1, z0, z1); W.deckBoxes.push(solid(x0, -1, z0, x1, 0, z1));
     if (i < 5 || i === 8) { const long = (z1 - z0) > (x1 - x0); const n = Math.floor((long ? z1 - z0 : x1 - x0) / 3);
-      for (let k = 0; k <= n; k++) { const t = n ? k / n : 0.5; for (const s of [0, 1]) { const px = long ? (s ? x1 - 0.08 : x0 + 0.08) : x0 + t * (x1 - x0), pz = long ? z0 + t * (z1 - z0) : (s ? z1 - 0.08 : z0 + 0.08); const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 0.08), railM); post.position.set(px, 0.5, pz); refl.add(post); } }
+      for (let k = 0; k <= n; k++) { const t = n ? k / n : 0.5; for (const s of [0, 1]) { const px = long ? (s ? x1 - 0.08 : x0 + 0.08) : x0 + t * (x1 - x0), pz = long ? z0 + t * (z1 - z0) : (s ? z1 - 0.08 : z0 + 0.08); railPosts.push([px, pz]); } }
       if (i % 2 === 0) lamp(x0 + 0.1, 0, (z0 + z1) / 2, refl);
     }
   });
   // the island: a broken piece of a station platform, real and visible (a place to stand and breathe)
   const [ix0, ix1, iz0, iz1] = BR.island;
-  const isl = both(box(ix1 - ix0, 3.2, iz1 - iz0, rock, (ix0 + ix1) / 2, -3.2, (iz0 + iz1) / 2, { detail: false })); void isl;
+  const isl = both(box(ix1 - ix0, 2.9, iz1 - iz0, rock, (ix0 + ix1) / 2, -3.2, (iz0 + iz1) / 2, { detail: false })); void isl;
   both(box(ix1 - ix0, 0.3, iz1 - iz0, RZ.pbrMaterial('concrete', { mapping: 'world', params: { color: 0x9a9a96 } }), (ix0 + ix1) / 2, -0.3, (iz0 + iz1) / 2, { detail: false }));
   solid(ix0, -3.2, iz0, ix1, 0, iz1);
   const edge = both(box(ix1 - ix0, 0.02, 0.4, new THREE.MeshStandardMaterial({ color: 0xffd34a, roughness: 0.5 }), (ix0 + ix1) / 2, 0.0, iz1 - 0.3, { detail: false })); void edge;
@@ -730,11 +733,11 @@ export function buildMirror(game, scene, low) {
   W.sliderX = (s, t) => { const P = 9, u = ((t + s.phase) % P) / P; const k = u < 0.22 ? 0 : u < 0.5 ? (u - 0.22) / 0.28 : u < 0.72 ? 1 : 1 - (u - 0.72) / 0.28; const e = k * k * (3 - 2 * k); return s.a + (s.b - s.a) * e; };
   W.updaters.push((dt, t) => { for (const S of W.sliders) { const x = W.sliderX(S.s, t); S.x = x; S.m.position.x = x; S.b.min.x = x - S.s.w / 2; S.b.max.x = x + S.s.w / 2; } });
   // ---------- the far cliff and the Concourse of Doors ----------
-  both(box(80, 8, 70, rock, 0, LAKE, -91.4, { detail: false }));
+  both(box(80, 7.9, 70, rock, 0, LAKE, -91.4, { detail: false }));
   const pl = add(new THREE.Mesh(new THREE.PlaneGeometry(80, 70), RZ.pbrMaterial('cutStone', { mapping: 'world', params: { color: 0xa8a296 } }))); pl.rotation.x = -PI / 2; pl.position.set(0, 0, -91.4); pl.receiveShadow = true;
   solid(-40, -8, -126.4, 40, 0, -56.4);
   solid(-40, 0, -127, 40, 8, -126.4); solid(-40.6, 0, -126.4, -40, 8, -56.4); solid(40, 0, -126.4, 40.6, 8, -56.4);
-  for (const s of [-1, 1]) { both(box(36.4, 0.2, 0.4, stoneO, s * 21.8, 1.0, -56.6, { detail: false })); solid(s > 0 ? 3.6 : -40, 0, -56.8, s > 0 ? 40 : -3.6, 1.2, -56.4); for (let k = 4; k <= 39; k += 1.0) both(box(0.16, 1.0, 0.16, stoneO, s * k, 0, -56.6, { detail: false })); }
+  for (const s of [-1, 1]) { both(box(36.4, 0.2, 0.4, stoneO, s * 21.8, 1.0, -56.6, { detail: false })); solid(s > 0 ? 3.6 : -40, 0, -56.8, s > 0 ? 40 : -3.6, 1.2, -56.4); for (let k = 4; k <= 39; k += 1.0) balPosts.push([s * k, -56.6]); }
   // landmarks: the station clock tower (north), Hensel's front (west), the observatory dome (east), Helix pylons
   try {
     const b = RZ.cityBlock([
@@ -788,7 +791,8 @@ export function buildMirror(game, scene, low) {
   const motes = new Motes(low ? 200 : 420, [-30, 0.4, -120, 30, 10, 30], 0xfff0d8, 0.05, 0.08); add(motes.mesh);
   W.updaters.push((dt, t) => { fr.userData.update(t); motes.update(dt); });
   W.lightSrc.push({ p: [0, 3, -60], c: 0xffe8c8, i: 6, d: 12 }, { p: [-14, 2.5, -74], c: 0xffe0b0, i: 5, d: 9 }, { p: [10, 2.5, -110], c: 0xe0e8ff, i: 5, d: 9 }, { p: [2, 3, -116], c: 0xfff0d8, i: 8, d: 10 });
-  // the reflection lies under the lake: it never casts a shadow (halves the shadow pass over the gorge)
+  postRun(balPosts, 0.16, stoneO, root, true); postRun(balPosts, 0.16, stoneO, refl, false); postRun(railPosts, 0.08, railM, refl, false);
+  // the reflection lies under the lake: it never casts a shadow
   refl.traverse(o => { o.castShadow = false; });
   W.update = (dt, t) => { for (const u of W.updaters) u(dt, t); };
   return W;
