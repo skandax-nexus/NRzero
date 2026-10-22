@@ -34,7 +34,7 @@ await p.evaluate(async (S) => {
   const sp = S.spot, camDir = Math.atan2(sp.cam[0] - sp.x, sp.cam[1] - sp.z);
   window.CAP = {
     cur: null,
-    spawn(sub) {
+    async spawn(sub) {
       if (this.cur && this.cur !== g.player.char) { g.scene.remove(this.cur.root); delete g.actors['cap']; }
       if (sub.player) {
         g.player.place(sp.x, sp.y, sp.z, camDir); g.player.char.root.visible = true; this.cur = g.player.char;
@@ -45,6 +45,8 @@ await p.evaluate(async (S) => {
         this.cur = g.actor('cap', { ...look, umbrella: null }, sp.x, sp.y, sp.z, camDir);
       }
       this.cur.lookTarget = null; this.cur.speed = 0;
+      // the look's template analysis (src/human/skin.js) runs in a worker: wait for it before shooting
+      try { const SK = await import('/src/human/skin.js'); if (SK.look?.idle) await SK.look.idle(); } catch { /* older build */ }
       for (let i = 0; i < 12; i++) g.step(1 / 30);
       return this.cur.template || 'procedural';
     },
@@ -69,7 +71,7 @@ await p.evaluate(async (S) => {
         for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'emissiveMap', 'roughnessMap']) if (m[k]?.image) tex.add(k + ':' + m[k].image.width + 'x' + m[k].image.height);
       });
       const castS = g.engine.renderer.shadowMap.enabled;
-      return { template: c.template, lod: c.person?.lod ?? null, draws, shadowDraws: castS ? draws : 0, tris: Math.round(tris), textures: [...tex] };
+      return { template: c.template, lod: c.person?.lod ?? null, look: !!c.person?.face, draws, shadowDraws: castS ? draws : 0, tris: Math.round(tris), textures: [...tex] };
     },
   };
 }, S);

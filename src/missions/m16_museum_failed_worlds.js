@@ -777,6 +777,7 @@ export default {
     // ======================================================================================================
     // ---------- opening: the establishing shot, the chapter card, the stair ----------
     S.phase = 'intro'; S.main = true;
+    ui.missionTag('MISSION 16 · THE MUSEUM OF FAILED WORLDS'); ui.show('hud', true);
     pl.place(...P.start); kai.root.rotation.y = PI;
     cine(true); lockMusic('m16-museum', 0.5);
     await game.shot([0, 4.6, -31], [0, 2.2, 10], 0.01, { fov: 50 });
@@ -847,6 +848,8 @@ export default {
       ['mara', 'One thousand and forty-six worlds. One hand writing every label.'],
       ['kai', 'He isn\'t collecting them. He\'s repeating. The same morning, a thousand times, changing one thing each time.'],
       ['kai', 'The fever. The rain. The hospital. Every time, she reaches, and every time it ends.'],
+      // M14: Sera counted seventeen Kais under the statue; the museum counts every try
+      ...(F.seraKnowsVersions || F.m14denial ? [['kai', 'Sera counted seventeen of me under that statue. Those were only the ones who got as far as her century.']] : []),
       ...(dual ? [['mara', 'Both of my records were true for different branches. He\'s the one cutting the branches.']] : [['mara', 'Then the archive upstairs is one page of his notebook.']]),
     ]);
     if (S.box) {

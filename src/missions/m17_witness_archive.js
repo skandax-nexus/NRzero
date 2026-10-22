@@ -702,7 +702,7 @@ export default {
             await game.say('kai', 'Nobody ever got past their own habits before. Apparently.');
             audio.sfxPlay('door'); W.doors.gateLamp.material = W.mats.amber;
             await tween(2.0, k => { W.doors.gate.position.y = 1.7 + k * 3.6; }); W.doors.gateBox.enabled = false;
-            if (F.metSera || F.m10metSera || F.m14metSera) await game.say('m17sera', 'Kai? Your signal just went very quiet and then very loud. Talk to me.');
+            if (F.metSera || F.m10metSera || F.m14metSera) await game.say('sera', 'Kai? Your signal just went very quiet and then very loud. Talk to me.');
             if (F.metSera || F.m10metSera || F.m14metSera) await game.say('kai', 'Mirrors that fight like me. They\'re down. I\'m going under the seal.');
           } finally { S.main = false; S.busy = false; cine(false); }
           S.phase = 'seal'; game.checkpoint(0, 0, -72.4, PI, () => { S.echoT = 0; }); refreshObjective();
@@ -965,9 +965,10 @@ export default {
       await game.say('m17band', 'Correction to the record. Varen, Mira: died 19.10.2026, 08:14:09, Site Zero. Neural pattern: incomplete, sixty-one percent. Location: the Chronolith.');
       await game.say('kai', 'Not alive. Not dead. Unfinished.');
       if (F.metSera || F.m10metSera || F.m14metSera) {
-        await game.say('m17sera', 'Kai. You\'re back on my screen. What did you find down there?');
+        await game.say('sera', 'Kai. You\'re back on my screen. What did you find down there?');
         await game.say('kai', 'My sister. Most of her. And the man who keeps paying for the rest with other people\'s worlds.');
-        await game.say('m17sera', 'Then come up. Before he finds out what you\'ll do with it.');
+        await game.say('sera', 'Then come up. Before he finds out what you\'ll do with it.');
+        await game.say('sera', 'And come to Lantern Hall. The sky over the valley has gone a colour I don\'t have a name for.');
       }
       F.m17done = true; F.m17quote = true; F.witnessMotive = true; F.metWitness = true; F.m17witnessTalk = true;
       F.m17shards = S.shards; F.m17journal = S.journal.size; F.m17evidence = S.ev.size; F.m17echoes = S.echoes; F.m17collapses = S.collapses;
@@ -1024,6 +1025,7 @@ export default {
 
     // ---------- intro ----------
     S.main = true; game.control = false; ui.letterbox(true);
+    ui.missionTag('MISSION 17 · THE WITNESS\'S ARCHIVE');   // the previous mission's tag must not show under the opening
     pl.place(...P.start); kai.root.rotation.y = PI;
     W.stacks.setLayout('A', true);
     game.checkpoint(0, 0, 16, PI);
@@ -1039,7 +1041,7 @@ export default {
     await tween(2.4, k => { W.doors.lift.position.y = 1.7 + k * 3.6; });
     W.doors.liftBox.enabled = false;
     if (F.metSera || F.m10metSera || F.m14metSera) {
-      await game.say('m17sera', F.seraTrust != null && F.seraTrust < 0 ? 'You\'re under the old Helix. If he\'s down there, don\'t make a deal you can\'t pay for.' : 'You\'re under the old Helix now. Nobody comes back up from Site Zero with the same face.');
+      await game.say('sera', F.seraTrust != null && F.seraTrust < 0 ? 'You\'re under the old Helix. If he\'s down there, don\'t make a deal you can\'t pay for.' : 'You\'re under the old Helix now. Nobody comes back up from Site Zero with the same face.');
     }
     await game.say('kai', 'He left an empty case for this world in his museum. I want to know what he means to put in it.');
     await game.shot([-1.6, 1.8, 18.6], [0.6, 1.6, 22.6], 1.2, { fov: 38 });

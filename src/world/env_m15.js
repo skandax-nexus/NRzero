@@ -48,8 +48,8 @@ export const SHARDS = [
 ];
 export const NOTES = [
   [-3.2, 0.52, 19.6, 'a bench on the Archive Plaza', 'If you are reading this, it is not the fourteenth. It only feels like it. Find Mara at the Archive. — You'],
-  [-60.6, 0.9, 13.6, 'the station waiting room', 'Tomorrow I will tell Ines I\'m sorry about the boat. (Written 14 May. Found 14 May. Again.)'],
-  [-80.2, 4.5, -54.2, 'the signal box', 'Pip — your father is not coming back on the 08:14. I\'m sorry. I couldn\'t say it out loud. — T.W.'],
+  [-60.6, 0.9, 13.6, 'the station waiting room', 'Tomorrow I will tell Hanne I\'m sorry about the boat. (Written 14 May. Found 14 May. Again.)'],
+  [-80.2, 4.5, -54.2, 'the signal box', 'Pip — your father is not coming back on the 08:14. I\'m sorry. I couldn\'t say it out loud. — T.M.'],
   [64.2, 0.8, -7.2, 'a desk at the back of Larkfield classroom one', 'Ms O: you count fifteen every morning. There were twenty-four chairs. Write it down.'],
   [-4.4, 1.0, 50.6, 'Bram Tully\'s fruit stall', 'The pears are always fresh. Nothing is always fresh. — B.'],
   [18.4, 0.97, -35.2, 'Anja\'s lab bench', 'Anja, you said one day. It has been a thousand and ninety. — M.Q.'],
@@ -57,7 +57,7 @@ export const NOTES = [
 
 // The nine cards of the Separation Board (the archive puzzle). col: 'cause' | 'consequence' | 'fabricated'
 export const CARDS = [
-  { id: 'st_cause', d: 'station', col: 'cause', title: 'Signal log, 07:56', text: '"Line unmaking at the Keld cutting. Sent the coast service early from Platform One, 212 aboard. Could not hold it." — T. Wren, signal box, 14 May 2193.' },
+  { id: 'st_cause', d: 'station', col: 'cause', title: 'Signal log, 07:56', text: '"Line unmaking at the Keld cutting. Sent the coast service early from Platform One, 212 aboard. Could not hold it." — T. Marsh, signal box, 14 May 2193.' },
   { id: 'st_cons', d: 'station', col: 'consequence', title: 'Driver\'s pass, Platform One', text: 'Pip\'s father drove the early train. He told her to wait for the 08:14. Six hundred people waited on Platform Two for a train that had already gone.' },
   { id: 'st_fake', d: 'station', col: 'fabricated', title: 'Council notice', text: '"The evacuation was completed without loss. All residents departed safely on the 08:14 coast service." Dated 15 May 2193.' },
   { id: 'sc_cause', d: 'school', col: 'cause', title: 'Council order, 07:40', text: '"Storm front at Keld. Abandon Larkfield School. All children to the Archive by 10:40." Signed, the Council of Harrow, 14 May 2193.' },
@@ -102,8 +102,8 @@ export function registerM15Cast() {
     rimColor: 0xb6ff8a, glow: 0x14180e, bg: 0x0e0e0c,
     vp: { sex: 'f', pitch: 0.92, rate: 0.94, langs: ['en-GB', 'en-IE', 'en-US'] },
   });
-  registerCast('wren', {
-    name: 'TOBIAS WREN', role: 'Stationmaster · Harrow North',
+  registerCast('tobias', {
+    name: 'TOBIAS MARSH', role: 'Stationmaster · Harrow North',
     bio: 'Has sent the last train out of Harrow North every morning for three years, and every morning he has forgotten that he sent it early.',
     look: { era: '2196', costume: 'surv_m2', sex: 0, age: 58, height: 1.75, build: 1.04, skin: 0xc49a7c, hair: 0x8a8278, hairStyle: 'short', beard: 0x8a8278, eyes: 0x4a5a6a,
       face: { jaw: 0.3, cheek: 0.05, nose: 0.3, noseWidth: 0.2, lips: -0.2, brow: 0.3, eyeSize: -0.15, faceLength: 0.1, chin: 0.2 },
@@ -135,10 +135,10 @@ export function registerM15Cast() {
   });
   registerCast('m15res', { name: 'RESIDENT', role: 'Harrow Reach · 14 May 2193', vp: { sex: 'm', pitch: 0.96, rate: 1.02, langs: ['en-GB', 'en-US'] } });
   registerCast('m15resf', { name: 'RESIDENT', role: 'Harrow Reach · 14 May 2193', vp: { sex: 'f', pitch: 1.08, rate: 1.02, langs: ['en-GB', 'en-AU'] } });
-  registerCast('m15pa', { name: 'STATION PA', role: 'Harrow North · Tobias Wren', voice: true, vp: { sex: 'm', pitch: 0.84, rate: 0.92, langs: ['en-GB', 'en-US'] } });
+  registerCast('m15pa', { name: 'STATION PA', role: 'Harrow North · Tobias Marsh', voice: true, vp: { sex: 'm', pitch: 0.84, rate: 0.92, langs: ['en-GB', 'en-US'] } });
   registerCast('m15band', { name: 'CHRONOLITH BAND', role: 'Kai\'s wrist · lock tuner', voice: true, vp: { sex: 'f', pitch: 1.18, rate: 1.06, langs: ['en-US', 'en-GB'] } });
   registerCast('m15ren', { name: 'REN HALLOWAY', role: 'Testimony 7 · wax-and-wire cylinder, 2150', voice: true, vp: { sex: 'm', pitch: 0.74, rate: 0.88, langs: ['en-GB', 'en-IE'] } });
-  registerCast('m15teo', { name: 'TEO', role: 'Archive Plaza · asks about tomorrow', look: { ...KIDS[1], age: 10, height: 1.34, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'curly', lod: false }, vp: { sex: 'm', pitch: 1.4, rate: 1.08, langs: ['en-GB', 'en-US'] } });
+  registerCast('m15teo', { name: 'SAMI', role: 'Archive Plaza · asks about tomorrow', look: { ...KIDS[1], age: 10, height: 1.34, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'curly', lod: false }, vp: { sex: 'm', pitch: 1.4, rate: 1.08, langs: ['en-GB', 'en-US'] } });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -591,8 +591,8 @@ export function buildHarrow(game, scene, T) {
     C.box(M.rust, -86.4, fy + 3.2, -60.4, -75.6, fy + 3.5, -51.6);
     for (let k = 0; k < 9; k++) { const x = -84.8 + k * 0.9; C.box(M.rust, x - 0.05, fy, -58.8, x + 0.05, fy + 1.1, -58.6); C.geo(k % 3 ? M.steel : M.rust, new THREE.BoxGeometry(0.06, 1.0, 0.06), [x, fy + 1.0, -58.3], [0.4, 0, 0]); }
     C.box(M.wood, -84, fy, -57.8, -81, fy + 0.95, -56.6); box(-84, fy, -57.8, -81, fy + 0.95, -56.6);     // the desk with the log
-    W.sigLogMesh = plane(TEX.paper('SIGNAL LOG · HARROW NORTH', [['07:40  Council order: evacuate. Coast service 08:14, P2.', '#2a2018'], ['07:52  Keld cutting reports the line unmaking. Ahead, the rails forget they are rails.', '#2a2018'], ['07:56  Sent the coast service early from Platform ONE. 212 aboard. Could not hold it. Could not call the others back.', '#8a1a10'], ['08:14  Announced P2 anyway. God forgive me.  — T. Wren', '#2a2018']], { hand: true, key: 'log' }), 0.9, 0.68, -82.5, fy + 0.97, -57.2, 0, scene, 0.25, -Math.PI / 2);
-    // the door: a plank door that Wren opens
+    W.sigLogMesh = plane(TEX.paper('SIGNAL LOG · HARROW NORTH', [['07:40  Council order: evacuate. Coast service 08:14, P2.', '#2a2018'], ['07:52  Keld cutting reports the line unmaking. Ahead, the rails forget they are rails.', '#2a2018'], ['07:56  Sent the coast service early from Platform ONE. 212 aboard. Could not hold it. Could not call the others back.', '#8a1a10'], ['08:14  Announced P2 anyway. God forgive me.  — T. Marsh', '#2a2018']], { hand: true, key: 'log' }), 0.9, 0.68, -82.5, fy + 0.97, -57.2, 0, scene, 0.25, -Math.PI / 2);
+    // the door: a plank door that Marsh opens
     const door = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.3, 0.08), M.wood); door.position.set(-78.6, fy + 1.15, -52); door.castShadow = true; scene.add(door);
     W.doors.signal = { mesh: door, col: box(-79.6, fy, -52.2, -77.6, fy + 2.3, -51.8) };
     // stair: 9 steps of 0.4 from z -40 (y 0) to the landing z -50..-52 (y 3.6)

@@ -36,6 +36,8 @@ export class Player {
     this.stickSprint = false; this.autoCrouch = false;
     this.cam = { arm: 3.4, side: 1, eye: 1.55, step: { x: 0, v: 0 }, dip: { x: 0, v: 0 } };
     this._hs = 0; this._yawPrev = 0;
+    // safe respawn: the last stable, well-supported spot (falls into the void return there instead of failing)
+    this.safe = null; this._safeT = 0; this._stable = 0; this._respawning = false; this._hidKai = false;
   }
 
   place(x, y, z, facing = 0) {
@@ -43,6 +45,7 @@ export class Player {
     this.camYaw = facing + Math.PI; this.first = true;
     this.motor.reset(this.pos); this.grounded = true; this._carryBox = null; this._sim.copy(this.pos); this.visOffset.set(0, 0, 0);
     this.cam.step.x = this.cam.step.v = this.cam.dip.x = this.cam.dip.v = 0; this._hs = 0; this._yawPrev = facing;
+    this._stable = 0; this.showKai(true);
     this.applyVisual();
   }
 
@@ -102,10 +105,13 @@ export class Player {
     }
     const H = this.crouching ? CROUCH_H : this.height;
     const people = allowMove && !g.cine ? this.gatherPeople(dt) : [];
+    this._camPeople = people;
     M.frame({ pos, vel: this.vel, dt, state: g.temporal.current, tv, hasInput: len > 0, sprint: this.sprinting, radius: this.radius,
       height: H, crouching: this.crouching, canJump: !this.crouching, assist: this.edgeAssist, killY: g.killY ?? -30, people });
     this.grounded = M.grounded;
-    if (pos.y < (g.killY ?? -30)) g.fail('You fell between states.');
+    if (pos.y < (g.killY ?? -30)) this.fallOut();
+    else this.trackSafe(dt, allowMove);
+    if (g.cine) this.showKai(true);
     // a low ceiling crouches Kai, and he stands again once clear
     if (!this.crouching && M.grounded && M.headroom(pos, this.radius, CROUCH_H, this.height) !== null) { this.crouching = true; this.autoCrouch = true; }
     else if (this.crouching && this.autoCrouch && M.headroom(pos, this.radius, CROUCH_H, this.height) === null) { this.crouching = false; this.autoCrouch = false; }
@@ -127,6 +133,65 @@ export class Player {
     this._sim.copy(pos);
     this._carryBox = M.groundBox?.carry ? M.groundBox : null;
     if (this._carryBox) this._carry.copy(this._carryBox.min);
+  }
+
+  // Remember the last stable spot: grounded for 0.4 s, under player control, with ground under the whole footprint.
+  trackSafe(dt, allowMove) {
+    const g = this.game, M = this.motor;
+    this._stable = M.grounded && allowMove && !g.cine && !M.groundBox?.carry ? this._stable + dt : 0;
+    if (this._stable < 0.4 || (this._safeT -= dt) > 0) return;
+    this._safeT = 0.25;
+    if (this.footprintOk(this.pos.x, this.pos.y, this.pos.z)) {
+      const s = this.safe || (this.safe = {});
+      s.x = this.pos.x; s.y = this.pos.y; s.z = this.pos.z; s.yaw = this.yaw; s.scene = g.scene; s.state = g.temporal.current;
+    }
+  }
+  footprintOk(x, y, z) {
+    const col = this.game.collision, st = this.game.temporal.current, r = this.radius;
+    for (const [ox, oz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+      const t = col.groundHeight(x + ox, z + oz, y, st);
+      if (t === null || Math.abs(t - y) > 0.05) return false;
+    }
+    return true;
+  }
+  // Fell below the kill plane: back to the last safe spot after a short fade (no fail, nothing lost). Falls with no
+  // safe spot still standing (an era switch removed it, a new scene, game.fallRespawn === false) fail as before.
+  fallOut() {
+    const g = this.game, s = this.safe;
+    if (this._respawning || g._failing) return;
+    if (!s || g.fallRespawn === false || s.scene !== g.scene || s.state !== g.temporal.current || !this.footprintOk(s.x, s.y, s.z)) { g.fail('You fell between states.'); return; }
+    this._respawning = true; g.control = false;
+    g.touch?.buzz?.([40, 40, 60]); g.audio.sfxPlay?.('rewind');
+    const done = () => { this._respawning = false; if (g.control === false && !g._failing) g.control = true; };
+    Promise.resolve(g.ui.fade(1, 260)).then(() => {
+      if (g.scene === s.scene && !g._failing && s.state === g.temporal.current && this.footprintOk(s.x, s.y, s.z)) this.place(s.x, s.y, s.z, s.yaw);
+      else if (!g._failing) { this._respawning = false; g.fail('You fell between states.'); return null; }
+      return g.ui.fade(0, 380);
+    }).then(done, done);
+  }
+
+  // Distance along the camera arm (from o, unit dir d) to the first person cylinder (0.5 m: body + near-plane margin).
+  peopleArm(o, d, far) {
+    let best = far;
+    const ps = this._camPeople; if (!ps?.length) return best;
+    const a = d.x * d.x + d.z * d.z; if (a < 1e-6) return best;
+    for (const p of ps) {
+      const ox = o.x - p.x, oz = o.z - p.z, b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - 0.5 * 0.5;
+      if (c < 0) continue;                                       // the pivot is inside: ignore (the motor keeps people off Kai)
+      const disc = b * b - a * c; if (disc < 0) continue;
+      const t = (-b - Math.sqrt(disc)) / a; if (t <= 0 || t >= best) continue;
+      const y = o.y + d.y * t; if (y < p.y - 0.1 || y > p.y + 1.9) continue;
+      best = t - 0.15;
+    }
+    return best;
+  }
+
+  // Kai's model hides while the camera arm is squeezed into his head (backed into a corner), and shows again after.
+  showKai(on) {
+    const m = this.char.person?.root || this.char.body?.root;
+    if (!m) return;
+    if (!on && !this._hidKai && m.visible) { m.visible = false; this._hidKai = true; }
+    else if (on && this._hidKai) { m.visible = true; this._hidKai = false; }
   }
 
   setInterface(ch, dt, hs, airT, landing) {
@@ -196,8 +261,15 @@ export class Player {
     }
     want = Math.max(0.3, want);
     C.arm = this.first || want < C.arm ? want : C.arm + (want - C.arm) * Math.min(1, dt * 4);
+    // people between Kai and the camera: the arm slides in front of them (quickly, not in one frame), never closer
+    // than 0.7 m, so the camera does not pass through a head
+    const pw = Math.max(0.7, this.peopleArm(shoulder, dir, this.camDist));
+    C.pArm = this.first || C.pArm === undefined ? pw : C.pArm + (pw - C.pArm) * Math.min(1, dt * (pw < C.pArm ? 10 : 3));
+    const arm = Math.min(C.arm, C.pArm);
     this.first = false;
-    this.camSmooth.copy(shoulder).addScaledVector(dir, C.arm);
+    // backed into a wall, the arm is too short to see past Kai's shoulder: hide his model until it opens again
+    if (arm < 0.6) this.showKai(false); else if (arm > 0.75) this.showKai(true);
+    this.camSmooth.copy(shoulder).addScaledVector(dir, arm);
     cam.position.copy(this.camSmooth);
     cam.lookAt(shoulder.x, shoulder.y - 0.05, shoulder.z);
   }

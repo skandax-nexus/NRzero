@@ -19,15 +19,19 @@
 // (oily, red, cav, thin, lips, brow, crow, nail, tip, det); ?looktier=high|medium|low forces a tier.
 import * as THREE from 'three';
 import { getQuality } from '../world/realism.js';
+import { analyseData } from './skin_analyse.js';
 
 const Q = new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '');
 const LOOKQ = (Q.get('look') || '').split(',').filter(Boolean);
+// DEFAULT_ON: the new look is the default; false keeps it behind ?look=new while it is being verified
+const DEFAULT_ON = false;
 export const look = {
-  classic: LOOKQ.includes('classic'),
+  classic: LOOKQ.includes('classic') || (!DEFAULT_ON && !LOOKQ.includes('new')),
   off: new Set(LOOKQ.filter(s => s.startsWith('no')).map(s => s.slice(2))),
   dbg: (LOOKQ.find(s => s.startsWith('dbg:')) || '').slice(4),
   tier: Q.get('looktier') || null,
-  stats: { templates: 0, prepMs: 0, persons: 0 },
+  stats: { templates: 0, prepMs: 0, mainMs: 0, persons: 0 },
+  sync: Q.has('looksync'), waitIdle: [],
 };
 const on = k => !look.off.has(k);
 const tierName = () => look.tier || (() => { try { return getQuality(); } catch { return 'medium'; } })();
@@ -85,8 +89,8 @@ function makeDetailMaps() {
     const l1 = Math.pow(Math.abs(Math.sin((u + v) * 9 + w1)), 14), l2 = Math.pow(Math.abs(Math.sin((u - v) * 11 + w2)), 14);
     const soft = 0.25 * Math.sin(u * 5 + Math.sin(v * 7)) * Math.sin(v * 6 + Math.sin(u * 4));
     const i = y * N + x;
-    H[i] += -0.55 * (l1 + l2) + soft * 0.4;
-    C[i] = Math.min(C[i], 1 - 0.3 * (l1 + l2));
+    H[i] += -0.18 * (l1 + l2) + soft * 0.3;
+    C[i] = Math.min(C[i], 1 - 0.12 * (l1 + l2));
   }
   const pores = heightToTexture(N, H, C, 0.55);
   // weave: a 2 cm tile, plain weave of 24 threads, each thread rounded, over / under alternating, slub noise
@@ -107,252 +111,20 @@ function makeDetailMaps() {
 // ------------------------------------------------------------------------------------------------------------------
 // template analysis (rest pose, mesh space; once per geometry, shared by every clone)
 // ------------------------------------------------------------------------------------------------------------------
-const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-const gauss = (d2, s) => Math.exp(-d2 / (2 * s * s));
-function sphereFit(P) {
-  const N = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], y = [0, 0, 0, 0];
-  for (const p of P) {
-    const a = [2 * p[0], 2 * p[1], 2 * p[2], 1], b = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
-    for (let r = 0; r < 4; r++) { y[r] += a[r] * b; for (let c = 0; c < 4; c++) N[r][c] += a[r] * a[c]; }
-  }
-  for (let k = 0; k < 4; k++) {
-    let m = k; for (let r = k + 1; r < 4; r++) if (Math.abs(N[r][k]) > Math.abs(N[m][k])) m = r;
-    [N[k], N[m]] = [N[m], N[k]]; [y[k], y[m]] = [y[m], y[k]];
-    if (Math.abs(N[k][k]) < 1e-12) return null;
-    for (let r = 0; r < 4; r++) if (r !== k) { const f = N[r][k] / N[k][k]; for (let c = k; c < 4; c++) N[r][c] -= f * N[k][c]; y[r] -= f * y[k]; }
-  }
-  const s = y.map((v, i) => v / N[i][i]), c = s.slice(0, 3);
-  return { c, r: Math.sqrt(Math.max(1e-10, s[3] + c[0] * c[0] + c[1] * c[1] + c[2] * c[2])) };
-}
-// the atlas, read back small (lips, hair colour); null where the image cannot be drawn
+// the atlas, read back small for the analysis (lips, hair colour): { S, data, flipY }, or null where it cannot be drawn
 function atlasPixels(tex, S = 256) {
   try {
     const img = tex && tex.image; if (!img || !img.width) return null;
     const cv = globalThis.OffscreenCanvas ? new globalThis.OffscreenCanvas(S, S) : Object.assign(globalThis.document.createElement('canvas'), { width: S, height: S });
     const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0, S, S);
-    const d = cx.getImageData(0, 0, S, S).data;
-    return (u, v) => { const x = Math.max(0, Math.min(S - 1, Math.floor(u * S))), y = Math.max(0, Math.min(S - 1, Math.floor((tex.flipY ? 1 - v : v) * S))), i = (y * S + x) * 4; return [d[i] / 255, d[i + 1] / 255, d[i + 2] / 255]; };
+    return { S, data: cx.getImageData(0, 0, S, S).data, flipY: !!tex.flipY };
   } catch { return null; }
-}
-const srgb2lin = c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
-
-function analyse(mesh, mat) {
-  const t0 = globalThis.performance ? globalThis.performance.now() : 0;
-  const g = mesh.geometry, pos = g.attributes.position, nor = g.attributes.normal, uv = g.attributes.uv, M = g.attributes.azMask;
-  const n = pos.count, idx = g.index, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
-  const bones = mesh.skeleton ? mesh.skeleton.bones.map(b => b.name.replace(/_\d+$/, '')) : [];
-  const bi = name => bones.indexOf(name);
-  const wOf = (i, b) => { if (b < 0 || !SI) return 0; let w = 0; for (let k = 0; k < 4; k++) if (SI.getComponent(i, k) === b) w += SW.getComponent(i, k); return w; };
-  const HEAD = bi('head'), HL = bi('hand_L'), HR = bi('hand_R');
-  const P = i => [pos.getX(i), pos.getY(i), pos.getZ(i)], Nn = i => [nor.getX(i), nor.getY(i), nor.getZ(i)];
-  const mk = i => [M.getX(i), M.getY(i), M.getZ(i)];
-  const isSkin = new Uint8Array(n), isHair = new Uint8Array(n), isEye = new Uint8Array(n), isLash = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    const [r, gl, h] = mk(i);
-    if (r > 0.5) isSkin[i] = 1;
-    if (h > 0.5 && r < 0.3 && !(Math.abs(h - 0.5) < 0.06 && gl < 0.03)) isHair[i] = 1;
-    if (gl > 0.97 && r < 0.03 && h < 0.03 && wOf(i, HEAD) > 0.9) isEye[i] = 1;
-    if (Math.abs(h - 0.5) < 0.06 && r < 0.03 && gl < 0.03) isLash[i] = 1;
-  }
-  const out = { eyes: null, face: null };
-  // ---- eyes: one sphere per side, the disc's centre and radius in the atlas, the lid lines (e-space, y up)
-  const eyeIdx = []; for (let i = 0; i < n; i++) if (isEye[i]) eyeIdx.push(i);
-  if (eyeIdx.length >= 16 && uv) {
-    const us = eyeIdx.map(i => uv.getX(i)), vs = eyeIdx.map(i => uv.getY(i));
-    const cu = (Math.min(...us) + Math.max(...us)) / 2, cv = (Math.min(...vs) + Math.max(...vs)) / 2;
-    const R = Math.max(Math.max(...us) - Math.min(...us), Math.max(...vs) - Math.min(...vs)) / 2;
-    const sides = [1, -1].map(s => { const E = eyeIdx.filter(i => Math.sign(pos.getX(i)) === s); return E.length >= 8 ? sphereFit(E.map(P)) : null; });
-    if (sides[0] && sides[1] && R > 0.01 && R < 0.1) {
-      const eS = (S, p) => { const d = [p[0] - S.c[0], p[1] - S.c[1], p[2] - S.c[2]], L = Math.hypot(...d) || 1; const rr = Math.acos(Math.max(-1, Math.min(1, d[2] / L))) / (Math.PI / 2), al = Math.atan2(d[1], d[0]); return [rr * Math.cos(al), rr * Math.sin(al), L / S.r]; };
-      // lid edges: the nearest skin around each eye, binned across the eye
-      const up = [], lo = [];
-      for (const S of sides) for (let i = 0; i < n; i++) {
-        if (!isSkin[i] && !isLash[i]) continue;
-        const p = P(i), e = eS(S, p); if (e[2] > 1.35) continue;
-        const d = [p[0] - S.c[0], p[1] - S.c[1], p[2] - S.c[2]]; if (d[2] / Math.hypot(...d) < 0.3) continue;
-        if (Math.abs(e[0]) > 0.25) continue;
-        if (e[1] > 0) up.push(e[1]); else lo.push(e[1]);
-      }
-      up.sort((a, b) => a - b); lo.sort((a, b) => b - a);
-      const U = up.length ? up[Math.min(up.length - 1, 1)] : 0.12, Lo = lo.length ? lo[Math.min(lo.length - 1, 1)] : -0.22;
-      out.eyes = { cu, cv, R, cs: R / 0.94, U: Math.max(0.0, Math.min(0.3, U)), Lo: Math.max(-0.4, Math.min(-0.1, Lo)), L: sides[0], Rr: sides[1] };
-    }
-  }
-  // ---- face frame: eye centres (or the head bone), interocular distance
-  let Mc, u;
-  if (out.eyes) { const a = out.eyes.L.c, b = out.eyes.Rr.c; Mc = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]; u = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
-  else {
-    let s = [0, 0, 0], k = 0, top = -1e9;
-    for (let i = 0; i < n; i++) if (wOf(i, HEAD) > 0.8) { const p = P(i); s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; k++; top = Math.max(top, p[1]); }
-    Mc = k ? [s[0] / k, top - 0.11, s[2] / k + 0.05] : [0, 1.6, 0.05]; u = 0.064;
-  }
-  if (!(u > 0.03 && u < 0.09)) u = 0.064;
-  out.face = { M: Mc, u };
-  const X = p => (p[0] - Mc[0]) / u, Y = p => (p[1] - Mc[1]) / u, Z = p => (p[2] - Mc[2]) / u;
-  // nose tip: the most forward head skin on the midline below the eyes
-  let nose = [0, -0.75, 0.55], bz = -1e9;
-  for (let i = 0; i < n; i++) if (isSkin[i] && wOf(i, HEAD) > 0.5) { const p = P(i), x = X(p), y = Y(p), z = Z(p); if (Math.abs(x) < 0.25 && y < -0.1 && y > -1.3 && z > bz) { bz = z; nose = [x, y, z]; } }
-  // lips: redder than the face's own skin in the painted atlas, in the mouth window
-  const pix = atlasPixels(mat.map);
-  const red = i => { const c = pix(uv.getX(i), uv.getY(i)); return (c[0] - c[1]) / (c[0] + c[1] + c[2] + 1e-3); };
-  let lipBase = 0;
-  const lipCand = [];
-  if (pix && uv) {
-    const rs = [];
-    for (let i = 0; i < n; i++) if (isSkin[i] && wOf(i, HEAD) > 0.5) { const p = P(i), y = Y(p); if (y > -1.0 && y < 0.6) rs.push(red(i)); }
-    rs.sort((a, b) => a - b); lipBase = rs.length ? rs[rs.length >> 1] : 0;
-  }
-  // hair colour (linear) and hands
-  let hairCol = [0.05, 0.035, 0.025], hk = 0;
-  if (pix && uv) { const s = [0, 0, 0]; for (let i = 0; i < n; i++) if (isHair[i]) { const c = pix(uv.getX(i), uv.getY(i)); s[0] += srgb2lin(c[0]); s[1] += srgb2lin(c[1]); s[2] += srgb2lin(c[2]); hk++; } if (hk) hairCol = s.map(v => v / hk); }
-  const hands = [HL, HR].map(b => {
-    if (b < 0) return null;
-    const vs = []; for (let i = 0; i < n; i++) if (isSkin[i] && wOf(i, b) > 0.6) vs.push(i);
-    if (vs.length < 20) return null;
-    const bone = mesh.skeleton.bones[b], inv = mesh.skeleton.boneInverses[b];
-    const hp = new THREE.Vector3().setFromMatrixPosition(inv.clone().invert());   // rest position of the joint (mesh space at bind)
-    hp.applyMatrix4(mesh.bindMatrixInverse);
-    const c = [0, 0, 0]; for (const i of vs) { const p = P(i); c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
-    c[0] /= vs.length; c[1] /= vs.length; c[2] /= vs.length;
-    const D = new THREE.Vector3(c[0] - hp.x, c[1] - hp.y, c[2] - hp.z).normalize();
-    let tmax = 0; for (const i of vs) { const p = P(i); tmax = Math.max(tmax, (p[0] - hp.x) * D.x + (p[1] - hp.y) * D.y + (p[2] - hp.z) * D.z); }
-    void bone;
-    return { hp, D, tmax };
-  });
-  // ---- welded adjacency (UV seams split vertices; neighbourhoods and boundaries need the surface)
-  const key = new Map(), weld = new Int32Array(n);
-  for (let i = 0; i < n; i++) { const k = Math.round(pos.getX(i) * 4000) + ',' + Math.round(pos.getY(i) * 4000) + ',' + Math.round(pos.getZ(i) * 4000); let w = key.get(k); if (w === undefined) { w = i; key.set(k, i); } weld[i] = w; }
-  const nb = Array.from({ length: n }, () => []), edgeCount = new Map(), triN = idx ? idx.count / 3 : n / 3;
-  const area3 = new Float32Array(n), areaUV = new Float32Array(n);
-  for (let t = 0; t < triN; t++) {
-    const a = idx ? idx.getX(t * 3) : t * 3, b = idx ? idx.getX(t * 3 + 1) : t * 3 + 1, c = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
-    const wa = weld[a], wb = weld[b], wc = weld[c];
-    for (const [p, q] of [[wa, wb], [wb, wc], [wc, wa]]) {
-      if (p === q) continue;
-      if (!nb[p].includes(q)) nb[p].push(q);
-      if (!nb[q].includes(p)) nb[q].push(p);
-      const ek = p < q ? p * n + q : q * n + p; edgeCount.set(ek, (edgeCount.get(ek) || 0) + 1);
-    }
-    const pa = P(a), pb = P(b), pc = P(c);
-    const e1 = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]], e2 = [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]];
-    const A3 = 0.5 * Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]);
-    let AU = 0;
-    if (uv) AU = 0.5 * Math.abs((uv.getX(b) - uv.getX(a)) * (uv.getY(c) - uv.getY(a)) - (uv.getX(c) - uv.getX(a)) * (uv.getY(b) - uv.getY(a)));
-    for (const v of [a, b, c]) { area3[v] += A3; areaUV[v] += AU; }
-  }
-  // concavity per welded vertex: how far the neighbours' centroid lies in front of the normal (per edge length)
-  const conc = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    if (weld[i] !== i || !nb[i].length) continue;
-    const p = P(i), q = Nn(i), c = [0, 0, 0]; let el = 0;
-    for (const j of nb[i]) { const pj = P(j); c[0] += pj[0]; c[1] += pj[1]; c[2] += pj[2]; el += Math.hypot(pj[0] - p[0], pj[1] - p[1], pj[2] - p[2]); }
-    const k = nb[i].length; c[0] /= k; c[1] /= k; c[2] /= k; el /= k;
-    conc[i] = ((c[0] - p[0]) * q[0] + (c[1] - p[1]) * q[1] + (c[2] - p[2]) * q[2]) / Math.max(el, 1e-4);
-  }
-  for (let it = 0; it < 2; it++) { const c2 = conc.slice(); for (let i = 0; i < n; i++) if (weld[i] === i && nb[i].length) { let s = conc[i]; for (const j of nb[i]) s += conc[j]; c2[i] = s / (nb[i].length + 1); } conc.set(c2); }
-  // contact: skin close to cloth or hair (collars, cuffs, the hairline): spatial hash of the other pieces
-  const CELL = 0.01, grid = new Map(), gk = (x, y, z) => x + ',' + y + ',' + z;
-  for (let i = 0; i < n; i++) if (!isSkin[i] && !isEye[i] && !isLash[i]) { const p = P(i), k = gk(Math.floor(p[0] / CELL), Math.floor(p[1] / CELL), Math.floor(p[2] / CELL)); let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(i); }
-  const contact = i => {
-    const p = P(i), q = Nn(i), cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL), cz = Math.floor(p[2] / CELL); let best = 1;
-    for (let dz = -2; dz <= 2; dz++) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-      const a = grid.get(gk(cx + dx, cy + dy, cz + dz)); if (!a) continue;
-      for (const j of a) { const pj = P(j), d = [pj[0] - p[0], pj[1] - p[1], pj[2] - p[2]], L = Math.hypot(...d); if (L > 0.025) continue; const facing = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) / (L || 1); if (facing < -0.2) continue; best = Math.min(best, L / 0.025); }
-    }
-    return 1 - smooth(0.12, 1, best);
-  };
-  // hair: distance to the shell's open border (tips, fringe), over the welded surface
-  const hairDist = new Float32Array(n).fill(1e9), queue = [];
-  for (let i = 0; i < n; i++) if (isHair[i] && weld[i] === i) {
-    let border = false;
-    for (const j of nb[i]) { const ek = i < j ? i * n + j : j * n + i; if (edgeCount.get(ek) === 1 || !isHair[j]) { border = true; break; } }
-    if (border) { hairDist[i] = 0; queue.push(i); }
-  }
-  for (let it = 0; it < 60 && queue.length; it++) {      // a few relaxation sweeps (Bellman-Ford on the hair graph)
-    const next = [];
-    for (const i of queue) { const p = P(i); for (const j of nb[i]) { if (!isHair[j]) continue; const pj = P(j), d = hairDist[i] + Math.hypot(pj[0] - p[0], pj[1] - p[1], pj[2] - p[2]); if (d < hairDist[j] - 1e-5) { hairDist[j] = d; next.push(j); } } }
-    queue.length = 0; for (const j of new Set(next)) queue.push(j);
-  }
-  const crown = [Mc[0], Mc[1] + 2.3 * u, Mc[2] - 1.5 * u];   // above the back of the crown, outside the head
-  // ---- attributes
-  const F1 = new Uint8Array(n * 4), F2 = new Uint8Array(n * 4), HT = new Int8Array(n * 4), DET = new Float32Array(n);
-  const q8 = v => Math.round(Math.max(0, Math.min(1, v)) * 255), s8 = v => Math.round(Math.max(-1, Math.min(1, v)) * 127);
-  for (let i = 0; i < n; i++) {
-    const w = weld[i], p = P(i), x = X(p), y = Y(p), z = Z(p), ax = Math.abs(x);
-    DET[i] = areaUV[i] > 1e-12 ? Math.sqrt(area3[i] / areaUV[i]) : 1;
-    const cav = smooth(0.06, 0.4, conc[w]);
-    if (isSkin[i]) {
-      const head = wOf(i, HEAD) + wOf(i, bi('neck')) * 0.3;
-      let oily = 0, redn = 0, cv = cav * 0.8, thin = 0, lips = 0, brow = 0, crow = 0, nail = 0;
-      if (head > 0.3) {
-        const fore = smooth(0.25, 0.6, y) * (1 - smooth(1.5, 1.9, y)) * (1 - smooth(0.7, 1.0, ax)) * smooth(-0.9, -0.4, z);
-        const dn2 = (x - nose[0]) ** 2 + ((y - nose[1]) * 0.6) ** 2 + ((z - nose[2]) * 0.8) ** 2;
-        const noseW = gauss(dn2, 0.32) * (1 - smooth(0.0, 0.25, y + 0.05 - 0.3));
-        const chin = gauss(x * x + ((y + 2.0) * 0.8) ** 2, 0.38) * smooth(-0.5, 0.2, z);
-        oily = Math.max(fore * 0.55, noseW * 0.95, chin * 0.45);
-        const cheek = gauss((ax - 0.85) ** 2 + (y + 0.62) ** 2 + ((z + 0.15) * 0.5) ** 2, 0.38);
-        const tip = gauss((x - nose[0]) ** 2 + (y - nose[1]) ** 2 + (z - nose[2]) ** 2, 0.2);
-        // ears: lateral, behind the eyes, between brow and jaw height
-        const ear = smooth(1.02, 1.18, ax) * smooth(-1.25, -0.85, y) * (1 - smooth(0.2, 0.55, y)) * (1 - smooth(-0.55, -0.25, z));
-        const alae = gauss((ax - 0.27) ** 2 + (y - nose[1] - 0.05) ** 2 + ((z - nose[2] + 0.22) * 0.8) ** 2, 0.11);
-        // eye sockets: darker, cooler around and above the eyes (not on the lids' edge)
-        const sock = out.eyes ? gauss((ax - 0.5) ** 2 + ((y + 0.02) * 1.3) ** 2, 0.33) * smooth(-0.2, 0.25, z) : 0;
-        const lidW = out.eyes ? gauss((ax - 0.5) ** 2 + ((y - 0.1) * 2.2) ** 2, 0.22) * smooth(0.0, 0.25, z) : 0;
-        redn = Math.max(cheek * 0.55, tip * 0.65, ear * 0.55, lidW * 0.25);
-        thin = Math.max(ear, alae * 0.8, lidW * 0.35);
-        cv = Math.max(cv, sock * 0.3, smooth(0.6, 1.0, conc[w] * 1.5) * 0.4);
-        brow = smooth(0.2, 0.45, y) * (1 - smooth(1.4, 1.75, y)) * (1 - smooth(0.85, 1.1, ax)) * smooth(-0.8, -0.3, z);
-        crow = gauss((ax - 1.0) ** 2 + ((y + 0.05) * 1.2) ** 2, 0.2) * smooth(-0.9, -0.3, z);
-        if (pix && y < -0.9 && y > -2.0 && ax < 0.85 && z > -0.2) {
-          const r = red(i); lips = smooth(lipBase + 0.012, lipBase + 0.05, r) * (1 - smooth(0.55, 0.85, ax));
-          if (lips > 0.3) lipCand.push(i);
-        }
-        cv = Math.max(cv, contact(i) * 0.75);
-      } else {
-        cv = Math.max(cv, contact(i) * 0.6);
-        for (const H of hands) {
-          if (!H) continue;
-          if (wOf(i, H === hands[0] ? HL : HR) < 0.5) continue;
-          const t = ((p[0] - H.hp.x) * H.D.x + (p[1] - H.hp.y) * H.D.y + (p[2] - H.hp.z) * H.D.z) / H.tmax;
-          const q = Nn(i), dors = q[1] * 0.85 + Math.abs(q[2]) * 0.0;
-          nail = smooth(0.8, 0.9, t) * smooth(0.25, 0.6, dors);
-          const knuck = gauss((t - 0.42) ** 2, 0.06) * smooth(0.0, 0.5, dors) + gauss((t - 0.66) ** 2, 0.05) * 0.6;
-          redn = Math.max(redn, knuck * 0.45, smooth(0.85, 1.0, t) * 0.35);
-          cv = Math.max(cv, knuck * 0.25);
-        }
-      }
-      F1.set([q8(oily), q8(redn), q8(cv), q8(thin)], i * 4);
-      if (head > 0.3) HT[i * 4 + 3] = s8(smooth(0.12, 0.3, y) * (1 - smooth(0.75, 1.45, y)) * (1 - smooth(0.8, 1.05, ax)) * smooth(-0.6, -0.2, z));
-      F2.set([q8(lips), q8(brow), q8(crow), q8(nail)], i * 4);
-    } else {
-      F1.set([0, 0, isHair[i] ? 0 : q8(cav * 0.9), 0], i * 4);
-    }
-    if (isHair[i]) {
-      const q = Nn(i), d = [p[0] - crown[0], p[1] - crown[1], p[2] - crown[2]], dn = d[0] * q[0] + d[1] * q[1] + d[2] * q[2];
-      let tg = [d[0] - q[0] * dn, d[1] - q[1] * dn, d[2] - q[2] * dn]; let L = Math.hypot(...tg);
-      if (L < 1e-5) { tg = [-q[0] * q[1], 1 - q[1] * q[1], -q[2] * q[1]].map(v => -v); L = Math.hypot(...tg) || 1; }
-      const cd = Math.hypot(...d) / u;
-      // root to tip by the distance from the crown only (overlapping shell layers then shade alike: no seams)
-      const tip = smooth(1.4, 5.0, cd) * 0.85 + 0.15 * smooth(0.8, 2.6, cd);
-      HT.set([s8(tg[0] / L), s8(tg[1] / L), s8(tg[2] / L), s8(tip)], i * 4);
-    }
-  }
-  // the mouth line: lip vertices define the mouth centre (micro-expressions, mouth-corner shading)
-  if (lipCand.length) { const c = [0, 0, 0]; for (const i of lipCand) { const p = P(i); c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; } out.face.mouth = c.map(v => v / lipCand.length); }
-  out.face.nose = nose; out.face.hair = hairCol; out.face.lipBase = lipBase; out.face.lips = lipCand.length;
-  out.attrs = {
-    azFace: new THREE.BufferAttribute(F1, 4, true), azFace2: new THREE.BufferAttribute(F2, 4, true),
-    azHairT: new THREE.BufferAttribute(HT, 4, true), azDet: new THREE.BufferAttribute(DET, 1),
-  };
-  out.ms = (globalThis.performance ? globalThis.performance.now() : 0) - t0;
-  look.stats.templates++; look.stats.prepMs += out.ms;
-  return out;
 }
 
 // ------------------------------------------------------------------------------------------------------------------
 // shader
 // ------------------------------------------------------------------------------------------------------------------
-const DBG = { oily: 'vAzFace.x', red: 'vAzFace.y', cav: 'vAzFace.z', thin: 'vAzFace.w', lips: 'vAzFace2.x', brow: 'vAzFace2.y', crow: 'vAzFace2.z', nail: 'vAzFace2.w', tip: 'vAzHairT.w', det: 'fract( vAzDet )', tan: 'normalize( vAzHairT.xyz ) * 0.5 + 0.5', face: 'gl_FrontFacing ? vec3( 1.0, 0.2, 0.2 ) : vec3( 0.2, 0.2, 1.0 )', mask: 'vAzMask', nrm: 'normal * 0.5 + 0.5' };
+const DBG = { oily: 'vAzFace.x', bd: 'vAzFace.x * azHair', tilt: 'azTilt + 0.5', red: 'vAzFace.y', cav: 'vAzFace.z', thin: 'vAzFace.w', lips: 'vAzFace2.x', brow: 'vAzFace2.y', crow: 'vAzFace2.z', nail: 'vAzFace2.w', tip: 'vAzHairT.w', det: 'fract( vAzDet )', tan: 'normalize( vAzHairT.xyz ) * 0.5 + 0.5', face: 'gl_FrontFacing ? vec3( 1.0, 0.2, 0.2 ) : vec3( 0.2, 0.2, 1.0 )', mask: 'vAzMask', nrm: 'normal * 0.5 + 0.5' };
 function lightsChunk() {
   let s = THREE.ShaderChunk.lights_physical_pars_fragment;
   const a = 'vec3 irradiance = dotNL * directLight.color;';
@@ -363,14 +135,21 @@ function lightsChunk() {
     float azNL = dot( geometryNormal, directLight.direction );
     float azW = azSkin * AZ_WRAP + azHair * 0.2 + azCloth * 0.08;
     vec3 azIrr = ( vec3( dotNL ) + ( saturate( ( azNL + azW ) / ( 1.0 + azW ) ) - dotNL ) * mix( vec3( 1.0 ), vec3( 1.0, 0.42, 0.3 ), azSkin ) ) * directLight.color;
-    // thin skin (ears, nostril wings, lids) lets red light through from behind
+    // thin skin (ears, nostril wings, lids) lets red light through from behind (medium / high: per-light cost)
+    #if AZ_TIER > 0
     if ( azThin > 0.01 ) {
       float azBack = pow( saturate( dot( geometryViewDir, - directLight.direction ) ), 3.0 ) * 0.7 + saturate( - azNL ) * 0.25;
       azIrr += azThin * azBack * vec3( 1.0, 0.28, 0.16 ) * directLight.color;
-    }`);
+    }
+    #endif`);
   s = s.replace(b, `{ vec3 azSp = irradiance * BRDF_GGX( directLight.direction, geometryViewDir, geometryNormal, material );
+    #if AZ_TIER > 0
     if ( azHair > 0.01 ) azSp = mix( azSp, azHairSpec( directLight.direction, geometryViewDir, geometryNormal ) * directLight.color * saturate( azNL * 0.6 + 0.4 ), azHair * AZ_HAIRK );
+    if ( azEyeK > 0.5 ) azSp += ( 1.0 - azLidK ) * directLight.color * ( pow( saturate( dot( geometryNormal, normalize( directLight.direction + geometryViewDir ) ) ), 900.0 ) * 2.5 * saturate( azNL * 4.0 ) );
+    #endif
+    #if AZ_TIER > 1
     if ( azCloth > 0.01 ) azSp += azCloth * material.diffuseColor * directLight.color * ( pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), 4.0 ) * saturate( azNL + 0.35 ) * 0.5 );
+    #endif
     reflectedLight.directSpecular += azSp; }`);
   s = s.replace(c, 'reflectedLight.directDiffuse += azIrr * BRDF_Lambert( material.diffuseColor );');
   // Kajiya-Kay strands: a white primary lobe shifted toward the root, a tinted secondary lobe toward the tip, broken
@@ -421,7 +200,7 @@ uniform sampler2D azPoreMap;
 uniform sampler2D azWeaveMap;
 #endif
 float azSkin = 0.0; float azGloss = 0.0; float azHair = 0.0; float azCloth = 0.0; float azThin = 0.0; float azCav = 0.0;
-float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0; float azSparkle = 1.0; float azMicro = 1.0; vec3 azTv = vec3( 0.0, 1.0, 0.0 );
+float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0; float azSparkle = 1.0; float azMicro = 1.0; vec3 azTv = vec3( 0.0, 1.0, 0.0 );
 ` + sh.fragmentShader;
   F = F.replace('void main() {', `void main() {
 	azSkin = vAzMask.r; azGloss = vAzMask.g; azHair = vAzMask.b;
@@ -473,10 +252,12 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
 		azC *= mix( vec3( 1.0 ), vec3( 0.86, 0.85, 0.9 ), vAzFace.z * azSkin * 0.8 );
 		azC = mix( azC, azC * vec3( 1.04, 0.92, 0.92 ), vAzFace2.x * azSkin * 0.5 );
 		azC = mix( azC, azC * vec3( 1.05, 1.0, 1.0 ) + vec3( 0.035, 0.025, 0.025 ), vAzFace2.w * azSkin );
-		// complexion: blotches and, with age, spots (rest-space noise, so they stay on the body)
+		// complexion: blotches and, with age, spots (rest-space noise, so they stay on the body); not on the low tier
+	#if AZ_TIER > 0
 		{ vec3 azP = vAzRest * 70.0; float azN = sin( azP.x * 1.7 + sin( azP.y * 2.3 ) ) * sin( azP.y * 1.9 + sin( azP.z * 2.9 ) ) * sin( azP.z * 2.1 + sin( azP.x * 3.1 ) );
 		  azC *= 1.0 + azSkin * ( 0.03 * azN - azLook.x * 0.09 * smoothstep( 0.55, 0.9, azN ) );
 		  azC = mix( azC, azC * vec3( 1.04, 0.95, 0.94 ), azSkin * 0.25 * smoothstep( -0.2, 0.6, azN ) ); }
+	#endif
 		diffuseColor.rgb = azC;
 	}
 #endif
@@ -486,11 +267,27 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
 		float azV = clamp( azL / azB - 1.0, -1.0, 1.0 );
 		// strands: a fine streak pattern across the strand direction (angle around the crown, rest space), faded out
 		// where a strand gets thinner than a pixel; it shifts and breaks up the highlight and the colour
+		float azN = 0.0;
+	#if AZ_TIER > 0
 		vec3 azRc = vAzRest - azCrown.xyz;
 		float azTh = atan( azRc.x, azRc.z ), azAl = length( azRc ) * 30.0;
-		float azN = sin( azTh * 400.0 + 1.7 * sin( azAl * 7.0 ) ) * 0.5 + sin( azTh * 923.0 + 0.8 * sin( azAl * 11.0 ) ) * 0.3 + sin( azTh * 228.0 + azAl * 3.0 ) * 0.2;
+		azN = sin( azTh * 400.0 + 1.7 * sin( azAl * 7.0 ) ) * 0.5 + sin( azTh * 923.0 + 0.8 * sin( azAl * 11.0 ) ) * 0.3 + sin( azTh * 228.0 + azAl * 3.0 ) * 0.2;
 		float azSk = 1.0 - smoothstep( 1.0, 3.0, fwidth( azTh * 400.0 ) );
 		azN *= azSk;
+	#endif
+	#if AZ_TIER > 0
+		if ( AZ_HAIRK > 0.0 && azHair > 0.5 ) {
+			// clumps of strands (~4 mm): the normal rolls across each clump, so the highlight breaks into strands
+			float azSx = azTh * 40.0 + 0.35 * sin( azAl * 1.3 ), azId = floor( azSx ), azFr = fract( azSx );
+			float azRn = fract( sin( azId * 12.9898 + 78.233 ) * 43758.5453 );
+			float azCk = 1.0 - smoothstep( 0.35, 0.9, fwidth( azSx ) );
+			azTilt = ( azFr - 0.5 ) * 1.1 * azCk;
+			diffuseColor.rgb *= 1.0 + ( azRn - 0.5 ) * 0.22 * azCk;
+			// frayed tips: near the shell's edge each clump ends at its own length and tapers to a point
+			float azBd = vAzFace.x * 0.03, azW = abs( azFr - 0.5 ) * 2.0;
+			if ( azBd < 0.014 * azRn * ( 0.2 + 0.8 * azW ) * azCk + 0.0025 * azW * azCk ) discard;
+		}
+	#endif
 		azShift = azV * 0.08 + azN * 0.12; azSparkle = 0.45 + 0.9 * smoothstep( -0.6, 0.8, azN + azV * 0.5 );
 		diffuseColor.rgb *= 1.0 + 0.16 * azN * azHair;
 		diffuseColor.rgb *= mix( 1.0, mix( 0.74, 1.14, vAzHairT.w ), azHair );
@@ -507,10 +304,11 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
   // ---- normals: pore / weave detail (tier-gated), wrinkle relief with age
   F = F.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #if AZ_TIER > 0
+	if ( azHair > 0.5 && azTilt != 0.0 ) { vec3 azB = cross( normal, azTv ); normal = normalize( normal + azB * ( azTilt * inversesqrt( max( dot( azB, azB ), 1e-6 ) ) ) ); }
 	{ float azDist = length( vViewPosition );
 	  float azFade = 1.0 - smoothstep( 1.0, 3.2, azDist );
 	  vec3 azQ0 = dFdx( - vViewPosition ), azQ1 = dFdy( - vViewPosition );
-	#ifdef AZ_SKIN
+	#if defined( AZ_SKIN ) && AZ_TIER > 1
 	  if ( azFade > 0.0 && azSkin > 0.5 && azEyeK < 0.5 && azLook.x > 0.02 ) {
 		// forehead lines and crow's feet (rest space, so they move with the skin), deeper with age
 		vec3 azP = vAzRest;
@@ -548,7 +346,7 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
 		#else
 		  azDn = texture2D( azWeaveMap, azDuv );
 		#endif
-		float azK = azFade * ( azDoSkin ? 0.9 - 0.3 * vAzFace.x : 0.75 );
+		float azK = azFade * ( azDoSkin ? 0.5 + 0.2 * vAzFace.x : 0.75 );
 		vec2 azNxy = ( azDn.xy * 2.0 - 1.0 ) * azK;
 		vec3 azS0 = vec3( dFdx( azDuv ), 0.0 ), azS1 = vec3( dFdy( azDuv ), 0.0 );
 		vec3 azR1 = cross( azQ1, normal ), azR2 = cross( normal, azQ0 );
@@ -574,6 +372,10 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
   F = F.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
 	{ float azAo = 1.0 - azCav * 0.65;
 	  reflectedLight.indirectDiffuse *= azAo; reflectedLight.indirectSpecular *= azAo * azAo * ( 1.0 - 0.55 * azHair );
+	#ifdef AZ_SKIN
+	  // light that travelled under the skin comes out redder (multiple scattering): a small red shift of the ambient
+	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.07, 0.96, 0.92 ), azSkin * ( 1.0 - azEyeK ) );
+	#endif
 	  float azF = pow( 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ), 4.0 );
 	#ifdef AZ_LIGHT
 	  reflectedLight.indirectDiffuse += material.diffuseColor * ( irradiance + iblIrradiance ) * RECIPROCAL_PI * azF * ( azSkin * 0.6 + azCloth * 0.4 + azHair * 0.3 );
@@ -617,13 +419,84 @@ export function lookPerson(h, seed = 1) {
   if (!atlas.length) return h;
   const main = atlas.find(o => !o.userData.lod) || atlas[0];
   const g = main.geometry;
-  let info = g.userData.azLook;
-  if (!info) {
-    const mat = [].concat(main.material).find(m => m.userData.slot === 'atlas');
-    try { info = analyse(main, mat); } catch (e) { console.warn('look: analysis failed for', h.id, e && e.message); info = { failed: true }; }
-    g.userData.azLook = info;
+  const info = g.userData.azLook;
+  if (info) return info.failed ? h : applyLook(h, seed, atlas, main, info);
+  // a template seen for the first time: analysed in a worker (or at once with look.sync); the person keeps the
+  // classic shading until the result is in
+  request(main, h.id).then(inf => { if (!inf.failed) applyLook(h, seed, atlas, main, inf); });
+  return h;
+}
+
+// ---- the analysis: one job per template geometry, in a worker when there is one
+const jobs = new Map();
+let worker = null, jobId = 0;
+const now = () => (globalThis.performance ? globalThis.performance.now() : Date.now());
+function extract(mesh) {
+  const g = mesh.geometry, A = g.attributes, n = A.position.count;
+  const PA = new Float32Array(n * 3), NA = new Float32Array(n * 3), MK = new Float32Array(n * 3);
+  const UV = A.uv ? new Float32Array(n * 2) : null, SKI = A.skinIndex ? new Uint16Array(n * 4) : null, SKW = A.skinWeight ? new Float32Array(n * 4) : null;
+  for (let i = 0; i < n; i++) {
+    PA[i * 3] = A.position.getX(i); PA[i * 3 + 1] = A.position.getY(i); PA[i * 3 + 2] = A.position.getZ(i);
+    NA[i * 3] = A.normal.getX(i); NA[i * 3 + 1] = A.normal.getY(i); NA[i * 3 + 2] = A.normal.getZ(i);
+    MK[i * 3] = A.azMask.getX(i); MK[i * 3 + 1] = A.azMask.getY(i); MK[i * 3 + 2] = A.azMask.getZ(i);
+    if (UV) { UV[i * 2] = A.uv.getX(i); UV[i * 2 + 1] = A.uv.getY(i); }
+    if (SKI) for (let k = 0; k < 4; k++) { SKI[i * 4 + k] = A.skinIndex.getComponent(i, k); SKW[i * 4 + k] = A.skinWeight.getComponent(i, k); }
   }
-  if (info.failed) return h;
+  const IDX = g.index ? Uint32Array.from(g.index.array) : null;
+  const sk = mesh.skeleton, bones = sk ? sk.bones.map(b => b.name.replace(/_\d+$/, '')) : [];
+  const handRest = ['hand_L', 'hand_R'].map(nm => {
+    const b = bones.indexOf(nm); if (b < 0) return null;
+    const hp = new THREE.Vector3().setFromMatrixPosition(sk.boneInverses[b].clone().invert()).applyMatrix4(mesh.bindMatrixInverse);
+    return [hp.x, hp.y, hp.z];
+  });
+  const mat = [].concat(mesh.material).find(m => m.userData.slot === 'atlas');
+  return { n, PA, NA, UV, MK, SKI, SKW, IDX, bones, handRest, pix: atlasPixels(mat && mat.map) };
+}
+function finish(J, r) {
+  if (!r || r.failed) { console.warn('look: analysis failed for', J.id, r && r.error); r = { failed: true }; }
+  else {
+    r.attrs = { azFace: new THREE.BufferAttribute(r.attrs.azFace, 4, true), azFace2: new THREE.BufferAttribute(r.attrs.azFace2, 4, true),
+      azHairT: new THREE.BufferAttribute(r.attrs.azHairT, 4, true), azDet: new THREE.BufferAttribute(r.attrs.azDet, 1) };
+    look.stats.templates++; look.stats.prepMs += r.ms; look.stats.mainMs += J.mainMs;
+  }
+  J.geometry.userData.azLook = r; jobs.delete(J.geometry);
+  for (const f of J.waiters) try { f(r); } catch (e) { console.warn('look:', e && e.message); }
+  if (!jobs.size) { const w = look.waitIdle; look.waitIdle = []; w.forEach(f => f()); }
+}
+function runSync(J) { let r; try { r = analyseData(J.D); } catch (e) { r = { failed: true, error: e && e.message }; } J.D = null; finish(J, r); }
+function getWorker() {
+  if (worker !== null) return worker;
+  worker = false;
+  if (look.sync || typeof globalThis.Worker !== 'function') return worker;
+  try {
+    const w = new globalThis.Worker(new globalThis.URL('./skin_worker.js', import.meta.url), { type: 'module' });
+    w.onmessage = e => { for (const J of jobs.values()) if (J.wid === e.data.id) { J.D = null; finish(J, e.data.r); break; } };
+    // no module workers here (or the worker died): the rest runs on the main thread
+    w.onerror = () => { worker = false; for (const J of [...jobs.values()]) if (J.D) runSync(J); };
+    worker = w;
+  } catch { worker = false; }
+  return worker;
+}
+function request(mesh, id) {
+  const g = mesh.geometry;
+  let J = jobs.get(g);
+  if (!J) {
+    const t0 = now();
+    J = { id, geometry: g, waiters: [], wid: ++jobId, D: null, mainMs: 0 };
+    jobs.set(g, J);
+    try { J.D = extract(mesh); } catch (e) { J.mainMs = now() - t0; finish(J, { failed: true, error: e && e.message }); return Promise.resolve(g.userData.azLook); }
+    J.mainMs = now() - t0;
+    const w = getWorker();
+    if (w) { try { w.postMessage({ id: J.wid, D: J.D }); } catch { runSync(J); } } else runSync(J);
+  }
+  if (g.userData.azLook) return Promise.resolve(g.userData.azLook);
+  return new Promise(ok => J.waiters.push(ok));
+}
+// tools and tests: resolves when every template analysis has finished
+look.idle = () => (jobs.size ? new Promise(ok => look.waitIdle.push(ok)) : Promise.resolve());
+
+function applyLook(h, seed, atlas, main, info) {
+  if (h.face) return h;
   const E = info.eyes, Fc = info.face;
   const age = AGES[h.id]?.age;
   const U = {
@@ -639,7 +512,7 @@ export function lookPerson(h, seed = 1) {
     azCrown: { value: new THREE.Vector4(Fc.M[0], Fc.M[1] + 2.3 * Fc.u, Fc.M[2] - 1.5 * Fc.u, 0) },
   };
   if (age == null) ageWait.push(() => { const a = AGES[h.id]?.age; if (a != null) U.azLook.value.x = Math.max(0, Math.min(1, (a - 22) / 50)); });
-  const mats = new Map();
+  const mats = new Map(), swaps = [];
   for (const o of atlas) {
     if (!o.geometry.attributes.azFace) {
       for (const k in info.attrs) {
@@ -648,9 +521,11 @@ export function lookPerson(h, seed = 1) {
       }
     }
     if (!o.geometry.attributes.azFace) continue;
+    const before = o.material;
     o.material = Array.isArray(o.material)
       ? o.material.map(m => (m.userData.slot === 'atlas' ? (mats.get(m) || mats.set(m, lookMaterial(m, U, info)).get(m)) : m))
       : (o.material.userData.slot === 'atlas' ? (mats.get(o.material) || mats.set(o.material, lookMaterial(o.material, U, info)).get(o.material)) : o.material);
+    swaps.push([o, before, o.material]);
   }
   look.stats.persons++;
   // ---- facial life
@@ -661,9 +536,11 @@ export function lookPerson(h, seed = 1) {
   const eyeMid = E ? new THREE.Vector3((E.L.c[0] + E.Rr.c[0]) / 2, (E.L.c[1] + E.Rr.c[1]) / 2, (E.L.c[2] + E.Rr.c[2]) / 2) : new THREE.Vector3(...Fc.M);
   const blinkCurve = t => (t < 0 ? 0 : t < 0.075 ? t / 0.075 : t < 0.11 ? 1 : t < 0.27 ? 1 - (t - 0.11) / 0.16 : 0);
   const character = () => { let p = h.root.parent; for (let k = 0; k < 3 && p; k++, p = p.parent) if (p.userData && p.userData.character) return p.userData.character; return null; };
-  const face = h.face = {
+  h.face = {
     state: S, uniforms: U, info,
     blink() { if (S.blinkT < 0) S.blinkT = 0; },
+    // A/B (tools): false puts the classic materials back on this person, true the look's
+    useLook(v) { for (const [o, a, b] of swaps) o.material = v ? b : a; },
     // world point to look at (a Vector3), or null: free gaze
     look(p) { S.fix = p ? (p.isVector3 ? p : null) : null; },
   };

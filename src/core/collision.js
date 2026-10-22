@@ -71,25 +71,26 @@ export class Collision {
    * boxes that already contain o are skipped. Returns the distance or Infinity.
    */
   rayCast(o, d, far, radius, state) {
-    let best = Infinity;
+    let best = far;
+    const ox = o.x, oy = o.y, oz = o.z;
+    const ix = Math.abs(d.x) < 1e-9 ? 0 : 1 / d.x, iy = Math.abs(d.y) < 1e-9 ? 0 : 1 / d.y, iz = Math.abs(d.z) < 1e-9 ? 0 : 1 / d.z;
+    let hit = Infinity;
     for (const b of this.boxes) {
-      if (!this.isActive(b, state)) continue;
-      if (b.walkOnly && o.y <= b.max.y) continue;
-      if (o.x > b.min.x && o.x < b.max.x && o.y > b.min.y && o.y < b.max.y && o.z > b.min.z && o.z < b.max.z) continue;
-      let t0 = 0, t1 = Math.min(far, best);
-      const lo = [b.min.x - radius, b.min.y - radius, b.min.z - radius], hi = [b.max.x + radius, b.max.y + radius, b.max.z + radius];
-      const oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
-      let miss = false;
-      for (let i = 0; i < 3; i++) {
-        if (Math.abs(dd[i]) < 1e-9) { if (oo[i] < lo[i] || oo[i] > hi[i]) { miss = true; break; } continue; }
-        let ta = (lo[i] - oo[i]) / dd[i], tb = (hi[i] - oo[i]) / dd[i];
-        if (ta > tb) { const s = ta; ta = tb; tb = s; }
-        if (ta > t0) t0 = ta; if (tb < t1) t1 = tb;
-        if (t0 > t1) { miss = true; break; }
-      }
-      if (!miss && t0 < best) best = t0;
+      if (!b.enabled || (b.states && !b.states.includes(state))) continue;
+      if (b.walkOnly && oy <= b.max.y) continue;
+      const mn = b.min, mx = b.max;
+      if (ox > mn.x && ox < mx.x && oy > mn.y && oy < mx.y && oz > mn.z && oz < mx.z) continue;
+      // slab test against the box grown by radius (no allocation: this runs for every box, twice a frame)
+      let t0 = 0, t1 = best, ta, tb, s;
+      if (ix === 0) { if (ox < mn.x - radius || ox > mx.x + radius) continue; }
+      else { ta = (mn.x - radius - ox) * ix; tb = (mx.x + radius - ox) * ix; if (ta > tb) { s = ta; ta = tb; tb = s; } if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; if (t0 > t1) continue; }
+      if (iy === 0) { if (oy < mn.y - radius || oy > mx.y + radius) continue; }
+      else { ta = (mn.y - radius - oy) * iy; tb = (mx.y + radius - oy) * iy; if (ta > tb) { s = ta; ta = tb; tb = s; } if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; if (t0 > t1) continue; }
+      if (iz === 0) { if (oz < mn.z - radius || oz > mx.z + radius) continue; }
+      else { ta = (mn.z - radius - oz) * iz; tb = (mx.z + radius - oz) * iz; if (ta > tb) { s = ta; ta = tb; tb = s; } if (ta > t0) t0 = ta; if (tb < t1) t1 = tb; if (t0 > t1) continue; }
+      if (t0 < hit) { hit = t0; best = t0; }
     }
-    return best;
+    return hit;
   }
 
   // Resolve a vertical cylinder (pos = feet). Returns { grounded, groundY }. (The original solver: see the header.)

@@ -64,11 +64,11 @@ export function scenarios() {
   // standing jump-climb (the m18 van: the roof is 1.15 m above a 1 m deep bonnet): start 0.7 m from the face
   for (const h of [1.0, 1.15, 1.2]) add({ name: `climb_stand_${h}`, frames: 90, place: [0, 0, z0 + 0.3, 0], setup: `FEEL.dynSolid([-1, 0, ${z0 + 1}], [1, ${h}, ${z0 + 3}])`, timeline: [{ f: 1, down: ['KeyW'] }, { f: 3, press: ['Space'] }], meta: { h } });
   // upper bound: sprinted gaps between two 2 m slabs (the authored Echo Step gaps are 5 m and more). 'late' presses
-  // the jump as late as the coyote window allows (airborne for 0.06 s), 'edge' on the last grounded frame.
-  for (const w of [4.0, 4.4, 4.6, 4.8, 5.0]) for (const mode of ['late', 'edge']) add({ name: `gap_${mode}_${w}`, dt: 1 / 60, frames: 200, place: [50, 2, -14, 0],
+  // the jump as late as the sprint coyote window allows (airborne for 0.03 s), 'edge' on the last grounded frame.
+  for (const w of [4.0, 4.4, 4.6, 4.8, 5.0]) for (const mode of ['late', 'edge']) add({ name: `gap_${mode}_${w}`, dt: 1 / 60, frames: 280, place: [50, 2, -14, 0],
     setup: `FEEL.dynSolid([48, 0, -20], [52, 2, 0]); FEEL.dynSolid([48, 0, ${w}], [52, 2, ${w + 6}]); FEEL.jumped = false; FEEL.air = 0;`,
-    timeline: [{ f: 1, down: ['KeyW', 'ShiftLeft'] }, ...Array.from({ length: 180 }, (_, i) => ({ f: 2 + i, eval: mode === 'late'
-      ? 'if (!FEEL.jumped && !__game.player.grounded && __game.player.vel.y <= 0 && __game.player.pos.z > -0.5) { FEEL.air = (FEEL.air || 0) + 1 / 60; if (FEEL.air >= 0.06) { __game.input.pressed.add("Space"); FEEL.jumped = true; } }'
+    timeline: [{ f: 1, down: ['KeyW', 'ShiftLeft'] }, ...Array.from({ length: 260 }, (_, i) => ({ f: 2 + i, eval: mode === 'late'
+      ? 'if (!FEEL.jumped && !__game.player.grounded && __game.player.vel.y <= 0 && __game.player.pos.z > -0.5) { FEEL.air = (FEEL.air || 0) + 1 / 60; if (FEEL.air >= 0.03) { __game.input.pressed.add("Space"); FEEL.jumped = true; } }'
       : 'if (!FEEL.jumped && __game.player.grounded && __game.player.pos.z + __game.player.vel.z / 60 > 0.16) { __game.input.pressed.add("Space"); FEEL.jumped = true; }' }))],
     meta: { w, mode } });
   // ledge tolerance: walk slowly off the 1.0 m platform edge (x = 36) and record where Kai starts to fall
@@ -78,6 +78,24 @@ export function scenarios() {
   add({ name: 'coyote_probe', frames: 70, place: [35.2, 1.0, -2, PI / 2], camYaw: PI / 2 + PI, setup: 'FEEL.c2 = 0', timeline: [{ f: 1, down: ['KeyW'] }, ...Array.from({ length: 60 }, (_, i) => ({ f: 2 + i, eval: 'if (!__game.player.grounded && !FEEL.c2) FEEL.c2 = 1; else if (FEEL.c2 > 0 && FEEL.c2 < 4) { FEEL.c2++; if (FEEL.c2 === 4) __game.input.pressed.add("Space"); }' }))] });
   // lifts: a box lift rising 3 m at 1.6 m/s then falling at 2.4 m/s (the m2 / m3 lift speeds)
   add({ name: 'lift', frames: 150, place: [-40, 0.05, 0, 0], setup: `const b = FEEL.dynSolid([-41, -0.2, -1], [-39, 0.05, 1], 0x5a7a9a); FEEL.lift = (dt, t) => { const k = FEEL.liftT = (FEEL.liftT || 0) + dt; const y = k < 0.5 ? 0 : k < 2.375 ? (k - 0.5) * 1.6 : k < 3.5 ? 3 : Math.max(0, 3 - (k - 3.5) * 2.4); b.max.y = y + 0.05; b.min.y = y - 0.2; b.mesh.position.y = y - 0.075; }; FEEL.liftT = 0;` });
+  // ---- physics & controls step additions (new physics; most are no-ops or show the old behaviour under ?phys=classic) ----
+  // a true ramp (collision.addRamp, 1.2 m over 6 m, 11 degrees) walked up and down; classic has no addRamp (skipped)
+  add({ name: 'ramp_true', place: [45, 0, -15, 0], setup: `if (__game.collision.addRamp) { FEEL.dyn.push(__game.collision.addRamp([44, 0, -12], [46, 1.2, -6], '+z')); FEEL.dyn.push(__game.collision.add([44, 0, -6], [46, 1.2, -3])); }`,
+    timeline: [{ f: 1, down: ['KeyW'] }, { f: 100, up: ['KeyW'], down: ['KeyS'] }, { f: 190, up: ['KeyS'] }], frames: 200 });
+  // an opt-in carrying platform (box option carry: true) sliding 3 m along x at 1.5 m/s and back, Kai idle on it
+  add({ name: 'carry_x', frames: 150, place: [-40, 0.05, 6, 0], setup: `const b = FEEL.dynSolid([-41, -0.2, 5], [-39, 0.05, 7], 0x5a7a9a, { carry: true }); FEEL.lift = (dt) => { const k = FEEL.liftT = (FEEL.liftT || 0) + dt; const x = k < 0.5 ? 0 : k < 2.5 ? (k - 0.5) * 1.5 : k < 3 ? 3 : Math.max(0, 3 - (k - 3) * 1.5); b.min.x = -41 + x; b.max.x = -39 + x; b.mesh.position.x = -40 + x; }; FEEL.liftT = 0;` });
+  // edge brake at the 3 m platform (edge x = 30): a short push (stays), a long push (goes over after the hold), a coast
+  // after releasing a sprint 0.4 m before the edge (stays)
+  add({ name: 'edge_brief', frames: 60, place: [28.6, 3.0, -2, PI / 2], camYaw: PI / 2 + PI, timeline: [{ f: 1, down: ['KeyW'] }, { f: 22, up: ['KeyW'] }] });
+  add({ name: 'edge_hold', frames: 90, place: [28.6, 3.0, -2, PI / 2], camYaw: PI / 2 + PI, timeline: [{ f: 1, down: ['KeyW'] }, { f: 80, up: ['KeyW'] }] });
+  add({ name: 'edge_coast', frames: 90, place: [26.4, 3.0, -2, PI / 2], camYaw: PI / 2 + PI, timeline: [{ f: 1, down: ['KeyW', 'ShiftLeft'] }, ...Array.from({ length: 40 }, (_, i) => ({ f: 2 + i, eval: 'if (__game.player.pos.x > 29.6) __game.input.down.clear();' }))] });
+  // a void edge (kill plane just under the platform top): walking never goes over; sprinting over respawns at the last
+  // safe spot after a short fade (no fail)
+  add({ name: 'void_walk', frames: 120, place: [28.6, 3.0, -2, PI / 2], camYaw: PI / 2 + PI, setup: 'FEEL.killY0 = __game.killY; __game.killY = 2.0;', timeline: [{ f: 1, down: ['KeyW'] }, { f: 110, up: ['KeyW'] }] });
+  add({ name: 'void_respawn', frames: 150, place: [27, 3.0, -2, PI / 2], camYaw: PI / 2 + PI, setup: 'FEEL.killY0 = __game.killY; __game.killY = 2.0; FEEL.fails = 0; FEEL.fail0 = FEEL.fail0 || __game.fail; __game.fail = (...a) => { FEEL.fails++; return FEEL.fail0.apply(__game, a); };',
+    timeline: [{ f: 30, down: ['KeyW', 'ShiftLeft'] }, { f: 75, up: ['KeyW', 'ShiftLeft'] }, ...Array.from({ length: 50 }, (_, i) => ({ f: 60 + i, sleep: 40 })), { f: 148, eval: '__game.fail = FEEL.fail0; FEEL.out = { fails: FEEL.fails };' }] });
+  // three people standing close around Kai (a 0.9 m triangle): he must be able to walk out
+  add({ name: 'people_trap', frames: 120, place: [0, 0, z0, 0], npc: true, setup: `FEEL.actor('hale', 0, 0, ${z0 + 0.55}, Math.PI); FEEL.actor('iven', 0.5, 0, ${z0 - 0.3}, 0); FEEL.actor('mira', -0.5, 0, ${z0 - 0.3}, 0);`, timeline: [{ f: 5, down: ['KeyW'] }, { f: 110, up: ['KeyW'] }] });
   // CPU cost of one game step: Kai alone, and Kai + 12 walkers (no render)
   add({ name: 'cost_kai', frames: 120, place: [0, 0, z0, 0], timeline: [{ f: 1, down: ['KeyW'] }] });
   add({ name: 'cost_crowd12', frames: 120, place: [0, 0, z0, 0], setup: 'for (let i = 0; i < 12; i++) FEEL.walker({ x: 3 + (i % 6) * 1.2, z0: -20 + (i >> 1), z1: 10, speed: 1.0 + 0.04 * i }, 5 + i * 3);', timeline: [{ f: 1, down: ['KeyW'] }] });

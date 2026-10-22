@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { lookPerson } from './skin.js';    // the look shading and facial life (docs/CHARACTER_LOOK.md); ?look=classic: off
 
 const T = {};            // id -> { root, clips, speeds, height, box }
 const key = n => n.replace(/_\d+$/, '');
@@ -320,5 +321,6 @@ export function makePerson(id, opts = {}) {
   };
   h.update = dt => mixer.update(dt);
   h.play('idle', 0);
+  try { lookPerson(h, seed); } catch (e) { console.warn('look: skipped for', h.id, e && e.message); }
   return h;
 }

@@ -51,6 +51,7 @@
     FEEL.actors = [];
     for (const w of FEEL.walkers) { w.c.root.parent?.remove(w.c.root); w.off?.(); }
     FEEL.walkers = []; FEEL.lift = null;
+    if (FEEL.killY0 !== undefined) { g.killY = FEEL.killY0; FEEL.killY0 = undefined; }
   };
 
   FEEL.setup = async () => {
@@ -155,7 +156,7 @@
   //             setup (JS string, run once after reset), render: { every, views:['chase','side','wide'], from, to }, npc: true (sample NPCs) }
   FEEL.run = async (sc) => {
     const inp = g.input, pl = g.player;
-    FEEL.clearDyn(); prevQ.clear();
+    FEEL.clearDyn(); prevQ.clear(); FEEL.out = null;
     inp.down.clear(); inp.virtual.clear(); inp.setStick(0, 0, 0); inp.endFrame(); inp.touchMode = !!sc.touch;
     pl.crouching = false; pl.char.crouch = 0; pl.camDist = 3.4;
     FEEL.sideDir = sc.sideDir || [1, 0]; FEEL.sideDist = sc.sideDist; FEEL.sideH = sc.sideH; FEEL.sideFov = sc.sideFov; FEEL.wide = sc.wide;
@@ -178,6 +179,7 @@
         if (e.camYawRate !== undefined) camRate = e.camYawRate;
         if (e.camYaw !== undefined) pl.camYaw = e.camYaw;
         if (e.eval) (0, eval)(e.eval);
+        if (e.sleep) await new Promise(res => setTimeout(res, e.sleep));   // let timers (fades) run in real time
       }
       pl.camYaw += camRate * dt;
       const t0 = performance.now();
@@ -188,6 +190,9 @@
       const s = { f, t: +(f * dt).toFixed(4), p: [pl.pos.x, pl.pos.y, pl.pos.z].map(x => +x.toFixed(4)), v: [pl.vel.x, pl.vel.y, pl.vel.z].map(x => +x.toFixed(3)),
         gr: pl.grounded ? 1 : 0, yaw: +pl.yaw.toFixed(4), cr: pl.crouching ? 1 : 0, sp: pl.sprinting ? 1 : 0,
         cam: [E.camera.position.x, E.camera.position.y, E.camera.position.z].map(x => +x.toFixed(3)), camYaw: +pl.camYaw.toFixed(4) };
+      // the drawn body: the visual offset of the new physics (render interpolation + smoothed steps), when present
+      if (pl.visOffset) s.vo = [pl.visOffset.x, pl.visOffset.y, pl.visOffset.z].map(x => +x.toFixed(4));
+      if (pl.cam?.arm !== undefined) s.arm = +pl.cam.arm.toFixed(3);
       s.k = boneSample(pl.char, 'kai', dt);
       if (sc.npc) s.n = FEEL.actors.concat(FEEL.walkers.map(w => w.c)).map((c, i) => { const b = boneSample(c, 'n' + i, dt); return b && { ...b, rp: [c.root.position.x, c.root.position.y, c.root.position.z].map(x => +x.toFixed(4)), speed: c.speed }; });
       S.push(s);
@@ -202,7 +207,8 @@
       }
     }
     inp.down.clear(); inp.setStick(0, 0, 0); inp.touchMode = false;
-    return { name: sc.name, dt, samples: S, renders: R, stepMs: +(cost / sc.frames).toFixed(3) };
+    const out = FEEL.out; FEEL.out = null;
+    return { name: sc.name, dt, samples: S, renders: R, stepMs: +(cost / sc.frames).toFixed(3), out };
   };
 
   // NPC helpers for scenarios

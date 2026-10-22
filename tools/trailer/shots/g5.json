@@ -479,12 +479,18 @@
    "id": "s32",
    "group": "g5",
    "mission": 18,
-   "beat": "Montage: the storm front bearing down on Lantern Hall as its anchor fails: from above the gate, the settlement's garden beds, stalls, lantern strings and iron trusses run to the beacon, and the violet wall of loose time advances behind it while the last survivors hurry for the gate.",
+   "beat": "Montage: the storm front comes through Lantern Hall as its anchor fails: survivors run down the aisles between the garden beds toward the lens, a teacher with two children among them, while the violet wall of loose time advances behind them and swallows the beacon, the hall's lantern strings hanging in front of it.",
    "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=1",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{__game.control=false; __m18.S.anchor=0.34; window.__stormT=null; window.__stormHook=__game.onUpdate(dt=>{ if(window.__stormT!=null){ __stormT+=dt; __m18.S.anchor=Math.max(0.05, 0.34-__stormT*0.11); } }); return 'storm hook: anchor 0.34 -> 0.12 over the shot'})()"
+     "eval": "(()=>{__game.control=false; __game.player.place(0,0,-60,0); let n=0; __game.scene.traverse(o=>{ if(o.isMesh&&o.name==='reach'&&Math.abs(o.position.x)<0.5){ o.geometry.computeBoundingBox(); const b=o.geometry.boundingBox; if(b.max.x-b.min.x<1 && Math.abs((b.min.z+b.max.z)/2+86.5)<0.6){ o.visible=false; n++; } } }); return 'control off, Kai behind the lens, gate lamp hidden: '+n})()"
+    },
+    {
+     "eval": "(async () => {\n  const T = await import('/vendor/three.module.min.js');\n  const H = __m18.W.H;\n  const frag = `uniform float uTime; uniform vec3 uA; uniform vec3 uB; uniform float uAmp; uniform float uSeed; uniform float uTop; uniform float uDark; uniform float uFil; uniform float uMin;\nvarying vec2 vUv; varying vec3 vW;\nfloat h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nfloat n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1,0)), f.x), mix(h(i + vec2(0,1)), h(i + vec2(1,1)), f.x), f.y); }\nfloat fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 6; i++) { s += a * n(p); p = mat2(1.6, 1.2, -1.2, 1.6) * p + vec2(1.7, 9.2); a *= 0.5; } return s; }\nvoid main(){\n  float t = uTime;\n  vec2 q = vec2(vW.x, vW.y) * 0.045 + vec2(uSeed, 0.0);\n  vec2 w = vec2(fbm(q * 0.7 + vec2(0.0, -t * 0.10)), fbm(q * 0.7 + vec2(5.2, 1.3) + vec2(t * 0.04, -t * 0.13)));\n  float f = fbm(q * 1.3 + w * 2.4 + vec2(t * 0.02, -t * 0.16));\n  float top = uTop + 30.0 * (fbm(vec2(vW.x * 0.025 + uSeed, t * 0.05)) - 0.5);\n  float hy = vW.y + (f - 0.5) * 30.0;\n  float body = 1.0 - smoothstep(top - 34.0, top + 4.0, hy);\n  float r = 1.0 - abs(2.0 * fbm(q * 2.2 + w * 3.0 + vec2(-t * 0.05, t * 0.22)) - 1.0);\n  float mask = smoothstep(0.42, 0.68, fbm(q * 0.35 + vec2(7.1, -t * 0.04)));\n  float fil = pow(r, 18.0) * uFil * (0.25 + 0.75 * mask) * (1.0 - 0.6 * smoothstep(20.0, 75.0, vW.y));\n  float lift = smoothstep(0.5, 0.95, f) * (0.4 + 0.6 * mask);\n  vec3 base = mix(vec3(0.022, 0.016, 0.045), uA * 0.10, lift) * uDark;\n  vec3 glow = mix(uA, uB, smoothstep(0.35, 0.75, w.y));\n  float ground = 1.0 - smoothstep(0.0, 10.0, vW.y);\n  vec3 col = base + glow * (fil * 2.6 * body + lift * 0.22) + mix(uA, uB, 0.5) * ground * ground * 0.5;\n  float alpha = clamp(max(body * (0.40 + 0.55 * f) * (1.0 + 0.3 * smoothstep(12.0, 45.0, vW.y)), body * uMin) + fil * 0.35 + ground * 0.15, 0.0, 0.96) * uAmp;\n  gl_FragColor = vec4(col, alpha);\n}`;\n  const mk = (m, seed, top, amp, dark, fil, mn = 0) => {\n    const old = m.material;\n    const mat = new T.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uA: { value: old.uniforms.uA.value.clone() }, uB: { value: old.uniforms.uB.value.clone() }, uAmp: { value: amp }, uSeed: { value: seed }, uTop: { value: top }, uDark: { value: dark }, uFil: { value: fil }, uMin: { value: mn } },\n      vertexShader: old.vertexShader, fragmentShader: frag, transparent: true, depthWrite: false, side: T.FrontSide, blending: T.NormalBlending, toneMapped: false });\n    m.material = mat; return mat;\n  };\n  if (!window.__lead) { const L = H.storm.clone(); L.material = H.storm.material; H.storm.parent.add(L); window.__lead = L; }\n  window.__stormMats = [mk(window.__lead, 41.3, 60, 0.35, 1.3, 0.7), mk(H.storm, 0.0, 95, 0.9, 1.0, 1.0), mk(H.storm2, 13.7, 150, 1.0, 0.6, 0.6, 0.88)];\n  window.__lead.renderOrder = 3; H.storm.renderOrder = 2; H.storm2.renderOrder = 1;\n  H.__set = H.__set || H.setFront;\n  H.setFront = () => {};\n  window.__frontAt = z => { H.front = z; const r = z + 520; window.__lead.scale.set(r + 5, 1, r + 5); H.storm.scale.set(r, 1, r); H.storm2.scale.set(r - 10, 1, r - 10); return z; };\n  window.__frontAt(window.__front ?? -110);\n  __game.scene.traverse(o => { if (o.name === 'lightShaft') o.visible = false; });\n  if (!window.__s32) {\n    window.__s32 = { t: null, z0: -113, v: 3.0, ut: 0 };\n    __game.onUpdate(dt => { const S = window.__s32; S.ut += dt * 1.25; for (const m of window.__stormMats) m.uniforms.uTime.value = S.ut + m.uniforms.uSeed.value; if (S.t != null) S.t += dt; window.__frontAt(S.z0 + S.v * (S.t || 0)); });\n  }\n  return 'storm shader swapped, 3 layers';\n})()"
+    },
+    {
+     "eval": "(() => {\n  window.__run = (c, pts, speed, delay = 0) => {\n    if (c.__runOff) c.__runOff();\n    let i = 0, w = delay; c.pose = null; c.crouch = 0;\n    c.__runOff = __game.onUpdate(dt => {\n      if (w > 0) { w -= dt; return; }\n      const p = c.root.position, t = pts[i]; if (!t) { c.speed = 0; c.__runOff(); return; }\n      const dx = t[0] - p.x, dz = t[1] - p.z, d = Math.hypot(dx, dz);\n      if (d < 0.08) { i++; return; }\n      const st = Math.min(d, speed * dt); p.x += dx / d * st; p.z += dz / d * st; p.y += (0 - p.y) * Math.min(1, dt * 5);\n      let dy = Math.atan2(dx, dz) - c.root.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.root.rotation.y += dy * Math.min(1, dt * 8); c.speed = speed;\n    });\n    return true;\n  };\n  const A = [];\n  __game.scene.traverse(o => { const c = o.userData && o.userData.character; if (c && o === c.root && !Object.values(__game.actors).includes(c)) A.push(c); });\n  const near = (x, z) => A.reduce((b, c) => (Math.hypot(c.root.position.x - x, c.root.position.z - z) < Math.hypot(b.root.position.x - x, b.root.position.z - z) ? c : b));\n  const G = __game.actors;\n  window.__cast = window.__cast || { ama: G.ama, teach: G.m18teacher, g0: near(2.2, -103.4), g1: near(6.4, -99.6), k0: near(16.8, -94.8), k1: near(18.0, -95.6), k2: near(15.6, -95.2) };\n  const C = window.__cast;\n  const put = (c, x, z) => { if (c.__runOff) c.__runOff(); c.root.position.set(x, 0, z); c.root.rotation.y = 0; c.pose = null; c.crouch = 0; c.speed = 0; };\n  window.__s32start = () => {\n    put(C.ama, -3.5, -97.5); put(C.g0, 3.4, -100.5); put(C.g1, -3.3, -111.5); put(C.teach, 3.6, -106); put(C.k0, 3.0, -104.6); put(C.k1, 4.1, -105.4); put(C.k2, 15.6, -95.2);\n    C.k2.root.visible = false;\n  };\n  window.__s32go = () => {\n    window.__s32.t = 0;\n    __run(C.ama, [[-3.5, -92], [-4.6, -86], [-6, -80]], 4.3);\n    __run(C.g0, [[3.5, -92], [4.4, -86], [6, -80]], 4.0);\n    __run(C.g1, [[-3.4, -92], [-4.6, -86]], 4.6);\n    __run(C.teach, [[3.6, -92], [4.6, -86]], 3.6);\n    __run(C.k0, [[3.0, -92], [3.8, -86]], 3.4);\n    __run(C.k1, [[4.1, -92], [5.0, -86]], 3.3);\n    return 'go';\n  };\n  window.__s32start();\n  return Object.entries(C).map(([k, c]) => k + ':' + !!c).join(' ');\n})()"
     },
     {
      "wait": 0.8
@@ -500,54 +506,54 @@
      {
       "t": 0,
       "p": [
-       6.5,
-       11.5,
-       -66.5
+       -0.95,
+       1.62,
+       -86.7
       ],
       "l": [
-       -1.0,
-       6.0,
-       -120.0
+       1.0,
+       4.0,
+       -118.0
       ],
-      "fov": 48,
+      "fov": 40,
       "roll": 0,
       "focus": null
      },
      {
       "t": 2.0,
       "p": [
-       5.6,
-       10.4,
-       -69.5
+       -0.7,
+       1.55,
+       -85.2
       ],
       "l": [
-       -1.0,
-       6.2,
-       -120.0
+       1.0,
+       3.8,
+       -118.0
       ],
-      "fov": 47,
+      "fov": 40,
       "roll": 0,
       "focus": null
      }
     ],
-    "ease": "linear",
-    "shake": 0.1
+    "ease": "inOut",
+    "shake": 0.12
    },
    "actions": [
     {
      "t": 0,
-     "eval": "(()=>{window.__stormT=0; TR.act('ama',null); TR.walk('ama',[[-4.2,-92],[-5.5,-84]],1.9); TR.act('m18teacher',null); TR.walk('m18teacher',[[14.5,-92],[12,-86]],1.7); TR.look('joss',[0,12,-150]); return 'flee'})()"
+     "eval": "__s32go()"
     }
    ],
    "grade": "ruin2196",
-   "approved": false,
-   "characters": "Survivors (small: Ama leaving her beds, the teacher on the east platform, Joss at the beacon)",
-   "lighting": "The storm wall's violet and cyan light behind the hall's north wall; lantern strings and the cook fire inside.",
+   "approved": true,
+   "characters": "Survivors running toward the lens: Ama in the west aisle, a hooded gardener, the teacher and two of her pupils in the east aisle, a second gardener coming out of the storm haze",
+   "lighting": "The storm wall is the key light: violet and cyan filaments in a dark churning mass, a glowing base where it eats the floor; the lantern strings warm in front of it; the runners read as backlit silhouettes. The sunset light shafts are hidden (no sun in the storm).",
    "sound": "",
-   "notes": "g5: the storm front is set from the anchor (front = -132 - 150 * anchor): a run-time hook lowers the anchor from 0.34 to 0.12 over the shot, so the wall advances about 33 m toward the beacon while the camera pushes in. game.control is off for the shot (the mission's own anchor drain and the anchor-fail trigger only run with control). Tried and rejected: low views in the aisle and at the beacon (the hall's north brick wall fills the frame and the storm reads as a flat backdrop).",
+   "notes": "g5: the game's storm wall (an additive cylinder whose UV-stretched noise rendered as flat violet panels with vertical seams) is re-shaded at run time: world-space domain-warped fbm, a dark body with sparse bright filaments, normal alpha blending so it occludes what is behind it, in three layers (a faint lead haze 5 m ahead, the main wall, a darker opaque back wall 10 m behind) for depth. The mission's setFront is replaced by a hook that drives the front from z -113 to -107 over the shot (3 m/s; it reaches the beacon at z -121 with the back layer at about t 0.7), and the storm time runs 1.25x for churn. Runners are moved by a run-time walker (the gardeners and children are ambient characters, not in game.actors, so TR.walk cannot reach them; they are picked by their spawn positions). game.control is off (no anchor drain, no anchor fail); Kai is placed behind the lens; the gate lamp 0.9 m from the lens is hidden. Tried and rejected: the storyboard's elevated view over the gate (people too small, the north brick wall a flat plane under a flat violet backdrop).",
    "preview": {
     "status": "ok",
-    "note": "Lantern Hall trusses under violet storm light."
+    "note": "g5 final: survivors run toward the lens down the garden aisles while the churning violet front swallows the beacon behind them."
    }
   }
  ]

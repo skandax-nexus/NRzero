@@ -39,6 +39,7 @@ export default {
     const tStart = game.time;
     const tick = () => new Promise(r => setTimeout(r, 0));
     registerM14Cast(); registerM10Cast(); registerM18Cast(); registerM18Themes();
+    game.ui.missionTag('MISSION 18 · THE FRACTURE'); game.ui.show('hud', true);
     const kai = pl.char;
     const metSera = !!(F.metSera || F.m10metSera || F.m14metSera || F.m13done);
     const trust = F.seraTrust ?? 0, haleSide = F.trustedHale !== false, radioId = haleSide ? 'hale' : 'brandt';
@@ -321,7 +322,7 @@ export default {
         S.main = true; cine(true);
         if (!S.seen.sera1) {
           S.seen.sera1 = true;
-          await convo(A.sera, [['kai', 'How long has the sky been doing this?'], ['sera', 'Three days. Every settlement with a Helix anchor is losing it at once. Harrow Reach went dark this morning.'],
+          await convo(A.sera, [['kai', 'How long has the sky been doing this?'], ['sera', 'Three days. Every settlement with a Helix anchor is losing it at once. ' + (F.m15lantern === 'dark' ? 'Harrow\'s people walked out before it hit. Because of you.' : F.m15lantern === 'stable' ? 'Anja\'s Lantern went dark this morning. Harrow woke up on the fifteenth of May, all at once.' : 'Harrow Reach went dark this morning.')],
             ['kai', 'Three days. The Zero Second was eight days ago, my time.'], ['sera', 'Your time is not the problem. Everybody\'s time is coming loose.'],
             ['kai', 'Where does the convoy go?'], ['sera', 'Test Hall C, under the old Helix. When the sky does this, my people go there. The ring still holds it.']]);
         } else {
@@ -483,7 +484,7 @@ export default {
       await game.say('m18band', `Binding: Lantern Hall beacon. Anchor stability ${Math.round(S.anchor * 100)} percent and falling.`);
       await game.say('kai', 'That\'s not weather. That\'s a front of loose time, and it\'s walking south.');
       await convo(A.sera, [
-        ['sera', metSera ? 'You came back through the beacon. Good. You can help me empty the hall.' : 'You\'re Varen. I\'m Sera Voss. Lantern Hall is mine to empty. You can help.'],
+        ['sera', metSera ? (F.m17done ? 'You came up out of Site Zero. Good. You can help me empty the hall.' : 'You came back through the beacon. Good. You can help me empty the hall.') : 'You\'re Varen. I\'m Sera Voss. Lantern Hall is mine to empty. You can help.'],
         ['kai', 'The beacon is failing.'], ['sera', 'The beacon was holding the storm off this whole valley. When it goes, the hall goes. Twenty-one are out. Thirteen are still inside.'],
         ...(trust < 0 ? [['sera', 'And before you ask: no, I don\'t think you did this. Not this part.']] : trust >= 2 ? [['sera', 'I\'m glad it\'s you. That\'s a strange thing to say to a man on a memorial.']] : []),
         ['kai', 'Who\'s still inside?'], ['sera', 'Ama\'s gardeners in the beds. Hedda\'s school. Nadia and Tomas, he\'s got a broken leg. And Joss. Joss won\'t leave the beacon.'],
@@ -664,7 +665,7 @@ export default {
       hint(() => S.deck && T.current === '2026' && pl.pos.x > 7 && pl.pos.y > -0.5, 25, () => ui.subtitle('kai', 'Twenty forty-nine filled this in. Two.', 2400));
       game.onUpdate(() => {
         if (S.main || S.busy) return;
-        if (zoneOf() === 'ramp' && once('rampSera') && metSera) side(async () => { await game.say('m18sera', 'Kai? ... Kai. You fell off my scanner. The convoy\'s on the freight road.'); await game.say('kai', 'I\'m twenty-three years before the road. Going down a canyon nobody remembers.'); await game.say('m18sera', 'Then come forward. Test Hall C. I mean it.'); });
+        if (zoneOf() === 'ramp' && once('rampSera') && metSera) side(async () => { await game.say('sera', 'Kai? ... Kai. You fell off my scanner. The convoy\'s on the freight road.'); await game.say('kai', 'I\'m twenty-three years before the road. Going down a canyon nobody remembers.'); await game.say('sera', 'Then come forward. Test Hall C. I mean it.'); });
         if (zoneOf() === 'floor' && S.gen && once('floorIn')) { game.checkpoint(-5.2, -16, -24, 0); ui.subtitle('kai', 'The river. Fast, and colder than it looks.', 2600); }
         if (zoneOf() === 'east' && once('eastIn')) game.checkpoint(4.6, -16, -6.6, 0);
       });
@@ -1139,10 +1140,12 @@ export default {
       S.main = false; cine(false); S.stage = 3; spawnWave(3); cpWave();
       const sup = Array.isArray(F.factionSupport) ? F.factionSupport : [];
       if (sup.length) {
-        const a = sup[0]; G.ally = a.id || a.label || 'ally';
+        // prefer the allies who fight (M13), then Harrow Reach (M15); the line names whoever came
+        const a = ['unwritten-sappers', 'sable-civilians', 'harrow-reach', 'harrow-lantern', 'anja-diagnosis'].map(id => sup.find(x => x.id === id)).find(Boolean) || sup[0];
+        G.ally = a.id || a.label || 'ally';
         await game.wait(2.5);
         const e = standing()[0]; if (e) C.stun(e, 12);
-        ui.subtitle('m18sera', a.faction === 'unwritten' ? 'Lasker\'s sappers on the east breach! He said he owed you one!' : a.faction === 'anja' ? 'Harrow\'s lantern crew! Anja sent them!' : 'People from the Yards! They came!', 3200);
+        ui.subtitle('sera', a.faction === 'unwritten' ? 'Lasker\'s sappers on the east breach! He said he owed you one!' : a.id === 'harrow-reach' ? 'Harrow Reach! They remembered you!' : a.faction === 'anja' ? 'Harrow\'s lantern crew! Anja sent them!' : a.id === 'sable-civilians' ? 'People from the Yards! They came!' : 'Friends of yours on the east breach!', 3200);
       }
       await game.waitFor(() => S.rep >= 1 && !standing().length && !S.busy && !game._failing);
       // ---------- the ring sings ----------
@@ -1290,7 +1293,7 @@ export default {
       await game.shot([10, 4, 78], [0, 34, 0], 4.2, { fov: 50 });
       await game.say('m18band', 'Helix Long Array. Transmitting. Carrier: three tones. Payload: a pattern.');
       await game.say('kai', 'Forty-four metres of it. And the wind\'s trying to take the hill off the map.');
-      if (metSera) await game.say('m18sera', 'Kai, the ring\'s holding. Every storm on my scanner just turned to face your hill.');
+      if (metSera) await game.say('sera', 'Kai, the ring\'s holding. Every storm on my scanner just turned to face your hill.');
       S.main = false; cine(false); T.unlocked = true; T.refreshHud(); refreshObj(); S.phase = 'array';
       window.__m18.ch6 = { W };
       await game.waitFor(() => S.solved && !S.busy);
@@ -1330,9 +1333,9 @@ export default {
       await game.say('m18band', 'Coordinates received. Nineteenth October, twenty twenty-six. Eight fourteen and nine seconds. Then a second that has no number.');
       await game.say('kai', 'A city in the clouds. Nobody ever built that.');
       if (metSera) {
-        await game.say('m18sera', 'Kai. The storms stopped. All of them. For one second every clock on my hill said nothing at all.');
+        await game.say('sera', 'Kai. The storms stopped. All of them. For one second every clock on my hill said nothing at all.');
         await game.say('kai', 'She isn\'t in the Chronolith. Not all of her.');
-        await game.say('m18sera', 'Then where?');
+        await game.say('sera', 'Then where?');
         await game.say('kai', 'In a second nobody wrote.');
       } else await game.say('kai', 'Not in the Chronolith. Not all of her. In a second nobody wrote.');
       F.m18done = true; F.m18quote = true; F.miraFirstWorld = true; F.unwrittenSecond = true; F.m18miraMessage = true; F.m18array = true;

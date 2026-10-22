@@ -38,6 +38,49 @@ The runner calls missions in order; when `run` returns, the next mission starts.
 - Audio: `game.audio.setTheme('title'|'city'|'stealth'|'tension'|'chronolith'|'past'|'future'|'memory'|null)`; add your own with `registerTheme(name, { bpm, step(a, step, time, sixteenth) })` from src/core/audio.js (instruments: a.piano, a.pad, a.cello, a.flute, a.pluck, a.drum, a.tick, a.glass). Beds: `game.audio.rain(v) wind(v) hum(v, hz) water(v) crowd(v)`. Stingers: `game.audio.sfxPlay('switch'|'anomaly'|'pickup'|'success'|'fail'|'alarm'|'boom'|'metal'|'door'|'spark'|'heartbeat'|'motif'|'rewind'|'drone')`. Silence as storytelling: `game.audio.silence(sec)`.
 - Visual kits: src/world/kit.js (sky, Rain, Motes, box, glowMat, neonSign, puddleGlow, facade textures, asphalt/tile/stone/concrete materials, chronolith, cableCurve, canvasTex, rng) and src/world/realism.js (PBR texture sets, sky-driven lighting, environment captures, interior-mapped windows, city blocks, terrain, grass, trees, water, fog; read its header comments).
 
+## Physics API
+Kai moves with a fixed-step (120 Hz) capsule motor, `src/core/physics.js`; numbers and tests are in docs/MOTION.md
+"Physics & controls". Everything here is opt-in. Missions that write `player.pos`, `vel`, `grounded`, `yaw` or
+`crouching` keep working: a write to `pos` counts as a teleport (no smoothing, no carry). `?phys=classic` restores
+the old player, camera and touch feel for A/B checks.
+- **Ramps:** `game.collision.addRamp([minx,miny,minz], [maxx,maxy,maxz], dir, opts)` makes a box whose top slopes
+  along `dir` (`'+x'`, `'-x'`, `'+z'` or `'-z'`) from `opts.low` (default `miny`) to `maxy`. It is an ordinary
+  entry in `collision.boxes` (it has `.ramp`); Kai, NPC `resolve()` and `groundHeight()` walk on the slope. Use it
+  instead of micro-steps for slopes up to about 30 degrees.
+- **Moving platforms:** add `{ carry: true }` (or set `box.carry = true`) and move the box's `min`/`max` every frame
+  in `game.onUpdate`. Kai standing on it rides along (sideways and up/down) and keeps full control. Do not also write
+  `player.pos` for a carry box. Lifts that write `player.pos` every frame (m2, m3, m9, m18) still work unchanged.
+- **Ground query:** `game.collision.groundHeight(x, z, yHint, state)` returns the walkable top (boxes, ramps,
+  `walkOnly`) under a point that is at most 0.5 m above `yHint` (null: no limit), or null. For NPC grounding and
+  foot placement. `game.collision.rayCast(origin, dir, far, radius, state)` is the camera's sphere cast.
+- **Falls:** dropping below `killY` returns Kai to his last safe spot after a short fade, with no fail and no
+  checkpoint restore. A safe spot is a place he stood on, under control, for 0.4 s with ground under his whole
+  footprint. If that ground is gone (era switch, new scene), the fall fails as before. Set `game.fallRespawn = false`
+  for a section where a fall must fail. There is no fall damage in the core; a mission-owned rule (m18 `fallRule`)
+  still sees the fall.
+- **Edge assist:** a walking Kai (not sprinting, not jumping) stops at a drop of 2.5 m or more until the player keeps
+  pushing for 0.4 s. At a void (nothing below but the kill plane) he stops for as long as he walks. With no input he
+  never slides over a drop of more than 0.6 m. Sprint or jump to go over. `game.player.edgeAssist = false` turns it
+  off (for example for a drop the player must walk off without a run-up).
+- **People:** named actors and every Character in the scene within 3 m are soft cylinders (radius 0.26 m times
+  scale). Kai slides and steps around them and never walks through them. After 0.8 s of pushing against people who
+  box him in, he squeezes past. NPCs are never moved. Set `character.noCollide = true` for someone Kai must pass
+  through; ghosts (`setGhost`), hidden characters and characters outside the scene are ignored. Off during `cine`
+  and while the player has no control.
+- **Low ceilings:** Kai crouches by himself under a box whose underside is 1.12 m or more above his feet, and
+  stands again once clear. Lower undersides are walls.
+- **Reach (author gaps and climbs against these):** jump apex 0.82 m, air time 0.82 s (real gravity, 9.81 m/s²);
+  walking jump 2.5 m; sprint jump 4.2 m; a sprinted gap of 4.6 m is crossable, and 5.0 m never is (keep Echo Step
+  gaps at 5 m or more); step-up 0.45 m without jumping; jump-climb 1.15 m (1.2 m from a sprint); ledge tolerance
+  0.16 m or more. Coyote time is 0.12 s (0.04 s at a sprint) and jump buffering 0.15 s.
+- **Speeds:** walk 3.1, sprint 5.6, crouch 1.7, Alt-stroll 1.5 m/s. Top speed in 0.2 s (walk) or 0.3 s (sprint).
+  Stops take 0.4 m from a walk and 1.2 m from a sprint. Chases tuned against 3.1 and 5.6 m/s still hold.
+- **Animation interface:** every frame, Kai's Character receives `speed` (the real horizontal speed), `vel`,
+  `accel`, `turnRate`, `grounded`, `airTime` and `landing` (the impact speed on the landing frame). For NPCs, set
+  `.speed` as today; the Character derives the rest from root motion. Kai's model is drawn at `player.pos +
+  player.visOffset` (render interpolation and step smoothing), so read `player.pos` for game logic as before.
+- **Tuning:** `PHYS` in `src/core/physics.js` holds every constant. Do not change it from a mission.
+
 ## Shared systems (owner builds it; later missions import it)
 | System | File | Owner mission |
 |---|---|---|

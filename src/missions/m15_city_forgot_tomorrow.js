@@ -34,7 +34,7 @@ export default {
     registerM15Cast(); registerM15Themes();
     const seraTrust = F.seraTrust || 0, metSera = !!(F.metSera || F.m10metSera || F.m14metSera || F.m13done);
     try {
-      const need = ['anja', 'mara', 'wren', 'okafor', 'tully', 'pip', 'm15teo', 'sera'].filter(id => !ui.portraits[id] && CAST[id]?.look);
+      const need = ['anja', 'mara', 'tobias', 'okafor', 'tully', 'pip', 'm15teo', 'sera'].filter(id => !ui.portraits[id] && CAST[id]?.look);
       if (need.length) Object.assign(ui.portraits, renderPortraits(Object.fromEntries(need.map(id => [id, CAST[id]]))));
     } catch (err) { console.warn('m15 portraits', err); }
 
@@ -215,7 +215,7 @@ export default {
     const anja = person(game.actor('anja', null, 3.4, 0, -25.6, Math.PI));
     await tick();
     const mara = person(game.actor('mara', null, -12.9, 0, -18.4, Math.PI / 2)); mara.pose = 'look';
-    const wren = person(game.actor('wren', null, ...P.wrenGate, -Math.PI / 2));
+    const wren = person(game.actor('tobias', null, ...P.wrenGate, -Math.PI / 2));
     await tick();
     const okafor = person(game.actor('okafor', null, ...P.okDesk, Math.PI / 2));
     const tully = person(game.actor('tully', null, ...P.tully, Math.PI));
@@ -266,7 +266,7 @@ export default {
       lp.at(6, () => pa('Attention, please. All residents to Platform Two. Walk. Do not run.'), { learn: ['pa', '08:12:06 · The PA sends everyone to Platform Two'], when: () => inRegion('station') });
       lp.at(12, () => {}, { learn: ['surge', '08:12:12 · The crowd floods the gates for twenty seconds'], when: () => inRegion('station') });
       lp.at(28, () => pa('The 08:14 coast service is approaching Platform Two.'), { learn: ['train', '08:12:36 · An echo train runs the track bed to :44'], when: () => inRegion('station'), warn: true });
-      lp.at(46, () => {}, { learn: ['wren', '08:12:46 · Wren climbs to the signal box · door open :58 to :62'], when: () => inRegion('station') && pl.pos.x < -60 });
+      lp.at(46, () => {}, { learn: ['tobias', '08:12:46 · Marsh climbs to the signal box · door open :58 to :62'], when: () => inRegion('station') && pl.pos.x < -60 });
       lp.at(60, () => { pa('The 08:14 coast service has departed. There are no further services today.'); if (inRegion('station') && near(P.pip[0], P.pip[2], 14)) ui.subtitle('pip', 'He said Platform Two. He said wait.', 3000); }, { learn: ['gone', '08:13:00 · "Departed." Nobody boarded.'], when: () => inRegion('station') });
       // the crowd pushes back anyone standing in the gates while it surges
       lp.hazard(() => {
@@ -465,7 +465,7 @@ export default {
     }) });
     // the signal box: the log on the desk, Wren
     act({ pos: [P.sigDoor[0], 4.6, P.sigDoor[2] + 0.4], radius: 1.6, prompt: 'Try the signal box door', states: ['2196'], enabled: () => !S.sigInside && W.doors.signal.col.enabled, onUse: () => {
-      if (once('doorTry' + Math.floor(game.time / 6))) { ui.subtitle('kai', L.station.knows('wren') ? 'Locked. Wren opens it at fifty-eight past. I need to be here then.' : 'Locked. Somebody has the key.', 2800); audio.sfxPlay('metal'); }
+      if (once('doorTry' + Math.floor(game.time / 6))) { ui.subtitle('kai', L.station.knows('wren') ? 'Locked. Marsh opens it at fifty-eight past. I need to be here then.' : 'Locked. Somebody has the key.', 2800); audio.sfxPlay('metal'); }
     } });
     act({ pos: [-78.6, 4.6, -53.4], radius: 1.4, prompt: 'Open the door from inside', states: ['2196'], enabled: () => S.sigInside && W.doors.signal.col.enabled, onUse: () => { S.sigDoorHeld = true; W.setSigDoor(true); setTimeout(() => { S.sigDoorHeld = false; }, 4000); } });
     act({ pos: [P.sigLog[0], 4.6, P.sigLog[2]], radius: 2.4, prompt: 'Read the signal log', states: ['2196'], enabled: () => S.sigInside, onUse: (it) => side(async () => {
@@ -476,12 +476,12 @@ export default {
       if (!wasIn) { audio.sfxPlay('door'); await game.wait(0.4); }
       pl.place(-81.6, 3.6, -56.0, 0);
       await convo(wren, [
-        ['wren', 'Who— you shouldn\'t be up here. First time in Harrow?'],
+        ['tobias', 'Who— you shouldn\'t be up here. First time in Harrow?'],
         ['kai', 'Seven fifty-six. You sent the train early.'],
-        ['wren', 'The line was going. The rails ahead were forgetting they were rails. If I\'d held it, nobody would have left.'],
+        ['tobias', 'The line was going. The rails ahead were forgetting they were rails. If I\'d held it, nobody would have left.'],
         ['kai', 'And Platform Two?'],
-        ['wren', 'I announced it anyway. Every morning I announce it, and every morning I think I\'ve made a mistake. Then the day ends.'],
-        ['wren', S.cards.has('st_cons') ? 'You\'ve got Ashe\'s pass. Then you\'ve met Pip. Don\'t tell her. Not today.' : 'There\'s a girl on Two waiting for her dad. Don\'t tell her. Not today.'],
+        ['tobias', 'I announced it anyway. Every morning I announce it, and every morning I think I\'ve made a mistake. Then the day ends.'],
+        ['tobias', S.cards.has('st_cons') ? 'You\'ve got Ashe\'s pass. Then you\'ve met Pip. Don\'t tell her. Not today.' : 'There\'s a girl on Two waiting for her dad. Don\'t tell her. Not today.'],
       ]);
       F.m15wren = 'talked'; gotCard('st_cause');
       pauseLoop('station', false);
@@ -759,14 +759,14 @@ export default {
       act({ pos: [x, y + 0.4, z], radius: 1.7, prompt: 'Read the note to tomorrow', states: ['2196'], onUse: (it) => {
         it.done(); m.visible = false; m.userData.states = []; S.notes++; F.m15notes = S.notes; audio.sfxPlay('pickup'); progress();
         ev(`Note to tomorrow ${S.notes}/6`, `Found on ${where}: "${text}"`, 'NOTES TO TOMORROW · ' + S.notes + '/6');
-        ui.subtitle('kai', ['Written to a morning that never read it.', 'He wrote it down and never found it.', 'Wren knew. Every morning, for a minute.', 'Somebody has been trying to tell her.', 'Even the pears know.', 'Mara. Of course.'][i], 2600);
+        ui.subtitle('kai', ['Written to a morning that never read it.', 'He wrote it down and never found it.', 'Marsh knew. Every morning, for a minute.', 'Somebody has been trying to tell her.', 'Even the pears know.', 'Mara. Of course.'][i], 2600);
       } });
     });
-    // Teo on the plaza: "What day is it tomorrow?"
+    // Sami on the plaza: "What day is it tomorrow?"
     act({ pos: [6.4, 1, 15.6], radius: 2.0, prompt: 'Talk to the boy', states: ['2196'], enabled: () => S.phase !== 'intro', onUse: (it) => side(async () => {
       it.done(); cine(true);
       await convo(teo, [['m15teo', 'Mister. What day is it tomorrow?']]);
-      const i = await choose('kai', 'Teo asks what day it is tomorrow', ['"The fifteenth."', '"I don\'t know yet."', '"What day was yesterday?"'], 1);
+      const i = await choose('kai', 'Sami asks what day it is tomorrow', ['"The fifteenth."', '"I don\'t know yet."', '"What day was yesterday?"'], 1);
       await convo(teo, [['m15teo', ['Everyone says that. Nobody\'s ever been.', 'Me neither. I think about it at night, and then it\'s morning.', '…Thursday? It\'s always Thursday.'][i]]]);
       F.m15teo = i;
     }) });
@@ -804,7 +804,7 @@ export default {
     // ---------- hints when the player stalls ----------
     hint(() => S.phase === 'find', 60, () => ui.subtitle('kai', 'The dome with the light in it. The Archive\'s north of the plaza.', 3000));
     let hs = 0, hc = 0, hm = 0;
-    hint(() => S.phase === 'tears' && region() === 'station' && !S.tearDone.station && game.time - S.lastProgress > 50, 70, () => ui.subtitle('kai', ['Everybody\'s watching the gates. Nobody\'s watching the signal box.', 'Wren goes up to the box at forty-six past. If I\'m on the landing when he opens it…', 'There\'s another way up: along the track bed to the north end. Not while the echo train runs.', 'The girl on Platform Two hasn\'t moved since I got here.'][hs++ % 4], 3400));
+    hint(() => S.phase === 'tears' && region() === 'station' && !S.tearDone.station && game.time - S.lastProgress > 50, 70, () => ui.subtitle('kai', ['Everybody\'s watching the gates. Nobody\'s watching the signal box.', 'Marsh goes up to the box at forty-six past. If I\'m on the landing when he opens it…', 'There\'s another way up: along the track bed to the north end. Not while the echo train runs.', 'The girl on Platform Two hasn\'t moved since I got here.'][hs++ % 4], 3400));
     hint(() => S.phase === 'tears' && region() === 'school' && !S.tearDone.school && game.time - S.lastProgress > 50, 70, () => ui.subtitle('kai', ['The office opens when the bell goes. The corridor\'s the problem.', 'Seven seconds between pulses. Go right after one.', 'Her register\'s on the desk. The yard has a notice board.'][hc++ % 3], 3400));
     hint(() => S.phase === 'tears' && region() === 'market' && !S.tearDone.market && game.time - S.lastProgress > 50, 70, () => ui.subtitle('kai', ['Three girders, aged from one side. Read them all.', 'Whatever happens at 16:40, I want to be outside for it.', 'The warden kept a booth by the door. And Residue Vision might show me what nobody wrote down.'][hm++ % 3], 3400));
     hint(() => S.phase === 'tears' && region() === 'city' && game.time - S.lastProgress > 90, 90, () => ui.subtitle('kai', 'Station west. School east, past the road. The market south, down the avenue.', 3200));
@@ -817,6 +817,7 @@ export default {
     // ======================================================================================================
     // ---------- opening: the establishing shot, the chapter card, the veil ----------
     S.phase = 'intro'; S.main = true;
+    ui.missionTag('MISSION 15 · THE CITY THAT FORGOT TOMORROW'); ui.show('hud', true);
     pl.place(73.0, 0, 14.6, -Math.PI / 2); kai.root.rotation.y = -Math.PI / 2;
     cine(true); lockMusic('m15-city', 0.5);
     await game.shot([118, 46, 70], [0, 16, -30], 0.01, { fov: 50 });
@@ -827,6 +828,8 @@ export default {
     await game.shot([80, 2.0, 19.6], [69, 1.6, 12.6], 2.2, { fov: 40 });
     sera.lookTarget = kai.head; kai.lookTarget = sera.head;
     await convo(sera, [
+      // M14 ended at the repaired beacon with a road home open: say why Kai is still here
+      ...(F.m14done ? [['sera', 'The beacon\'s been holding your road home all night. You haven\'t taken it.'], ['kai', 'Sixteen of me went home. I\'d like to see what they didn\'t.']] : []),
       ['sera', 'Harrow Reach. Eleven hundred people, one day.'],
       ['sera', 'Every morning in there is the fourteenth of May, twenty-one ninety-three. They\'ll meet you today and lose you tonight.'],
       ['kai', 'A loop?'],
@@ -992,7 +995,7 @@ export default {
       // the tears close: the station waits calmly, the school counts properly, the market sells its pears
       wren.root.position.set(-83.6, 0, 4.6); wren.root.rotation.y = -Math.PI / 2; pip.root.position.set(-84.6, 0, 5.2); pip.pose = null; wren.lookTarget = pip.head; pip.lookTarget = wren.head;
       await game.shot([-79.4, 1.5, 9.4], [-84.2, 1.2, 4.8], 2.6, { fov: 38 });
-      await game.say('wren', 'Let\'s wait together, shall we? The eight-fourteen\'s never early.');
+      await game.say('tobias', 'Let\'s wait together, shall we? The eight-fourteen\'s never early.');
       okafor.root.position.set(43, 0, 9.2); okafor.root.rotation.y = Math.PI; okafor.pose = null;
       await game.shot([46, 1.6, 13.2], [43, 1.4, 9.2], 2.2, { fov: 38 });
       await game.say('okafor', '...twenty-two, twenty-three, twenty-four. Twenty-four. Good.');
@@ -1032,7 +1035,7 @@ export default {
       // the city remembers
       wren.root.position.set(-83.4, 0, 4.4); wren.root.rotation.y = -Math.PI / 2; wren.crouch = 1; pip.root.position.set(-84.6, 0, 5.2); pip.root.rotation.y = Math.PI / 2; pip.pose = null; wren.lookTarget = pip.head; pip.lookTarget = wren.head;
       await game.shot([-79.6, 1.3, 8.8], [-84, 1.0, 4.8], 2.6, { fov: 36 });
-      await game.say('wren', 'Pip. Your dad\'s train left early. I sent it. I\'m sorry.');
+      await game.say('tobias', 'Pip. Your dad\'s train left early. I sent it. I\'m sorry.');
       await game.say('pip', '...I know. I remembered. I think I always knew.');
       okafor.root.position.set(51.2, 0, -16.6); okafor.root.rotation.y = -Math.PI / 2; okafor.pose = 'sad';
       await game.shot([46.6, 1.2, -13.6], [51.2, 1.0, -16.6], 2.2, { fov: 36 });

@@ -213,6 +213,21 @@ for (const n of ['ledge_key', 'ledge_stick']) { const d = load(n); if (!d) conti
 { const d = load('coyote_probe'); if (d) { const S = d.samples; M.coyote = { jumpedAfterLeavingLedge: S.some(s => s.v[1] > 2) }; } }
 { const d = load('lift'); if (d) { const S = d.samples; let flick = 0; for (let i = 1; i < S.length; i++) if (S[i].gr !== S[i - 1].gr) flick++; const up = S.filter(s => s.t > 0.6 && s.t < 2.3), down = S.filter(s => s.t > 3.6 && s.t < 4.6);
   M.lift = { groundedTogglesTotal: flick, groundedFramesRising: up.filter(s => s.gr).length + '/' + up.length, groundedFramesDescending: down.filter(s => s.gr).length + '/' + down.length, clips: [...new Set(S.map(s => s.k.clip))].join('/') }; } }
+// ---- physics & controls step additions ----
+// the drawn body height (simulated feet + visual offset): the largest change in one frame, i.e. the visible pop
+const visY = s => s.p[1] + (s.vo ? s.vo[1] : 0);
+const visPop = S => r2(Math.max(...S.map((s, i) => i ? Math.abs(visY(s) - visY(S[i - 1])) : 0)) * 100);
+for (const h of Object.keys(M.stepUp)) { const d = load('stepup_' + h); if (d) M.stepUp[h].visPopCm = visPop(d.samples); }
+for (const fps of [15, 30, 60, 144]) { const st = load('phys_stairs_' + fps); if (st && M.physics[fps]?.stairs) M.physics[fps].stairs.visMaxStepPerFrameCm = visPop(st.samples); }
+for (const n of ['stairs', 'risers40', 'ramp', 'drop_3m']) { const d = load(n); if (d) (M.visPop ||= {})[n] = visPop(d.samples); }
+{ const d = load('ramp_true'); if (d) { const S = d.samples, on = S.filter(s => s.p[2] > -11.8 && s.p[2] < -6.2), slope = z => 1.2 * (z + 12) / 6;
+  M.rampTrue = { framesOnSlope: on.length, groundedOnSlope: on.filter(s => s.gr).length, maxErrCm: on.length ? r2(Math.max(...on.map(s => Math.abs(s.p[1] - slope(s.p[2])))) * 100) : null, topReached: S.some(s => s.p[1] >= 1.19), backDown: S[S.length - 1].p[1] < 0.05, visPopCm: visPop(S) }; } }
+{ const d = load('carry_x'); if (d) { const S = d.samples; M.carry = { maxX: r2(Math.max(...S.map(s => s.p[0]))), finalX: r2(S[S.length - 1].p[0]), groundedFrames: S.filter(s => s.gr).length + '/' + S.length, note: 'platform moves +3 m along x and back; Kai starts at x = -40' }; } }
+for (const n of ['edge_brief', 'edge_hold', 'edge_coast', 'void_walk']) { const d = load(n); if (!d) continue; const S = d.samples; M[n] = { fell: S.some(s => s.p[1] < 2.9), maxX: r2(Math.max(...S.map(s => s.p[0]))), finalY: r2(S[S.length - 1].p[1]) }; }
+{ const d = load('void_respawn'); if (d) { const S = d.samples; const L = S[S.length - 1]; M.voidRespawn = { fails: d.out?.fails ?? null, wentBelowKill: S.some(s => s.p[1] < 2), final: L.p.map(r2), grounded: L.gr === 1 }; } }
+{ const d = load('people_trap'); if (d) { const S = d.samples; let dmin = Infinity; for (const s of S) for (const n of s.n || []) if (n?.rp) dmin = Math.min(dmin, hyp(s.p[0] - n.rp[0], s.p[2] - n.rp[2])); M.peopleTrap = { escapedM: r2(S[S.length - 1].p[2] - S[0].p[2]), minDistToNpcM: r2(dmin) }; } }
+{ const d = load('npc_bump'); if (d && M.npc_bump) { const S = d.samples; M.npc_bump.kaiSpeedMinWhilePassing = r2(Math.min(...S.slice(15, 100).map(hs))); } }
+{ const d = load('cam_wall'); if (d && d.samples[0].arm !== undefined) M.cam_wall.armMin = r2(Math.min(...d.samples.map(s => s.arm))); }
 for (const n of ['cost_kai', 'cost_crowd12']) { const d = load(n); if (d) M[n] = { stepMs: d.stepMs }; }
 M.contactReference = { fromSteadyWalk: Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, r2(v * 100)])), idlePoseCm: Object.fromEntries(Object.entries(restIdle).map(([k, v]) => [k, r2(v * 100)])) };
 fs.writeFileSync(path.join(dir, 'metrics.json'), JSON.stringify(M, null, 1));

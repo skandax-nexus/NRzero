@@ -837,7 +837,7 @@ export default {
 
     // ---------- completion ----------
     F.m14done = true; F.m14shards = S.shards; F.m14evidence = S.ev.size; F.m14components = 3; F.m14settlement = 'Lantern Hall';
-    if (!F.metSera) F.metSera = true; void metSera;
+    if (!F.metSera) F.metSera = true; F.m14metSera = true; void metSera;
     await game.shot([28, 34, -60], [0, 20, -121], 5.0, { fov: 52 });
     await ui.fade(1, 2600);
     const mins = Math.round((game.time - tStart) / 60);
