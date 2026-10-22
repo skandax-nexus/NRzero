@@ -7,11 +7,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { lookPerson } from './skin.js';    // the look shading and facial life (docs/CHARACTER_LOOK.md); ?look=classic: off
+import { MOTION, Motion, analyseTemplate, gaitProfile } from './locomotion.js';   // walking style (docs/MOTION.md); ?motion=classic: off
 
 const T = {};            // id -> { root, clips, speeds, height, box }
 const key = n => n.replace(/_\d+$/, '');
 let lib = null;          // { clips, root, meta }
-export const cast = { ready: false, ids: [], meta: {}, loading: null };
+export const cast = { ready: false, ids: [], meta: {}, loading: null, index: {} };
 
 // ---------------- loading ----------------
 export function loadCast(base = new globalThis.URL('../../assets/models/', import.meta.url).href) {
@@ -31,10 +32,22 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
   cast.loading = (async () => {
     try {
       await MeshoptDecoder.ready;
-      const [c, a] = await Promise.all([get('cast.glb'), get('anims.glb')]);
+      // the new motion also reads our own authored clips (anims_extra.glb: same rig, never the owner's anims.glb) and
+      // the cast index (sex, age, height per build) for each person's gait; both are optional
+      const extra = MOTION.classic ? null : get('anims_extra.glb').catch(() => null);
+      const index = MOTION.classic ? null : globalThis.fetch(base + 'cast_index.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
+      const [c, a, x, ix] = await Promise.all([get('cast.glb'), get('anims.glb'), extra, index]);
       let meta = {};
       a.scene.traverse(o => { if (o.userData && o.userData.az_clips) try { meta = JSON.parse(o.userData.az_clips); } catch { /* older file */ } });
-      lib = { clips: a.animations, root: a.scene, meta }; cast.meta = meta;
+      const clips = a.animations.slice();
+      if (x) {
+        let xm = {};
+        x.scene.traverse(o => { if (o.userData && o.userData.az_clips) try { xm = JSON.parse(o.userData.az_clips); } catch { /* none */ } });
+        for (const cl of x.animations) if (!clips.some(k => k.name === cl.name)) clips.push(cl);
+        meta = { ...meta, clips: { ...(meta.clips || {}), ...(xm.clips || {}) } };
+      }
+      if (ix && ix.characters) for (const e of ix.characters) cast.index[e.id] = e;
+      lib = { clips, root: a.scene, meta }; cast.meta = meta;
       c.scene.children.slice().forEach(root => {
         let skinned = null, hips = null, top = 0;
         root.traverse(o => {
@@ -151,6 +164,7 @@ function clipsFor(t) {
   if (t.clips) return t.clips;
   t.clips = {};
   lib.clips.forEach(c => { const r = retarget(lib.root, c, t.root); t.clips[c.name] = r.clip; t.speeds[c.name] = r.speed; });
+  if (!MOTION.classic) try { analyseTemplate(t); } catch (e) { console.warn('motion: no gait data for', t.root.name, e && e.message); t.motionInfo = null; }
   return t.clips;
 }
 
@@ -281,7 +295,7 @@ export function makePerson(id, opts = {}) {
   let cur = null;
   const rnd = k => ((Math.imul(seed + 1, 2654435761) ^ Math.imul(k + 7, 40503)) >>> 0) % 1000 / 1000;
   const pace = 0.93 + 0.14 * rnd(1);
-  const h = { root, bones, id: t.root.name, mixer, actions, meshes, gadgets, current: null, height: t.height, speeds: t.speeds };
+  const h = { root, bones, id: t.root.name, mixer, actions, meshes, gadgets, current: null, height: t.height, speeds: t.speeds, pace };
   h.setGadget = (type, level) => { const g = gadgets[type]; if (!g) return; g.level = level; g.glow.forEach(m => { m.emissiveIntensity = level; }); if (g.group) g.group.lv.value[g.slot] = level; };
   // props: showProp is the caller's wish; long props (umbrella, staff, spear) also hide while crouching or sitting,
   // where they would sink through the floor
@@ -291,8 +305,10 @@ export function makePerson(id, opts = {}) {
   // level of detail: 0 = full mesh (+ glow group), 1 = crowd low LOD (6 000 triangles, glow baked); no-op without one
   h.lod = 0;
   h.setLOD = n => { if (!lods.length) return; h.lod = n ? 1 : 0; lods.forEach(o => { o.visible = !!n; }); lod0.forEach(o => { o.visible = !n; }); glowGroups.forEach(o => { o.visible = !n; }); };
+  h.postureChanged = (prev, name) => { if (POSTURE.has(name) || POSTURE.has(prev)) for (const t in gadgets) if (gadgets[t].long) vis(gadgets[t]); };
   h.play = (name, fade = 0.25, speed = 1) => {
     if (!actions[name]) name = LOCO.has(name) && actions.walk ? 'walk' : 'idle';
+    if (h.motion) { if (LOCO.has(name)) h.motion.cmd.speed = (t.speeds[name] || DEFAULT_SPEED[name] || 1.2) * speed; else { h.motion.cmd.pose = name; h.motion.cmd.speed = 0; } h.motion.poseFade = fade || 0.01; return; }
     const a = actions[name];
     if (!a) return;
     a.timeScale = LOCO.has(name) ? speed : speed * pace;
@@ -309,6 +325,7 @@ export function makePerson(id, opts = {}) {
   };
   h.move = (speed, scale = 1, mo = {}) => {
     const sp = n => (t.speeds[n] || DEFAULT_SPEED[n] || 1.2) * scale;
+    if (h.motion) { h.motion.cmd.speed = speed; h.motion.cmd.crouch = !!mo.crouch; return mo.crouch ? 'crouch' : 'walk'; }
     if (mo.crouch) { h.play('crouch', 0.3, Math.max(0.35, Math.min(2.4, Math.max(0.2, speed) / sp('crouch')))); return 'crouch'; }
     let best = null, bd = Infinity;
     for (const n of GAITS) {
@@ -319,7 +336,13 @@ export function makePerson(id, opts = {}) {
     h.play(best || 'walk', 0.3, Math.max(0.3, Math.min(2.2, speed / sp(best || 'walk'))));
     return best;
   };
-  h.update = dt => mixer.update(dt);
+  // the new motion (locomotion.js) drives the mixer itself; ?motion=classic or a template without gait data: crossfades
+  if (!MOTION.classic && t.motionInfo) {
+    const ix = cast.index[t.root.name] || {};
+    h.motion = new Motion(h, t.motionInfo, seed, gaitProfile(t.root.name, ix));
+    h.motion.meta = ix;
+  }
+  h.update = dt => (h.motion ? h.motion.update(dt) : mixer.update(dt));
   h.play('idle', 0);
   try { lookPerson(h, seed); } catch (e) { console.warn('look: skipped for', h.id, e && e.message); }
   return h;

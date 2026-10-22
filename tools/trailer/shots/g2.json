@@ -36,6 +36,9 @@
     },
     {
      "eval": "(()=>{const n=window.__s05.nose;n.children.forEach(c=>{if(c.isMesh)c.material.emissiveIntensity=10;if(c.isSpotLight)c.intensity=25;});return 'nose lamps 10 / spot 25'})()"
+    },
+    {
+     "eval": "(()=>{const B=__game.engine.bloom,m=B.materialHighPassFilter,src='vec4 texel = texture2D( tDiffuse, vUv );';if(!m.fragmentShader.includes(src))return 'highpass pattern not found';m.fragmentShader=m.fragmentShader.replace(src,src+' texel.rgb *= min(1.0, 16.0 / max(max(texel.r, max(texel.g, texel.b)), 1e-4));');m.needsUpdate=true;const s0=B.strength;__game.onUpdate(()=>{const u=Math.min(1,Math.max(0,(DIR.t-1.9)/0.85));B.strength=s0+0.8*u*u;});return 'bloom input clamped at 16; strength '+s0+' ramps +0.8 from 1.9 s'})()"
     }
    ],
    "frames": 78,
@@ -105,7 +108,7 @@
    "characters": "Jun Park (transit operator), three civilians on the platform, Kai (foreground left)",
    "lighting": "Warm platform canopy light, the yellow edge strip, the stopped station clock.",
    "sound": "Train horn (the game's 311 / 370 Hz pair), rising rail hiss.",
-   "notes": "Low on the track bed looking up the line, a slow push. The train is driven at run time (its nose from z +12 at 33 m/s, so the light swells from ~120 m to ~35 m by the cut-out; the mission's own train starts out of sight) and the mission's teleports of it are blocked for this shot. Kai crosses the mission's line at t 0.55 (a 15 cm step), so the Zero Second lands on frame 68, after the cut-out (frame 66): cut out on the white-out, hard cut to s06 in silence. Heads turn to the light: Kai 0.6, Jun 0.85, the commuters 1.0. Frames 68+ (handle) are frozen.",
+   "notes": "Low on the track bed looking up the line, a slow push. The train is driven at run time (its nose from z +12 at 33 m/s, so the light swells from ~120 m to ~35 m by the cut-out; the mission's own train starts out of sight) and the mission's teleports of it are blocked for this shot. Kai crosses the mission's line at t 0.55 (a 15 cm step), so the Zero Second lands on frame 68, after the cut-out (frame 66): cut out on the white-out, hard cut to s06 in silence. Heads turn to the light: Kai 0.6, Jun 0.85, the commuters 1.0. Frames 68+ (handle) are frozen. Final-frame QC: the first render flickered in its last 0.7 s (frames 50-66): specular fireflies of the 25-strength nose spot on the shop shutters / platform glass (HDR peaks far above the lamps) changed from frame to frame and the bloom spread them into large soft squares that jumped between frames. Fixed at run time: the bloom input is clamped at 16 per pixel (the lamps keep their glare, the fireflies lose theirs) and the bloom strength ramps 0.75 -> 1.55 from 1.9 s, so the glare still swells to the white-out at the cut-out.",
    "preview": {
     "status": "ok",
     "note": "Full-res stills 12/40/65 (+70 frozen handle): the platform in the rain, the headlights swell from the vanishing point to a glare; heads turn. Freeze on frame 68, after the cut-out."

@@ -24,7 +24,7 @@ import { analyseData } from './skin_analyse.js';
 const Q = new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '');
 const LOOKQ = (Q.get('look') || '').split(',').filter(Boolean);
 // DEFAULT_ON: the new look is the default; false keeps it behind ?look=new while it is being verified
-const DEFAULT_ON = false;
+const DEFAULT_ON = true;
 export const look = {
   classic: LOOKQ.includes('classic') || (!DEFAULT_ON && !LOOKQ.includes('new')),
   off: new Set(LOOKQ.filter(s => s.startsWith('no')).map(s => s.slice(2))),

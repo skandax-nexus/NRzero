@@ -790,7 +790,7 @@ export default {
     await tween(4.2, u => { const z = 31.4 - u * 11.4, y = z > 30 ? 3 : z < 22 ? 0 : (z - 22) / 8 * 3; pl.place(0, y, z, PI); });
     kai.speed = 0;
     await convo(mara, [
-      ...(metMara ? [['mara', 'Under the Archive. Anja doesn\'t come down here. She says the floor hums.']] : [['mara', 'Mara Quill. I keep the archive upstairs that disagrees with itself. Sera said you\'d want to see what\'s under it.']]),
+      ...(metMara ? [['mara', F.anjaAlly === 'free' ? 'Under the Archive. Anja\'s packing for the road with your Sera\'s people. She never came down here anyway. She says the floor hums.' : 'Under the Archive. Anja doesn\'t come down here. She says the floor hums.']] : [['mara', 'Mara Quill. I keep the archive upstairs that disagrees with itself. Sera said you\'d want to see what\'s under it.']]),
       ['kai', 'What is it?'],
       ['mara', 'Edie calls it a museum. I call it the other side of every argument I\'ve ever had.'],
     ]);

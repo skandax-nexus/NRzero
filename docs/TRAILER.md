@@ -656,6 +656,58 @@ frame, finished at 8.2 / 8.9 s per frame (load average 20-25) and were encoded t
 `clips/t_walk.mp4` (h264, 1280×590, yuv420p, 24 fps, 144 / 120 frames), after which the farm exited by itself.
 Their `approved` flags are back to false so the production farm skips them.
 
+## Final-frame QC
+
+`tools/trailer/qc.py` checks the farm's output, shot by shot (run it with the trailer venv,
+`/home/user/tools/trailer-venv/bin/python tools/trailer/qc.py [ids...] [--force]`; a shot whose frames and clip have not
+changed since its last check is skipped). For every approved shot with a clip it writes `<OUT>/qc/<id>/sheet.jpg` and
+`<OUT>/qc/<id>/qc.json`, and `<OUT>/qc/summary.json` for a full run.
+
+- **Contact sheet**: 6 frames spread evenly over the part the edit uses (`[handles, frames − handles)`), the 2.39
+  band marked in yellow. Below them is a strip with per-frame band luma (white) and frame-to-frame change (orange).
+  Flicker candidates are marked blue, pops red, local pops and colour steps with violet ticks, and the handles shaded.
+- **clip**: ffprobe reports h264, yuv420p, the render size, and a frame count equal to the spec's `frames`. The clip's
+  spec hash matches the frames' hash.
+- **black / freeze**: ffmpeg `blackdetect` (≥ 0.08 s) and `freezedetect` (−70 dB, ≥ 0.25 s) on the clip. Frames whose
+  band luma is under 6/255 count as black. Runs of 4 or more frames with no measurable change count as frozen.
+- **flicker**: a one-frame band-luma excursion from a 5-frame median (more than 2/255 and 6 %).
+- **pop**: a frame-to-frame change over 3/255 and 3× its 9-frame median: a staging jump, an object popping in or out,
+  a focus snap, or a cut.
+- **local pop**: a 32×64 px block that steps to a new value in one frame and keeps it, more than 18/255 and 5× the
+  block's own change around that frame: an object or LOD popping, or one building relit. Flagged at 3 or more blocks,
+  or a step of 40/255 or more. Single blocks are usually just motion.
+- **colour step**: a one-frame step in the band's mean RGB, more than 0.8/255 and 4× its neighbours: an
+  environment-probe swap or a grade snap.
+- **grade**: band mean RGB at the start, middle and end of the used range. A drift inside one shot shows up here.
+
+The numbers only point at frames worth a look. Each candidate is judged on the sheet and the frames around it.
+Intended events also trip them: era switches, flares, impact flashes and dissolves.
+
+Pass of 2026-10-22, all 36 shots: no black, frozen or format faults, and no HUD, debug or letterbox remnants on any
+sheet. Four shots were fixed at run time in their specs and re-rendered:
+
+| shot | fault | fix |
+|---|---|---|
+| s02 | From ~3.7 s the band light (cyan, strength 10) washed the child's face out to a flat porcelain white: doll-like, with the skin hue gone. | The light rises to 3.5. Her skin tone stays, with a cool rim on the forehead and hair. |
+| s03 | A focus pop: the depth of field snapped from the child to the band between frames 26 and 27. The director re-aims the focus every frame, and the engine's focus smoothing does not run on frame-stepped renders. | `focusOn` pulls focus itself over 0.8–1.4 s, with a smoothstep interpolated in 1/distance. |
+| s05 | Flicker in the last 0.7 s (frames 50–66). The 25-strength nose spot raised specular fireflies on the shop shutters and the platform glass, with HDR peaks far above the lamps. The bloom spread them into large soft squares that jumped from frame to frame. | The bloom high-pass input is clamped at 16 per pixel, so the lamps keep their glare and the fireflies lose theirs. The bloom strength ramps from 0.75 to 1.55 starting at 1.9 s, so the glare still swells to the white-out at the cut-out. |
+| s20 | A lighting pop at frame 56 (2.3 s, inside the cut). During the loop's run-up to the reset the scene's light signature changed. The engine re-captured its environment probe and swapped it in within one frame: the left building turned from warm brick to cold grey and the whole frame cooled. | The probe the director settles at the shot camera on frame 0 is frozen from frame 1 (`scene.userData.autoEnv = false`). The morning light now holds until the freeze grade. |
+
+Any shot can get the probe swap: the probe re-captures when fog, background, environment intensity or the number of
+visible lights changes, at most once every 2 s, and a re-capture swaps in at once. A shot whose world changes while it
+runs gets a colour step 2 s or more in, when the re-capture finishes (it takes about 14 frames). Freeze the probe for it the way s20 does.
+
+Intended, not faults (the edit relies on them): the s03 band flare (frame 41, on the 13.2 s chime). The s08 dissolve onset
+(frame 67). The era switches in s11 (4×), s14, s15 (one dark transitional frame at 48), s33 (2× in the cut) and s36
+(the distortion builds from frame 64; the 2196 flip is frame 72, just past the last used frame 71). s21's Echo Step:
+the trigger flash at frame 27, then Kai's body arcs over the shutter and fades out by frame 36 while the afterimage holds.
+The four impact flashes of s23. The light-on in s19's head handle (frame 8). The reset in s20's tail handle (frame 115).
+
+Look-dev notes from the pass, not faults: s09's HELIX lettering is cut at the top of the 2.39 band. In s01 two street
+lamps leave the top edge during the crane down (frames 97–99), and their bloom goes with them (−2/255 band luma),
+mostly above the 2.39 band. The s09 corridor's alarm lights flash, as the game's lockdown lighting does. In s07 a frozen
+commuter enters frame left on the last used frame. s29, s26 and s30 are near-static 1-second holds, with frame change ≤ 0.9/255.
+
 ## Sound
 
 Everything the trailer sounds like is rebuilt by one command (outputs outside the repo, in the session scratchpad

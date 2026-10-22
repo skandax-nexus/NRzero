@@ -124,6 +124,15 @@
     out.gtL = FEEL.groundAt(out.toe_L[0], out.toe_L[2], out.toe_L[1]);
     out.gtR = FEEL.groundAt(out.toe_R[0], out.toe_R[2], out.toe_R[1]);
     out.ry = +ch.root.rotation.y.toFixed(4);
+    // the new motion's state (src/human/locomotion.js), when it runs: loco / air weights, gait phase, stride warp,
+    // pelvis drop and landing dip, per foot contact, lock weight and stepping
+    const M = P.motion;
+    if (M) {
+      const r3 = x => +(+x).toFixed(3);
+      out.m = { wl: r3(M.wLoco), wa: r3(M.wAir), phi: r3(M.phi), k: r3(M.k), F: r3(M.F), drop: r3(M.drop), dip: r3(M.dip.x), v: r3(M.v), turn: r3(M.turn), lod: M.lod,
+        acts: Object.entries(P.actions).filter(([, a]) => a.isScheduled() && a.weight > 0).map(([n, a]) => n + ':' + a.weight.toFixed(2) + '@' + a.time.toFixed(3)).join(' '),
+        roll: r3(M.roll.x), pitch: r3(M.pitch.x), yo: r3(M.yawOff), feet: M.feet.map(f => [r3(f.c), r3(f.lockW), f.step ? 1 : 0, r3(f.delta)]) };
+    }
     return out;
   }
   // rest offsets: foot / toe bone heights above the sole in Kai's idle pose (to turn bone heights into sole heights)

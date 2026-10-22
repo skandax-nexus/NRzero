@@ -7,6 +7,7 @@ import { createHead } from '../human/head.js';
 import { createHair } from '../human/hair.js';
 import { createBody } from '../human/body.js';
 import { cast, makePerson, templateBox } from '../human/cast3d.js';
+import { motionView, gaitProfile } from '../human/locomotion.js';
 
 // ---------- shared helpers ----------
 export function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -217,6 +218,9 @@ export class Character {
     this.legs = [['R', -1], ['L', 1]].map(([S, side]) => ({ th: proxyBone(), kn: proxyBone(), ft: B['foot_' + S] || proxyBone(), side }));
     this.eyes = []; this.mats = {};
     this.template = id; this.scale3d = scale;
+    // the new motion (src/human/locomotion.js) reads this Character's speed, crouch, pose, talk, lookTarget and the
+    // physics interface (vel, accel, turnRate, grounded, airTime, landing) itself; the gait follows the look
+    if (person.motion) { person.motion.ch = this; person.motion.P = gaitProfile(id, person.motion.meta, look); }
     // gadgets (docs/COSTUMES.md): glow levels are driven through setGadget(); the Chronolith band answers era switches
     this.gadgetLv = {}; this.gadgetTo = {};
     const band = ['chronolith_band', 'chronolith_cuff_thin'].find(t => person.gadgets[t]?.slot != null || person.gadgets[t]?.glow.length);
@@ -419,6 +423,7 @@ const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.
 const POSE_CLIPS = new Set(['sit', 'work', 'look', 'nod', 'sad', 'fall', 'talk', 'idle']);
 Character.prototype.update3d = function (dt) {
   const P = this.person, sp = this.speed;
+  if (P.motion) return this.updateMotion(dt);
   if (sp > 0.05) P.move(sp, this.scale3d || 1, { crouch: this.crouch > 0.5 });
   else if (this.crouch > 0.5) P.play('crouch', 0.3, 0.02);
   else if (this.pose && POSE_CLIPS.has(this.pose)) P.play(this.pose, 0.35);
@@ -451,6 +456,30 @@ Character.prototype.update3d = function (dt) {
       }
     }
   }
+  this.updateKit(dt);
+};
+// The new motion: locomotion.js drives clips, IK, lean, head and springs; the umbrella arm goes on top of it.
+Character.prototype.updateMotion = function (dt) {
+  const P = this.person;
+  motionView.camera = charView.camera; motionView.low = charView.low;
+  P.motion.ch = this; P.motion.poseFade = 0.35;
+  P.update(dt);
+  if (this.talk > 0) this.talk -= dt;
+  if (this.umbrellaPose) { // forearm raised to hold the umbrella over the head
+    const a = this.arms[1].bone;
+    if (a.up && a.el) {
+      const right = _v.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+      for (const [b, ang] of [[a.up, -0.55], [a.el, -1.35]]) {
+        b.getWorldQuaternion(_q); _q2.setFromAxisAngle(right, ang); _q.premultiply(_q2);
+        b.parent.getWorldQuaternion(_q2).invert(); b.quaternion.copy(_q2.multiply(_q)); b.updateMatrixWorld(true);
+      }
+    }
+  }
+  this.updateKit(dt);
+};
+// gadgets, the shoulder lamp and the crowd level of detail (both motion paths)
+Character.prototype.updateKit = function (dt) {
+  const P = this.person;
   // gadget glow: levels ease toward their targets; the Chronolith band flashes on an era switch (temporal.js wristBoost)
   const band = this.wrist?.gadget, boost = this.wristBoost || 0;
   for (const name in this.gadgetTo) {

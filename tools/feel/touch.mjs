@@ -2,7 +2,7 @@
 // Drives the real touch controls with CDP touch events and reads back what Input / Player made of them:
 // stick dead zone, the walk-speed curve against thumb travel, the sprint threshold, camera drag per pixel,
 // and the layout of the JUMP / CROUCH / interact buttons. Writes <out>/touch.json and screenshots.
-//   node tools/feel/touch.mjs --out=<dir> [--size=844x390] [--m=0]
+//   node tools/feel/touch.mjs --out=<dir> [--size=844x390] [--m=0] [--query=phys=classic]
 /* global window, document */
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import fs from 'fs'; import path from 'path';
@@ -13,7 +13,7 @@ const [W, H] = (flag('size') || '844x390').split('x').map(Number);
 const b = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--mute-audio'] });
 const ctx = await b.newContext({ viewport: { width: W, height: H }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
 const p = await ctx.newPage(); p.on('pageerror', e => console.log('PAGEERROR', e.message));
-await p.goto(`http://localhost:8765/index.html?m=${flag('m') || 0}&gfx=low&dtcap=0.25&auto&touch=1`);
+await p.goto(`http://localhost:8765/index.html?m=${flag('m') || 0}&gfx=low&dtcap=0.25&auto&touch=1${flag('query') ? '&' + flag('query') : ''}`);
 await p.waitForFunction(() => window.__game && window.__game.control && !window.__game.ui.dlgActive, null, { timeout: 600000, polling: 1000 });
 await p.waitForTimeout(1500);
 const cdp = await ctx.newCDPSession(p);
@@ -46,9 +46,11 @@ R.look = { yawDegPer100px: +((yaw0[0] - yaw1[0]) * 180 / Math.PI).toFixed(1), pi
 // jump: tap the button, see whether Kai leaves the ground
 const j = R.layout.jump;
 if (j) {
-  const y0 = await p.evaluate(() => window.__game.player.pos.y);
+  // every simulated frame is sampled in the page (frames are slow under SwiftShader, so polling from here misses the apex)
+  const y0 = await p.evaluate(() => { const g = window.__game; window.__jt = { y0: g.player.pos.y, top: g.player.pos.y }; window.__jtOff = g.onUpdate(() => { window.__jt.top = Math.max(window.__jt.top, g.player.pos.y); }); return g.player.pos.y; });
   await touch('touchStart', [[j.cx, j.cy, 2]]); await p.waitForTimeout(120); await touch('touchEnd', []);
-  let top = y0; for (let i = 0; i < 12; i++) { await p.waitForTimeout(80); top = Math.max(top, await p.evaluate(() => window.__game.player.pos.y)); }
+  await p.waitForTimeout(2500);
+  const top = await p.evaluate(() => { window.__jtOff?.(); return window.__jt.top; });
   R.jumpTap = { rose: +(top - y0).toFixed(2) };
 }
 await p.screenshot({ path: path.join(out, 'touch_after.png') });
