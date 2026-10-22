@@ -33,7 +33,7 @@ def loudnorm_measure(path):
 
 def loudnorm_apply(src, dst, m):
     af = (f"loudnorm=I={TARGET_I}:TP={TARGET_TP}:LRA=20:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
-          f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset=0:linear=true:print_format=json")
+          f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true:print_format=json")
     r = subprocess.run(['ffmpeg', '-y', '-hide_banner', '-nostats', '-i', src, '-af', af, '-ar', str(SR), '-c:a', 'pcm_s24le', dst],
                        capture_output=True, text=True).stderr
     j = json.loads(r[r.rfind('{'):r.rfind('}') + 1])
@@ -69,12 +69,17 @@ def master(music, sfx, vo, name, length, gates=()):
         for it in range(8):
             y = limit(mix * undb(g), ceiling_db=TARGET_TP - 0.6)
             write_wav(tmp, y)
-            m = loudnorm_measure(tmp)
-            err = TARGET_I - float(m['input_i'])
-            print(f'  pass {it}: I {m["input_i"]} TP {m["input_tp"]} gain {g:+.2f}')
+            e = ebur128(tmp)  # converge on the verifying meter (EBU R128, ffmpeg ebur128)
+            err = TARGET_I - e['I']
+            print(f'  pass {it}: I {e["I"]} TP {e["TP"]} gain {g:+.2f}')
             if abs(err) < 0.05:
                 break
             g += err * (1.25 if it else 1.0)
+        m = loudnorm_measure(tmp)
+        # loudnorm's integrator can read a few tenths away from ebur128 on short programmes (the store cut); the second
+        # pass is given the ebur128 reading as measured_I, so its linear gain lands on the verifying meter's scale
+        m['input_i'] = e['I']
+        m['target_offset'] = 0
         final = os.path.join(OUT, name + '.wav')
         j = loudnorm_apply(tmp, final, m)
     print('  loudnorm pass 2:', j.get('normalization_type'), 'out I', j.get('output_i'), 'TP', j.get('output_tp'))

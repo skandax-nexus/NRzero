@@ -116,6 +116,28 @@ def onset(v, t_expect, rel_db=-26):
     return a / SR + i / SR
 
 
+def hit_alignment(music):
+    """for every hit in the beat map: the strongest music onset (spectral-flux peak) within 80 ms, and its offset.
+    Hits that open a silence (19.75, 97.375) are checked as cut-offs: the level must fall by 40 dB within 10 ms."""
+    m = music.mean(1)
+    f, t, S = signal.stft(m, SR, nperseg=1024, noverlap=1024 - 240)
+    mag = np.log1p(np.abs(S) * 50)
+    flux = np.maximum(0, np.diff(mag, axis=1)).sum(0)
+    tt = t[1:]
+    out = []
+    for h in TRAILER['hits']:
+        seg = m[ns(h):ns(h + 0.01)]
+        pre = m[ns(h - 0.05):ns(h - 0.005)]
+        if np.abs(m[ns(h) + ns(0.01):ns(h) + ns(0.3)]).max() < 1e-6:
+            out.append({'hit': h, 'kind': 'cut-off', 'drop_db': round(float(db(np.abs(pre).max() + 1e-9) - db(np.abs(seg[-48:]).max() + 1e-12)), 1)})
+            continue
+        w = (tt > h - 0.08) & (tt < h + 0.08)
+        loc = (tt > h - 1.0) & (tt < h + 1.0)
+        i = np.argmax(np.where(w, flux, -1))
+        out.append({'hit': h, 'kind': 'onset', 'offset_ms': round((tt[i] - h) * 1000), 'strength': round(float(flux[i] / (np.median(flux[loc]) + 1e-9)), 1)})
+    return out
+
+
 def report():
     res = {}
     mix = os.path.join(OUT, 'trailer_mix.wav')
@@ -138,6 +160,7 @@ def report():
         ons.append({'t': line['t'], 'speaker': line['speaker'], 'onset': None if o is None else round(o, 3),
                     'error_ms': None if o is None else round((o - line['t']) * 1000)})
     res['vo_onsets'] = ons
+    res['hits'] = hit_alignment(read_wav(os.path.join(OUT, 'stems', 'music.wav')))
     st = os.path.join(OUT, 'store_mix.wav')
     if os.path.exists(st):
         y = read_wav(st)

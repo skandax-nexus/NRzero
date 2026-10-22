@@ -723,21 +723,21 @@ def build_store(length=30.0):
     for r, s0 in zip(rows, starts):
         e = era[r['shot']]
         d = r['dur']
-        bedx = {'rain': lambda: rain(d, seed=int(s0 * 10) + 1, heavy=0.7) * 0.5,
-                'held': lambda: glass_shimmer(d, seed=3, rate=30),
-                'chamber': lambda: chronolith_hum(d, seed=4) * 0.55,
-                'valley': lambda: stream(d, seed=5) * 0.5 + birds(d, seed=6, rate=1.4) * 0.4,
-                'wind': lambda: wind(d, seed=int(s0 * 10) + 7, gust=0.6) * 0.5,
-                'water': lambda: lapping(d, seed=8) * 0.6,
-                'hum': lambda: chronolith_hum(d, seed=9) * 0.45}[e]()
+        bedx = {'rain': lambda: at_rms(rain(d, seed=int(s0 * 10) + 1, heavy=0.7), -36),
+                'held': lambda: at_rms(glass_shimmer(d, seed=3, rate=30), -42),
+                'chamber': lambda: at_rms(chronolith_hum(d, seed=4), -38),
+                'valley': lambda: at_rms(stream(d, seed=5), -37) + at_rms(birds(d, seed=6, rate=1.4), -41),
+                'wind': lambda: at_rms(wind(d, seed=int(s0 * 10) + 7, gust=0.6), -37),
+                'water': lambda: at_rms(lapping(d, seed=8), -38),
+                'hum': lambda: at_rms(chronolith_hum(d, seed=9), -40)}[e]()
         add(amb, fade(bedx, 0.02, 0.05), s0)
         if prev is not None:
             if (prev in ('rain', 'held', 'chamber')) != (e in ('rain', 'held', 'chamber')) or e == 'chamber':
-                add(fx, switch(seed=int(s0 * 10), level=0.45), s0 - 0.3)
+                add(fx, at_peak(switch(seed=int(s0 * 10)), -11), s0 - 0.3)
             elif s0 < 25.6:
-                add(fx, impact(seed=int(s0 * 10), f0=66), s0, 0.3)
+                add(fx, at_peak(impact(seed=int(s0 * 10), f0=66), -13), s0)
         prev = e
-    add(fx, heartbeat(0.6), 0.0)
+    add(fx, at_peak(heartbeat(), -9), 0.0)
     return amb, fx
 
 

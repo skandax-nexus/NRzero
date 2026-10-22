@@ -311,6 +311,9 @@ def compose(S):
     S.chord('violins', C(3), [71, 74], C(6) - C(3), 0.45, vel_end=0.52, attack=0.2, section=3)
     S.strings('horn', C(1), 60, C(3) - C(1), 0.28, 0.4, attack=0.5, release=0.6, section=2, bus='winds', bright=1800)
     S.strings('horn', C(3), 59, C(6) - C(3), 0.3, 0.42, attack=0.3, release=0.6, section=2, bus='winds', bright=1800)
+    S.strings('timpani', C(0), 41, 3.0, 0.42, section=1, bus='perc', jitter=0)  # the arrival in 2196
+    S.piano(C(0), 29, 0.4, C(6), felt=0.3, jitter=0)
+    S.piano(C(0) + 0.008, 41, 0.34, C(6), felt=0.3, jitter=0)
     S.piano(C(0) + 0.3, 93, 0.24, C(6), felt=0.3)
     S.piano(C(2.5), 88, 0.2, C(6), felt=0.3)
     # 65.75 (s18, the statue): B-flat, foreign and cold, held under "For ending it."
@@ -349,8 +352,8 @@ def compose(S):
     title(S, C, end=109.583)
 
     # ---------------------------------------------------------------- end card: one low A rings out
-    S.piano(112.2, 33, 0.42, None, felt=0.35, jitter=0)
-    S.piano(112.205, 45, 0.2, None, felt=0.4, jitter=0)
+    S.piano(112.09, 33, 0.42, None, felt=0.35, jitter=0)
+    S.piano(112.095, 45, 0.2, None, felt=0.4, jitter=0)
 
 
 def montage(S, C, bars, roots, gaps, rev_hits, slip_from, end_beat, vo_quiet=((0, 6),), intensity=1.0):
@@ -438,8 +441,8 @@ def tom(vel, f0, seed):
 def title(S, C, end, short=False):
     """main theme reprise: piano motif alone, then cello; strings bloom; the hopeful suspended chord, top note unresolved"""
     if not short:
-        S.piano(C(0) + 0.06, 76, 0.4, C(3), felt=0.4, jitter=0.002)
-        S.piano(C(0) + 0.08, 45, 0.26, C(3), felt=0.45)
+        S.piano(C(0) + 0.004, 76, 0.4, C(3), felt=0.4, jitter=0.0)
+        S.piano(C(0) + 0.014, 45, 0.26, C(3), felt=0.45, jitter=0.0)
         S.piano(C(1.5), 83, 0.38, C(3), felt=0.4)
         S.piano(C(3), 81, 0.36, C(5), felt=0.4)
         S.piano(C(3) + 0.02, 41, 0.25, C(5), felt=0.45)
@@ -520,7 +523,7 @@ def main():
         return
     S = Score(LEN)
     compose(S)
-    gates = [(19.75, 20.75), (97.375, 98.583), (109.583 + 0.25, 112.15)]
+    gates = [(19.75, 20.75), (97.375, 98.583), (109.583 + 0.25, 112.083)]
     music, stems = S.render(gates=gates)
     n = ns(LEN)
     music = music[:n]
