@@ -9,82 +9,10 @@
    "ready": "window.__game && __game.control && __game.actors.niko",
    "setup": [
     {
-     "eval": "__game.player.place(0, 0, 21.5, Math.PI)"
+     "eval": "(()=>{const t=__game.scene.children.filter(o=>o.isGroup&&Math.abs(o.position.x+0.5)<0.3&&Math.abs(o.position.z-30.1)<0.3); t.forEach(o=>o.visible=false); return 'lens-line tree hidden: '+t.length})()"
     },
     {
-     "wait": 0.6
-    }
-   ],
-   "frames": 98,
-   "handles": 12,
-   "fps": 24,
-   "cut_frames": 74,
-   "camera": {
-    "mode": "path",
-    "keys": [
-     {
-      "t": 0,
-      "p": [
-       5.8,
-       1.8,
-       26.5
-      ],
-      "l": [
-       0,
-       2.4,
-       -10
-      ],
-      "fov": 44,
-      "roll": 0,
-      "focus": 36.96
-     },
-     {
-      "t": 4.1,
-      "p": [
-       3.0,
-       6.2,
-       25.0
-      ],
-      "l": [
-       0,
-       3.0,
-       -12
-      ],
-      "fov": 48,
-      "roll": 0,
-      "focus": 37.26
-     }
-    ],
-    "ease": "inOut",
-    "shake": 0
-   },
-   "actions": [
-    {
-     "t": 0.3,
-     "down": "KeyW"
-    }
-   ],
-   "grade": "ancient",
-   "approved": false,
-   "characters": "Kai walking in, Tala and villagers",
-   "lighting": "Low warm sun, long shadows, dust motes; the stone ring at the heart of the village.",
-   "sound": "Wind and water bed; the switch transition lands on the cut.",
-   "notes": "",
-   "preview": {
-    "status": "ok",
-    "note": "Golden hour, villagers, the stone ring; faceted low-poly trees (known mission 4 item)."
-   }
-  },
-  {
-   "id": "s13",
-   "group": "g4",
-   "mission": 4,
-   "beat": "Niko, keeper of the Telling, reads the ring on Kai's wrist: \"You came before the first fire.\"",
-   "url": "index.html?m=3&dtcap=0.25&gfx=high&auto",
-   "ready": "window.__game && __game.control && __game.actors.niko",
-   "setup": [
-    {
-     "eval": "(()=>{const g=__game, n=g.actors.niko; g.player.place(1.14, 0.6, -4.1, 2.57); n.root.rotation.y=-0.373; n.lookTarget=g.player.char.head; g.player.char.lookTarget=n.head; return 'niko'})()"
+     "eval": "(()=>{const g=__game; g.player.place(1.35,0,38.0,Math.PI); TR.place('tala',-0.6,0,33.2,Math.PI); TR.walk('tala',[[-0.7,12],[-0.6,-2]],1.3); g.input.setStick(0,0.36,0.36); return 'kai and tala walking to the ring'})()"
     },
     {
      "wait": 1.0
@@ -100,51 +28,128 @@
      {
       "t": 0,
       "p": [
-       1.8,
-       2.0,
-       -3.4
+       1.15,
+       1.5,
+       40.6
       ],
       "l": [
-       2.5,
-       2.08,
-       -6.2
+       0.4,
+       2.8,
+       -11
       ],
-      "fov": 32,
+      "fov": 24,
       "roll": 0,
-      "focus": 2.89
+      "focus": null
      },
      {
-      "t": 4.1,
+      "t": 4.08,
       "p": [
-       1.9,
-       1.99,
-       -3.8
+       0.95,
+       2.15,
+       38.9
       ],
       "l": [
-       2.5,
-       2.08,
-       -6.2
+       0.2,
+       3.1,
+       -11
       ],
-      "fov": 30,
+      "fov": 23,
       "roll": 0,
-      "focus": 2.48
+      "focus": null
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0.15,
+    "rig": false,
+    "focusOn": "DIR.t < 2.1 ? DIR.actor('kai').head : [0, 3.2, -11]"
+   },
+   "actions": [],
+   "grade": "ancient",
+   "approved": false,
+   "characters": "Kai walking away from the lens toward the Old Ring (a calm 1.5 m/s walk, analog stick), Tala walking beside him on the left, villagers on the plaza around the Ring",
+   "lighting": "The mission's golden-hour sun low behind the Ring (frame left), warm valley haze; no rig light, Kai's back stays in the house shadow.",
+   "sound": "Wind and water bed; the switch transition lands on the cut.",
+   "notes": "Telephoto (24 to 23 deg) walk-away between two houses that frame the Ring: the camera cranes up 0.65 m and creeps in while Kai walks away from it, so he shrinks into the valley and the Ring rises clear above him. Focus holds on Kai, then racks to the Ring at 2.1 s. The tree on the lens line (-0.5, 30.1) is hidden for the whole shot.",
+   "preview": {
+    "status": "ok",
+    "note": "Golden hour, villagers, the stone ring; faceted low-poly trees (known mission 4 item)."
+   }
+  },
+  {
+   "id": "s13",
+   "group": "g4",
+   "mission": 4,
+   "beat": "Niko, keeper of the Telling, reads the ring on Kai's wrist: \"You came before the first fire.\"",
+   "url": "index.html?m=3&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.actors.niko",
+   "setup": [
+    {
+     "eval": "(()=>{const g=__game,k=g.player.char,n=g.actors.niko; n.root.position.set(2.5,0.6,-6.2); n.root.rotation.y=0.477; g.player.place(3.37,0.3,-4.51,-2.664); g.input.setStick(0,0,0); n.lookTarget=k.head; k.lookTarget=n.head; TR.clip('kai','talk',0.3,0.7); return 'niko faces kai in front of the Ring'})()"
+    },
+    {
+     "wait": 1.0
+    }
+   ],
+   "frames": 98,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 74,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       4.75,
+       2.05,
+       -3.3
+      ],
+      "l": [
+       2.45,
+       2.12,
+       -6.3
+      ],
+      "fov": 19.5,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.08,
+      "p": [
+       4.5,
+       2.08,
+       -3.62
+      ],
+      "l": [
+       2.45,
+       2.15,
+       -6.3
+      ],
+      "fov": 18.5,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0.12,
+    "focusOn": "niko"
    },
    "actions": [
     {
-     "t": 0.9,
-     "eval": "DIR.actor('niko').talk = 1.5"
+     "t": 0.92,
+     "eval": "DIR.actor('niko').talk = 1.7"
+    },
+    {
+     "t": 2.62,
+     "eval": "DIR.actor('kai').talk = 1.2"
     }
    ],
    "grade": "ancient",
    "approved": false,
-   "characters": "Niko (close-up), Kai (soft foreground shoulder)",
-   "lighting": "Warm key from the low sun, cool sky fill; shallow focus.",
+   "characters": "Niko (medium close-up, talking to Kai: the VO line), Kai (soft foreground head and shoulder, frame left; his steady 'talk' clip at 0.7x so his head does not wander like the idle does)",
+   "lighting": "Niko stands between the lens and the Old Ring: the low sun behind the Ring rims him, the dialogue rig keys his face, and the Ring's glowing inner rim makes a halo around him; the halo fragments sweep behind.",
    "sound": "",
-   "notes": "",
+   "notes": "Long-lens over-the-shoulder (19.5 to 18.5 deg) with a slow 0.4 m push. Niko on the platform at (2.5, 0.6, -6.2) faces Kai (3.37, 0.3, -4.51); the camera sits on the far side of the Niko-Ring line so the Ring frames him. Niko talks from 0.92 s (the VO 'The ring on your wrist is the Ring in our valley...'), Kai answers from 2.62 s ('I've never been here.').",
    "preview": {
     "status": "ok",
     "note": "Niko medium close-up framed by the village Ring."

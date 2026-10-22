@@ -101,14 +101,14 @@
     }
    ],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Jun Park (transit operator), three civilians on the platform, Kai (foreground left)",
    "lighting": "Warm platform canopy light, the yellow edge strip, the stopped station clock.",
    "sound": "Train horn (the game's 311 / 370 Hz pair), rising rail hiss.",
    "notes": "Low on the track bed looking up the line, a slow push. The train is driven at run time (its nose from z +12 at 33 m/s, so the light swells from ~120 m to ~35 m by the cut-out; the mission's own train starts out of sight) and the mission's teleports of it are blocked for this shot. Kai crosses the mission's line at t 0.55 (a 15 cm step), so the Zero Second lands on frame 68, after the cut-out (frame 66): cut out on the white-out, hard cut to s06 in silence. Heads turn to the light: Kai 0.6, Jun 0.85, the commuters 1.0. Frames 68+ (handle) are frozen.",
    "preview": {
     "status": "ok",
-    "note": "Kai left, the train headlight swells at the end; cut before the freeze."
+    "note": "Full-res stills 12/40/65 (+70 frozen handle): the platform in the rain, the headlights swell from the vanishing point to a glare; heads turn. Freeze on frame 68, after the cut-out."
    }
   },
   {
@@ -207,14 +207,14 @@
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Frozen civilians, Jun",
    "lighting": "The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads.",
    "sound": "Hard cut into one second of total silence (bible: the Zero Second), then a low metallic resonance.",
    "notes": "Camera on the track bed in the train's path, pushing 2 m toward the nose (linear: no ease at the cut points). Focus held on the nose so the frozen sparks between camera and train fall into soft points. The nose lamps / spot are toned down at run time (glow 8 -> 3, spot 60 -> 6): at full strength their bloom flooded the left half of the frame. The passing ambient train is hidden (it shares the track).",
    "preview": {
     "status": "ok",
-    "note": "Derailing train hangs with frozen sparks in the freeze grade."
+    "note": "Full-res stills 12/60/107: low in the train's path, the tilted train hangs with frozen sparks; lamps toned down so its shape reads."
    }
   },
   {
@@ -332,14 +332,14 @@
     }
    ],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Kai (tracking side-on), frozen commuters and umbrellas between camera and Kai",
    "lighting": "Frozen rain beads catch the station light; Kai the only warm, moving figure.",
    "sound": "Kai's footsteps, glass-harmonic shimmer of the held rain.",
    "notes": "Leading Steadicam on the platform (between the canopy pillars and the edge): the camera is anchored to Kai and backs away as he walks, closing from a full figure (28 deg) to a knees-up mid shot (31 deg). Jun is staged frozen at the edge facing up the line (Kai passes him at ~1.8 s), two commuters moved to the edge so Kai's path is clear. Kai walks at 1.26 m/s on the touch stick (setStick 0.3) so the 'walk' clip plays, not the jog; he glances at Jun at 1.2 and finds the lens at 3.5, under the VO line. Dialogue rig on Kai. Train lamps toned down (glow 3, spot 6).",
    "preview": {
     "status": "ok",
-    "note": "Kai walks through the held station in the freeze grade."
+    "note": "Full-res stills 12/60/107: Kai walks the frozen platform past Jun toward the lens, the derailed train hanging behind him."
    }
   },
   {
@@ -453,21 +453,21 @@
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Mira (close-up, looking at Kai), crowd behind",
    "lighting": "Helix entrance glow behind her; her violet dissolve (the mission's ghost shader).",
    "sound": "The three-note motif (E-B-A) on felt piano; Kai: \"...Mira?\"",
    "notes": "Slow push along her eyeline (Kai stands just behind the camera, so she looks into the lens). She is revealed 1 s before the mission does it: solid from the cut-in to ~2.9 s, dissolving ~2.9-4.3 s, gone by 4.3 s; the focus racks to the Helix doors at 4.35-4.95 s. EDIT: put Kai's '...Mira?' at shot t ~2.5 (edit ~29.75 s), just before she dissolves. Ghost material made front-faced at run time (the mission's double-sided additive ghost shows a skull-like mask). Three idle commuters moved behind her as a soft crowd; env probe re-captured at the camera (it was taken by the crash fire).",
    "preview": {
     "status": "ok",
-    "note": "She is solid at the cut-in, violet at the middle, gone at the cut-out. Check her sharpness (DOF) at full size."
+    "note": "Full-res stills 12/40/66/100/119: Mira solid in the cyan Helix doorway looking into the lens, violet dissolve, then the empty doors in focus."
    }
   },
   {
    "id": "s16",
    "group": "g2",
    "mission": 6,
-   "beat": "The clockmaker opens his door before Kai knocks: \"You're late.\"",
+   "beat": "The clockmaker opens his door before Kai can knock: Hensel steps into the warm doorway, plants his hands on his hips and looks Kai over. \"You're late.\"",
    "url": "index.html?m=5&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
@@ -479,8 +479,14 @@
      "eval": "__game.player.place(0, 0, 9.8, Math.PI); __game.use('Knock')"
     },
     {
-     "until": "__game.actors.oskar && __game.actors.oskar.root.visible && __game.actors.oskar.root.position.z > 7.85",
+     "until": "__game.actors.oskar && __game.actors.oskar.root.visible",
      "timeout": 30
+    },
+    {
+     "wait": 1.15
+    },
+    {
+     "eval": "(()=>{const g=__game;g.talk=()=>new Promise(()=>{});g.say=()=>new Promise(()=>{});const k=g.scene.children.find(x=>x.isSpotLight&&x.intensity===160);if(k)k.intensity=60;g.scene.userData.rigIntensity=0.6;return 'dialogue held, key '+(k?60:'?')})()"
     }
    ],
    "frames": 80,
@@ -493,49 +499,59 @@
      {
       "t": 0,
       "p": [
-       0.95,
-       1.72,
-       9.75
+       1.75,
+       1.45,
+       11.9
       ],
       "l": [
-       0.1,
-       1.62,
-       7.95
+       0.0,
+       1.6,
+       7.9
       ],
-      "fov": 34,
+      "fov": 30,
       "roll": 0,
-      "focus": 1.99
+      "focus": null
      },
      {
-      "t": 4.0,
+      "t": 3.33,
       "p": [
-       0.85,
-       1.72,
-       9.55
+       1.45,
+       1.5,
+       11.2
       ],
       "l": [
-       0.1,
-       1.62,
-       7.95
+       0.02,
+       1.58,
+       7.9
       ],
-      "fov": 32,
+      "fov": 28,
       "roll": 0,
-      "focus": 1.77
+      "focus": null
      }
     ],
-    "ease": "inOut",
-    "shake": 0
+    "ease": "linear",
+    "shake": 0.1,
+    "focusOn": "oskar"
    },
-   "actions": [],
+   "actions": [
+    {
+     "t": 0.9,
+     "eval": "TR.act('oskar', 'look')"
+    },
+    {
+     "t": 1.2,
+     "eval": "TR.talk('oskar', 0.9)"
+    }
+   ],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Oskar Hensel (78, clockmaker) in his doorway, Kai (foreground shoulder)",
    "lighting": "Rain on the old quarter, warm shop light from inside the door.",
    "sound": "",
-   "notes": "The mission stages this scene itself after the knock; the path holds its close shot a little longer.",
+   "notes": "Over Kai's shoulder (soft, left) into the warm shop doorway: clocks glowing behind Hensel, rain in the street light. The shot starts as the door finishes opening; Hensel steps forward (0-0.8 s), then the 'look' pose (hands on hips, head up) from 0.9 under the line at ~1.2. The mission's dialogue is held at run time (its fade would move everyone inside mid-shot). Street key 160 -> 60 and dialogue rig x0.6 so his white hair and face hold detail. Note: cast3d characters have no mouth animation, so the line plays over a medium two-shot rather than a close-up.",
    "preview": {
     "status": "ok",
-    "note": "Hensel in his doorway, warm shop light, Kai's shoulder."
+    "note": "Full-res stills 12/40/67: over Kai's shoulder into the warm doorway; Hensel steps out, hands on hips, clocks glowing behind."
    }
   }
  ]

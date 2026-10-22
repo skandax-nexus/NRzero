@@ -277,14 +277,14 @@
     }
    ],
    "grade": "ruin2196",
-   "approved": false,
+   "approved": true,
    "characters": "Sera Voss (medium close-up, right third, outside the lock, turning her head to Kai and speaking); Kai small and soft in the haze beyond the veil, left third, facing her",
    "lighting": "Late gold of the lock (2196 golden-hour sky and haze through the gate); two warm bounce fills (run-time point lights: one from the camera side, one ahead of her face so it stays lit when she turns to Kai), the dialogue rig on her (focusOn); the veil's shimmer raised to 0.28.",
    "sound": "",
    "notes": "Restaged from the storyboard (camera west of her into the boxy outer skyline): now from the east through the Lock Gate, the hazy golden city behind her (clock, colonnade). VO from mission 13 (\"The future that survives long enough to remember us.\"); her mouth moves with it (talk action at 0.62 = trailer 85.3).",
    "preview": {
     "status": "ok",
-    "note": "Sera close-up at the veil; the skyline behind her is simple boxes."
+    "note": "g3 review: full-res stills 12/36/60 checked; restaged east of the Lock Gate: Sera right third against the hazy golden city, turning to Kai beyond the veil, warm fills on her face."
    }
   },
   {

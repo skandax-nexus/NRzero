@@ -1297,7 +1297,7 @@ export default {
       // ---------- Mira's message ----------
       S.mira = true; S.main = true; cine(true); lockMusic('m18-mira', 1.5); hudSet(null);
       audio.sfxPlay('motif'); W.beam.material.opacity = 0.8;
-      await game.shot([8.5, P6.P3y + 2.6, 8.5], [0, P6.P3y + 7, 0], 2.2, { fov: 54 });
+      await game.shot([8.0, P6.P3y + 2.2, 8.0], [0, P6.P3y + 4.5, 0], 2.2, { fov: 56 });
       await game.say('m18band', `Pattern: Varen, Mira. ${pattern} percent. Transmitting on every clock on Earth.`);
       // south side of the crown, clear of the emitter post and the horns: the beam rises behind them
       const mira = game.actor('m18mira', null, 1.5, P6.P3y, 2.0, -PI / 2); S.byId.m18mira = mira;
