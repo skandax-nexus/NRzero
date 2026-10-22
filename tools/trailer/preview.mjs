@@ -64,6 +64,7 @@ for (const shot of shots) {
         if (a.eval) { const r = await p.evaluate(a.eval).catch(e => 'evalerr ' + e.message); if (String(r).startsWith('evalerr')) log.push('action ' + r); }
       }
       const jpg = await p.evaluate(([i, d]) => window.DIR.frame(i, d), [f, frames.includes(f)]);
+      if (!jpg) await p.waitForTimeout(18);   // let requestAnimationFrame run between frames: mission scripts await on it
       if (jpg) { const fp = path.join(out, `${shot.id}_${String(f).padStart(4, '0')}.jpg`); fs.writeFileSync(fp, Buffer.from(jpg.split(',')[1], 'base64')); imgs.push(fp); }
     }
     const info = await p.evaluate(() => { const g = window.__game, E = g.engine; return { canvas: E.renderer.domElement.width + 'x' + E.renderer.domElement.height, era: g.temporal.current, calls: E.stats.calls, tris: E.stats.triangles, grade: E.grade, kai: g.player.pos.toArray().map(v => +v.toFixed(2)) }; });

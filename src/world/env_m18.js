@@ -1009,6 +1009,7 @@ export function buildArray(game, scene, T) {
     for (const s of [-1, 1]) { const z = s * hw; if (s === gapZ) { solid(M.rust, -hw, y, z - 0.05, -0.7, y + 1.1, z + 0.05); solid(M.rust, 0.7, y, z - 0.05, hw, y + 1.1, z + 0.05); } else solid(M.rust, -hw, y, z - 0.05, hw, y + 1.1, z + 0.05); }
   };
   deck(P6.P1y, 5, 1); deck(P6.P2y, 4, -1); deck(P6.P3y, 3, 0);
+  solid(M.grate, -1.0, P6.P3y - 0.25, -1.0, 1.0, P6.P3y, 1.0);   // the crown has no lift shaft: close the middle
   // ladders: south face base -> P1, north face P2 -> P3
   const ladder = (z, y0, y1, s) => { for (const x of [-0.32, 0.32]) bat().box(M.rust, x - 0.03, y0, z - 0.03, x + 0.03, y1 + 1.0, z + 0.03); for (let y = y0 + 0.3; y < y1; y += 0.32) bat().box(M.rust, -0.32, y, z - 0.02, 0.32, y + 0.04, z + 0.02); for (let y = y0 + 2.2; y < y1; y += 1.4) bat().geo(M.rust, new THREE.TorusGeometry(0.55, 0.03, 4, 16, PI), [0, y, z + s * 0.05], [PI / 2, 0, 0]); };
   ladder(5.15, 0.4, P6.P1y, 1); ladder(-4.15, P6.P2y, P6.P3y, -1);

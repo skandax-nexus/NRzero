@@ -40,7 +40,7 @@
       ],
       "fov": 32,
       "roll": 0,
-      "focus": null
+      "focus": 6.3
      },
      {
       "t": 4.9,
@@ -56,12 +56,11 @@
       ],
       "fov": 30,
       "roll": 0,
-      "focus": null
+      "focus": 6.0
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('kai').head"
+    "shake": 0
    },
    "actions": [],
    "grade": "rain2049",
@@ -110,7 +109,7 @@
       ],
       "fov": 42,
       "roll": 0,
-      "focus": null
+      "focus": 23.9
      },
      {
       "t": 5.1,
@@ -126,7 +125,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 22.92
      }
     ],
     "ease": "linear",
@@ -197,7 +196,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 5.95
      },
      {
       "t": 3.05,
@@ -213,7 +212,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 5.84
      }
     ],
     "ease": "linear",
@@ -272,7 +271,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 46.1
      },
      {
       "t": 3.0,
@@ -288,7 +287,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 42.88
      }
     ],
     "ease": "linear",
@@ -331,7 +330,7 @@
      "timeout": 200
     },
     {
-     "eval": "(()=>{const g=__game, s=g.actors.sera; g.player.place(2.3, 0.15, 51.4, 0.3); s.root.position.set(2.6, 0.15, 54.0); s.root.rotation.y = Math.PI + 0.2; s.speed = 0; s.lookTarget = g.player.char.head; return 'sera'})()"
+     "eval": "(()=>{const g=__game, s=g.actors.sera; const q = s.root.position; g.player.place(q.x - 0.4, q.y, q.z - 2.4, 0); s.root.rotation.y = Math.PI; s.speed = 0; s.lookTarget = g.player.char.head; return 'sera'})()"
     },
     {
      "wait": 0.8
@@ -347,39 +346,40 @@
      {
       "t": 0,
       "p": [
-       3.3,
+       0.75,
        1.62,
-       51.75
+       -2.3
       ],
       "l": [
-       2.6,
-       1.6,
-       54.0
+       0,
+       1.58,
+       0
       ],
       "fov": 30,
       "roll": 0,
-      "focus": null
+      "focus": 2.42
      },
      {
       "t": 3.0,
       "p": [
-       3.22,
+       0.68,
        1.62,
-       51.95
+       -2.1
       ],
       "l": [
-       2.6,
-       1.6,
-       54.0
+       0,
+       1.58,
+       0
       ],
       "fov": 29,
       "roll": 0,
-      "focus": null
+      "focus": 2.21
      }
     ],
     "ease": "inOut",
     "shake": 0,
-    "focusOn": "DIR.actor('sera').head"
+    "anchor": "DIR.actor('sera').root.position",
+    "anchorLive": false
    },
    "actions": [
     {
@@ -427,7 +427,7 @@
       ],
       "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 94.68
      },
      {
       "t": 2.1,
@@ -443,7 +443,7 @@
       ],
       "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 89.55
      }
     ],
     "ease": "linear",
@@ -479,34 +479,34 @@
      {
       "t": 0,
       "p": [
-       4.2,
-       1.5,
-       61
+       6,
+       4.5,
+       72
       ],
       "l": [
-       -8.2,
-       1.1,
-       55.4
+       0,
+       2,
+       46
       ],
-      "fov": 36,
+      "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 26.8
      },
      {
       "t": 2.1,
       "p": [
-       3.7,
-       1.5,
-       59.9
+       5.2,
+       4.1,
+       68.5
       ],
       "l": [
-       -8.2,
-       1.1,
-       55.4
+       0,
+       2,
+       46
       ],
-      "fov": 36,
+      "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 23.19
      }
     ],
     "ease": "linear",

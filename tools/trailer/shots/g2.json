@@ -50,7 +50,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 26.98
      },
      {
       "t": 3.25,
@@ -66,7 +66,7 @@
       ],
       "fov": 39,
       "roll": 0,
-      "focus": null
+      "focus": 25.94
      }
     ],
     "ease": "inOut",
@@ -134,34 +134,34 @@
      {
       "t": 0,
       "p": [
-       8.3,
-       1.25,
-       -101.5
+       10.0,
+       1.3,
+       -100.5
       ],
       "l": [
-       12.3,
-       1.3,
-       -92
+       12.6,
+       1.4,
+       -90
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 10.82
      },
      {
       "t": 5.0,
       "p": [
-       8.7,
+       10.2,
        1.4,
-       -99.8
+       -99.0
       ],
       "l": [
-       12.4,
+       12.6,
        1.5,
-       -90
+       -89
       ],
       "fov": 38,
       "roll": 0,
-      "focus": null
+      "focus": 10.28
      }
     ],
     "ease": "linear",
@@ -242,7 +242,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 2.63
      },
      {
       "t": 5.0,
@@ -258,14 +258,13 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 2.67
      }
     ],
     "ease": "linear",
     "shake": 0,
     "anchor": "DIR.actor('kai').root.position",
-    "anchorLive": true,
-    "focusOn": "DIR.actor('kai').head"
+    "anchorLive": true
    },
    "actions": [
     {
@@ -348,7 +347,7 @@
       ],
       "fov": 30,
       "roll": 0,
-      "focus": null
+      "focus": 3.2
      },
      {
       "t": 5.5,
@@ -364,12 +363,11 @@
       ],
       "fov": 28,
       "roll": 0,
-      "focus": null
+      "focus": 2.65
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('mira').head"
+    "shake": 0
    },
    "actions": [],
    "grade": "rain2049",
@@ -420,7 +418,7 @@
       ],
       "fov": 34,
       "roll": 0,
-      "focus": null
+      "focus": 1.99
      },
      {
       "t": 4.0,
@@ -436,12 +434,11 @@
       ],
       "fov": 32,
       "roll": 0,
-      "focus": null
+      "focus": 1.77
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('oskar').head"
+    "shake": 0
    },
    "actions": [],
    "grade": "rain2049",

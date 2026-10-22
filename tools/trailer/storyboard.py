@@ -40,8 +40,10 @@ def shot(sid, group, mission, beat, camera, setup=(), actions=(), grade='neutral
                       lighting=look, sound=sound, notes=notes)
 
 def path(keys, ease='inOut', shake=0, **kw):
+    # focus defaults to the look point's distance (the subject sits on the look point); give k[5] to override
+    d = lambda k: round(math.dist(k[1], k[2]), 2)
     c = dict(mode='path', keys=[dict(t=k[0], p=k[1], l=k[2], fov=k[3], roll=(k[4] if len(k) > 4 else 0),
-                                     focus=(k[5] if len(k) > 5 else None)) for k in keys], ease=ease, shake=shake)
+                                     focus=(k[5] if len(k) > 5 and k[5] is not None else d(k))) for k in keys], ease=ease, shake=shake)
     c.update(kw); return c
 
 # ------------------------------------------------------------------------------------------------------------------
@@ -56,8 +58,7 @@ shot('s01', 'g1', 1, 'Rain City at night: a slow crane down through the rain ont
      look='Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point.',
      sound='Rain bed, distant traffic hum, footsteps; piano motif enters at the cut.')
 shot('s02', 'g1', 1, 'The toy that un-falls: a child drops a toy, it lands, then rises back into her hand along the same arc.',
-     path([[0, [-8.0, 0.66, -11.0], [-8.65, 0.62, -14.0], 36], [5.5, [-8.1, 0.62, -11.5], [-8.65, 0.6, -14.0], 34]],
-          focusOn="DIR.actor('child').head"),
+     path([[0, [-7.3, 0.8, -11.9], [-8.8, 0.62, -14.2], 31], [5.5, [-7.45, 0.76, -12.3], [-8.8, 0.6, -14.2], 29]]),
      setup=[DIM_SHOPS, {'eval': '__game.player.place(-4.2, 0.15, -8.5, Math.PI * 0.8)'},
             {'until': '(__game.time % 4) > 3.45 && (__game.time % 4) < 3.55', 'timeout': 8, 'pace': 0}],
      actions=[{'t': 3.6, 'eval': "DIR.actor('child').talk = 1.4"}],
@@ -66,7 +67,7 @@ shot('s02', 'g1', 1, 'The toy that un-falls: a child drops a toy, it lands, then
      notes='The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO "Mister, your wrist is glowing." lands on the un-fall.')
 shot('s03', 'g1', 1, 'Kai\'s wrist: the Chronolith band glows, then flares as the street pulls toward one moment.',
      path([[0, [-0.52, 0.12, -0.55], [0, 0, 0], 30], [3.5, [-0.42, 0.07, -0.46], [0, 0.01, 0], 28]],
-          anchor=WRIST, anchorLive=True, focusOn=WRIST),
+          anchor=WRIST, anchorLive=True),
      setup=[DIM_SHOPS, {'eval': '__game.player.place(-1.0, 0.15, -20, Math.PI)'}, {'wait': 1.0}],
      actions=[{'t': 1.7, 'eval': "DIR.actor('kai').wristBoost = 9"}],
      grade='rain2049', chars='Kai (hand and band only, idle)',
@@ -79,9 +80,8 @@ shot('s04', 'g1', 1, 'The street clock outside Chrono Repair runs backward, one 
      look='Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame.',
      sound='Clock ticks reversed (pre-echo ticks).')
 shot('s09', 'g1', 2, 'Helix lobby in lockdown red: Dr. Elias Rook, the director, holds Kai\'s gaze.',
-     path([[0, [1.28, 1.66, -8.75], [0.48, 1.6, -11.0], 34, 0, None], [3.5, [1.18, 1.67, -9.05], [0.48, 1.6, -11.0], 32]],
-          focusOn="DIR.actor('rook').head"),
-     setup=[{'wait': 5.0}, {'eval': "(()=>{const g=__game, r=g.actors.rook; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=Math.PI*0.95; r.speed=0; g.player.place(-0.35,0,-8.4,Math.PI*1.05); r.lookTarget=g.player.char.head; g.player.char.lookTarget=r.head; return 'rook'})()"},
+     path([[0, [1.28, 1.66, -8.75], [0.48, 1.6, -11.0], 34, 0, None], [3.5, [1.18, 1.67, -9.05], [0.48, 1.6, -11.0], 32]]),
+     setup=[{'wait': 5.0}, {'eval': "(()=>{const g=__game, r=g.actors.rook; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=0.15; r.speed=0; g.player.place(-0.35,0,-8.4,Math.PI*1.05); r.lookTarget=g.player.char.head; g.player.char.lookTarget=r.head; return 'rook'})()"},
             {'wait': 1.5}],
      actions=[{'t': 1.1, 'eval': "DIR.actor('rook').talk = 1.4"}],
      grade='rain2049', u=url(2), ready='window.__game && __game.control && __game.actors.iven',
@@ -100,14 +100,14 @@ shot('s05', 'g2', 1, 'Central Station platform: people waiting in the rain; a tr
      sound='Train horn (the game\'s 311 / 370 Hz pair), rising rail hiss.',
      notes='The mission freezes ~2.2 s after Kai crosses z -104 (action at t 0.3): cut out on the frame before the freeze.')
 shot('s06', 'g2', 1, 'The Zero Second: the derailing train hangs in the air, sparks and rain frozen around it.',
-     path([[0, [8.3, 1.25, -101.5], [12.3, 1.3, -92], 40], [5.0, [8.7, 1.4, -99.8], [12.4, 1.5, -90], 38]], ease='linear'),
+     path([[0, [10.0, 1.3, -100.5], [12.6, 1.4, -90], 40], [5.0, [10.2, 1.4, -99.0], [12.6, 1.5, -89], 38]], ease='linear'),
      setup=M1_FREEZE + [{'wait': 0.3}],
      grade='rain2049', chars='Frozen civilians, Jun',
      look='The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads.',
      sound='Hard cut into one second of total silence (bible: the Zero Second), then a low metallic resonance.')
 shot('s07', 'g2', 1, 'Kai walks alone through the frozen station: the only thing still moving.',
      path([[0, [-1.93, 1.5, -1.87], [0.41, 1.3, -0.69], 40], [5.0, [-2.05, 1.55, -1.70], [0.41, 1.3, -0.69], 40]],
-          ease='linear', anchor=KAI, anchorLive=True, focusOn="DIR.actor('kai').head"),
+          ease='linear', anchor=KAI, anchorLive=True),
      setup=M1_FREEZE + [{'until': '__game.flags.frozen && __game.control', 'timeout': 40},
                         {'eval': '__game.player.place(-1.5, 0.15, -100.5, 2.6)'}, {'wait': 0.3}],
      actions=[{'t': 0.0, 'down': 'KeyW'}],
@@ -115,8 +115,7 @@ shot('s07', 'g2', 1, 'Kai walks alone through the frozen station: the only thing
      look='Frozen rain beads catch the station light; Kai the only warm, moving figure.',
      sound='Kai\'s footsteps, glass-harmonic shimmer of the held rain.')
 shot('s08', 'g2', 1, 'In the crowd, a woman with Mira\'s face looks at Kai, then comes apart like light.',
-     path([[0, [-2.75, 1.63, -121.9], [-3.5, 1.58, -125.0], 30], [5.5, [-2.86, 1.62, -122.45], [-3.5, 1.58, -125.0], 28]],
-          focusOn="DIR.actor('mira').head"),
+     path([[0, [-2.75, 1.63, -121.9], [-3.5, 1.58, -125.0], 30, 0, 3.2], [5.5, [-2.86, 1.62, -122.45], [-3.5, 1.58, -125.0], 28, 0, 2.65]]),
      setup=M1_FREEZE + [{'until': '__game.flags.frozen && __game.control', 'timeout': 40},
                         {'eval': "[0,1,2].forEach(()=>{const it=__game.interactables.find(i=>i.prompt.includes('safety')); if(it) __game.useInteract(it);})"},
                         {'until': '__game.actors.mira && __game.actors.mira.root.visible', 'timeout': 60}],
@@ -125,8 +124,7 @@ shot('s08', 'g2', 1, 'In the crowd, a woman with Mira\'s face looks at Kai, then
      sound='The three-note motif (E-B-A) on felt piano; Kai: "...Mira?"',
      notes='The mission fades her out (alpha 0.7 / s) right after Kai\'s line: about 1.6 s solid, 1.4 s dissolve.')
 shot('s16', 'g2', 6, 'The clockmaker opens his door before Kai knocks: "You\'re late."',
-     path([[0, [0.95, 1.72, 9.75], [0.1, 1.62, 7.95], 34], [4.0, [0.85, 1.72, 9.55], [0.1, 1.62, 7.95], 32]],
-          focusOn="DIR.actor('oskar').head"),
+     path([[0, [0.95, 1.72, 9.75], [0.1, 1.62, 7.95], 34], [4.0, [0.85, 1.72, 9.55], [0.1, 1.62, 7.95], 32]]),
      setup=[{'until': "__game.control && __game.interactables.some(i=>i.prompt.includes('Knock'))", 'timeout': 600},
             {'eval': "__game.player.place(0, 0, 9.8, Math.PI); __game.use('Knock')"},
             {'until': "__game.actors.oskar && __game.actors.oskar.root.visible && __game.actors.oskar.root.position.z > 7.85", 'timeout': 30}],
@@ -163,8 +161,7 @@ shot('s11', 'g3', 3, 'The first switch: Kai reaches for the ring and the room fl
      sound='The temporal switch (the game\'s switch stinger) on each flicker, pitched up each time.',
      notes='DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture).')
 shot('s33', 'g3', 3, 'Montage: Kai\'s face in the ring light as the room tears between eras.',
-     path([[0, [0.38, 1.5, -0.6], [0, 1.45, 0.95], 40], [2.1, [0.42, 1.5, -0.45], [0, 1.45, 0.95], 39]], shake=0.35,
-          focusOn="DIR.actor('kai').head"),
+     path([[0, [0.38, 1.5, -0.6], [0, 1.45, 0.95], 40], [2.1, [0.42, 1.5, -0.45], [0, 1.45, 0.95], 39]], shake=0.35),
      setup=[M3_EXPOSE, {'eval': '__game.player.place(0, 0, 0.95, Math.PI)'}, {'eval': RING_POWER + '(0.9)'}, {'wait': 0.8}],
      actions=[{'t': 0.55, 'eval': "DIR.era('2196', 0.3)"}, {'t': 1.05, 'eval': "DIR.era('2026', 0.3)"}, {'t': 1.5, 'eval': "DIR.era('2049', 0.3)"}],
      grade='rain2049', u=url(3), ready=M3_READY, chars='Kai (medium shot, facing camera, the ring behind camera)',
@@ -175,8 +172,7 @@ shot('s35', 'g3', 3, 'Final image: Kai alone before the Chronolith, small agains
      grade='rain2049', u=url(3), ready=M3_READY, chars='Kai (silhouette, back to camera, centred)',
      look='Symmetric, the ring core the only bright thing; slow push-in.', sound='Piano motif returns, alone.')
 shot('s36', 'g3', 3, 'Button: Kai lifts his hand to the ring. Iven: "Don\'t touch it. Varen. Don\'t—" Cut on the switch.',
-     path([[0, [4.7, 1.72, 5.3], [0, 1.9, 0.2], 34], [3.5, [4.45, 1.72, 5.0], [0, 1.95, 0.0], 32]],
-          focusOn="DIR.actor('kai').head"),
+     path([[0, [4.7, 1.72, 5.3], [0, 1.9, 0.2], 34, 0, 6.4], [3.5, [4.45, 1.72, 5.0], [0, 1.95, 0.0], 32, 0, 6.1]]),
      setup=[M3_EXPOSE, {'eval': '__game.player.place(0, 0, 1.0, Math.PI)'},
             {'eval': "(()=>{const i=__game.actors.iven; i.root.position.set(2.9,0,4.6); i.lookTarget=__game.player.char.head; return 'iven'})()"},
             {'wait': 0.8}],
@@ -203,8 +199,7 @@ shot('s12', 'g4', 4, 'The ancient settlement at golden hour: a valley built arou
      look='Low warm sun, long shadows, dust motes; the stone ring at the heart of the village.',
      sound='Wind and water bed; the switch transition lands on the cut.')
 shot('s13', 'g4', 4, 'Niko, keeper of the Telling, reads the ring on Kai\'s wrist: "You came before the first fire."',
-     path([[0, [1.8, 2.0, -3.4], [2.5, 2.08, -6.2], 32], [4.1, [1.9, 1.99, -3.8], [2.5, 2.08, -6.2], 30]],
-          focusOn="DIR.actor('niko').head"),
+     path([[0, [1.8, 2.0, -3.4], [2.5, 2.08, -6.2], 32], [4.1, [1.9, 1.99, -3.8], [2.5, 2.08, -6.2], 30]]),
      setup=[{'eval': "(()=>{const g=__game, n=g.actors.niko; g.player.place(1.14, 0.6, -4.1, 2.57); n.root.rotation.y=-0.373; n.lookTarget=g.player.char.head; g.player.char.lookTarget=n.head; return 'niko'})()"},
             {'wait': 1.0}],
      actions=[{'t': 0.9, 'eval': "DIR.actor('niko').talk = 1.5"}],
@@ -261,8 +256,7 @@ shot('s32', 'g5', 18, 'Montage: the storm front bearing down on Lantern Hall as 
      setup=[{'wait': 0.8}], grade='ruin2196', u=url(18, '&m18part=1'), chars='Survivors in the hall (small)',
      look='Violet storm light over the iron trusses.')
 shot('s27', 'g5', 8, 'Montage: Dr. Yara Lind, stopped mid-stride inside the containment field for three days.',
-     path([[0, [1.8, 1.5, -63.0], [-0.6, 1.25, -66.6], 40], [2.1, [1.45, 1.5, -63.5], [-0.6, 1.25, -66.6], 39]], ease='linear',
-          focusOn="DIR.actor('yara').head"),
+     path([[0, [1.8, 1.5, -63.0], [-0.6, 1.25, -66.6], 40], [2.1, [1.45, 1.5, -63.5], [-0.6, 1.25, -66.6], 39]], ease='linear'),
      setup=[{'wait': 0.8}], grade='rain2049', u=url(8), chars='Yara (frozen)', look='Containment rings, cold field light.')
 shot('s22', 'g5', 11, 'Montage: Halden General\'s reversed East Corridor: a gurney, a cylinder and glass fly back to where they were at 08:14.',
      path([[0, [16.4, 2.4, 2.2], [24, 0.8, 4.6], 48], [3.05, [17.3, 2.2, 2.6], [24, 0.9, 4.6], 46]], ease='linear'),
@@ -286,8 +280,7 @@ shot('s29', 'g6', 10, 'Montage: the Continuum spire grafted onto the ruin of Hel
      setup=[{'wait': 0.5}], grade='ruin2196', u=url(10), chars='none', look='Dusk, the pearl spire lit gold.')
 M12_READY = "window.__game && window.__m12 && __game.control && document.getElementById('objective-text').textContent.includes('Rook')"
 shot('s19', 'g6', 12, 'The man behind the glass: from behind a grey-haired man in a long coat, Kai beyond the glass. He taps three notes.',
-     path([[0, [3.0, 1.55, -12.9], [1.6, 1.6, -7.5], 32], [4.9, [2.85, 1.58, -12.55], [1.6, 1.6, -7.5], 30]],
-          focusOn="DIR.actor('kai').head"),
+     path([[0, [3.0, 1.55, -12.9], [1.6, 1.6, -7.5], 32, 0, 6.3], [4.9, [2.85, 1.58, -12.55], [1.6, 1.6, -7.5], 30, 0, 6.0]]),
      setup=[{'eval': '__game.player.place(0, 0, -6.4, Math.PI)'},
             {'until': '__game.actors.witness && __game.actors.witness.root.visible', 'timeout': 40},
             {'wait': 3.4}],
@@ -311,7 +304,7 @@ shot('s21', 'g6', 12, 'Montage: Echo Step — Kai leaves an afterimage and slips
 M13_READY = "window.__game && window.__m13 && __game.control && document.getElementById('objective-text').textContent.includes('held district')"
 M13_WAR = [{'eval': '__game.player.place(2, 0, 51, Math.PI)'}, {'until': "__game.temporal.current === '2196'", 'timeout': 60}]
 shot('s34', 'g6', 13, 'Montage: the Sable Yards held in one second — people mid-step, rain hanging in the air.',
-     path([[0, [4.2, 1.5, 61], [-8.2, 1.1, 55.4], 36], [2.1, [3.7, 1.5, 59.9], [-8.2, 1.1, 55.4], 36]], ease='linear'),
+     path([[0, [6, 4.5, 72], [0, 2, 46], 44], [2.1, [5.2, 4.1, 68.5], [0, 2, 46], 44]], ease='linear'),
      setup=[{'wait': 0.5}], grade='rain2049', u=url(13), ready=M13_READY, chars='Held residents, a courier, an umbrella',
      look='Grey dawn, beads of rain frozen in the air.')
 shot('s23', 'g6', 13, 'Montage: 2196, the same yards are a battlefield; shells arc out of the stabilizer\'s ring.',
@@ -321,10 +314,9 @@ shot('s23', 'g6', 13, 'Montage: 2196, the same yards are a battlefield; shells a
      grade='ruin2196', u=url(13), ready=M13_READY, chars='Unwritten fighters behind the barricade (small)',
      look='Smoke and dust, tracer light from the spire.')
 shot('s24', 'g6', 13, 'Sera Voss, who leads the survivors: "The future that survives long enough to remember us."',
-     path([[0, [3.3, 1.62, 51.75], [2.6, 1.6, 54.0], 30], [3.0, [3.22, 1.62, 51.95], [2.6, 1.6, 54.0], 29]],
-          focusOn="DIR.actor('sera').head"),
+     path([[0, [0.75, 1.62, -2.3], [0, 1.58, 0], 30], [3.0, [0.68, 1.62, -2.1], [0, 1.58, 0], 29]], anchor="DIR.actor('sera').root.position", anchorLive=False),
      setup=M13_WAR + [{'until': "__game.control && document.getElementById('objective-text').textContent.includes('Cross the yard')", 'timeout': 200},
-                      {'eval': "(()=>{const g=__game, s=g.actors.sera; g.player.place(2.3, 0.15, 51.4, 0.3); s.root.position.set(2.6, 0.15, 54.0); s.root.rotation.y = Math.PI + 0.2; s.speed = 0; s.lookTarget = g.player.char.head; return 'sera'})()"},
+                      {'eval': "(()=>{const g=__game, s=g.actors.sera; const q = s.root.position; g.player.place(q.x - 0.4, q.y, q.z - 2.4, 0); s.root.rotation.y = Math.PI; s.speed = 0; s.lookTarget = g.player.char.head; return 'sera'})()"},
                       {'wait': 0.8}],
      actions=[{'t': 0.62, 'eval': "DIR.actor('sera').talk = 2.6"}],
      grade='ruin2196', u=url(13), ready=M13_READY, chars='Sera Voss (close-up), Kai (soft foreground shoulder)',
@@ -590,7 +582,9 @@ until a reviewer passes the shot's frames), `notes`. Extensions: `fps`, `cut_fra
 The recorder loads `url` and waits for `ready`. It then evaluates `tools/trailer/director.js` in the page, which
 takes over the frame loop the way `tools/render/refhelper.js` does: frames are only simulated and drawn on request.
 Then it runs `setup[]`, calls `DIR.begin(shot)` and, for each frame, runs the due `actions` and `DIR.frame(i, true)`.
-That call steps the game exactly 1/24 s, poses the camera, draws, and returns the frame. `tools/trailer/preview.mjs`
+That call steps the game exactly 1/24 s, poses the camera, draws, and returns the frame. Between frames the page
+must get at least one `requestAnimationFrame` turn: mission scripts await `game.wait` / `waitFor` through rAF polling,
+and stall if frames are stepped back to back without yielding. `preview.mjs` waits 18 ms after each undrawn frame. `tools/trailer/preview.mjs`
 does exactly this at 640×296 for three frames per shot (cut-in, middle, cut-out). It writes one strip per shot for
 review:
 

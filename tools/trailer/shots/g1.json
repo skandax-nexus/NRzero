@@ -39,7 +39,7 @@
       ],
       "fov": 46,
       "roll": 0,
-      "focus": null
+      "focus": 63.67
      },
      {
       "t": 3.5,
@@ -55,7 +55,7 @@
       ],
       "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 43.06
      },
      {
       "t": 7.0,
@@ -71,7 +71,7 @@
       ],
       "fov": 42,
       "roll": 0,
-      "focus": null
+      "focus": 18.42
      }
     ],
     "ease": "inOut",
@@ -120,39 +120,38 @@
      {
       "t": 0,
       "p": [
-       -8.0,
-       0.66,
-       -11.0
+       -7.3,
+       0.8,
+       -11.9
       ],
       "l": [
-       -8.65,
+       -8.8,
        0.62,
-       -14.0
+       -14.2
       ],
-      "fov": 36,
+      "fov": 31,
       "roll": 0,
-      "focus": null
+      "focus": 2.75
      },
      {
       "t": 5.5,
       "p": [
-       -8.1,
-       0.62,
-       -11.5
+       -7.45,
+       0.76,
+       -12.3
       ],
       "l": [
-       -8.65,
+       -8.8,
        0.6,
-       -14.0
+       -14.2
       ],
-      "fov": 34,
+      "fov": 29,
       "roll": 0,
-      "focus": null
+      "focus": 2.34
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('child').head"
+    "shake": 0
    },
    "actions": [
     {
@@ -206,7 +205,7 @@
       ],
       "fov": 30,
       "roll": 0,
-      "focus": null
+      "focus": 0.77
      },
      {
       "t": 3.5,
@@ -222,14 +221,13 @@
       ],
       "fov": 28,
       "roll": 0,
-      "focus": null
+      "focus": 0.63
      }
     ],
     "ease": "inOut",
     "shake": 0,
     "anchor": "DIR.actor('kai').arms[1].hand.getWorldPosition(__game.engine.camera.position.clone())",
-    "anchorLive": true,
-    "focusOn": "DIR.actor('kai').arms[1].hand.getWorldPosition(__game.engine.camera.position.clone())"
+    "anchorLive": true
    },
    "actions": [
     {
@@ -280,7 +278,7 @@
       ],
       "fov": 30,
       "roll": 0,
-      "focus": null
+      "focus": 7.72
      },
      {
       "t": 4.0,
@@ -296,7 +294,7 @@
       ],
       "fov": 27,
       "roll": 0,
-      "focus": null
+      "focus": 6.82
      }
     ],
     "ease": "inOut",
@@ -322,7 +320,7 @@
      "wait": 5.0
     },
     {
-     "eval": "(()=>{const g=__game, r=g.actors.rook; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=Math.PI*0.95; r.speed=0; g.player.place(-0.35,0,-8.4,Math.PI*1.05); r.lookTarget=g.player.char.head; g.player.char.lookTarget=r.head; return 'rook'})()"
+     "eval": "(()=>{const g=__game, r=g.actors.rook; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=0.15; r.speed=0; g.player.place(-0.35,0,-8.4,Math.PI*1.05); r.lookTarget=g.player.char.head; g.player.char.lookTarget=r.head; return 'rook'})()"
     },
     {
      "wait": 1.5
@@ -349,7 +347,7 @@
       ],
       "fov": 34,
       "roll": 0,
-      "focus": null
+      "focus": 2.39
      },
      {
       "t": 3.5,
@@ -365,12 +363,11 @@
       ],
       "fov": 32,
       "roll": 0,
-      "focus": null
+      "focus": 2.07
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('rook').head"
+    "shake": 0
    },
    "actions": [
     {

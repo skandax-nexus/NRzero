@@ -242,7 +242,7 @@ export default {
     // =================================================================================================================
     async function chapter1() {
       G.ch = 1; portraits(['sera', 'joss', 'wren', 'ama', 'm18teacher', 'm18lio', 'm18medic', 'm18tomas', 'm18ruth']);
-      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'LANTERN HALL · 2196 · ANCHOR FAILING', glyph: '◑', color: '#c8a0ff', theme: 'm18-storm', apply: () => {} };
+      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'LANTERN HALL · 2196', glyph: '◑', color: '#c8a0ff', theme: 'm18-storm', apply: () => {} };
       const scene = await newPlace({ background: 0x5a4a6a, fog: [0x6a5a76, 0.0095], exposure: 1.05, bloom: 0.5, bloomThreshold: 0.85, envIntensity: 0.8, killY: -12 }, [D96], '2196');
       const R = buildReach(game, scene); game.onUpdate((dt, t) => R.update(dt, t)); await tick();
       const H = dressHall(game, scene, T); game.onUpdate((dt, t) => H.update(dt, t)); await tick();
@@ -551,8 +551,8 @@ export default {
     // =================================================================================================================
     async function chapter2() {
       G.ch = 2; portraits(['sera', 'm18kai6', 'm18mira9']);
-      const D26 = { id: '2026', key: '1', name: 'PAST', year: 'VARROW GORGE · 2026', glyph: '◐', color: '#ffc890', theme: 'm18-gorge', apply: () => {} };
-      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'THE EASTWAY · 2049 · TORN', glyph: '◎', color: '#5fe6ff', theme: 'm18-tear', apply: () => {} };
+      const D26 = { id: '2026', key: '1', name: 'PAST', year: 'GORGE · 2026', glyph: '◐', color: '#ffc890', theme: 'm18-gorge', apply: () => {} };
+      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'EASTWAY · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-tear', apply: () => {} };
       const scene = await newPlace({ background: 0x1a1c2a, fog: [0x2a2c3a, 0.012], exposure: 1.0, bloom: 0.55, bloomThreshold: 0.85, envIntensity: 0.7, killY: -30 }, [D26, D49], '2049');
       W = buildGorge(game, scene, T); prevRoot.push(W.root); game.onUpdate((dt, t) => W.update(dt, t)); await tick();
       rig(W, {
@@ -704,8 +704,8 @@ export default {
     // =================================================================================================================
     async function chapter3() {
       G.ch = 3; portraits(['jun', radioId, 'm18pass']);
-      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'THE EASTWAY · 2049 · FLOODED', glyph: '◎', color: '#5fe6ff', theme: 'm18-flood', apply: () => {} };
-      const D26 = { id: '2026', key: '1', name: 'PAST', year: 'VARROW FILL · 2026', glyph: '◐', color: '#ffc890', theme: 'm18-pit', apply: () => {} };
+      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'EASTWAY · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-flood', apply: () => {} };
+      const D26 = { id: '2026', key: '1', name: 'PAST', year: 'THE FILL · 2026', glyph: '◐', color: '#ffc890', theme: 'm18-pit', apply: () => {} };
       const scene = await newPlace({ background: 0x141a22, fog: [0x1c242e, 0.016], exposure: 1.05, bloom: 0.6, bloomThreshold: 0.82, envIntensity: 0.6, killY: -14 }, [D26, D49], '2049');
       W = buildEastway(game, scene, T); prevRoot.push(W.root); game.onUpdate((dt, t) => W.update(dt, t)); await tick();
       const rain = new Rain(RZ.getQuality() === 'low' ? 2200 : 4200, 46); scene.add(rain.mesh); T.only(rain.mesh, '2049');
@@ -894,8 +894,8 @@ export default {
     // =================================================================================================================
     async function chapter4() {
       G.ch = 4; portraits(['witness']);
-      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'THE CORRAN BUILDING · 2196', glyph: '◑', color: '#ffb070', theme: 'm18-tower', apply: () => {} };
-      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'CORRAN & VEY · 2049 · HOLDS 12 s', glyph: '◎', color: '#5fe6ff', theme: 'm18-office', apply: () => {} };
+      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'CORRAN · 2196', glyph: '◑', color: '#ffb070', theme: 'm18-tower', apply: () => {} };
+      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'CORRAN · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-office', apply: () => {} };
       const scene = await newPlace({ background: 0x3a2a30, fog: [0x5a4040, 0.012], exposure: 1.05, bloom: 0.55, bloomThreshold: 0.85, envIntensity: 0.7, killY: -12 }, [D49, D96], '2196');
       W = buildTower(game, scene, T); prevRoot.push(W.root); game.onUpdate((dt, t) => W.update(dt, t)); await tick();
       rig(W, {
@@ -1015,8 +1015,8 @@ export default {
     // =================================================================================================================
     async function chapter5() {
       G.ch = 5; portraits(['sera', 'wren', 'joss', 'prefect']);
-      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'TEST HALL C · 2196', glyph: '◑', color: '#ffd27a', theme: 'm18-defend', apply: () => {} };
-      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'TEST HALL C · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-office', apply: () => {} };
+      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'HALL C · 2196', glyph: '◑', color: '#ffd27a', theme: 'm18-defend', apply: () => {} };
+      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'HALL C · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-office', apply: () => {} };
       const scene = await newPlace({ background: 0x2a2430, fog: [0x3a3038, 0.012], exposure: 1.05, bloom: 0.6, bloomThreshold: 0.82, envIntensity: 0.7, killY: -10 }, [D49, D96], '2196');
       W = buildHallC(game, scene, T); prevRoot.push(W.root); game.onUpdate((dt, t) => W.update(dt, t)); await tick();
       rig(W, {
@@ -1173,8 +1173,8 @@ export default {
     // =================================================================================================================
     async function chapter6() {
       G.ch = 6; portraits(['m18mira', 'witness', 'sera']);
-      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'HALCYON HILL · 2196', glyph: '◑', color: '#c8a0ff', theme: 'm18-array', apply: () => {} };
-      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'THE LONG ARRAY · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-tear', apply: () => {} };
+      const D96 = { id: '2196', key: '3', name: 'FUTURE', year: 'HALCYON · 2196', glyph: '◑', color: '#c8a0ff', theme: 'm18-array', apply: () => {} };
+      const D49 = { id: '2049', key: '2', name: 'PRESENT', year: 'ARRAY · 2049', glyph: '◎', color: '#5fe6ff', theme: 'm18-tear', apply: () => {} };
       const scene = await newPlace({ background: 0x1a1630, fog: [0x2a2240, 0.011], exposure: 1.06, bloom: 0.65, bloomThreshold: 0.8, envIntensity: 0.6, killY: -30 }, [D49, D96], '2196');
       W = buildArray(game, scene, T); prevRoot.push(W.root); game.onUpdate((dt, t) => W.update(dt, t)); await tick();
       rig(W, {
@@ -1255,7 +1255,7 @@ export default {
       const wEcho = game.actor('witness', null, -1.6, P6.P3y, 0.4, -PI / 2); try { wEcho.setGhost(GHOST_WIT); } catch (err) { void err; } game.residue(wEcho.root); wEcho.pose = 'work';
       act({ pos: [-1.6, P6.P3y + 1.2, 0.4], radius: 1.8, prompt: 'Watch the echo', enabled: () => S.p3 && game.residueOn && !G.witnessEcho, onUse: () => side(async () => {
         G.witnessEcho = true; S.main = true; cine(true);
-        await game.shot([1.8, P6.P3y + 1.8, 2.2], [-1.6, P6.P3y + 1.4, 0.4], 1.2, { fov: 40 });
+        await game.shot([-2.6, P6.P3y + 1.75, 2.0], [-1.6, P6.P3y + 1.45, 0.3], 1.2, { fov: 44 });
         await game.say('witness', 'E, on the west. B, on the north. A, on the east. She always started low.');
         await game.say('witness', 'Iteration one thousand and forty-six. She called me up here too. I tuned it. I listened. Then I went back down and tried again.');
         await game.say('kai', 'You heard her. And you still went back to the morning.');
@@ -1297,7 +1297,7 @@ export default {
       // ---------- Mira's message ----------
       S.mira = true; S.main = true; cine(true); lockMusic('m18-mira', 1.5); hudSet(null);
       audio.sfxPlay('motif'); W.beam.material.opacity = 0.4;
-      await game.shot([3.4, P6.P3y + 2.2, 3.4], [0, P6.P3y + 6, 0], 2.2, { fov: 44 });
+      await game.shot([7.5, P6.P3y + 0.6, 7.5], [0, P6.P3y + 14, 0], 2.2, { fov: 50 });
       await game.say('m18band', `Pattern: Varen, Mira. ${pattern} percent. Transmitting on every clock on Earth.`);
       const mira = game.actor('m18mira', null, 0, P6.P3y, 1.4, PI); S.byId.m18mira = mira;
       try { mira.setGhost(GHOST_MIRA); } catch (err) { void err; }

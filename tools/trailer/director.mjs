@@ -132,11 +132,14 @@ async function main() {
   // ---------- browser ----------
   const t0 = Date.now();
   browser = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--mute-audio', '--disable-audio-output'] });
-  const cleanup = async () => { try { await browser.close(); } catch { /* closed */ } };
+  let closing = false;
+  const cleanup = async () => { closing = true; try { await browser.close(); } catch { /* closed */ } };
   const ctx = await browser.newContext({ viewport: { width: Math.round(W * ss), height: Math.round(H * ss) }, deviceScaleFactor: 1 });
   const p = await ctx.newPage();
   const errors = [];
   p.on('pageerror', e => { errors.push(e.message); log('! PAGEERROR', e.message); });
+  p.on('crash', () => log('! the page crashed (renderer process gone: out of memory?)'));
+  browser.on('disconnected', () => { if (!stopping && !closing) log('! browser disconnected (crashed or killed)'); });
   p.on('console', m => { if (m.type() === 'error') log('console.error', m.text().slice(0, 200)); });
   let inflight = 0;
   p.on('request', () => inflight++); p.on('requestfinished', () => inflight--); p.on('requestfailed', () => inflight--);

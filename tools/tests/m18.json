@@ -217,7 +217,7 @@
 {"until": "IDLE()", "timeout": 120000},
 {"eval": "__game.setResidue(false); PL(0.8,44.02,1.6,Math.PI); U('Listen')"},
 {"until": "IDLE()", "timeout": 120000},
-{"eval": "PL(0,44.02,0.8,Math.PI); for(let i=0;i<2;i++) U('Tune the west horn'); for(let i=0;i<5;i++) U('Tune the east horn'); for(let i=0;i<6;i++) U('Tune the north horn'); __m18.S.notes"},
+{"eval": "PL(-1.0,44.02,0.6,-Math.PI/2); for(let i=0;i<2;i++) U('Tune the west horn'); PL(1.0,44.02,0.6,Math.PI/2); for(let i=0;i<5;i++) U('Tune the east horn'); PL(0.6,44.02,-1.0,Math.PI); for(let i=0;i<6;i++) U('Tune the north horn'); __m18.S.notes"},
 {"until": "__m18.S.mira", "timeout": 120000},
 {"wait": 9000},
 {"shot": "f04_mira.png"},

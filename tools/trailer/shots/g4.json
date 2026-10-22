@@ -36,7 +36,7 @@
       ],
       "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 36.96
      },
      {
       "t": 4.1,
@@ -52,7 +52,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 37.26
      }
     ],
     "ease": "inOut",
@@ -107,7 +107,7 @@
       ],
       "fov": 32,
       "roll": 0,
-      "focus": null
+      "focus": 2.89
      },
      {
       "t": 4.1,
@@ -123,12 +123,11 @@
       ],
       "fov": 30,
       "roll": 0,
-      "focus": null
+      "focus": 2.48
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('niko').head"
+    "shake": 0
    },
    "actions": [
     {
@@ -176,7 +175,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 24.51
      },
      {
       "t": 5.6,
@@ -192,7 +191,7 @@
       ],
       "fov": 49,
       "roll": 0,
-      "focus": null
+      "focus": 22.69
      }
     ],
     "ease": "inOut",
@@ -248,7 +247,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 44.15
      },
      {
       "t": 4.1,
@@ -264,7 +263,7 @@
       ],
       "fov": 47,
       "roll": 0,
-      "focus": null
+      "focus": 40.16
      }
     ],
     "ease": "inOut",
@@ -323,7 +322,7 @@
       ],
       "fov": 44,
       "roll": 0,
-      "focus": null
+      "focus": 17.11
      },
      {
       "t": 2.1,
@@ -339,7 +338,7 @@
       ],
       "fov": 43,
       "roll": 0,
-      "focus": null
+      "focus": 16.66
      }
     ],
     "ease": "linear",
@@ -389,7 +388,7 @@
       ],
       "fov": 52,
       "roll": 0,
-      "focus": null
+      "focus": 55.73
      },
      {
       "t": 2.1,
@@ -405,7 +404,7 @@
       ],
       "fov": 52,
       "roll": 0,
-      "focus": null
+      "focus": 54.18
      }
     ],
     "ease": "linear",

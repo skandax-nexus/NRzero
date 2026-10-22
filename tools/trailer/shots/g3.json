@@ -39,7 +39,7 @@
       ],
       "fov": 46,
       "roll": 0,
-      "focus": null
+      "focus": 13.59
      },
      {
       "t": 4.1,
@@ -55,7 +55,7 @@
       ],
       "fov": 43,
       "roll": 0,
-      "focus": null
+      "focus": 10.51
      }
     ],
     "ease": "inOut",
@@ -108,7 +108,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 8.62
      },
      {
       "t": 5.6,
@@ -124,7 +124,7 @@
       ],
       "fov": 38,
       "roll": 0,
-      "focus": null
+      "focus": 7.56
      }
     ],
     "ease": "inOut",
@@ -212,7 +212,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 55.15
      },
      {
       "t": 2.1,
@@ -228,7 +228,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 53.24
      }
     ],
     "ease": "linear",
@@ -284,7 +284,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 1.6
      },
      {
       "t": 2.1,
@@ -300,12 +300,11 @@
       ],
       "fov": 39,
       "roll": 0,
-      "focus": null
+      "focus": 1.46
      }
     ],
     "ease": "inOut",
-    "shake": 0.35,
-    "focusOn": "DIR.actor('kai').head"
+    "shake": 0.35
    },
    "actions": [
     {
@@ -370,7 +369,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 13.67
      },
      {
       "t": 5.0,
@@ -386,7 +385,7 @@
       ],
       "fov": 38,
       "roll": 0,
-      "focus": null
+      "focus": 12.48
      }
     ],
     "ease": "sine",
@@ -442,7 +441,7 @@
       ],
       "fov": 34,
       "roll": 0,
-      "focus": null
+      "focus": 6.4
      },
      {
       "t": 3.5,
@@ -458,12 +457,11 @@
       ],
       "fov": 32,
       "roll": 0,
-      "focus": null
+      "focus": 6.1
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "focusOn": "DIR.actor('kai').head"
+    "shake": 0
    },
    "actions": [
     {

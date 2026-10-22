@@ -33,7 +33,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 105.97
      },
      {
       "t": 5.6,
@@ -49,7 +49,7 @@
       ],
       "fov": 49,
       "roll": 0,
-      "focus": null
+      "focus": 82.58
      }
     ],
     "ease": "inOut",
@@ -99,7 +99,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 14.62
      },
      {
       "t": 4.1,
@@ -115,7 +115,7 @@
       ],
       "fov": 38,
       "roll": 0,
-      "focus": null
+      "focus": 12.32
      }
     ],
     "ease": "inOut",
@@ -165,7 +165,7 @@
       ],
       "fov": 48,
       "roll": 0,
-      "focus": null
+      "focus": 8.13
      },
      {
       "t": 3.05,
@@ -181,7 +181,7 @@
       ],
       "fov": 46,
       "roll": 0,
-      "focus": null
+      "focus": 7.11
      }
     ],
     "ease": "linear",
@@ -228,7 +228,7 @@
       ],
       "fov": 40,
       "roll": 0,
-      "focus": null
+      "focus": 4.33
      },
      {
       "t": 2.1,
@@ -244,12 +244,11 @@
       ],
       "fov": 39,
       "roll": 0,
-      "focus": null
+      "focus": 3.72
      }
     ],
     "ease": "linear",
-    "shake": 0,
-    "focusOn": "DIR.actor('yara').head"
+    "shake": 0
    },
    "actions": [],
    "grade": "rain2049",
@@ -292,7 +291,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 61.12
      },
      {
       "t": 2.1,
@@ -308,7 +307,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 57.52
      }
     ],
     "ease": "linear",
@@ -355,7 +354,7 @@
       ],
       "fov": 54,
       "roll": 0,
-      "focus": null
+      "focus": 41.21
      },
      {
       "t": 2.1,
@@ -371,7 +370,7 @@
       ],
       "fov": 54,
       "roll": 0,
-      "focus": null
+      "focus": 38.71
      }
     ],
     "ease": "linear",
@@ -418,7 +417,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 58.14
      },
      {
       "t": 2.1,
@@ -434,7 +433,7 @@
       ],
       "fov": 50,
       "roll": 0,
-      "focus": null
+      "focus": 55.39
      }
     ],
     "ease": "linear",

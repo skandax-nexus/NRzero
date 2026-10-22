@@ -1,5 +1,5 @@
 {
- "_doc": "Director / farm verification shots (not part of the edit). Times are seconds from frame 0 of the rendered clip, handles included. See docs/TRAILER.md, Director.",
+ "_doc": "Director / farm verification shots (not part of the edit; rendered and verified 2026-10-22, approved set back to false so the production farm skips them). Times are seconds from frame 0 of the rendered clip, handles included. See docs/TRAILER.md, Director.",
  "shots": [
   {
    "id": "t_iven", "group": "test", "mission": 2,
@@ -23,7 +23,7 @@
     {"t": 1.4, "eval": "__game.actors.iven.crouch = 0; const c = __game.actors.iven, k = __game.player.char.root.position; const off = __game.onUpdate(dt => c.faceTowards(k.x, k.z, dt, 2.2)); setTimeout(off, 4000); null"},
     {"t": 2.9, "eval": "TR.talk('iven', 2.6)"}
    ],
-   "grade": "helix2026", "approved": true,
+   "grade": "helix2026", "approved": false,
    "notes": "camera move with a character acting (look-at, rise, turn, talk); focus pulled to Iven's head, dialogue rig on"
   },
   {
@@ -46,7 +46,7 @@
     ]
    },
    "actions": [],
-   "grade": "rain2049", "approved": true,
+   "grade": "rain2049", "approved": false,
    "notes": "follow shot: leading camera, offsets in Kai's frame with operator lag and handheld shake"
   }
  ]

@@ -205,7 +205,7 @@ Times are trailer times. `rec` is the recorded length including both handles. Ca
 | shot | group | mission | trailer | cut (fr) | rec (fr) | camera | grade | on screen | light and mood |
 |---|---|---|---|---|---|---|---|---|---|
 | s01 | g1 | 1 | 0:01.50 | 144 | 168 | path, 3 keys, fov 46→42 | rain2049 | Kai (walking away from camera), umbrella crowd on both pavements | Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point. |
-| s02 | g1 | 1 | 0:07.50 | 108 | 132 | path, 2 keys, fov 36→34 | rain2049 | The station child (yellow coat, red boots), her mother under a red umbrella | Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail. |
+| s02 | g1 | 1 | 0:07.50 | 108 | 132 | path, 2 keys, fov 31→29 | rain2049 | The station child (yellow coat, red boots), her mother under a red umbrella | Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail. |
 | s03 | g1 | 1 | 0:12.00 | 60 | 84 | path, 2 keys, fov 30→28, anchored | rain2049 | Kai (hand and band only, idle) | Macro close-up, DOF on the band; out-of-focus neon and rain behind. |
 | s04 | g1 | 1 | 0:14.50 | 72 | 96 | path, 2 keys, fov 30→27 | rain2049 | none (passers-by in the background) | Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame. |
 | s05 | g2 | 1 | 0:17.50 | 54 | 78 | path, 2 keys, fov 40→39 | rain2049 | Jun Park (transit operator), three civilians on the platform, Kai (foreground left) | Warm platform canopy light, the yellow edge strip, the stopped station clock. |
@@ -227,7 +227,7 @@ Times are trailer times. `rec` is the recorded length including both handles. Ca
 | s21 | g6 | 12 | 1:19.08 | 48 | 72 | path, 2 keys, fov 50→50 | rain2049 | Kai and his afterimage | Lockdown red on the shutter, cyan afterimage. |
 | s22 | g5 | 11 | 1:21.08 | 49 | 73 | path, 2 keys, fov 48→46 | rain2049 | Kai at the threshold (edge of frame) | Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward. |
 | s23 | g6 | 13 | 1:23.12 | 49 | 73 | path, 2 keys, fov 48→48, shake 0.12 | ruin2196 | Unwritten fighters behind the barricade (small) | Smoke and dust, tracer light from the spire. |
-| s24 | g6 | 13 | 1:25.17 | 49 | 73 | path, 2 keys, fov 30→29 | ruin2196 | Sera Voss (close-up), Kai (soft foreground shoulder) | Firelight from the camp on one side, grey war light on the other. |
+| s24 | g6 | 13 | 1:25.17 | 49 | 73 | path, 2 keys, fov 30→29, anchored | ruin2196 | Sera Voss (close-up), Kai (soft foreground shoulder) | Firelight from the camp on one side, grey war light on the other. |
 | s25 | g4 | 7 | 1:27.21 | 24 | 48 | path, 2 keys, fov 44→43 | ruin2196 | Dace (scavenger boss), scavenger lookouts | Sunset behind the broken rim, Venus low in the west, green gauntlet glow. |
 | s26 | g3 | 15 | 1:28.21 | 25 | 49 | path, 2 keys, fov 48→48 | ruin2196 | none (crowds too small to read) | The plaza and the Hollow Archive's copper dome in the amber haze of the lock. |
 | s27 | g5 | 8 | 1:29.25 | 24 | 48 | path, 2 keys, fov 40→39 | rain2049 | Yara (frozen) | Containment rings, cold field light. |
@@ -237,7 +237,7 @@ Times are trailer times. `rec` is the recorded length including both handles. Ca
 | s31 | g4 | 5 | 1:33.29 | 25 | 49 | path, 2 keys, fov 52→52 | neutral | none | Flat overcast light on the water, the dam across the valley. |
 | s32 | g5 | 18 | 1:34.33 | 24 | 48 | path, 2 keys, fov 50→50 | ruin2196 | Survivors in the hall (small) | Violet storm light over the iron trusses. |
 | s33 | g3 | 3 | 1:35.33 | 25 | 49 | path, 2 keys, fov 40→39, shake 0.35 | rain2049 | Kai (medium shot, facing camera, the ring behind camera) | Hard cyan key from the ring core, era colour washing over his face on each switch. |
-| s34 | g6 | 13 | 1:36.38 | 24 | 48 | path, 2 keys, fov 36→36 | rain2049 | Held residents, a courier, an umbrella | Grey dawn, beads of rain frozen in the air. |
+| s34 | g6 | 13 | 1:36.38 | 24 | 48 | path, 2 keys, fov 44→44 | rain2049 | Held residents, a courier, an umbrella | Grey dawn, beads of rain frozen in the air. |
 | s35 | g3 | 3 | 1:38.58 | 96 | 120 | path, 2 keys, fov 40→38 | rain2049 | Kai (silhouette, back to camera, centred) | Symmetric, the ring core the only bright thing; slow push-in. |
 | s36 | g3 | 3 | 1:49.58 | 60 | 84 | path, 2 keys, fov 34→32 | rain2049 | Iven Marr (soft foreground shoulder, right), Kai at the ring | Over Iven's shoulder; ring flare at the end. |
 
@@ -277,7 +277,7 @@ Times are trailer times. `rec` is the recorded length including both handles. Ca
 - **s21** `index.html?m=11&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(0, 0, -6.4, Math.PI)`; until `__game.control && document.getElementById('objective-text').textContent.includes` (240 s); eval `__game.player.place(10, 0, 0.4, Math.PI)`; until `__m12.S.seen && __m12.S.seen.glimpse1 && __game.control` (120 s); eval `__game.player.place(10, 0, -16.2, Math.PI)`; until `__game.control && document.getElementById('objective-text').textContent.includes` (120 s); eval `__game.player.place(10, 0, -19.9, Math.PI); __game.player.yaw = Math.PI`; wait 0.6 s. Actions: t 0.7: `__m12.echo.trigger()`. Setup follows tools/tests/m12.json up to the shutter.
 - **s22** `index.html?m=10&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(14.6, 0, 3.2, Math.PI / 2)`; wait 1.5 s. The corridor's hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight.
 - **s23** `index.html?m=12&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(2, 0, 51, Math.PI)`; until `__game.temporal.current === '2196'` (60 s); wait 2.0 s. Actions: t 0.6: `__m13.W.tracer([0, 9, -2], [-4, 0.5, 42], 1.6, 7)`; t 1.3: `__m13.W.tracer([0, 9, -2], [3, 0.5, -40], 1.6, 7)`.
-- **s24** `index.html?m=12&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(2, 0, 51, Math.PI)`; until `__game.temporal.current === '2196'` (60 s); until `__game.control && document.getElementById('objective-text').textContent.includes` (200 s); eval `(()=>{const g=__game, s=g.actors.sera; g.player.place(2.3, 0.15, 51.4, 0.3); s.root.positi…`; wait 0.8 s. Actions: t 0.62: `DIR.actor('sera').talk = 2.6`.
+- **s24** `index.html?m=12&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(2, 0, 51, Math.PI)`; until `__game.temporal.current === '2196'` (60 s); until `__game.control && document.getElementById('objective-text').textContent.includes` (200 s); eval `(()=>{const g=__game, s=g.actors.sera; const q = s.root.position; g.player.place(q.x - 0.4…`; wait 0.8 s. Actions: t 0.62: `DIR.actor('sera').talk = 2.6`.
 - **s25** `index.html?m=6&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.temporal.setImmediate('2196'); __game.player.place(-7.9, 21.06, -21.6, Math.PI / 2)`; wait 0.8 s.
 - **s26** `index.html?m=14&dtcap=0.25&gfx=high&auto`. Setup: wait 0.5 s.
 - **s27** `index.html?m=7&dtcap=0.25&gfx=high&auto`. Setup: wait 0.8 s.
@@ -450,7 +450,9 @@ until a reviewer passes the shot's frames), `notes`. Extensions: `fps`, `cut_fra
 The recorder loads `url` and waits for `ready`. It then evaluates `tools/trailer/director.js` in the page, which
 takes over the frame loop the way `tools/render/refhelper.js` does: frames are only simulated and drawn on request.
 Then it runs `setup[]`, calls `DIR.begin(shot)` and, for each frame, runs the due `actions` and `DIR.frame(i, true)`.
-That call steps the game exactly 1/24 s, poses the camera, draws, and returns the frame. `tools/trailer/preview.mjs`
+That call steps the game exactly 1/24 s, poses the camera, draws, and returns the frame. Between frames the page
+must get at least one `requestAnimationFrame` turn: mission scripts await `game.wait` / `waitFor` through rAF polling,
+and stall if frames are stepped back to back without yielding. `preview.mjs` waits 18 ms after each undrawn frame. `tools/trailer/preview.mjs`
 does exactly this at 640×296 for three frames per shot (cut-in, middle, cut-out). It writes one strip per shot for
 review:
 
@@ -481,7 +483,7 @@ frame by frame, in headless Chromium (SwiftShader). It is built on the approach 
 
 ```sh
 node tools/trailer/director.mjs s07                         # final frames of shot s07 (found in shots/*.json)
-node tools/trailer/director.mjs tools/trailer/shots/g2.json#s07 --preview   # every 4th frame at 640x360
+node tools/trailer/director.mjs tools/trailer/shots/g2.json#s07 --preview   # every 4th frame, 640 wide
 node tools/trailer/director.mjs s07 --still=0,48,95          # look-dev stills at full size
 node tools/trailer/director.mjs s07 --from=0 --to=23         # part of the shot; --force re-renders
 ```
@@ -489,7 +491,7 @@ node tools/trailer/director.mjs s07 --from=0 --to=23         # part of the shot;
 | output | where (`<OUT>` = `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/trailer`, env `TRAILER_OUT`) |
 |---|---|
 | final | `<OUT>/frames/<id>/%05d.jpg` (JPEG q95, `trailer.json` width × height), `meta.json` (spec hash), `progress.json` |
-| `--preview` | `<OUT>/preview/<id>/%05d.jpg` (frame numbers of the final), `<OUT>/preview/<id>.mp4` (real pace), `<OUT>/preview/<id>_sheet.jpg` (contact sheet) |
+| `--preview` | `<OUT>/preview/<id>/%05d.jpg` (640 wide at the render aspect; frame numbers of the final), `<OUT>/preview/<id>.mp4` (real pace), `<OUT>/preview/<id>_sheet.jpg` (contact sheet) |
 | `--still` | `<OUT>/stills/<id>/%05d.jpg` (always re-rendered) |
 
 **Time.** Every time in a shot (camera keys, actions) is seconds from frame 0 of the rendered clip, handles included:
@@ -524,9 +526,11 @@ up to the first missing frame (plus frame 0, which is always drawn to snap the e
 everything that changes pixels (url, ready, setup, frames, camera, actions, grade, exposure, ss, blur, extras, seed,
 size, fps, director version): a changed spec deletes the stale frames; editing `beat`, `notes` or `approved` does not.
 One director per shot and output (`.lock`; a second one exits with code 5).
-Verified on m1: two separate runs of the same stills match at 50-51 dB PSNR (mean difference 0.3 of 255: JPEG-block
-noise from sub-LSB GPU differences, invisible), and a shot rendered in two runs (frames 0-12, killed, 13-23) matches a
-straight render at 46 dB with no step at the seam.
+Verified: frame 60 of `t_walk` rendered alone (`--still=60`: frames 1-59 simulated dry) is bit-identical to the farm's
+frame 60, which was rendered continuously after a stop / restart at frame 17 (PSNR ∞, max difference 0). Adjacent-frame
+differences across the restart seams of both test shots (t_iven 29→30, t_walk 16→17) are the same as anywhere else in
+the shot. Earlier development runs on m1 matched at 46-51 dB (JPEG-block noise, invisible) before the title-screen and
+clock fixes made runs exact.
 
 **Camera** (`camera`, the storyboard's fields plus a few extensions):
 
@@ -541,6 +545,14 @@ straight render at 46 dB with no step at the seam.
 | `rig` | the game's dialogue key + rim lights follow the focus subject (default on, as in `game.shot`); `false` keeps them off |
 | `anchor`, `anchorLive` | path keys are offsets from a moving point: a JS expression (a character root, a bone), re-read every frame unless `anchorLive: false` |
 | `target`, `lag`, `yawLag`, `frame`, `yaw` | operator follow: offsets in the frame of `target` (`"kai"` default, or an actor id; `x` right, `y` up, `z` along its facing, positive = in front), with operator lag on position (0.3 s) and heading (0.8 s); `"frame": "world"` for world axes, a fixed `yaw` |
+
+**Storyboard compatibility.** The shot files from `tools/trailer/storyboard.py` run unchanged: `page.js` serves the
+`DIR` helper names that `tools/trailer/director.js` defines for the storyboard previews (`tools/trailer/preview.mjs`), and
+the camera fields `anchor`, `anchorLive`, `focusOn` (JS) and the orbit `follow` behave the same. Differences, all in
+favour of the final frames: everything runs on virtual time (no real-time `pace`), path positions use the time-aware
+Hermite form of Catmull-Rom (identical at the keys, slightly different between unevenly spaced keys), exposure is
+held from frame 0, and the frames are JPEG q95. Checked with `--preview` on s03 (camera anchored to Kai's hand,
+`focusOn` JS, band flare) and s33 (three `DIR.era` switches).
 
 **Characters and story state** (from `setup` / `actions` evals; `TR` is the page helper, `DIR` the storyboard's helper
 names, `__game` the game):
@@ -560,8 +572,9 @@ runs on the virtual clock. Setup `pace` is ignored: every wait is virtual, so no
 facades), `"blur": { "samples": 4, "shutter": 0.5 }` sub-frame accumulation motion blur (the frame interval is split
 into `samples / shutter` steps and the last `samples` are averaged: a 180° shutter; for whip pans and fast moves),
 `"extras": { "crowdFar": 30 }` (crowd people stay on their full build up to 30 m instead of 14 m),
-`"extras": { "shadowMap": 4096 }` (sharper sun shadows). Each costs about its factor in render time (ss 2 ≈ 4×,
-blur 4 ≈ 4×): use them where they show.
+`"extras": { "shadowMap": 4096 }` (sharper sun shadows). Measured on `t_walk` frame 60 at 1280×590: plain 5.9 s,
+`"ss": 2` 14.4 s (2.4×; also averages the film grain away and is slightly brighter, so keep it for whole shots),
+`"blur": 4` 24.7 s (4.2×): use them where they show.
 
 **Resolution.** Benchmark on the heaviest street (mission 1 rain street, `gfx=high`, 230 draw calls / 0.5 M triangles,
 8 drawn frames each, mean wall seconds per frame including the game step and the JPEG; this container's 4 cores shared
@@ -601,3 +614,13 @@ node tools/trailer/farm.mjs stop     # stops the farm and its renderers; frames 
   state `<OUT>/farm-state.json`.
 - Kill-safe: frames are written atomically and every director resumes at its first missing frame, so `stop` (or a
   container restart) followed by `start` loses at most the frames in flight.
+- Director exit codes: 0 done, 2 usage, 3 `ready` / `until` timed out, 4 crash (page or browser), 5 another director
+  holds the shot (the farm retries in 60 s).
+
+Verification (2026-10-22, `tools/trailer/shots/test.json`, two eras): `t_iven` (mission 2, Helix 2026: a push-in on Iven,
+who looks up, rises, turns to Kai and talks, focus and dialogue rig on him; 144 frames) and `t_walk` (mission 1, Rain City
+2049: an operator follow leading Kai down the rainy street; 120 frames) rendered through the farm at 1280×590, two
+directors at once. The farm was stopped at frames 30 / 17 and started again; both shots resumed at their first missing
+frame, finished at 8.2 / 8.9 s per frame (load average 20-25) and were encoded to `clips/t_iven.mp4` and
+`clips/t_walk.mp4` (h264, 1280×590, yuv420p, 24 fps, 144 / 120 frames), after which the farm exited by itself.
+Their `approved` flags are back to false so the production farm skips them.
