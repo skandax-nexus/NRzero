@@ -10,6 +10,7 @@
 // neighbouring tips (the hem stays a ring) and is pushed out of the thigh capsules, so cloth never passes through the
 // legs. Far people get the collision only (no dynamics); ?motion=nospring turns it all off.
 import * as THREE from 'three';
+import { wpos, wquat } from './ik.js';
 
 const key = n => n.replace(/_\d+$/, '');
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -175,24 +176,24 @@ const CFG = { skirt: { stiff: 7, damp: 2.2, grav: 0.35, ring: 0.5 }, hair: { sti
 export class Springs {
   constructor(h, S) { this.h = h; this.S = S; this.valid = false; this.wind = new THREE.Vector3(); }
   reset() { this.valid = false; }
+  /** back to the rest shape (hung from the body, no swing) and stop simulating until update() runs again */
+  rest() { if (!this.valid) return; for (const C of this.S.chains) for (const nd of C.nodes) nd.bone.quaternion.copy(nd.restQ); this.valid = false; }
   /** dt: frame time; dyn: false = collision only (far people), no inertia. */
   update(dt, dyn = true) {
     const h = this.h, B = h.bones;
     const sc = h.root.getWorldScale(_o).y;
     // the leg capsules (thigh to knee to ankle), the chest for hair
-    B.thigh_L.getWorldPosition(_k1); B.shin_L.getWorldPosition(_h1);
-    B.thigh_R.getWorldPosition(_k2); B.shin_R.getWorldPosition(_h2);
+    wpos(B.thigh_L, _k1); wpos(B.shin_L, _h1);
+    wpos(B.thigh_R, _k2); wpos(B.shin_R, _h2);
     const r = (this.S.rig.rLeg + 0.02) * sc;
     const fresh = !this.valid || !(dt > 0);
     const steps = fresh ? 1 : Math.min(4, Math.ceil(dt / (1 / 60)));
     const sdt = fresh ? 0 : dt / steps;
     for (const C of this.S.chains) {
       const cf = CFG[C.kind];
-      C.parent.updateWorldMatrix(true, false);
-      C.parent.getWorldQuaternion(_pq);
       for (const nd of C.nodes) {
         nd.bone.quaternion.copy(nd.restQ); nd.bone.updateMatrixWorld(true);
-        nd.o = nd.o || new THREE.Vector3(); nd.bone.getWorldPosition(nd.o);
+        nd.o = nd.o || new THREE.Vector3(); wpos(nd.bone, nd.o);
         nd.restTip = nd.restTip || new THREE.Vector3(); nd.restTip.copy(nd.rest.tipLocal).applyMatrix4(C.parent.matrixWorld);
         if (fresh || !dyn || nd.tip.distanceToSquared(nd.restTip) > 1) { nd.tip.copy(nd.restTip); nd.prev.copy(nd.restTip); }
       }
@@ -214,13 +215,13 @@ export class Springs {
         for (const nd of C.nodes) {
           if (C.kind === 'skirt') {
             // out of the thigh capsules (legs push the cloth, cloth never passes through them)
-            for (const [a, b] of [[_k1, _h1], [_k2, _h2]]) {
-              const d = segDist(nd.tip, a, b, _w);
+            for (let j = 0; j < 2; j++) {
+              const d = segDist(nd.tip, j ? _k2 : _k1, j ? _h2 : _h1, _w);
               if (d < r && d > 1e-6) nd.tip.sub(_w).multiplyScalar(r / d).add(_w);
             }
           } else {
             // hair stays outside a sphere around the neck and behind the face
-            B.neck.getWorldPosition(_w);
+            wpos(B.neck, _w);
             const d = nd.tip.distanceTo(_w), r0 = 0.085 * sc;
             if (d < r0 && d > 1e-6) nd.tip.sub(_w).multiplyScalar(r0 / d).add(_w);
           }
@@ -235,8 +236,8 @@ export class Springs {
       for (const nd of C.nodes) {
         _dir0.subVectors(nd.restTip, nd.o).normalize(); _dir.subVectors(nd.tip, nd.o).normalize();
         _q.setFromUnitVectors(_dir0, _dir);
-        nd.bone.getWorldQuaternion(_q2); _q2.premultiply(_q);
-        nd.bone.parent.getWorldQuaternion(_pq).invert(); nd.bone.quaternion.copy(_pq.multiply(_q2));
+        wquat(nd.bone, _q2); _q2.premultiply(_q);
+        wquat(nd.bone.parent, _pq).invert(); nd.bone.quaternion.copy(_pq.multiply(_q2));
         nd.bone.updateMatrixWorld(true);
       }
     }

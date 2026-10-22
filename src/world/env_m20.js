@@ -578,6 +578,7 @@ export function buildRainCity(game, scene, T) {
   bat().box(cyan, S[0] - 0.92, 2.7, S[2] - 2.3, S[0] - 0.88, 2.74, S[2] + 2.3); box(S[0] + 0.48, 0.15, S[2] - 2.2, S[0] + 0.62, 2.7, S[2] + 2.2);
   solid(M.steel, S[0] + 0.1, 0.15, S[2] - 1.4, S[0] + 0.45, 0.6, S[2] + 1.4);
   plane(TEX.tramBoard(), 1.4, 0.6, S[0] - 0.4, 2.3, S[2] - 2.25, 0, 0.9);
+  plane(TEX.tramBoard(), 1.4, 0.6, S[0] - 0.4, 2.3, S[2] - 2.29, PI, 0.9);   // the board reads from both ends of the shelter
   // the noodle bar (west), counter, stools, the empty chair
   const B = P3.bar;
   solid(M.wood, -8.5, 0.15, B[2] - 4.5, -8.0, 1.15, B[2] + 4.5); bat().box(M.wood, -8.1, 1.15, B[2] - 4.5, -7.6, 1.2, B[2] + 4.5);
@@ -643,6 +644,6 @@ export function buildRainCity(game, scene, T) {
   W.rain = new Rain(low ? 2200 : 4200, 40); add(W.rain.mesh);
   W.shards = P3.shards.map((p, i) => { const m = shardMesh(); m.position.set(...p); add(m, i === 0 ? 'gap' : 'mira'); return m; });
   K.finish();
-  W.update = (dt, t) => { tickEdges(t); ringL.userData.update(t); for (const s of W.shards) s.rotation.y = t * 1.4; try { W.rain.frozen = T.current === 'gap'; W.rain.update(dt, game.engine.camera); } catch (e) { void e; } };
+  W.update = (dt, t) => { tickEdges(t); ringL.userData.update(t); for (const s of W.shards) s.rotation.y = t * 1.4; try { W.rain.frozen = T.current === 'gap'; W.rain.mesh.visible = game.engine.camera.position.z > -40.2; W.rain.update(dt, game.engine.camera); } catch (e) { void e; } };
   return W;
 }

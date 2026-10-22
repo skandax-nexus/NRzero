@@ -19,7 +19,7 @@
 // Switches: ?motion=classic (the old crossfade player), ?motion=noik,nolock,nolean,nowarp,noprofile,nohead,noidle,
 // nospring (single parts off for A/B).
 import * as THREE from 'three';
-import { twoBoneIK, rotateWorld, setWorldQuat } from './ik.js';
+import { twoBoneIK, rotateWorld, setWorldQuat, wpos, wquat } from './ik.js';
 import { getQuality } from '../world/realism.js';
 
 const Q = new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '');
@@ -44,6 +44,7 @@ const NO_IK = new Set(['sit', 'fall']);       // poses whose feet are not on the
 const AIR = new Set(['jump', 'jump_run']);    // our authored air clips (anims_extra.glb), sampled by vertical speed
 const NS = 48;                                // samples per clip loop (contact curves)
 const G = 9.81;
+const SIDES = ['L', 'R'], ARM_SEG = ['upperarm_', 'forearm_'], HEAD_CH = ['chest', 'neck', 'head'], HEAD_KY = [0.18, 0.32, 0.5], HEAD_KP = [0, 0.4, 0.6];
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -242,7 +243,7 @@ export class Motion {
     this.vSm = 0; this.accSm = 0; this.turnSm = 0; this.hero = false;
     this.head = { yaw: { x: 0, v: 0 }, pitch: { x: 0, v: 0 }, gy: 0, gp: 0, gT: 1 + this.rng() * 3, hold: 0 };
     this.breath = this.rng() * 6; this.exert = 0;
-    this.lod = 0; this.lodT = this.rng() * 0.25; this.ikW = 1; this.springs = null;
+    this.lod = 0; this.lodT = this.rng() * 0.25; this.ikW = 1; this.springs = null; this.lodTick = 0; this.lodPhase = this.rng() < 0.5 ? 0 : 1; this.lodAcc = 0;
     this.ground = { boxes: [], x: 1e9, z: 1e9, t: 0, world: null, inWorld: false, wt: 0 };
     this.vy = 0; this.stopping = false; this.err = 0;
     this.rootQ = new THREE.Quaternion();
@@ -311,6 +312,13 @@ export class Motion {
   // ---- the frame ----
   update(dt) {
     const t0 = globalThis.performance ? globalThis.performance.now() : 0;
+    // far crowds (LOD 2) animate at half rate, every other frame, staggered between people
+    if (this.lod === 2 && !this.hero && dt > 0 && dt < 0.1) {
+      this.lodAcc = (this.lodAcc || 0) + dt;
+      if ((this.lodTick = (this.lodTick ^ 1)) !== this.lodPhase) { if (t0) MOTION.stats.ms += globalThis.performance.now() - t0; return; }
+      dt = this.lodAcc;
+    }
+    this.lodAcc = 0;
     try { this.frame(dt); } catch (e) {
       if (!this.err++) console.warn('motion: falling back to the plain mixer for', this.h.id, e && e.message);
       MOTION.stats.errors++;
@@ -358,11 +366,11 @@ export class Motion {
     this.F = tele ? (this.runMode ? 1 : 0) : clamp(this.F + (this.runMode ? 1 : -1) * dt / fT, 0, 1);
     // ---- weights inside each family (by the template's clip speeds)
     const C = I.clips, sp = n => (C[n] ? C[n].speed : 0);
-    const ww = {};
+    const ww = this._ww || (this._ww = {}); for (const n in ww) delete ww[n];
     let s1 = sp('walk_slow'), s2 = sp('walk');
     if (C.walk && C.walk_slow && s2 > s1) { const u = clamp((v - s1) / (s2 - s1), 0, 1); ww.walk_slow = 1 - u; ww.walk = u; } else if (C.walk) ww.walk = 1; else if (C.walk_slow) ww.walk_slow = 1;
-    const wr = {};
-    const rn = RUNS.filter(n => C[n]);
+    const wr = this._wr || (this._wr = {}); for (const n in wr) delete wr[n];
+    const rn = this._rn || (this._rn = RUNS.filter(n => C[n]));
     if (rn.length) {
       if (v <= sp(rn[0])) wr[rn[0]] = 1;
       else if (v >= sp(rn[rn.length - 1])) wr[rn[rn.length - 1]] = 1;
@@ -449,7 +457,7 @@ export class Motion {
     }
     // the planted heights of the clips in play (idle stands 2-4 cm higher at the ankle than a walking plant)
     const R = this.ref || (this.ref = { L: [0, 0], R: [0, 0] });
-    for (const side of ['L', 'R']) {
+    for (const side of SIDES) {
       let a = 0, t = 0, w = 0;
       for (const n in A) { const wn = W[n], ci = C[n]; if (!(wn > 0.0005) || !ci || !ci.ref || NO_IK.has(n)) continue; a += wn * ci.ref[side][0]; t += wn * ci.ref[side][1]; w += wn; }
       R[side][0] = w > 0 ? a / w : I.ank[side]; R[side][1] = w > 0 ? t / w : I.toe[side];
@@ -495,10 +503,12 @@ export class Motion {
     spring(this.dip, 0, 13, dt);
     if (this.dip.x < -0.17) { this.dip.x = -0.17; this.dip.v = Math.max(0, this.dip.v); }
     this.exert = clamp(this.exert + (v > 2.5 ? (v / 5.6) * 0.25 : -0.06) * dt, 0, 1);
-    h.root.updateWorldMatrix(true, true);       // parents too: the root moved this frame
     // the feet, the pelvis and the legs
     const ikOn = on('ik') && !this.poseNoIK && this.lod === 0 && !this.inPlace;
     this.ikW = tele ? (ikOn ? 1 : 0) : clamp(this.ikW + (ikOn ? 1 : -1) * dt / 0.3, 0, 1);
+    // a far person (LOD 2) with nothing procedural left to do: the clips alone (the renderer updates the matrices)
+    if (this.lod === 2 && this.ikW <= 0 && this.dip.x > -0.002) { if (this.springs) this.springs.rest(); return; }
+    h.root.updateWorldMatrix(true, true);       // parents too: the root moved this frame
     if (this.ikW > 0 || this.dip.x < -0.002) this.legs(dt, tele);
     // upper body: posture, arm swing, breathing, head
     if (this.lod < 2) this.upper(dt, pose);
@@ -550,7 +560,7 @@ export class Motion {
     const h = this.h, B = this.B, I = this.info, feet = this.feet;
     const hips = B.hips; if (!hips) return;
     const root = h.root;
-    root.getWorldPosition(_v3);
+    wpos(root, _v3);
     const plane = _v3.y, sc = root.getWorldScale(_v2).y;
     this.refreshGround(dt, _v3.x, _v3.z);
     // how steep the ground ahead is (stairs, ramps): rise over 0.6 m along the motion
@@ -561,10 +571,10 @@ export class Motion {
     } else this.slope = approach(this.slope || 0, 0, 6, dt);
     const grounded = this.grounded && this.wAir < 0.5, world = !!this.ground.world;
     // forward axis of the body, for stride warping
-    root.getWorldQuaternion(_q);
+    wquat(root, _q);
     _fwd.set(0, 0, 1).applyQuaternion(_q); _fwd.y = 0; _fwd.normalize();
     const yawW = Math.atan2(_fwd.x, _fwd.z);
-    const hipP = hips.getWorldPosition(_hipP);
+    const hipP = wpos(hips, _hipP);
     const kw = (this.k - 1) * this.wLoco;
     const lockOn = on('lock') && grounded;
     // gait style on the pelvis (before the feet are read, the leg IK keeps them planted): more pelvic rotation and
@@ -575,10 +585,10 @@ export class Motion {
       rotateWorld(hips, _q2.setFromAxisAngle(UP, -0.07 * sw * c2));
       rotateWorld(hips, _q2.setFromAxisAngle(_fwd, 0.035 * sw * s2 * (c2 > 0 ? 1 : -1)));
       if (B.chest) rotateWorld(B.chest, _q2.setFromAxisAngle(UP, 0.08 * sw * c2));
-      hipP.copy(hips.getWorldPosition(_v));
+      hipP.copy(wpos(hips, _v));
     }
     for (const f of feet) {
-      f.ft.getWorldPosition(f.anim); f.toe.getWorldPosition(f.toeP); f.ft.getWorldQuaternion(f.q);
+      wpos(f.ft, f.anim); wpos(f.toe, f.toeP); wquat(f.ft, f.q);
       // stride warp: the foot's distance ahead of / behind the hips grows or shrinks by k
       if (kw !== 0) {
         const along = (f.anim.x - hipP.x) * _fwd.x + (f.anim.z - hipP.z) * _fwd.z;
@@ -704,7 +714,7 @@ export class Motion {
       if (dy < 0) need = Math.max(need, -dy);
     }
     for (const f of feet) {
-      f.th.getWorldPosition(_v);
+      wpos(f.th, _v);
       const hx = f.target.x - _v.x, hz = f.target.z - _v.z, hd = Math.hypot(hx, hz);
       if (hd < Lmax) { const vy = Math.sqrt(Lmax * Lmax - hd * hd), cur = _v.y - need - f.target.y; if (cur > vy) reach = Math.max(reach, cur - vy); }
     }
@@ -713,7 +723,7 @@ export class Motion {
     this.drop = tele ? need : need > this.drop ? approach(this.drop, need, 30, dt) : approach(this.drop, need, 10, dt);
     const dy = -this.drop + this.dip.x;
     if (Math.abs(dy) > 1e-4) {
-      hips.getWorldPosition(_v); _v.y += dy;
+      wpos(hips, _v); _v.y += dy;
       hips.parent.updateWorldMatrix(true, false);
       hips.position.copy(hips.parent.worldToLocal(_v));
       hips.updateMatrixWorld(true);
@@ -733,7 +743,7 @@ export class Motion {
   upper(dt, pose) {
     const B = this.B, P = this.P, ch = this.ch, h = this.h;
     const root = h.root;
-    root.getWorldQuaternion(_q);
+    wquat(root, _q);
     _right.set(1, 0, 0).applyQuaternion(_q);
     // posture: age stoop, uniform bearing, a slump when sad, a forward lean when tired
     const sad = pose === 'sad' || (ch && ch.mood === 'sad') ? 1 : 0;
@@ -751,11 +761,11 @@ export class Motion {
       const c = best && C[best];
       if (c && c.ampL > 0 && c.ampR > 0) {
         const m = Math.sqrt(c.ampL * c.ampR);
-        for (const side of ['L', 'R']) {
+        for (const side of SIDES) {
           const g = clamp(P.arm * clamp(m / (side === 'L' ? c.ampL : c.ampR), 0.75, 1.35), 0.5, 1.5);
           const gw = 1 + (g - 1) * this.wLoco;
           if (Math.abs(gw - 1) < 0.01) continue;
-          for (const k of ['upperarm_', 'forearm_']) {
+          for (const k of ARM_SEG) {
             const b = B[k + side], ref = c.qs[k + side];
             if (!b || !ref) continue;
             _q2.copy(ref).slerp(b.quaternion, gw);
@@ -774,8 +784,8 @@ export class Motion {
     if (!B.head || !B.neck) return;
     let yaw = 0, pitch = 0;
     const lt = ch && ch.lookTarget;
-    B.head.getWorldPosition(_v);
-    h.root.getWorldQuaternion(_q);
+    wpos(B.head, _v);
+    wquat(h.root, _q);
     _fwd.set(0, 0, 1).applyQuaternion(_q);
     const bodyYaw = Math.atan2(_fwd.x, _fwd.z);
     if (lt) {
@@ -783,7 +793,7 @@ export class Motion {
       if (p) {
         let tx = p.x, ty = p.y ?? _v.y, tz = p.z;
         const c2 = lt.userData && lt.userData.character;
-        if (c2 && c2.head) { c2.head.getWorldPosition(_v2); tx = _v2.x; ty = _v2.y; tz = _v2.z; }
+        if (c2 && c2.head) { wpos(c2.head, _v2); tx = _v2.x; ty = _v2.y; tz = _v2.z; }
         const ang = wrap(Math.atan2(tx - _v.x, tz - _v.z) - bodyYaw);
         if (Math.abs(ang) < 2.1) {
           yaw = clamp(ang, -1.2, 1.2);
@@ -803,7 +813,8 @@ export class Motion {
     const y = H.yaw.x, pt = H.pitch.x;
     if (Math.abs(y) < 1e-4 && Math.abs(pt) < 1e-4) return;
     _right.set(1, 0, 0).applyQuaternion(_q);
-    for (const [b, ky, kp] of [[B.chest, 0.18, 0], [B.neck, 0.32, 0.4], [B.head, 0.5, 0.6]]) {
+    for (let j = 0; j < 3; j++) {
+      const b = B[HEAD_CH[j]], ky = HEAD_KY[j], kp = HEAD_KP[j];
       if (!b) continue;
       _q2.setFromAxisAngle(UP, y * ky); rotateWorld(b, _q2);
       if (kp) { _v.copy(_right).applyAxisAngle(UP, y); _q2.setFromAxisAngle(_v, pt * kp); rotateWorld(b, _q2); }

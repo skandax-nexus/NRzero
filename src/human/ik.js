@@ -10,18 +10,23 @@ import * as THREE from 'three';
 
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion();
 const _A = new THREE.Vector3(), _B = new THREE.Vector3(), _C = new THREE.Vector3(), _n = new THREE.Vector3();
-const _u = new THREE.Vector3(), _w = new THREE.Vector3(), _t = new THREE.Vector3();
+const _u = new THREE.Vector3(), _w = new THREE.Vector3(), _t = new THREE.Vector3(), _sc = new THREE.Vector3(), _ps = new THREE.Vector3();
+
+// Fast reads of a bone's world transform from its matrixWorld (no walk up the parents): the callers keep the
+// matrices current (the person root is updated once a frame, every edit below updates the edited subtree).
+export const wpos = (o, v) => v.setFromMatrixPosition(o.matrixWorld);
+export const wquat = (o, q) => { o.matrixWorld.decompose(_ps, q, _sc); return q; };
 
 /** Rotate `bone` by the world-space rotation q (its children follow). Updates the bone's world matrix. */
 export function rotateWorld(bone, q) {
-  bone.getWorldQuaternion(_qa);
+  wquat(bone, _qa);
   _qa.premultiply(q);
   return setWorldQuat(bone, _qa);
 }
 /** Give `bone` the world orientation q. Updates the bone's world matrix (and its children's). */
 export function setWorldQuat(bone, q) {
   const p = bone.parent;
-  if (p) { p.getWorldQuaternion(_qb).invert(); bone.quaternion.copy(_qb.multiply(q)); }
+  if (p) { wquat(p, _qb).invert(); bone.quaternion.copy(_qb.multiply(q)); }
   else bone.quaternion.copy(q);
   bone.updateMatrixWorld(true);
   return bone;
@@ -34,7 +39,7 @@ export function setWorldQuat(bone, q) {
  */
 export function twoBoneIK(a, b, c, target, pole = null, weight = 1) {
   if (weight <= 0) return 0;
-  a.getWorldPosition(_A); b.getWorldPosition(_B); c.getWorldPosition(_C);
+  wpos(a, _A); wpos(b, _B); wpos(c, _C);
   const l1 = _A.distanceTo(_B), l2 = _B.distanceTo(_C);
   if (l1 < 1e-4 || l2 < 1e-4) return 0;
   _t.copy(target);
@@ -59,7 +64,7 @@ export function twoBoneIK(a, b, c, target, pole = null, weight = 1) {
     rotateWorld(b, _qc);
   }
   // 2. the root joint: swing the chain so the end points at the target
-  c.getWorldPosition(_C);
+  wpos(c, _C);
   _u.subVectors(_C, _A).normalize(); _w.subVectors(_t, _A).normalize();
   if (_u.dot(_w) < 0.999999) { _qc.setFromUnitVectors(_u, _w); rotateWorld(a, _qc); }
   return Math.max(0, dist - hi);

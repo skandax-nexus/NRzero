@@ -528,7 +528,7 @@ comes from sampling take-off and landing at frame granularity, not from the simu
 | Coast after releasing a sprint 0.4 m from a 3 m drop | stops (its braking was near instant) | stops at the edge (1.2 m braking is held by the edge brake) | ✓ |
 | Walk at a void edge (kill plane below) | falls, fail and checkpoint | held at the edge for as long as he walks | ✓ |
 | Sprint off into the void | fail and checkpoint | fade back to the last safe spot, 0 fails | ✓ |
-| CPU per game step, Kai / Kai and 12 walkers (no render, loaded machine) | 0.019 / 0.093 ms | 0.028 / 0.143 ms | small |
+| CPU per game step, Kai / Kai and 12 walkers (no render, load average about 28) | 0.018 to 0.019 / 0.093 to 0.172 ms | 0.028 to 0.087 / 0.143 to 0.267 ms | under 0.1 ms more; see "Phone budget" |
 
 Clips, contact sheets and data are in
 `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/phys2/`:
@@ -551,3 +551,27 @@ Clips, contact sheets and data are in
   - Alt walks.
   - A jump while crouched stands up and jumps.
 - `?phys=classic` restores the old stick curve, sprint threshold, drag and layout.
+
+### Verification of the final build
+- **Audit re-run** (`tools/feel/audit.mjs --norender`, all scenarios, final code): every number in "Before and after"
+  reproduces. `?phys=classic` matches the base audit on all 34 shared behaviour metrics. Only the CPU timings
+  differ, and those are noise. The airborne frames in the `risers40` and micro-step `ramp` scenarios come from
+  walking off the far end of the structure (1.6 m and 1.0 m drops), never from the climb.
+- **Camera over people** (changed after the first sheets): someone between Kai and the camera used to pull the arm in
+  to 0.7 m, so Kai's back filled the screen for about 0.3 s whenever he passed a person. Now the camera cranes up to
+  1.2 m so the sight line clears their head, and the arm keeps its 3.4 m length. In the NPC bump scenario the camera
+  rises from 2.16 m to 2.38 m at full arm length. Only a person right beside or just behind Kai still causes a brief
+  pull-in.
+- **Phone budget** (`tools/feel/cost.mjs`, mission 7 (411 boxes) at 844x390, 120 frames at a fixed 1/30 s, median ms
+  per frame, CPU SwiftShader on a machine at load average about 28; an earlier 150-frame run on mission 1 agrees):
+
+  | Tier | Player update, new / classic | Camera, new / classic | Whole game step, new / classic |
+  |---|---|---|---|
+  | low | 0.1 / 0.1 | 4.6 / 4.7 | 5.0 / 5.1 |
+  | medium | 0.1 / 0.1 | 5.2 / 4.6 (p90 11.7 / 15.5) | 5.8 / 5.4 |
+
+  The camera's cost is mostly the three.js raycast against `camBlockers`, which both builds share. The new sphere casts
+  against the boxes allocate nothing. Low and medium are not measurably slower.
+- Data: `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/phys3/`. This holds
+  `new`, `classic` (audit data and `metrics.json`), `r1` and `r2` (rendered sheets: NPC bump, camera at a wall, the
+  3 m drop and the 0.40 m risers), `cost.jsonl`, and `play/` (playthroughs).

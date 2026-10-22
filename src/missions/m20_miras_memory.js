@@ -332,6 +332,13 @@ export default {
         }
         S.phase = 'reveal'; S.main = false;
       }) });
+      // the Loom at a glance (readable on a phone): what each ring shows on each spoke
+      game.onUpdate(() => {
+        if (S.phase !== 'loom' || S.main) { if (S.loomHud) { S.loomHud = false; hudSet(null); } return; }
+        S.loomHud = true;
+        const sp = loom.state().spokes;
+        hudSet([['THE LOOM · RINGS I · II · III', null], ...sp.map((o, i) => [`${['NORTH', 'EAST', 'SOUTH', 'WEST'][i]}: ${[0, 1, 2].map(r => loom.anchorAt(r, i).toUpperCase()).join(' · ')}${o.contradictory ? ' · LEFT OPEN' : o.aligned ? ' · ALIGNED' : ''}`, null])]);
+      });
       // hints
       hint(() => S.phase === 'hub' && G.doorsOpen === 1 && !G.done.I, 45, () => ui.subtitle('mira', 'The red door. Number fourteen. You know it.', 2600));
       hint(() => S.phase === 'loom', 60, () => { const path = loom.solve(); ui.subtitle('mira', path && path.length <= 2 ? `Try the ${['I-II', 'II-III', 'I-III'][path[0]]} lever.` : 'Each lever turns two rings. Line up the same signs on every spoke.', 3200); });
@@ -955,7 +962,7 @@ export default {
         await game.shot([-6.4, 1.8, -50.4], [-4.6, 1.4, -53.0], 1.2, { fov: 38 });
         await game.say('m20mira33', 'Run zero nine oh seven. Target: Varen, Kai. Eight-fourteen and nine seconds.');
         audio.sfxPlay('boom'); game.shake = 0.05; W.ringL.userData.disc.material.uniforms.uPower.value = 1.1;
-        await game.shot([-2.6, 1.6, -56.2], [0, 1.6, -60.6], 1.4, { fov: 40 });
+        await game.shot([3.0, 1.7, -55.4], [-0.4, 1.5, -60.2], 1.4, { fov: 42 });
         m33.lookTarget = kai.head; m33.root.rotation.y = PI;
         const step = walkTo(m33, [[-1.6, 0.15, -57.0]], 0.7);
         await game.say('m20mira33', '...Kai? You\'re... older.');

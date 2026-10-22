@@ -756,10 +756,10 @@ export function buildMirror(game, scene, low) {
   // footprints of every Kai who came before: Residue only, everywhere except the path they refused
   {
     const N = low ? 1100 : 2000, ft = canvasTex(64, 128, (c) => { c.clearRect(0, 0, 64, 128); c.fillStyle = '#fff'; c.beginPath(); c.ellipse(32, 40, 18, 30, 0, 0, 7); c.fill(); c.beginPath(); c.ellipse(32, 98, 14, 20, 0, 0, 7); c.fill(); }, 'm19foot');
-    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.13, 0.28), new THREE.MeshBasicMaterial({ map: ft, color: 0xffa860, transparent: true, depthWrite: false, opacity: 0.85 }), N);
+    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.22, 0.46), new THREE.MeshBasicMaterial({ map: ft, color: 0xffc890, transparent: true, depthWrite: false, opacity: 0.9, toneMapped: false, blending: THREE.AdditiveBlending }), N);
     const r = RZ.rng(1961), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), S1 = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
     let n = 0;
-    const put = (x, z, yaw, side) => { if (n >= N) return; if (W.stripDist(x, z) < 1.7) return; E.set(-PI / 2, 0, -yaw); Q.setFromEuler(E); P.set(x + Math.cos(yaw) * side * 0.1, 0.02, z - Math.sin(yaw) * side * 0.1); M.compose(P, Q, S1); im.setMatrixAt(n++, M); };
+    const put = (x, z, yaw, side) => { if (n >= N) return; if (W.stripDist(x, z) < 1.7) return; E.set(-PI / 2, 0, -yaw); Q.setFromEuler(E); P.set(x + Math.cos(yaw) * side * 0.13, 0.02, z - Math.sin(yaw) * side * 0.13); M.compose(P, Q, S1); im.setMatrixAt(n++, M); };
     // trails toward each door spot and wandering trails that give up
     for (let t = 0; t < 46; t++) {
       const sp = PLZ.spots[t % PLZ.spots.length];

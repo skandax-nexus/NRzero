@@ -48,8 +48,6 @@
 {"until":"IDLE() && __m20.G.mum.mira","timeout":600000},
 {"eval":"PL(10.4,0.02,2.4,0); U('Pencil marks')"},
 {"until":"IDLE()","timeout":600000},
-{"eval":"U('Pencil marks')"},
-{"until":"IDLE()","timeout":600000},
 {"eval":"PL(13.0,0.02,-5.0,Math.PI); U('drawing')"},
 {"until":"IDLE() && __m20.G.draw.mira","timeout":600000},
 {"eval":"SW('kai')"},

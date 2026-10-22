@@ -164,7 +164,7 @@ export default {
       T.configure([DEF], 'none'); T.unlocked = false;
       curTheme = null; musicLock = null;
       S = { seen: {}, obj: '', busy: false, main: false, phase: 'intro', byId: {} };
-      kai.pose = null; kai.lookTarget = null; pl.crouching = false; game.fallRespawn = true;
+      kai.pose = null; kai.lookTarget = null; pl.crouching = false; game.fallRespawn = true; pl.edgeAssist = true;
       let mT = 0; game.onUpdate(dt => { mT -= dt; if (mT <= 0) { mT = 0.5; music(); } });
       game.onUpdate(() => { if (game.residueOn) G.residueUsed = true; });
       await tick();
@@ -596,6 +596,8 @@ export default {
           if (S.phase === 'bridge' && (G.falls === 1 || G.falls === 4)) side(async () => { await game.say('kai', G.falls === 1 ? 'Don\'t look at the air. Look at the water.' : 'The water shows where the deck is. Not where I want it to be.'); });
         }
       });
+      // on the bridge the edge brake is off: the water, not an invisible wall, tells Kai where the deck ends
+      game.onUpdate(() => { pl.edgeAssist = S.phase !== 'bridge'; });
       const toPlaza = async () => {
         S.phase = 'door'; G.ch = 4; game.checkpoint(0, 0, -58, PI);
         cine(true); S.main = true;
@@ -847,7 +849,7 @@ export default {
       if (startPart <= 2) await chapter2();
       await chapter34(startPart >= 4);
     } finally {
-      kai.lookTarget = null; kai.pose = null; game.fallRespawn = true;
+      kai.lookTarget = null; kai.pose = null; game.fallRespawn = true; pl.edgeAssist = true;
       game.releaseCam(); ui.letterbox(false); audio.allBeds?.(0); audio.setTheme(null);
       window.__m19 = null;
     }
