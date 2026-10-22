@@ -4,7 +4,7 @@
    "id": "s17",
    "group": "g5",
    "mission": 14,
-   "beat": "Welcome to 2196: Rain City a hundred and forty-seven years on, overgrown, silent, beautiful.",
+   "beat": "Welcome to 2196: a slow tilt up from the overgrown avenue (trees in the road, a temporal zone glowing on it) to the tower canyon of Rain City a hundred and forty-seven years on: vines on the facades, the fallen tower face leaning across the avenue, haze and a slit of morning sky.",
    "url": "index.html?m=13&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
@@ -22,34 +22,34 @@
      {
       "t": 0,
       "p": [
-       5,
-       54,
-       168
+       1.6,
+       17.6,
+       142.0
       ],
       "l": [
-       0,
-       14,
-       70
+       0.3,
+       3.5,
+       98.0
       ],
       "fov": 50,
       "roll": 0,
-      "focus": 105.97
+      "focus": null
      },
      {
-      "t": 5.6,
+      "t": 5.58,
       "p": [
-       6,
-       41,
-       151
+       0.8,
+       16.4,
+       135.0
       ],
       "l": [
-       -1,
-       12,
-       74
+       0.0,
+       15.0,
+       80.0
       ],
-      "fov": 49,
+      "fov": 50,
       "roll": 0,
-      "focus": 82.58
+      "focus": null
      }
     ],
     "ease": "inOut",
@@ -57,26 +57,32 @@
    },
    "actions": [],
    "grade": "ruin2196",
-   "approved": false,
-   "characters": "Kai (tiny, at the landing)",
-   "lighting": "Morning haze, trees on the roofs, the broken tram viaduct; birds.",
+   "approved": true,
+   "characters": "none (the Reach itself; Kai stands at the landing, too small and shaded to read)",
+   "lighting": "Morning haze from the far end of the avenue, vines on the sunlit tower, the zone's cold glow; the near tower in shade.",
    "sound": "2196 bed: processed wind, birds, a far bell. Sera's line over it.",
-   "notes": "",
+   "notes": "g5: a tilt-up reveal along the avenue axis (camera 16-18 m up, above the canopy, pushing 7 m north) instead of the storyboard's oblique aerial, whose two near tower walls filled two thirds of the frame. Descending into the canopy was tried and rejected (tree crowns crossing the lens, the shaded road reads as a dark mass). Kai is not featured: from any height above the trees he is a dark speck on the shaded road; s18 carries him.",
    "preview": {
     "status": "ok",
-    "note": "Overgrown tower canyon with haze and the temporal zones."
+    "note": "g5 final: tilt-up from the overgrown avenue and the glowing zone to the vine-hung tower canyon and the sky slit."
    }
   },
   {
    "id": "s18",
    "group": "g5",
    "mission": 14,
-   "beat": "The memorial square: a bronze statue of Kai before a ring, \"ARCHITECT OF THE FRACTURE\".",
+   "beat": "The memorial square: Kai walks away from the lens toward a bronze statue of himself standing in the ring of a machine, and lifts his head to its face; the plaque below reads KAI VAREN · ARCHITECT OF THE FRACTURE.",
    "url": "index.html?m=13&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "__game.player.place(-6.0, 0, -46.8, -2.903)"
+     "eval": "(()=>{const s=__m14.W.lightSrc.find(s=>s.p[0]===-8&&s.p[2]===-51); if(s){s.p=[-8,1.9,-49.0]; s.i=2.6; s.d=7;} Object.defineProperty(__game.player,'camYaw',{configurable:true,get(){return 0},set(v){}}); return 'plaque lamp moved: '+!!s})()"
+    },
+    {
+     "eval": "(async()=>{const T=await import('/vendor/three.module.min.js'); const L=new T.SpotLight(0xffe2c0,60,30,0.35,0.6,1.5); L.position.set(-5.5,3.5,-44); L.target.position.set(-8,5,-54.7); __game.scene.add(L,L.target); return 'statue key on'})()"
+    },
+    {
+     "eval": "__game.player.place(-4.4, 0, -44.4, Math.PI + 0.1)"
     },
     {
      "wait": 0.8
@@ -92,46 +98,65 @@
      {
       "t": 0,
       "p": [
-       -3.2,
-       0.75,
+       -3.6,
+       0.62,
        -42.0
       ],
       "l": [
-       -8,
-       5.4,
-       -55
+       -7.0,
+       4.3,
+       -55.0
+      ],
+      "fov": 42,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.08,
+      "p": [
+       -3.85,
+       0.85,
+       -42.8
+      ],
+      "l": [
+       -7.3,
+       4.75,
+       -55.0
       ],
       "fov": 40,
       "roll": 0,
-      "focus": 14.62
-     },
-     {
-      "t": 4.1,
-      "p": [
-       -4.4,
-       0.9,
-       -44.2
-      ],
-      "l": [
-       -8,
-       5.6,
-       -55
-      ],
-      "fov": 38,
-      "roll": 0,
-      "focus": 12.32
+      "focus": null
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0,
+    "focusOn": [
+     -8,
+     5.6,
+     -54.6
+    ],
+    "rig": false
    },
-   "actions": [],
+   "actions": [
+    {
+     "t": 0,
+     "eval": "__game.input.setStick(-0.1, 0.99, 0.3)"
+    },
+    {
+     "t": 1.2,
+     "eval": "TR.look('kai', [-8, 5.8, -54.7])"
+    },
+    {
+     "t": 2.7,
+     "eval": "__game.input.setStick(0, 0, 0)"
+    }
+   ],
    "grade": "ruin2196",
    "approved": false,
-   "characters": "Kai (back to camera, small, looking up at his own statue)",
-   "lighting": "Low angle, the statue against the bright sky; candles and stones at the plinth.",
+   "characters": "Kai (back to camera, walking in from beside the lens, stopping right of the plaque and looking up); the bronze statue",
+   "lighting": "Low angle against the morning sky; a warm run-time key on the bronze from the camera side so it reads as metal, not a silhouette; the plaque lamp moved 2 m forward and up (it burned out a flower bunch beside the plaque).",
    "sound": "",
-   "notes": "",
+   "notes": "g5: Kai walks on the touch stick (0.3 = walk) with player.camYaw pinned to 0 for the shot (the game's camera yaw drifts behind a moving Kai and bent his path onto the plaque). He stops at t 2.7 right of the plaque, in front of the east bush. Focus on the statue's head: Kai walks from soft into the focal plane. The memorial cutscene's trigger is registered later in the mission, so the square is free to stage.",
    "preview": {
     "status": "ok",
     "note": "Strong: Kai under his own statue, plaque legible."

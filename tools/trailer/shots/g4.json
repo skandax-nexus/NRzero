@@ -61,15 +61,15 @@
     "ease": "inOut",
     "shake": 0.15,
     "rig": false,
-    "focusOn": "DIR.t < 2.1 ? DIR.actor('kai').head : [0, 3.2, -11]"
+    "focusOn": "kai"
    },
    "actions": [],
    "grade": "ancient",
-   "approved": false,
+   "approved": true,
    "characters": "Kai walking away from the lens toward the Old Ring (a calm 1.5 m/s walk, analog stick), Tala walking beside him on the left, villagers on the plaza around the Ring",
    "lighting": "The mission's golden-hour sun low behind the Ring (frame left), warm valley haze; no rig light, Kai's back stays in the house shadow.",
    "sound": "Wind and water bed; the switch transition lands on the cut.",
-   "notes": "Telephoto (24 to 23 deg) walk-away between two houses that frame the Ring: the camera cranes up 0.65 m and creeps in while Kai walks away from it, so he shrinks into the valley and the Ring rises clear above him. Focus holds on Kai, then racks to the Ring at 2.1 s. The tree on the lens line (-0.5, 30.1) is hidden for the whole shot.",
+   "notes": "Telephoto (24 to 23 deg) walk-away between two houses that frame the Ring: the camera cranes up 0.65 m and creeps in while Kai walks away from it, so he shrinks into the valley and the Ring rises clear above him. Focus follows Kai the whole way (a rack to the Ring sharpened the mission's faceted cliff backdrop into crumpled-paper facets; held on Kai the cliffs stay a soft painted wall and the Ring a glowing halo). The tree on the lens line (-0.5, 30.1) is hidden for the whole shot.",
    "preview": {
     "status": "ok",
     "note": "Golden hour, villagers, the stone ring; faceted low-poly trees (known mission 4 item)."
@@ -101,12 +101,12 @@
       "t": 0,
       "p": [
        4.75,
-       2.05,
+       2.0,
        -3.3
       ],
       "l": [
        2.45,
-       2.12,
+       2.0,
        -6.3
       ],
       "fov": 19.5,
@@ -117,12 +117,12 @@
       "t": 4.08,
       "p": [
        4.5,
-       2.08,
+       2.03,
        -3.62
       ],
       "l": [
        2.45,
-       2.15,
+       2.03,
        -6.3
       ],
       "fov": 18.5,
@@ -145,11 +145,11 @@
     }
    ],
    "grade": "ancient",
-   "approved": false,
+   "approved": true,
    "characters": "Niko (medium close-up, talking to Kai: the VO line), Kai (soft foreground head and shoulder, frame left; his steady 'talk' clip at 0.7x so his head does not wander like the idle does)",
    "lighting": "Niko stands between the lens and the Old Ring: the low sun behind the Ring rims him, the dialogue rig keys his face, and the Ring's glowing inner rim makes a halo around him; the halo fragments sweep behind.",
    "sound": "",
-   "notes": "Long-lens over-the-shoulder (19.5 to 18.5 deg) with a slow 0.4 m push. Niko on the platform at (2.5, 0.6, -6.2) faces Kai (3.37, 0.3, -4.51); the camera sits on the far side of the Niko-Ring line so the Ring frames him. Niko talks from 0.92 s (the VO 'The ring on your wrist is the Ring in our valley...'), Kai answers from 2.62 s ('I've never been here.').",
+   "notes": "Long-lens over-the-shoulder (19.5 to 18.5 deg) with a slow 0.4 m push, the lens just under Niko's eye line and his eyes on the upper third of the 2.39 band. Niko on the platform at (2.5, 0.6, -6.2) faces Kai (3.37, 0.3, -4.51); the camera sits on the far side of the Niko-Ring line so the Ring frames him. Niko talks from 0.92 s (the VO 'You came before the first fire.'), Kai answers from 2.62 s ('I've never been here.').",
    "preview": {
     "status": "ok",
     "note": "Niko medium close-up framed by the village Ring."
@@ -164,6 +164,9 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
+     "eval": "(()=>{const g=__game; g.player.place(2,0,12,0); TR.hide('kai'); TR.hide('niko'); const f=g.scene.fog; f.color.set(0xd6ae84); f.density=0.0065; g.engine.aoPass.comp.uniforms.uFade.value.set(24,44); return 'shadows centred on the village, golden haze, AO faded before the hills'})()"
+    },
+    {
      "wait": 0.8
     }
    ],
@@ -177,38 +180,39 @@
      {
       "t": 0,
       "p": [
-       4.6,
-       9.0,
-       14.6
+       -1.8,
+       10.4,
+       -36.0
       ],
       "l": [
-       -6,
-       1,
-       -6
+       4.0,
+       1.0,
+       25.0
       ],
-      "fov": 50,
+      "fov": 44,
       "roll": 0,
-      "focus": 24.51
+      "focus": null
      },
      {
-      "t": 5.6,
+      "t": 5.58,
       "p": [
-       3.2,
-       8.6,
-       13.3
+       -1.0,
+       8.4,
+       -31.0
       ],
       "l": [
-       -6,
-       1,
-       -6
+       4.0,
+       1.4,
+       25.0
       ],
-      "fov": 49,
+      "fov": 43,
       "roll": 0,
-      "focus": 22.69
+      "focus": null
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0.05,
+    "rig": false
    },
    "actions": [
     {
@@ -218,14 +222,18 @@
     {
      "t": 3.0,
      "eval": "__game.engine.setGrade('neutral')"
+    },
+    {
+     "t": 3.2,
+     "eval": "(()=>{TR.hide('kai'); TR.hide('niko'); __game.engine.aoPass.comp.uniforms.uFade.value.set(24,44); return __game.temporal.current})()"
     }
    ],
    "grade": "ancient",
-   "approved": false,
-   "characters": "Villagers in the lanes (thriving); dead trees standing in the water (flooded)",
-   "lighting": "Golden hour to overcast 2049 daylight; water level rises over the same houses.",
+   "approved": true,
+   "characters": "Villagers round the plaza fire and in the lanes (thriving); nobody in 2049, dead trees standing in the water. Kai and Niko are hidden (Kai parked at (2, 0, 12) so the sun's shadow map covers the village).",
+   "lighting": "Thriving: the mission's low south-east sun straight into the lens through a warm golden haze (fog d6ae84, 0.0065, set at run time; the mission's own fog is a cool a9c1dd), bloom streak off the channel. Flooded: the mission's own 2049 day sky and fog (its applySky resets the haze on the switch), cold and flat.",
    "sound": "Switch stinger, then the causal-consequence resonance under the dam hum.",
-   "notes": "",
+   "notes": "A slow crane down and in from the north end of the valley (10.4 to 8.4 m, 5 m forward, 44 to 43 deg) over the rooftops toward the plaza fire, the waterwheel on the channel at left and the Water Ring on the retaining wall at right. At 2.6 s DIR.era switches to the flooded state: the same Water Ring stands on the same wall over the survey buoy, dead trees in the water, the outlet tower and the dam across the valley. GTAO fades out at 24-44 m (uFade) because the engine's GTAO bands the distant hillsides into horizontal stripes.",
    "preview": {
     "status": "ok",
     "note": "Thriving village switches to the flooded reservoir with dead trees."
