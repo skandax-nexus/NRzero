@@ -130,7 +130,7 @@
         const A = DIR._anchor || [0, 0, 0];
         st.p = st.p.map((v, j) => v + A[j]); st.l = st.l.map((v, j) => v + A[j]);
       }
-      if (st) DIR._hold(st);
+      if (st && c.hold) DIR._hold(st);   // optional: tell mission code a cinematic holds the camera (most shots must not: some missions pause on game.cine)
       g.step(dt); DIR._eraTick(dt);
       if (st) {
         DIR.pose(st.p, st.l, st.fov, st.roll);

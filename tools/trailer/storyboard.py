@@ -163,22 +163,22 @@ shot('s11', 'g3', 3, 'The first switch: Kai reaches for the ring and the room fl
      sound='The temporal switch (the game\'s switch stinger) on each flicker, pitched up each time.',
      notes='DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture).')
 shot('s33', 'g3', 3, 'Montage: Kai\'s face in the ring light as the room tears between eras.',
-     path([[0, [0.22, 1.62, -0.25], [-0.02, 1.6, 0.95], 34], [2.1, [0.28, 1.6, -0.1], [-0.02, 1.6, 0.95], 33]], shake=0.35,
+     path([[0, [0.38, 1.5, -0.6], [0, 1.45, 0.95], 40], [2.1, [0.42, 1.5, -0.45], [0, 1.45, 0.95], 39]], shake=0.35,
           focusOn="DIR.actor('kai').head"),
      setup=[M3_EXPOSE, {'eval': '__game.player.place(0, 0, 0.95, Math.PI)'}, {'eval': RING_POWER + '(0.9)'}, {'wait': 0.8}],
      actions=[{'t': 0.55, 'eval': "DIR.era('2196', 0.3)"}, {'t': 1.05, 'eval': "DIR.era('2026', 0.3)"}, {'t': 1.5, 'eval': "DIR.era('2049', 0.3)"}],
-     grade='rain2049', u=url(3), ready=M3_READY, chars='Kai (close-up, facing camera, the ring behind camera)',
+     grade='rain2049', u=url(3), ready=M3_READY, chars='Kai (medium shot, facing camera, the ring behind camera)',
      look='Hard cyan key from the ring core, era colour washing over his face on each switch.')
 shot('s35', 'g3', 3, 'Final image: Kai alone before the Chronolith, small against the ring.',
-     path([[0, [0, 1.65, 10.2], [0, 3.15, -2], 38], [5.0, [0, 1.72, 8.6], [0, 3.2, -2], 36]], ease='sine'),
-     setup=[M3_EXPOSE, {'eval': '__game.player.place(0, 0, 2.4, Math.PI)'}, {'eval': RING_POWER + '(0.75)'}, {'wait': 1.0}],
+     path([[0, [0, 1.6, 11.6], [0, 3.0, -2], 40], [5.0, [0, 1.66, 10.4], [0, 3.05, -2], 38]], ease='sine'),
+     setup=[M3_EXPOSE, {'eval': '__game.player.place(0, 0, 4.6, Math.PI); __game.actors.iven.root.visible = false'}, {'eval': RING_POWER + '(0.75)'}, {'wait': 1.0}],
      grade='rain2049', u=url(3), ready=M3_READY, chars='Kai (silhouette, back to camera, centred)',
      look='Symmetric, the ring core the only bright thing; slow push-in.', sound='Piano motif returns, alone.')
 shot('s36', 'g3', 3, 'Button: Kai lifts his hand to the ring. Iven: "Don\'t touch it. Varen. Don\'t—" Cut on the switch.',
-     path([[0, [4.25, 1.74, 5.25], [0.25, 1.95, -0.4], 34], [3.5, [4.0, 1.72, 4.9], [0.2, 2.0, -0.6], 32]],
+     path([[0, [4.7, 1.72, 5.3], [0, 1.9, 0.2], 34], [3.5, [4.45, 1.72, 5.0], [0, 1.95, 0.0], 32]],
           focusOn="DIR.actor('kai').head"),
      setup=[M3_EXPOSE, {'eval': '__game.player.place(0, 0, 1.0, Math.PI)'},
-            {'eval': "(()=>{const i=__game.actors.iven; i.root.position.set(3.5,0,4); i.lookTarget=__game.player.char.head; return 'iven'})()"},
+            {'eval': "(()=>{const i=__game.actors.iven; i.root.position.set(2.9,0,4.6); i.lookTarget=__game.player.char.head; return 'iven'})()"},
             {'wait': 0.8}],
      actions=[{'t': 0.8, 'eval': "DIR.actor('iven').talk = 2.2"}, {'t': 1.6, 'eval': "DIR.actor('kai').pose = 'work'"},
               {'t': 2.3, 'eval': RING_POWER + '(0.95)'}, {'t': 2.3, 'eval': "DIR.actor('kai').wristBoost = 14"},
@@ -196,14 +196,14 @@ shot('s26', 'g3', 15, 'Montage: Harrow Reach, the city that relives one day, und
 # ------------------------------------------------------------------------------------------------------------------
 M4_READY = 'window.__game && __game.control && __game.actors.niko'
 shot('s12', 'g4', 4, 'The ancient settlement at golden hour: a valley built around a ring of stone.',
-     path([[0, [4.5, 1.6, 27.5], [0, 2.4, -10], 44], [4.1, [3.0, 6.2, 25.0], [0, 3.0, -12], 48]]),
+     path([[0, [5.8, 1.8, 26.5], [0, 2.4, -10], 44], [4.1, [3.0, 6.2, 25.0], [0, 3.0, -12], 48]]),
      setup=[{'eval': '__game.player.place(0, 0, 21.5, Math.PI)'}, {'wait': 0.6}],
      actions=[{'t': 0.3, 'down': 'KeyW'}],
      grade='ancient', u=url(4), ready=M4_READY, chars='Kai walking in, Tala and villagers',
      look='Low warm sun, long shadows, dust motes; the stone ring at the heart of the village.',
      sound='Wind and water bed; the switch transition lands on the cut.')
 shot('s13', 'g4', 4, 'Niko, keeper of the Telling, reads the ring on Kai\'s wrist: "You came before the first fire."',
-     path([[0, [1.3, 2.0, -3.35], [2.5, 2.08, -6.2], 32], [4.1, [1.45, 1.99, -3.75], [2.5, 2.08, -6.2], 30]],
+     path([[0, [1.8, 2.0, -3.4], [2.5, 2.08, -6.2], 32], [4.1, [1.9, 1.99, -3.8], [2.5, 2.08, -6.2], 30]],
           focusOn="DIR.actor('niko').head"),
      setup=[{'eval': "(()=>{const g=__game, n=g.actors.niko; g.player.place(1.14, 0.6, -4.1, 2.57); n.root.rotation.y=-0.373; n.lookTarget=g.player.char.head; g.player.char.lookTarget=n.head; return 'niko'})()"},
             {'wait': 1.0}],
@@ -223,14 +223,14 @@ shot('s31', 'g4', 5, 'Montage: Reservoir 7, dead trees standing in the water ove
      grade='neutral', u=url(5), chars='none', look='Flat overcast light on the water, the dam across the valley.')
 M7_READY = READY
 shot('s15', 'g4', 7, 'The Sky House: the observatory at dawn c. 1000 BCE switches to Helix\'s floodlit 2049 night.',
-     path([[0, [22, 18, 72], [2, 10, -10], 46], [4.1, [19.5, 17.2, 66.5], [2, 10.5, -10], 45]]),
+     path([[0, [-9, 26, -2], [12, 4, 30], 48], [4.1, [-6.5, 24.5, 0.5], [12, 4.5, 30], 47]]),
      setup=[{'wait': 0.8}],
      actions=[{'t': 2.2, 'eval': "DIR.era('2049', 1.0)"}, {'t': 2.6, 'eval': "__game.engine.setGrade('rain2049')"}],
      grade='ancient', u=url(7), ready=M7_READY, chars='Keepers and acolytes on the court (too small to read)',
-     look='Dawn sun behind the drum, then a starfield over Helix floodlights and scaffolds.',
+     look='Over the drum toward the sunrise, then the same view at night: a starfield over Helix floodlights and scaffolds.',
      sound='Night: glass tones under Mira\'s recorded voice.')
 shot('s25', 'g4', 7, 'Montage: dusk on the ruined summit, 2196; the scavenger chief Dace on the pillar, gauntlet glowing.',
-     path([[0, [7.5, 23.1, -11.6], [0, 21.9, -16], 44], [2.1, [7.0, 23.0, -12.2], [0, 21.9, -16], 43]], ease='linear'),
+     path([[0, [7.0, 23.4, -15.0], [-10, 22.2, -16.5], 44], [2.1, [6.6, 23.3, -15.6], [-10, 22.2, -16.5], 43]], ease='linear'),
      setup=[{'eval': "__game.temporal.setImmediate('2196'); __game.player.place(-7.9, 21.06, -21.6, Math.PI / 2)"}, {'wait': 0.8}],
      grade='ruin2196', u=url(7), ready=M7_READY, chars='Dace (scavenger boss), scavenger lookouts',
      look='Sunset behind the broken rim, Venus low in the west, green gauntlet glow.')
@@ -239,7 +239,7 @@ shot('s25', 'g4', 7, 'Montage: dusk on the ruined summit, 2196; the scavenger ch
 # g5 · 2196 and the Fracture (missions 14, 18), Helix containment (8), the inverted hospital (11)
 # ------------------------------------------------------------------------------------------------------------------
 shot('s17', 'g5', 14, 'Welcome to 2196: Rain City a hundred and forty-seven years on, overgrown, silent, beautiful.',
-     path([[0, [9, 30, 142], [-2, 10, 80], 48], [5.6, [7, 21, 130], [-2, 8, 84], 48]]),
+     path([[0, [5, 54, 168], [0, 14, 70], 50], [5.6, [6, 41, 151], [-1, 12, 74], 49]]),
      setup=[{'wait': 0.8}], grade='ruin2196', u=url(14), chars='Kai (tiny, at the landing)',
      look='Morning haze, trees on the roofs, the broken tram viaduct; birds.',
      sound='2196 bed: processed wind, birds, a far bell. Sera\'s line over it.')
@@ -252,10 +252,10 @@ shot('s30', 'g5', 18, 'Montage: the Corran Building, its upper floors torn away 
      path([[0, [8, 1.6, 34], [0, 20, -2], 54], [2.1, [7.2, 2.0, 31.5], [0, 20, -2], 54]], ease='linear'),
      setup=[{'wait': 0.8}], grade='ruin2196', u=url(18, '&m18part=4'), chars='none', look='Looking up the broken tower into storm light.',
      notes='?m18part=4 is mission 18\'s own chapter start (development switch); nothing from later missions is loaded.')
-shot('s28', 'g5', 18, 'Montage: the flooded Eastway at night, the N4 bus stalled with its passengers on the roof.',
-     path([[0, [2.0, 4.6, -84], [8, 3.0, -80], 44], [2.1, [2.5, 4.4, -83.3], [8, 3.0, -80], 44]], ease='linear'),
+shot('s28', 'g5', 18, 'Montage: the Eastway at night, the sea of 2196 poured into 2049\'s highway.',
+     path([[0, [8, 6, 40], [-2, 0, -20], 50], [2.1, [7.2, 5.6, 36.5], [-2, 0, -20], 50]], ease='linear'),
      setup=[{'wait': 0.8}], grade='rain2049', u=url(18, '&m18part=3'), ready='window.__game && __game.control && window.__m18 && __m18.ch3',
-     chars='Jun Park and six passengers on the bus roof', look='Night rain, flood water, the Line 6 bridge.')
+     chars='none (the stalled N4 bus far down the road)', look='Night rain on flood water, wrecked traffic, highway lights.')
 shot('s32', 'g5', 18, 'Montage: the storm front bearing down on Lantern Hall as its anchor fails.',
      path([[0, [10, 16, -62], [-2, 6, -118], 50], [2.1, [9.0, 15.2, -64.5], [-2, 6, -118], 50]], ease='linear'),
      setup=[{'wait': 0.8}], grade='ruin2196', u=url(18, '&m18part=1'), chars='Survivors in the hall (small)',
@@ -264,21 +264,23 @@ shot('s27', 'g5', 8, 'Montage: Dr. Yara Lind, stopped mid-stride inside the cont
      path([[0, [1.8, 1.5, -63.0], [-0.6, 1.25, -66.6], 40], [2.1, [1.45, 1.5, -63.5], [-0.6, 1.25, -66.6], 39]], ease='linear',
           focusOn="DIR.actor('yara').head"),
      setup=[{'wait': 0.8}], grade='rain2049', u=url(8), chars='Yara (frozen)', look='Containment rings, cold field light.')
-shot('s22', 'g5', 11, 'Montage: Halden General, rain falling upward past the East Wing.',
-     path([[0, [24, 1.4, 25], [34, 9, 15], 40], [3.05, [24.4, 1.55, 24.2], [34, 9.3, 15], 40]], ease='linear'),
-     setup=[{'wait': 0.8}], grade='rain2049', u=url(11), chars='Paramedics and evacuees at the cordon (small)',
-     look='Night, rain streaks rising instead of falling, hospital windows.')
+shot('s22', 'g5', 11, 'Montage: Halden General\'s reversed East Corridor: a gurney, a cylinder and glass fly back to where they were at 08:14.',
+     path([[0, [16.4, 2.4, 2.2], [24, 0.8, 4.6], 48], [3.05, [17.3, 2.2, 2.6], [24, 0.9, 4.6], 46]], ease='linear'),
+     setup=[{'eval': '__game.player.place(14.6, 0, 3.2, Math.PI / 2)'}, {'wait': 1.5}],
+     grade='rain2049', u=url(11), chars='Kai at the threshold (edge of frame)',
+     look='Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward.',
+     notes='The corridor\'s hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight.')
 
 # ------------------------------------------------------------------------------------------------------------------
 # g6 · The Nine-Minute War (missions 9, 10, 12, 13)
 # ------------------------------------------------------------------------------------------------------------------
 LOOP = "import('/src/systems/loops.js').then(m => { const L = m.loopState.active; L.skipTo(%s); return L.t; })"
 shot('s20', 'g6', 9, 'Montage: Meridian Square at 08:14:00 — the whole district stops, then rewinds to 08:05.',
-     path([[0, [-29.4, 9.2, -21.5], [8, 2, -34], 50], [5.1, [-28.4, 8.9, -22.6], [8, 2, -34], 48]], ease='linear'),
+     path([[0, [-22, 6.0, -24.0], [0, 1.2, -32], 42], [5.1, [-21.2, 5.8, -24.6], [0, 1.2, -32], 40]], ease='linear'),
      setup=[{'eval': '__game.player.place(-31, 7.2, -24, Math.PI / 2)'}, {'wait': 0.5}, {'eval': LOOP % '535.4'}],
      grade='rain2049', u=url(9), chars='Continuum troopers in white armour, commuters, the tram',
      look='Morning light on the square; the freeze desaturates it as the reset arrives.',
-     notes='The loop fires its reset at loop time 538.6 (DUR - 1.4): about 3.2 s after the skip.')
+     notes='The loop fires its reset at loop time 538.6 (DUR - 1.4): about 3.2 s after the skip. The reset waits while game.cine is set, so this shot must not hold the camera through game.cine (the default).')
 shot('s29', 'g6', 10, 'Montage: the Continuum spire grafted onto the ruin of Helix, dusk, 2196.',
      path([[0, [150, 22, 50], [70, 30, 0], 44], [2.1, [146, 21, 46.5], [70, 30, 0], 44]], ease='linear'),
      setup=[{'wait': 0.5}], grade='ruin2196', u=url(10), chars='none', look='Dusk, the pearl spire lit gold.')
@@ -295,7 +297,7 @@ shot('s19', 'g6', 12, 'The man behind the glass: from behind a grey-haired man i
      sound='Three notes tapped on the glass (E-B-A), the game\'s glass voice; then silence.',
      notes='Spoiler rule: his face and wrist are never in frame.')
 shot('s21', 'g6', 12, 'Montage: Echo Step — Kai leaves an afterimage and slips through the jammed lockdown shutter.',
-     path([[0, [12.6, 1.35, -17.6], [9.8, 1.1, -21.0], 44], [3.05, [12.3, 1.35, -18.1], [9.8, 1.1, -21.4], 44]], ease='linear'),
+     path([[0, [10.6, 1.6, -15.6], [10, 1.1, -21.5], 50], [3.05, [10.5, 1.55, -16.2], [10, 1.1, -22.0], 50]], ease='linear'),
      setup=[{'eval': '__game.player.place(0, 0, -6.4, Math.PI)'},
             {'until': "__game.control && document.getElementById('objective-text').textContent.includes('Chase')", 'timeout': 240},
             {'eval': '__game.player.place(10, 0, 0.4, Math.PI)'},
@@ -445,7 +447,10 @@ SFX = [
 STORE = [('s01', 1.0, 3.6), ('s07', 0.6, 3.0), ('s11', 0.9, 3.5), ('s14', 1.2, 3.5), ('s17', 0.8, 3.0), ('s21', 0.4, 2.0),
          ('s22', 0.5, 2.0), ('s23', 0.4, 2.0), ('s28', 0.2, 1.5), ('s30', 0.2, 1.5), ('s35', 0.5, 4.4)]
 
-RENDER = dict(width=1920, height=886, gfx='high')        # what the recorder draws (the store-cut crop)
+# what the recorder draws (the store-cut crop, 2.167:1). 1280 wide is what the render farm can afford: m1 street, high
+# tier, under the shared load: 1280x720 5.7 s/frame alone, 16-18 s with two renderers; 1920x1080 18.3 s alone,
+# 29-30 s with two (docs/TRAILER.md, "Director"). The edit scales the 2.39 band up to the 1920x1080 output.
+RENDER = dict(width=1280, height=590, gfx='high')
 OUTPUT = dict(width=1920, height=1080, letterbox=2.39, active_height=804)   # what the trailer delivers
 
 
@@ -495,7 +500,7 @@ def build():
     return dict(title='AFTERZERO · theatrical trailer', fps=FPS, width=OUTPUT['width'], height=OUTPUT['height'], length=length,
                 render=RENDER, output=OUTPUT, handles=HANDLES, order=order, timeline=timeline, vo=vo, cards=cards, music=music,
                 hits=hits, silences=[dict(t=snap(19.75), dur=1.0, what='the Zero Second'), dict(t=next(c['t'] for c in cards if c['id'] == 'silence'), dur=1.2, what='before the final image')],
-                sfx=sfx, store_cut=store, store_cut_size=[1920, 886])
+                sfx=sfx, store_cut=store, store_cut_size=[RENDER['width'], RENDER['height']])
 
 
 def write(check=False):
@@ -571,8 +576,9 @@ until a reviewer passes the shot's frames), `notes`. Extensions: `fps`, `cut_fra
     `ease` (`inOut` | `sine` | `linear` | `in` | `out`) runs from the first key to the last. Positions go through
     Catmull-Rom, so multi-key moves never stop at a key. `shake` 0..1 adds a smooth hand-held drift.
     Extensions: `anchor` (JS for a moving point, such as a character root or a bone; the keys are then offsets from
-    it), `anchorLive` (re-read the anchor every frame, default true), and `focusOn` (JS for the depth-of-field
-    target, which overrides `focus`).
+    it), `anchorLive` (re-read the anchor every frame, default true), `focusOn` (JS for the depth-of-field
+    target, which overrides `focus`), and `hold` (true also parks the pose in `game.cine`. Leave it off: several
+    missions treat `game.cine` as "a cutscene is running" and pause, for example the Meridian reset).
   - `follow`: the game's own third-person camera behind Kai, driven by scripted input. `camera.orbit {yaw, pitch,
     dist}` sets it at frame 0.
   - `game`: the mission's own cinematic camera (`game.shot`) as authored.

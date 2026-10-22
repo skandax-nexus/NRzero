@@ -175,7 +175,7 @@
 
 {"shot": "e01_test_hall_c.png"},
 {"eval": "ST()"},
-{"eval": "window.SUB=()=>{const c=__m18.ch5; if(!c) return 0; let n=0; for(const e of c.standing()){c.C.restrain(e); n++} return n}; PL(18.4,6.02,31.2,0); U('temporal shard')"},
+{"eval": "window.SUB=()=>{try{const c=__m18&&__m18.ch5; if(!c) return 0; let n=0; for(const e of c.standing()){c.C.restrain(e); n++} return n}catch(e){return 0}}; PL(18.4,6.02,31.2,0); U('temporal shard')"},
 {"wait": 3000},
 {"eval": "PL(0,0,10,Math.PI)"},
 {"wait": 4000},

@@ -61,7 +61,7 @@
     // timeline does not depend on how many title frames fell before the loader finished (a real-time race)
     if (g.titleUpdate) { g.titleUpdate(dt, g.time); TR.ticks++; return true; }
     if (g.paused && TR.shotOn) { g.paused = false; g.ui.show('pause', false); TR.errors.push('game paused itself at t=' + g.time.toFixed(2) + ': unpaused'); }
-    if (!g.paused) TR._step(dt);
+    if (!g.paused) { TR._step(dt); eraTick(dt); }
     TR.ticks++;
     return true;
   };
@@ -75,6 +75,34 @@
     try { TR._render(g.time); } finally { if (own) C.render = keep; else delete C.render; }
   };
 
+  // Virtual-time advance inside the page: the same timer walk as Playwright's clock.runFor(), but between two timers it
+  // yields with a MessageChannel task instead of a real setTimeout (clamped to >= 4 ms, far more on a loaded machine),
+  // so microtask chains (await game.wait(...)) still run between timers. Falls back to the public runFor.
+  const mc = new window.MessageChannel(); let mcRes = null; mc.port1.onmessage = () => { const r = mcRes; mcRes = null; r?.(); };
+  const yieldTask = () => new Promise(r => { mcRes = r; mc.port2.postMessage(0); });
+  TR.advance = async ms => {
+    const C = window.__pwClock?.controller;
+    if (!C) throw new Error('fake clock not installed');
+    if (typeof C._takeFirstTimer !== 'function' || typeof C._advanceNow !== 'function') return C.runFor(ms);
+    C._replayLogOnce?.();
+    const to = Math.ceil(C._now.ticks + ms);
+    let err = null;
+    for (;;) {
+      const timer = C._takeFirstTimer(to); if (!timer) break;
+      C._duringTick = true;
+      try {
+        if (typeof timer.func === 'function') timer.func.apply(null, timer.type === 'AnimationFrame' ? [C._now.ticks] : timer.type === 'IdleCallback' ? [{ didTimeout: false, timeRemaining: () => 0 }] : timer.args);
+        else (0, eval)(timer.func);
+      } catch (e) { err = err || e; } finally { C._duringTick = false; }
+      await yieldTask();
+    }
+    C._advanceNow(to);
+    if (err) TR.errors.push('timer: ' + (err.message || err));
+    return to;
+  };
+  // tick + advance + frame in one call (one round trip per sub-frame)
+  TR.run = async (dt, ms, o) => { TR.tick(dt); await TR.advance(ms); return TR.frame(o); };
+
   // ---------- shot set-up ----------
   TR.hideCss = () => {
     if (document.getElementById('trcss')) return;
@@ -86,6 +114,7 @@
     const g = TR.g, E = g.engine;
     const diag = { ticks: TR.ticks, draws, scenes: TR.scenes, trace: TR.trace };
     TR.reseed(o.seed);
+    if (o.fps) window.DIR.fps = o.fps;
     TR.hideCss();
     // the edit adds the trailer letterbox: the game's own (DOM) letterbox stays off for the whole shot
     g.ui.letterbox(false); g.ui.letterbox = () => {};
@@ -98,7 +127,7 @@
   // optional trailer extras that only change what is drawn (see docs/TRAILER.md, "Quality")
   TR.extras = async x => {
     const out = {};
-    if (x.crowdFar) { const m = await import(new URL('src/core/character.js', document.baseURI).href); m.charView.far = x.crowdFar; out.crowdFar = x.crowdFar; }
+    if (x.crowdFar) { const m = await import(new window.URL('src/core/character.js', document.baseURI).href); m.charView.far = x.crowdFar; out.crowdFar = x.crowdFar; }
     if (x.shadowMap) { const E = TR.g.engine; E.settings.shadowMapMax = x.shadowMap; E.clampShadows(); out.shadowMap = x.shadowMap; }
     return out;
   };
@@ -135,25 +164,50 @@
     (c.head || c.root).getWorldPosition(out); if (!c.head) out.y += 1.6; return out;
   };
 
+  // a JS expression from the spec (anchor, focusOn): evaluated in the page, null on error
+  const js = (src, what) => { try { return (0, eval)(src); } catch (e) { if (!TR._jsErr?.[what]) { (TR._jsErr ||= {})[what] = 1; TR.errors.push(what + ': ' + e.message); } return null; } };
+  const toVec = (o, out) => (!o ? null : o.isVector3 ? out.copy(o) : o.isObject3D ? o.getWorldPosition(out) : Array.isArray(o) ? out.set(o[0], o[1], o[2]) : 'x' in o ? out.set(o.x, o.y, o.z) : null);
+
   TR.setCamera = cam => {
+    const g = TR.g, P = g.player;
     TR.cam = cam || { mode: 'game' };
     const k = (TR.cam.keys || []).slice().sort((a, b) => a.t - b.t);
+    // focus per key: null takes the nearest numeric neighbour (no number anywhere = no depth of field)
+    const nums = k.map((x, i) => [i, x.focus]).filter(([, f]) => typeof f === 'number');
+    for (let i = 0; i < k.length; i++) if (typeof k[i].focus !== 'number' && nums.length) k[i] = { ...k[i], _focus: nums.reduce((b, n) => (Math.abs(n[0] - i) < Math.abs(b[0] - i) ? n : b))[1] }; else k[i] = { ...k[i], _focus: k[i].focus };
     TR.cam.keys = k;
-    TR.cam.focusV = new TR.V(); TR.followState = null;
+    TR.cam.hasFocus = nums.length > 0;
+    TR.cam.focusV = new TR.V(); TR.followState = null; TR._anchor = null;
+    // follow without position keys = the game's own third-person camera behind Kai (driven by scripted input);
+    // camera.orbit { yaw, pitch, dist } sets it at frame 0
+    TR.cam.operator = TR.cam.mode === 'follow' && k.some(x => x.p);
+    if (TR.cam.mode === 'follow' && !TR.cam.operator) {
+      const o = TR.cam.orbit; g.cine = null;
+      if (o) { if (o.yaw != null) P.camYaw = o.yaw; if (o.pitch != null) P.camPitch = o.pitch; if (o.dist != null) P.camDist = o.dist; P.first = true; }
+    }
     if (TR.cam.mode !== 'game') TR.g.engine.focus(null);
     return k.length;
   };
   // pose the camera for shot time t (seconds from frame 0). Called after every step, drawn or dry.
   TR.camPose = (t, dt) => {
     const g = TR.g, E = g.engine, cam = E.camera, C = TR.cam; if (!C || C.mode === 'game') return null;
-    const K = C.keys; if (!K.length) return null;
+    const K = C.keys, V = TR.V, sh = C.shake || 0;
+    if (C.mode === 'follow' && !C.operator) {   // game third-person camera: only the lens and the hand-held drift
+      if (K[0]?.fov) { cam.fov = K[0].fov; cam.updateProjectionMatrix(); }
+      if (sh > 0) shake(cam, t, sh);
+      return null;
+    }
+    if (!K.length) return null;
     const T0 = K[0].t, T1 = K[K.length - 1].t;
     const u = T1 > T0 ? T0 + ease(C.ease || 'inOut', (t - T0) / (T1 - T0)) * (T1 - T0) : T0;
     const P = hermite(K, u, k => k.p), L = hermite(K, u, k => k.l || K[0].l);
     const [fov] = hermite(K, u, k => [k.fov ?? K[0].fov ?? 50]), [roll] = hermite(K, u, k => [k.roll ?? 0]);
-    const V = TR.V;
     let pos = new V(...P), look = new V(...L);
-    if (C.mode === 'follow') {
+    if (C.mode === 'path' && C.anchor) {   // keys are offsets from a moving point (a character, a bone)
+      if (C.anchorLive !== false || !TR._anchor) { const a = toVec(js(C.anchor, 'anchor'), new V()); if (a) TR._anchor = a; }
+      if (TR._anchor) { pos.add(TR._anchor); look.add(TR._anchor); }
+    }
+    if (C.mode === 'follow') {   // operator follow: offsets in the target's frame, with lag
       const a = TR.actor(C.target || 'kai'); if (!a) return null;
       const tp = a.root.getWorldPosition(new V()), ty = a.root.rotation.y;
       let S = TR.followState;
@@ -166,28 +220,30 @@
       const toW = o => new V(S.p.x + rx * o.x + fx * o.z, S.p.y + o.y, S.p.z + rz * o.x + fz * o.z);
       pos = toW(pos); look = toW(look);
     }
-    // handheld micro-shake: a few cm and a fraction of a degree, smooth, deterministic in shot time
-    const sh = C.shake || 0;
     cam.position.copy(pos);
-    if (sh > 0) cam.position.add(new V(wob(t, 1) * 0.012 * sh, wob(t, 2) * 0.008 * sh, wob(t, 3) * 0.012 * sh));
     cam.up.set(0, 1, 0); cam.lookAt(look);
-    if (sh > 0) { cam.rotateY(wob(t * 0.9, 4) * 0.35 * D2R * sh); cam.rotateX(wob(t * 0.9, 5) * 0.28 * D2R * sh); }
-    const rl = roll + (sh > 0 ? wob(t * 0.7, 6) * 0.3 * sh : 0);
-    if (rl) cam.rotateZ(rl * D2R);
-    if (Math.abs(cam.fov - fov) > 1e-6) { cam.fov = fov; }
-    cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
-    // depth of field: focus distance from the keys (metres), or a subject (actor id / point) via camera.focusOn
+    if (roll) cam.rotateZ(roll * D2R);
+    if (sh > 0) shake(cam, t, sh);
+    cam.fov = fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+    // depth of field (high tier) + the dialogue rig: camera.focusOn (actor id, JS expression or [x,y,z]) overrides
+    // the keys' focus distance (metres along the view axis); "rig": false keeps the rig lights off
     const fo = C.focusOn;
     let focus = null;
-    if (fo) focus = typeof fo === 'string' ? headPos(fo, C.focusV) : C.focusV.set(...fo);
-    else if (K.some(k => typeof k.focus === 'number')) {
-      const dist = hermite(K, u, k => [typeof k.focus === 'number' ? k.focus : look.distanceTo(pos)])[0];
+    if (fo) focus = Array.isArray(fo) ? C.focusV.set(...fo) : TR.actor(fo) ? headPos(fo, C.focusV) : toVec(js(fo, 'focusOn'), C.focusV);
+    else if (C.hasFocus) {
+      const dist = hermite(K, u, k => [k._focus])[0];
       const d = new V(); cam.getWorldDirection(d);
       focus = C.focusV.copy(cam.position).addScaledVector(d, Math.max(0.3, dist));
     }
-    E.focus(focus, { rig: !!C.rig });
+    E.focus(focus, { rig: C.rig !== false });
     return { p: [pos.x, pos.y, pos.z], fov };
   };
+  // smooth hand-held drift (same amplitudes as the storyboard previews: 4 cm and 0.34 degrees at shake 1)
+  function shake(cam, t, sh) {
+    const r = sh * 0.006, a = sh * 0.04;
+    cam.position.x += wob(t * 1.1, 1) * a; cam.position.y += wob(t, 2) * a * 0.8;
+    cam.rotateX(wob(t * 0.9, 5) * r); cam.rotateY(wob(t * 0.8, 4) * r); cam.rotateZ(wob(t * 0.7, 6) * r * 0.5);
+  }
 
   // ---------- characters (for shot actions) ----------
   TR.place = (id, x, y, z, ry) => {
@@ -229,11 +285,50 @@
     return true;
   };
 
+  // ---------- storyboard helpers (window.DIR, tools/trailer/director.js API used by the shot specs) ----------
+  // DIR.era(id, dur): an era switch on GAME time: the switch distortion rises, the era swaps at the midpoint
+  // (visibility, apply(), the onSwitch listeners, the band flare) and the distortion falls.
+  let sw = null;
+  function eraTick(dt) {
+    if (!sw) return;
+    const g = TR.g, T = g.temporal, E = g.engine;
+    sw.t += dt; const k = Math.min(1, sw.t / sw.dur);
+    E.fx.uShift.value = Math.sin(k * Math.PI);
+    if (!sw.swapped && k >= 0.5) {
+      sw.swapped = true; const prev = T.current;
+      T.setImmediate(sw.id);
+      for (const l of T.listeners || []) { try { l(sw.id, prev); } catch (e) { TR.errors.push('onSwitch: ' + e.message); } }
+      if (g.player?.char) g.player.char.wristBoost = 6;
+    }
+    if (k >= 1) { E.fx.uShift.value = 0; sw = null; }
+  }
+  const DIR = window.DIR = {
+    fps: 24, i: 0, t: 0, pace: 0,
+    actor: id => TR.actor(id),
+    era(id, dur = 0.9) { if (!TR.g.temporal.def(id)) return 'no era ' + id; sw = { id, dur: Math.max(0.05, dur), t: 0, swapped: false }; return 'era ' + id; },
+    freeze(on) { TR.g.engine.fx.uFreeze.value = on ? 1 : 0; return on; },
+    shift(v) { TR.g.engine.fx.uShift.value = v; return v; },
+    hideHud: () => TR.hideCss(),
+    pose(p, l, fov = 50, roll = 0) {
+      const cam = TR.g.engine.camera; cam.position.set(p[0], p[1], p[2]); cam.fov = fov; cam.updateProjectionMatrix();
+      cam.up.set(0, 1, 0); cam.lookAt(new TR.V(l[0], l[1], l[2])); if (roll) cam.rotateZ(roll * D2R);
+    },
+    // simulate game time inside the page (virtual clock included); dt 0.1 like the director's setup steps
+    async sim(sec, dt = 0.1) { const n = Math.round(sec / dt); for (let k = 0; k < n; k++) { TR.tick(dt); await TR.advance(dt * 1000); TR.render(false); } return TR.g.time; },
+    async until(src, timeout = 60, dt = 0.1) {
+      const f = typeof src === 'function' ? src : () => (0, eval)(src);
+      for (let w = 0; w <= timeout; w += dt) { let ok = false; try { ok = !!f(); } catch { ok = false; } if (ok) return true; TR.tick(dt); await TR.advance(dt * 1000); TR.render(false); }
+      return false;
+    },
+  };
+  void DIR;
+
   // ---------- a frame: pose, render (dry or drawn), capture ----------
   // o = { t, dt, draw: 'dry' | 'full', capture: false | 'jpeg' | 'acc', first, last, w, h, quality, settle, lockAfter }
   TR.frame = o => {
     const g = TR.g; if (!TR.started || !g) return null;
     const E = g.engine;
+    window.DIR.t = o.t; window.DIR.i = Math.round(o.t * window.DIR.fps);
     TR.camPose(o.t, o.dt);
     if (o.settle) E.settlePost();
     if (o.draw !== 'full') { TR.render(false); return null; }

@@ -1,0 +1,53 @@
+{
+ "_doc": "Director / farm verification shots (not part of the edit). Times are seconds from frame 0 of the rendered clip, handles included. See docs/TRAILER.md, Director.",
+ "shots": [
+  {
+   "id": "t_iven", "group": "test", "mission": 2,
+   "beat": "Helix 2026, power down: Iven, crouched among the dead consoles, rises and turns to Kai as the camera pushes in.",
+   "url": "index.html?m=1&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.actors.iven",
+   "setup": [
+    {"eval": "__game.player.place(5.45, 0, -43.32, 1.67); const c = __game.actors.iven; c.root.position.set(7.2, 0, -43.5); c.root.rotation.y = -1.45; c.crouch = 0.6; c.lookTarget = null; null"},
+    {"wait": 1.5}
+   ],
+   "frames": 144, "handles": 12,
+   "camera": {
+    "mode": "path", "ease": "inOut", "shake": 0.25, "rig": true, "focusOn": "iven",
+    "keys": [
+     {"t": 0, "p": [4.45, 1.36, -42.1], "l": [7.2, 1.05, -43.55], "fov": 36},
+     {"t": 6, "p": [5.05, 1.6, -42.6], "l": [7.2, 1.52, -43.5], "fov": 27}
+    ]
+   },
+   "actions": [
+    {"t": 0.9, "eval": "TR.look('iven', 'kai')"},
+    {"t": 1.4, "eval": "__game.actors.iven.crouch = 0; const c = __game.actors.iven, k = __game.player.char.root.position; const off = __game.onUpdate(dt => c.faceTowards(k.x, k.z, dt, 2.2)); setTimeout(off, 4000); null"},
+    {"t": 2.9, "eval": "TR.talk('iven', 2.6)"}
+   ],
+   "grade": "helix2026", "approved": true,
+   "notes": "camera move with a character acting (look-at, rise, turn, talk); focus pulled to Iven's head, dialogue rig on"
+  },
+  {
+   "id": "t_walk", "group": "test", "mission": 1,
+   "beat": "Rain City 2049: Kai walks toward camera down the neon street in the rain, the crowd around him.",
+   "url": "index.html?m=0&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.actors.hale",
+   "setup": [
+    {"eval": "__game.player.place(0.6, 0.15, 10, Math.PI); __game.control = true; null"},
+    {"wait": 0.5},
+    {"down": "KeyW"},
+    {"wait": 1.5}
+   ],
+   "frames": 120, "handles": 12,
+   "camera": {
+    "mode": "follow", "target": "kai", "lag": 0.25, "yawLag": 1.2, "ease": "inOut", "shake": 0.45,
+    "keys": [
+     {"t": 0, "p": [0.45, 1.62, 3.1], "l": [0, 1.45, 0], "fov": 44, "focus": 3.1},
+     {"t": 5, "p": [1.35, 1.66, 2.5], "l": [0, 1.4, 0], "fov": 40, "focus": 2.9}
+    ]
+   },
+   "actions": [],
+   "grade": "rain2049", "approved": true,
+   "notes": "follow shot: leading camera, offsets in Kai's frame with operator lag and handheld shake"
+  }
+ ]
+}

@@ -273,32 +273,32 @@
      {
       "t": 0,
       "p": [
-       0.22,
-       1.62,
-       -0.25
+       0.38,
+       1.5,
+       -0.6
       ],
       "l": [
-       -0.02,
-       1.6,
+       0,
+       1.45,
        0.95
       ],
-      "fov": 34,
+      "fov": 40,
       "roll": 0,
       "focus": null
      },
      {
       "t": 2.1,
       "p": [
-       0.28,
-       1.6,
-       -0.1
+       0.42,
+       1.5,
+       -0.45
       ],
       "l": [
-       -0.02,
-       1.6,
+       0,
+       1.45,
        0.95
       ],
-      "fov": 33,
+      "fov": 39,
       "roll": 0,
       "focus": null
      }
@@ -323,7 +323,7 @@
    ],
    "grade": "rain2049",
    "approved": false,
-   "characters": "Kai (close-up, facing camera, the ring behind camera)",
+   "characters": "Kai (medium shot, facing camera, the ring behind camera)",
    "lighting": "Hard cyan key from the ring core, era colour washing over his face on each switch.",
    "sound": "",
    "notes": ""
@@ -340,7 +340,7 @@
      "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
     },
     {
-     "eval": "__game.player.place(0, 0, 2.4, Math.PI)"
+     "eval": "__game.player.place(0, 0, 4.6, Math.PI); __game.actors.iven.root.visible = false"
     },
     {
      "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.75)"
@@ -360,15 +360,15 @@
       "t": 0,
       "p": [
        0,
-       1.65,
-       10.2
+       1.6,
+       11.6
       ],
       "l": [
        0,
-       3.15,
+       3.0,
        -2
       ],
-      "fov": 38,
+      "fov": 40,
       "roll": 0,
       "focus": null
      },
@@ -376,15 +376,15 @@
       "t": 5.0,
       "p": [
        0,
-       1.72,
-       8.6
+       1.66,
+       10.4
       ],
       "l": [
        0,
-       3.2,
+       3.05,
        -2
       ],
-      "fov": 36,
+      "fov": 38,
       "roll": 0,
       "focus": null
      }
@@ -415,7 +415,7 @@
      "eval": "__game.player.place(0, 0, 1.0, Math.PI)"
     },
     {
-     "eval": "(()=>{const i=__game.actors.iven; i.root.position.set(3.5,0,4); i.lookTarget=__game.player.char.head; return 'iven'})()"
+     "eval": "(()=>{const i=__game.actors.iven; i.root.position.set(2.9,0,4.6); i.lookTarget=__game.player.char.head; return 'iven'})()"
     },
     {
      "wait": 0.8
@@ -431,14 +431,14 @@
      {
       "t": 0,
       "p": [
-       4.25,
-       1.74,
-       5.25
+       4.7,
+       1.72,
+       5.3
       ],
       "l": [
-       0.25,
-       1.95,
-       -0.4
+       0,
+       1.9,
+       0.2
       ],
       "fov": 34,
       "roll": 0,
@@ -447,14 +447,14 @@
      {
       "t": 3.5,
       "p": [
-       4.0,
+       4.45,
        1.72,
-       4.9
+       5.0
       ],
       "l": [
-       0.2,
-       2.0,
-       -0.6
+       0,
+       1.95,
+       0.0
       ],
       "fov": 32,
       "roll": 0,

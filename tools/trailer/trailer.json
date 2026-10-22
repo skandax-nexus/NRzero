@@ -5,8 +5,8 @@
  "height": 1080,
  "length": 117.083,
  "render": {
-  "width": 1920,
-  "height": 886,
+  "width": 1280,
+  "height": 590,
   "gfx": "high"
  },
  "output": {
@@ -1033,7 +1033,7 @@
   }
  ],
  "store_cut_size": [
-  1920,
-  886
+  1280,
+  590
  ]
 }

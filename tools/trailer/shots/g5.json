@@ -22,32 +22,32 @@
      {
       "t": 0,
       "p": [
-       9,
-       30,
-       142
+       5,
+       54,
+       168
       ],
       "l": [
-       -2,
-       10,
-       80
+       0,
+       14,
+       70
       ],
-      "fov": 48,
+      "fov": 50,
       "roll": 0,
       "focus": null
      },
      {
       "t": 5.6,
       "p": [
-       7,
-       21,
-       130
+       6,
+       41,
+       151
       ],
       "l": [
-       -2,
-       8,
-       84
+       -1,
+       12,
+       74
       ],
-      "fov": 48,
+      "fov": 49,
       "roll": 0,
       "focus": null
      }
@@ -133,12 +133,15 @@
    "id": "s22",
    "group": "g5",
    "mission": 11,
-   "beat": "Montage: Halden General, rain falling upward past the East Wing.",
+   "beat": "Montage: Halden General's reversed East Corridor: a gurney, a cylinder and glass fly back to where they were at 08:14.",
    "url": "index.html?m=10&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "wait": 0.8
+     "eval": "__game.player.place(14.6, 0, 3.2, Math.PI / 2)"
+    },
+    {
+     "wait": 1.5
     }
    ],
    "frames": 73,
@@ -151,32 +154,32 @@
      {
       "t": 0,
       "p": [
-       24,
-       1.4,
-       25
+       16.4,
+       2.4,
+       2.2
       ],
       "l": [
-       34,
-       9,
-       15
+       24,
+       0.8,
+       4.6
       ],
-      "fov": 40,
+      "fov": 48,
       "roll": 0,
       "focus": null
      },
      {
       "t": 3.05,
       "p": [
-       24.4,
-       1.55,
-       24.2
+       17.3,
+       2.2,
+       2.6
       ],
       "l": [
-       34,
-       9.3,
-       15
+       24,
+       0.9,
+       4.6
       ],
-      "fov": 40,
+      "fov": 46,
       "roll": 0,
       "focus": null
      }
@@ -187,10 +190,10 @@
    "actions": [],
    "grade": "rain2049",
    "approved": false,
-   "characters": "Paramedics and evacuees at the cordon (small)",
-   "lighting": "Night, rain streaks rising instead of falling, hospital windows.",
+   "characters": "Kai at the threshold (edge of frame)",
+   "lighting": "Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward.",
    "sound": "",
-   "notes": ""
+   "notes": "The corridor's hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight."
   },
   {
    "id": "s27",
@@ -260,7 +263,7 @@
    "id": "s28",
    "group": "g5",
    "mission": 18,
-   "beat": "Montage: the flooded Eastway at night, the N4 bus stalled with its passengers on the roof.",
+   "beat": "Montage: the Eastway at night, the sea of 2196 poured into 2049's highway.",
    "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=3",
    "ready": "window.__game && __game.control && window.__m18 && __m18.ch3",
    "setup": [
@@ -278,32 +281,32 @@
      {
       "t": 0,
       "p": [
-       2.0,
-       4.6,
-       -84
+       8,
+       6,
+       40
       ],
       "l": [
-       8,
-       3.0,
-       -80
+       -2,
+       0,
+       -20
       ],
-      "fov": 44,
+      "fov": 50,
       "roll": 0,
       "focus": null
      },
      {
       "t": 2.1,
       "p": [
-       2.5,
-       4.4,
-       -83.3
+       7.2,
+       5.6,
+       36.5
       ],
       "l": [
-       8,
-       3.0,
-       -80
+       -2,
+       0,
+       -20
       ],
-      "fov": 44,
+      "fov": 50,
       "roll": 0,
       "focus": null
      }
@@ -314,8 +317,8 @@
    "actions": [],
    "grade": "rain2049",
    "approved": false,
-   "characters": "Jun Park and six passengers on the bus roof",
-   "lighting": "Night rain, flood water, the Line 6 bridge.",
+   "characters": "none (the stalled N4 bus far down the road)",
+   "lighting": "Night rain on flood water, wrecked traffic, highway lights.",
    "sound": "",
    "notes": ""
   },

@@ -404,7 +404,7 @@ export default {
         if (!t) { S.groups.medic = 'goneout'; A.tomas.root.visible = false; A.medic.root.visible = false; S.out += 2; H.setTally(S.out); audio.sfxPlay('success'); S.groups.medic = 'out'; refresh(); return; }
         if (d > 7.5) { A.tomas.speed = 0; A.medic.speed = 0; if (once('escwait' + S.esc)) ui.subtitle('m18medic', 'Kai! We can\'t go any faster on our own.', 2400); return; }
         for (const [ch, off] of [[A.tomas, 0], [A.medic, 0.8]]) {
-          const p = ch.root.position, tx = t[0] + off, dx = tx - p.x, dz = t[2] - p.z, dd = Math.hypot(dx, dz), sp = 1.05;
+          const p = ch.root.position, tx = t[0] + off, dx = tx - p.x, dz = t[2] - p.z, dd = Math.hypot(dx, dz), sp = game.autoplay ? 3.2 : 1.05;
           if (dd > 0.05) { const st = Math.min(dd, sp * dt); p.x += dx / dd * st; p.z += dz / dd * st; p.y += (t[1] - p.y) * Math.min(1, dt * 4); ch.root.rotation.y = Math.atan2(dx, dz); ch.speed = sp; }
           if (ch === A.tomas && dd < 0.12) S.esc++;
         }
@@ -1053,7 +1053,7 @@ export default {
         });
         audio.sfxPlay('alarm');
       };
-      const standing = () => S.waveList.filter(e => !['down', 'surrender'].includes(e.state));
+      const standing = () => (S.waveList || []).filter(e => !['down', 'surrender'].includes(e.state));
       const cpWave = () => { const ig = Math.max(0.6, S.integ); game.checkpoint(0, 0, 14.5, PI, () => { C.reset({ all: true }); spawnWave(S.wave); S.integ = ig; S.rep = [0, 0, 0.34, 0.67][S.wave] || S.rep; }); };
       // the stabilizer: troopers near it pull its field down; Sera works while it holds
       game.onUpdate(dt => {
@@ -1162,7 +1162,7 @@ export default {
       await game.say('kai', 'That\'s how the storm goes round the planet. And it\'s how she\'s calling.');
       await convo(A.sera, [['sera', 'Then go. I\'ll hold the ring.'], ['kai', 'Sera. Thank you.'], ['sera', trust >= 1 ? 'Don\'t. Come back and I\'ll let you say it properly.' : 'Don\'t thank me. Just don\'t end the world on the way.']]);
       await game.say('m18adair', 'Keep your ring, Varen. When it is finished with you, we will still be here.');
-      C.dispose(); echo?.unlock(false);
+      C.dispose(); echo?.unlock(false); window.__m18.ch5 = null;
       F.chronolithRepaired = true; F.m18stabilizer = Math.round(G.integMin * 100); F.m18waves = 3; F.m18collar = true; F.m18ally = G.ally;
       musicLock = null;
       await ui.fade(1, 1400);

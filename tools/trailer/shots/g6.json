@@ -99,32 +99,32 @@
      {
       "t": 0,
       "p": [
-       -29.4,
-       9.2,
-       -21.5
+       -22,
+       6.0,
+       -24.0
       ],
       "l": [
-       8,
-       2,
-       -34
+       0,
+       1.2,
+       -32
       ],
-      "fov": 50,
+      "fov": 42,
       "roll": 0,
       "focus": null
      },
      {
       "t": 5.1,
       "p": [
-       -28.4,
-       8.9,
-       -22.6
+       -21.2,
+       5.8,
+       -24.6
       ],
       "l": [
-       8,
-       2,
-       -34
+       0,
+       1.2,
+       -32
       ],
-      "fov": 48,
+      "fov": 40,
       "roll": 0,
       "focus": null
      }
@@ -138,7 +138,7 @@
    "characters": "Continuum troopers in white armour, commuters, the tram",
    "lighting": "Morning light on the square; the freeze desaturates it as the reset arrives.",
    "sound": "",
-   "notes": "The loop fires its reset at loop time 538.6 (DUR - 1.4): about 3.2 s after the skip."
+   "notes": "The loop fires its reset at loop time 538.6 (DUR - 1.4): about 3.2 s after the skip. The reset waits while game.cine is set, so this shot must not hold the camera through game.cine (the default)."
   },
   {
    "id": "s21",
@@ -186,32 +186,32 @@
      {
       "t": 0,
       "p": [
-       12.6,
-       1.35,
-       -17.6
+       10.6,
+       1.6,
+       -15.6
       ],
       "l": [
-       9.8,
+       10,
        1.1,
-       -21.0
+       -21.5
       ],
-      "fov": 44,
+      "fov": 50,
       "roll": 0,
       "focus": null
      },
      {
       "t": 3.05,
       "p": [
-       12.3,
-       1.35,
-       -18.1
+       10.5,
+       1.55,
+       -16.2
       ],
       "l": [
-       9.8,
+       10,
        1.1,
-       -21.4
+       -22.0
       ],
-      "fov": 44,
+      "fov": 50,
       "roll": 0,
       "focus": null
      }

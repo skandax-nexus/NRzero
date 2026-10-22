@@ -6,7 +6,7 @@
 //        [--still=f1,f2,..] [--size=WxH] [--force] [--quiet]
 //
 //   final     every missing frame of the shot -> <OUT>/frames/<id>/%05d.jpg (JPEG q95, trailer.json width x height)
-//   --preview every 4th frame at 640x360       -> <OUT>/preview/<id>/%05d.jpg + <OUT>/preview/<id>.mp4 + _sheet.jpg
+//   --preview every 4th frame, 640 wide       -> <OUT>/preview/<id>/%05d.jpg + <OUT>/preview/<id>.mp4 + _sheet.jpg
 //   --still   only the listed frames (full size) -> <OUT>/stills/<id>/%05d.jpg (always re-rendered)
 //   --from / --to limit the frame range; --force deletes the shot's frames in that output first.
 //
@@ -18,6 +18,7 @@
 // dry, so a restart continues where it stopped and the same spec renders the same frames.
 /* global window */
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
+import { setTimeout } from 'timers';
 import fs from 'fs'; import path from 'path'; import url from 'url'; import crypto from 'crypto'; import { execFileSync } from 'child_process';
 
 export const VERSION = 1;
@@ -26,12 +27,15 @@ export const ROOT = path.resolve(R, '../..');
 export const OUT = process.env.TRAILER_OUT || '/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/trailer';
 const BASE = process.env.TRAILER_BASE || 'http://localhost:8765/';
 export const SHOTS_DIR = path.join(R, 'shots');
+let stopping = false;   // set by SIGINT / SIGTERM: the browser is closing, page calls in flight fail quietly
 
 // ---------- spec helpers (shared with farm.mjs) ----------
 export function trailerConfig() {
   let t = {};
   try { t = JSON.parse(fs.readFileSync(path.join(R, 'trailer.json'), 'utf8')); } catch { /* not written yet */ }
-  return { fps: t.fps || 24, width: t.width || 1280, height: t.height || 720 };
+  // trailer.json: width / height are the OUTPUT (the edit); render { width, height } is what the recorder draws
+  const r = t.render || {};
+  return { fps: t.fps || 24, width: r.width || t.width || 1280, height: r.height || t.height || 720 };
 }
 export function shotFiles() { return fs.existsSync(SHOTS_DIR) ? fs.readdirSync(SHOTS_DIR).filter(f => f.endsWith('.json')).sort().map(f => path.join(SHOTS_DIR, f)) : []; }
 export function readShots(file) {
@@ -68,7 +72,7 @@ async function main() {
   const preview = !!flag('preview'), stills = flag('still') ? String(flag('still')).split(',').map(Number).filter(n => n >= 0) : null;
   let W = cfg.width, H = cfg.height;
   if (flag('size')) [W, H] = String(flag('size')).split('x').map(Number);
-  if (preview) { W = 640; H = 360; }
+  if (preview) { H = Math.round(640 * H / W / 2) * 2; W = 640; }   // the render aspect at 640 wide
   const mode = preview ? 'preview' : stills ? 'stills' : 'final';
   const N = shot.frames | 0; if (!(N > 0)) throw new Error('shot.frames must be > 0');
   const ss = preview ? 1 : Math.max(1, +shot.ss || 1);
@@ -80,7 +84,8 @@ async function main() {
   const hash = shotHash(shot, W, H, fps);
   const dir = path.join(OUT, mode === 'final' ? 'frames' : mode, shot.id);
   fs.mkdirSync(dir, { recursive: true });
-  const log = (...a) => { if (!flag('quiet') || a[0] === '!') console.log(`[${shot.id}]`, ...a); };
+  // --quiet keeps warnings ('!') and the summary lines ('=')
+  const log = (...a) => { if (!flag('quiet') || a[0] === '!' || a[0] === '=') console.log(`[${shot.id}]`, ...a); };
 
   // one director per shot and output
   const lock = path.join(dir, '.lock');
@@ -92,7 +97,16 @@ async function main() {
   fs.writeFileSync(lock, String(process.pid));
   const unlock = () => { try { if (+fs.readFileSync(lock, 'utf8') === process.pid) fs.unlinkSync(lock); } catch { /* gone */ } };
   process.on('exit', unlock);
-  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { unlock(); process.exit(130); });
+  let browser = null;
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, () => {
+      if (stopping) return; stopping = true;
+      log('! stopped by', sig);
+      const bye = () => { unlock(); process.exit(sig === 'SIGINT' ? 130 : 143); };
+      setTimeout(bye, 4000).unref();
+      (browser ? browser.close().catch(() => {}) : Promise.resolve()).finally(bye);
+    });
+  }
 
   // a changed spec makes the frames on disk stale
   const metaF = path.join(dir, 'meta.json');
@@ -117,9 +131,8 @@ async function main() {
 
   // ---------- browser ----------
   const t0 = Date.now();
-  const browser = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--mute-audio', '--disable-audio-output'] });
+  browser = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-gpu-watchdog', '--mute-audio', '--disable-audio-output'] });
   const cleanup = async () => { try { await browser.close(); } catch { /* closed */ } };
-  process.on('SIGTERM', () => { cleanup().finally(() => { unlock(); process.exit(143); }); });
   const ctx = await browser.newContext({ viewport: { width: Math.round(W * ss), height: Math.round(H * ss) }, deviceScaleFactor: 1 });
   const p = await ctx.newPage();
   const errors = [];
@@ -139,15 +152,11 @@ async function main() {
 
   // virtual time: integer milliseconds handed to the fake clock, the remainder carried
   let vt = 0;
-  const advance = async ms => { const a = Math.round(vt + ms) - Math.round(vt); vt += ms; if (a > 0) await p.clock.runFor(a); };
-  const prof = { step: 0, clock: 0, dry: 0, full: 0, nDry: 0, nFull: 0 };
+  // one sub-frame: game step + virtual-clock advance (in the page, see page.js TR.advance) + camera + render
+  const prof = { dry: 0, full: 0, nDry: 0, nFull: 0 };
   const tick = async (step, fr) => {
-    let a = Date.now();
-    await p.evaluate(s => window.TR.tick(s), step);
-    let b = Date.now(); prof.step += b - a; a = b;
-    await advance(step * 1000);
-    b = Date.now(); prof.clock += b - a; a = b;
-    const r = await p.evaluate(o => window.TR.frame(o), fr || { t: 0, dt: step, draw: 'dry' });
+    const a = Date.now(), ms = Math.round(vt + step * 1000) - Math.round(vt); vt += step * 1000;
+    const r = await p.evaluate(([s, m, o]) => window.TR.run(s, m, o), [step, ms, fr || { t: 0, dt: step, draw: 'dry' }]);
     if (fr?.draw === 'full') { prof.full += Date.now() - a; prof.nFull++; } else { prof.dry += Date.now() - a; prof.nDry++; }
     return r;
   };
@@ -157,7 +166,7 @@ async function main() {
   const ready = shot.ready || 'window.__game && __game.control';
   const readyDt = shot.readyDt ?? 0.1, readyMax = shot.readyTimeout ?? 900;
   let gt = 0;
-  writeProg({ done: framesDone(dir, N), phase: 'loading' });
+  writeProg({ done: mode === 'final' ? framesDone(dir, N) : 0, phase: 'loading' });
   for (;;) {
     const ok = await p.evaluate(`(() => { try { return !!(${ready}); } catch { return false; } })()`);
     if (ok) break;
@@ -166,12 +175,12 @@ async function main() {
     if (started) gt += readyDt;
     if (gt > readyMax || Date.now() - t0 > 1800e3) { log('! ready timeout:', ready); await cleanup(); process.exit(3); }
   }
-  const begin = await p.evaluate(o => window.TR.begin(o), { seed: seed >>> 0, grade: shot.grade });
+  const begin = await p.evaluate(o => window.TR.begin(o), { seed: seed >>> 0, grade: shot.grade, fps });
   if (shot.extras) log('extras', JSON.stringify(await p.evaluate(x => window.TR.extras(x), shot.extras)));
   log(`ready after ${gt.toFixed(1)} s game time, ${((Date.now() - t0) / 1000).toFixed(0)} s wall`, JSON.stringify(begin));
 
   // ---------- setup ----------
-  writeProg({ done: framesDone(dir, N), phase: 'setup' });
+  writeProg({ done: mode === 'final' ? framesDone(dir, N) : 0, phase: 'setup' });
   const setupDt = shot.setupDt ?? 0.1;
   const runInput = async a => {
     if (a.down) await p.keyboard.down(a.down);
@@ -196,7 +205,7 @@ async function main() {
   await p.evaluate(c => window.TR.setCamera(c), shot.camera || { mode: 'game' });
 
   // ---------- frames ----------
-  writeProg({ done: framesDone(dir, N), phase: 'render' });
+  writeProg({ done: mode === 'final' ? framesDone(dir, N) : 0, phase: 'render' });
   const actions = (shot.actions || []).slice().sort((a, b) => a.t - b.t);
   let ai = 0, drawn = 0, wrote = 0, ema = 0, sum = 0, nSum = 0;
   const capture = ss > 1 || samples > 1 ? 'acc' : 'jpeg';
@@ -228,10 +237,10 @@ async function main() {
   const stats = await p.evaluate(() => ({ ...window.TR.stats(), errors: window.TR.errors }));
   await cleanup();
   const doneN = mode === 'final' ? framesDone(dir, N) : wrote;
-  writeProg({ done: doneN, phase: mode === 'final' && doneN === N ? 'complete' : 'partial', secPerFrame: +ema.toFixed(2), wall: Math.round((Date.now() - t0) / 1000) });
+  writeProg({ done: doneN, phase: mode === 'final' && doneN === N ? 'complete' : 'partial', secPerFrame: +ema.toFixed(2), meanSec: nSum ? +(sum / nSum).toFixed(2) : null, wall: Math.round((Date.now() - t0) / 1000) });
   const ms = (v, n) => Math.round(v / Math.max(1, n));
-  log('profile ms/tick:', JSON.stringify({ step: ms(prof.step, prof.nDry + prof.nFull), clock: ms(prof.clock, prof.nDry + prof.nFull), dry: ms(prof.dry, prof.nDry), full: ms(prof.full, prof.nFull), ticks: prof.nDry + prof.nFull }));
-  log(JSON.stringify({ mode, wrote, drawn, frames: N, wall: Math.round((Date.now() - t0) / 1000), secPerFrame: +ema.toFixed(2), meanSec: nSum ? +(sum / nSum).toFixed(2) : null, size: `${W}x${H}`, ...stats, pageErrors: errors.length }));
+  log('profile ms per sub-frame:', JSON.stringify({ dry: ms(prof.dry, prof.nDry), drawn: ms(prof.full, prof.nFull), subframes: prof.nDry + prof.nFull }));
+  log('=', JSON.stringify({ mode, wrote, drawn, frames: N, wall: Math.round((Date.now() - t0) / 1000), secPerFrame: +ema.toFixed(2), meanSec: nSum ? +(sum / nSum).toFixed(2) : null, size: `${W}x${H}`, ...stats, pageErrors: errors.length }));
   finish();
 
   function finish() {
@@ -247,5 +256,5 @@ async function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === url.fileURLToPath(import.meta.url)) {
-  main().catch(e => { console.log('! director failed:', e.stack || e.message); process.exit(4); });
+  main().catch(e => { if (stopping) return; console.log('! director failed:', e.stack || e.message); process.exit(4); });
 }
