@@ -9,13 +9,25 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
+     "eval": "(()=>{const done=new Set();let n=0;__game.scene.traverse(o=>{if(!o.isMesh)return;const p=o.geometry&&o.geometry.parameters;for(const m of [].concat(o.material)){const t=m&&m.emissiveMap,im=t&&t.image;if(!t||!im||im.width!==512||im.height!==256||!(p&&p.height===3.2))continue;m.emissiveIntensity=0.8;if(done.has(t))continue;done.add(t);const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');g.filter='blur(7px) saturate(0.35) brightness(0.9)';g.drawImage(im,-12,-12,536,280);t.image=c;t.needsUpdate=true;n++;}});return 'shop windows softened: '+n})()"
     },
     {
-     "eval": "__game.player.place(0.5, 0.15, 15.5, Math.PI)"
+     "eval": "(()=>{const t=__game.scene.children.filter(o=>o.isGroup&&Math.abs(o.position.x-13.5)<0.01&&Math.abs(o.position.y-0.05)<0.01&&o.visible);t.forEach(o=>o.visible=false);return 'passing train hidden: '+t.length})()"
     },
     {
-     "wait": 0.5
+     "eval": "(()=>{const g=__game; let rm=null; g.scene.traverse(o=>{if(!rm&&o.userData&&o.userData.rzRain&&o.rzRainSystem)rm=o}); if(!rm) return 'no rain';const R=rm.rzRainSystem; const r2=new R.constructor(2600, 14); r2.uniforms.uArea.value.set(14,14,14); r2.uniforms.uOff.value.set(0,2,0); r2.uniforms.uOp.value=0.45;g.scene.add(r2.mesh); g.onUpdate(dt=>r2.update(dt, g.engine.camera)); return 'near rain added'})()"
+    },
+    {
+     "eval": "__game.player.place(0.0, 0.15, 15.5, Math.PI)"
+    },
+    {
+     "eval": "(()=>{const g=__game;let src=null; g.scene.traverse(o=>{if(!src&&o.isPointLight)src=o}); const l=src.clone(); l.color.set(0x8fdcff); l.intensity=0; l.distance=7; l.decay=1.6; l.castShadow=false; l.name='tr_l'; g.scene.add(l);l.intensity=8; g.onUpdate(()=>{const p=g.player.pos; l.position.set(p.x-0.7,p.y+2.7,p.z-1.8)}); return 'kai rim light'})()"
+    },
+    {
+     "eval": "__game.input.setStick(0, 0.36, 0.36)"
+    },
+    {
+     "wait": 1.0
     }
    ],
    "frames": 168,
@@ -24,71 +36,50 @@
    "cut_frames": 144,
    "camera": {
     "mode": "path",
+    "anchor": "DIR.actor('kai').root.position",
+    "focusOn": "kai",
     "keys": [
      {
       "t": 0,
       "p": [
-       2.4,
-       9.0,
-       23.5
+       1.2,
+       7.0,
+       14.0
       ],
       "l": [
        0,
-       5.0,
-       -40
-      ],
-      "fov": 46,
-      "roll": 0,
-      "focus": 63.67
-     },
-     {
-      "t": 3.5,
-      "p": [
-       1.9,
-       4.0,
-       13.0
-      ],
-      "l": [
-       0.3,
-       2.4,
-       -30
+       1.0,
+       -16
       ],
       "fov": 44,
-      "roll": 0,
-      "focus": 43.06
+      "focus": null
      },
      {
       "t": 7.0,
       "p": [
-       1.2,
-       1.8,
-       -1.6
+       0.75,
+       1.72,
+       2.9
       ],
       "l": [
-       0.4,
-       1.45,
-       -20
+       -0.3,
+       1.6,
+       -30
       ],
-      "fov": 42,
-      "roll": 0,
-      "focus": 18.42
+      "fov": 40,
+      "focus": 3.0
      }
     ],
     "ease": "inOut",
     "shake": 0
    },
-   "actions": [
-    {
-     "t": 0.2,
-     "down": "KeyW"
-    }
-   ],
+   "actions": [],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Kai (walking away from camera), umbrella crowd on both pavements",
-   "lighting": "Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point.",
+   "approved": true,
+   "characters": "Kai (walking away from camera at a walk, 1.5 m/s), umbrella crowd on both pavements",
+   "lighting": "Neon blade signs, puddle glow, near-camera rain streaks; a cool rim light rides with Kai so he reads against the asphalt; Helix rings at the vanishing point.",
    "sound": "Rain bed, distant traffic hum, footsteps; piano motif enters at the cut.",
-   "notes": "",
+   "notes": "g1: camera keys are offsets from Kai's root (anchor), 14 m back and 7 m up to an over-the-shoulder 2.9 m behind him; focus on Kai. Kai walks via the analog stick (0.36 = walk, not the 3.1 m/s jog of KeyW). Run-time staging: shop-window canvases blurred and desaturated, the ambient passing train hidden, a denser near-camera rain layer (a second Rain from the game's own class), a cyan rim light following Kai.",
    "preview": {
     "status": "ok",
     "note": "Crane reads; the m1 shop-window canvases (bright product squares) stay visible on the left at 1080p."
@@ -98,20 +89,25 @@
    "id": "s02",
    "group": "g1",
    "mission": 1,
-   "beat": "The toy that un-falls: a child drops a toy, it lands, then rises back into her hand along the same arc.",
+   "beat": "The toy that un-falls: a child drops a toy, it lands, then rises back into her hand along the same arc; she looks up at Kai's glowing wrist.",
    "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
+     "eval": "(()=>{const done=new Set();let n=0;__game.scene.traverse(o=>{if(!o.isMesh)return;const p=o.geometry&&o.geometry.parameters;for(const m of [].concat(o.material)){const t=m&&m.emissiveMap,im=t&&t.image;if(!t||!im||im.width!==512||im.height!==256||!(p&&p.height===3.2))continue;m.emissiveIntensity=0.8;if(done.has(t))continue;done.add(t);const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');g.filter='blur(7px) saturate(0.35) brightness(0.9)';g.drawImage(im,-12,-12,536,280);t.image=c;t.needsUpdate=true;n++;}});return 'shop windows softened: '+n})()"
     },
     {
-     "eval": "__game.player.place(-4.2, 0.15, -8.5, Math.PI * 0.8)"
+     "eval": "(()=>{const t=__game.scene.children.filter(o=>o.isGroup&&Math.abs(o.position.x-13.5)<0.01&&Math.abs(o.position.y-0.05)<0.01&&o.visible);t.forEach(o=>o.visible=false);return 'passing train hidden: '+t.length})()"
+    },
+    {
+     "eval": "(()=>{const g=__game; let rm=null; g.scene.traverse(o=>{if(!rm&&o.userData&&o.userData.rzRain&&o.rzRainSystem)rm=o}); if(!rm) return 'no rain';const R=rm.rzRainSystem; const r2=new R.constructor(2600, 14); r2.uniforms.uArea.value.set(14,14,14); r2.uniforms.uOff.value.set(0,2,0); r2.uniforms.uOp.value=0.45;g.scene.add(r2.mesh); g.onUpdate(dt=>r2.update(dt, g.engine.camera)); return 'near rain added'})()"
+    },
+    {
+     "eval": "(()=>{const g=__game;const c=DIR.actor('child'),V=c.root.position.constructor; c.root.position.set(-7.75,0.15,-13.0); c.root.rotation.y=-2.16;const kr=g.player.char.root; let moved=0;g.scene.children.forEach(o=>{ if(!o.isGroup||o===c.root||o===kr) return; const p=o.position; if(Math.abs(p.x+9.4)<0.05&&Math.abs(p.z+14.6)<0.05){p.set(-10.2,0.15,-12.2); o.rotation.y=1.887; return;} if(Math.abs(p.y-0.15)>0.01||p.x<-9.6||p.x>-7.5) return; let sk=false; o.traverse(m=>{if(m.isSkinnedMesh)sk=true}); if(!sk) return; p.x=-10.45; moved++; });g.scene.children.forEach(o=>{if(o.isMesh&&o.geometry&&o.geometry.type==='SphereGeometry'&&o.geometry.parameters.radius===0.1&&o.material.blending===2){o.scale.setScalar(0.5); o.material.color.multiplyScalar(0.55);}});g.player.place(-9.47,0.15,-12.91,1.62); g.input.setStick(0,0,0);const k=g.player.char, hand=k.arms[1].hand, hp=new V(), floor=new V(-8.2,0.6,-13.3);let src=null; g.scene.traverse(o=>{if(!src&&o.isPointLight)src=o}); const l=src.clone(); l.color.set(0x6fe0ff); l.intensity=0; l.distance=4; l.decay=1.5; l.castShadow=false; l.name='tr_l'; g.scene.add(l);g.onUpdate(()=>{hand.getWorldPosition(hp); l.position.copy(hp); const u=Math.min(1,Math.max(0,(DIR.t-3.0)/0.8)); l.intensity=u*u*(3-2*u)*3.5; c.lookTarget = DIR.t<3.3 ? floor : hp.clone(); k.lookTarget=c.head;});return 'staged s02, walkers moved: '+moved})()"
     },
     {
      "until": "(__game.time % 4) > 3.45 && (__game.time % 4) < 3.55",
-     "timeout": 8,
-     "pace": 0
+     "timeout": 8
     }
    ],
    "frames": 132,
@@ -120,42 +116,53 @@
    "cut_frames": 108,
    "camera": {
     "mode": "path",
+    "focusOn": "child",
     "keys": [
      {
       "t": 0,
       "p": [
-       -7.3,
-       0.8,
-       -11.9
+       -9.82,
+       0.55,
+       -14.68
       ],
       "l": [
-       -8.8,
-       0.62,
-       -14.2
+       -7.75,
+       0.68,
+       -13.0
       ],
-      "fov": 31,
-      "roll": 0,
-      "focus": 2.75
+      "fov": 33
+     },
+     {
+      "t": 2.6,
+      "p": [
+       -9.77,
+       0.6,
+       -14.64
+      ],
+      "l": [
+       -7.8,
+       0.69,
+       -13.05
+      ],
+      "fov": 32
      },
      {
       "t": 5.5,
       "p": [
-       -7.45,
-       0.76,
-       -12.3
-      ],
-      "l": [
-       -8.8,
-       0.6,
+       -9.2,
+       0.82,
        -14.2
       ],
-      "fov": 29,
-      "roll": 0,
-      "focus": 2.34
+      "l": [
+       -7.75,
+       0.98,
+       -13.0
+      ],
+      "fov": 29
      }
     ],
-    "ease": "inOut",
-    "shake": 0
+    "ease": "linear",
+    "shake": 0.12
    },
    "actions": [
     {
@@ -165,10 +172,10 @@
    ],
    "grade": "rain2049",
    "approved": false,
-   "characters": "The station child (yellow coat, red boots), her mother under a red umbrella",
-   "lighting": "Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail.",
+   "characters": "The station child (yellow coat, red boots) facing Kai, who stands just off frame right; her mother and the pavement walkers are moved off the camera's side",
+   "lighting": "Low child-eye-level angle from the shop side: the wet street, lit windows and neon strips of the far side behind her; the dialogue rig on her face; a cyan glow from Kai's band rises on her as she speaks.",
    "sound": "",
-   "notes": "The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO \"Mister, your wrist is glowing.\" lands on the un-fall. Pavement walkers can cross the lens at the head: if one does, add 4 s (one toy cycle) to the setup wait.",
+   "notes": "g1: the toy loop runs on game time (4 s): the setup waits for cycle 3.5, so hand 0.5-1.5 s, fall 1.5-2.1, floor 2.1-2.9, un-fall 2.9-3.5 (trail glow scaled down), line at 3.6. Run-time staging: child moved to (-7.75,-13.0) facing Kai at (-9.47,-12.91); her look target held forward, then on Kai's wrist from 3.3 s; mother moved beside Kai; left-pavement walkers shifted to x=-10.45 (never in frame); passing train hidden; near-camera rain.",
    "preview": {
     "status": "ok",
     "note": "Toy falls, lands, rises (visible at the middle frame). The shop canvases behind her are still bright; a passer-by may cross at the head."
@@ -178,15 +185,21 @@
    "id": "s03",
    "group": "g1",
    "mission": 1,
-   "beat": "Kai's wrist: the Chronolith band glows, then flares as the street pulls toward one moment.",
+   "beat": "Kai's wrist: the Chronolith band glows, then flares as the street pulls toward one moment; the child watches it, then the focus racks to the band.",
    "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
+     "eval": "(()=>{const done=new Set();let n=0;__game.scene.traverse(o=>{if(!o.isMesh)return;const p=o.geometry&&o.geometry.parameters;for(const m of [].concat(o.material)){const t=m&&m.emissiveMap,im=t&&t.image;if(!t||!im||im.width!==512||im.height!==256||!(p&&p.height===3.2))continue;m.emissiveIntensity=0.8;if(done.has(t))continue;done.add(t);const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');g.filter='blur(7px) saturate(0.35) brightness(0.9)';g.drawImage(im,-12,-12,536,280);t.image=c;t.needsUpdate=true;n++;}});return 'shop windows softened: '+n})()"
     },
     {
-     "eval": "__game.player.place(-1.0, 0.15, -20, Math.PI)"
+     "eval": "(()=>{const t=__game.scene.children.filter(o=>o.isGroup&&Math.abs(o.position.x-13.5)<0.01&&Math.abs(o.position.y-0.05)<0.01&&o.visible);t.forEach(o=>o.visible=false);return 'passing train hidden: '+t.length})()"
+    },
+    {
+     "eval": "(()=>{const g=__game; let rm=null; g.scene.traverse(o=>{if(!rm&&o.userData&&o.userData.rzRain&&o.rzRainSystem)rm=o}); if(!rm) return 'no rain';const R=rm.rzRainSystem; const r2=new R.constructor(2600, 14); r2.uniforms.uArea.value.set(14,14,14); r2.uniforms.uOff.value.set(0,2,0); r2.uniforms.uOp.value=0.45;g.scene.add(r2.mesh); g.onUpdate(dt=>r2.update(dt, g.engine.camera)); return 'near rain added'})()"
+    },
+    {
+     "eval": "(()=>{const g=__game;const c=DIR.actor('child'),V=c.root.position.constructor; c.root.position.set(-7.75,0.15,-13.0); c.root.rotation.y=-2.16;const kr=g.player.char.root; let moved=0;g.scene.children.forEach(o=>{ if(!o.isGroup||o===c.root||o===kr) return; const p=o.position; if(Math.abs(p.x+9.4)<0.05&&Math.abs(p.z+14.6)<0.05){p.set(-10.2,0.15,-12.2); o.rotation.y=1.887; return;} if(Math.abs(p.y-0.15)>0.01||p.x<-9.6||p.x>-7.5) return; let sk=false; o.traverse(m=>{if(m.isSkinnedMesh)sk=true}); if(!sk) return; p.x=-10.45; moved++; });g.scene.children.forEach(o=>{if(o.isMesh&&o.geometry&&o.geometry.type==='SphereGeometry'&&o.geometry.parameters.radius===0.1&&o.material.blending===2){o.scale.setScalar(0.5); o.material.color.multiplyScalar(0.55);}});g.player.place(-9.47,0.15,-12.91,1.62); g.input.setStick(0,0,0);const k=g.player.char, hand=k.arms[1].hand, hp=new V(), floor=new V(-8.2,0.6,-13.3);let src=null; g.scene.traverse(o=>{if(!src&&o.isPointLight)src=o}); const l=src.clone(); l.color.set(0x6fe0ff); l.intensity=0; l.distance=3; l.decay=1.6; l.castShadow=false; l.name='tr_l'; g.scene.add(l);k.person.mixer.timeScale=0.25; TR.band=new V(); TR.softHand=()=>{const h=hand.getWorldPosition(new V()); if(!TR._sh) TR._sh=h; else TR._sh.lerp(h,0.06); return TR._sh;}; g.onUpdate(()=>{hand.getWorldPosition(hp); TR.band.copy(hp).y+=0.05; l.position.copy(hp); l.position.z-=0.25; l.position.y+=0.1; l.intensity=0.15+(k.wristBoost||0)*0.2; c.lookTarget=hp.clone(); k.lookTarget=c.head;});return 'staged s03, walkers moved: '+moved})()"
     },
     {
      "wait": 1.0
@@ -198,57 +211,59 @@
    "cut_frames": 60,
    "camera": {
     "mode": "path",
+    "anchor": "TR.softHand()",
+    "anchorLive": true,
+    "rig": false,
+    "focusOn": "DIR.t < 1.05 ? DIR.actor('child').head : TR.band",
     "keys": [
      {
       "t": 0,
       "p": [
-       -0.52,
-       0.12,
-       -0.55
+       -0.5,
+       0.06,
+       -0.26
       ],
       "l": [
        0,
-       0,
+       0.02,
        0
       ],
-      "fov": 30,
-      "roll": 0,
-      "focus": 0.77
+      "fov": 29
      },
      {
       "t": 3.5,
       "p": [
        -0.42,
-       0.07,
-       -0.46
+       0.05,
+       -0.21
       ],
       "l": [
        0,
-       0.01,
+       0.03,
        0
       ],
-      "fov": 28,
-      "roll": 0,
-      "focus": 0.63
+      "fov": 27
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "anchor": "DIR.actor('kai').arms[1].hand.getWorldPosition(__game.engine.camera.position.clone())",
-    "anchorLive": true
+    "shake": 0.1
    },
    "actions": [
     {
+     "t": 1.1,
+     "eval": "DIR.actor('kai').wristBoost = 2.5"
+    },
+    {
      "t": 1.7,
-     "eval": "DIR.actor('kai').wristBoost = 9"
+     "eval": "DIR.actor('kai').wristBoost = 10"
     }
    ],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Kai (hand and band only, idle)",
-   "lighting": "Macro close-up, DOF on the band; out-of-focus neon and rain behind.",
+   "approved": true,
+   "characters": "Kai (left hand and band, foreground), the child in the background (same staging as s02)",
+   "lighting": "Macro on the band from behind Kai's hand; focus on the child, rack to the band at 1.1 s; pre-glow at 1.1 s, flare at 1.7 s with a cyan practical light that follows the band's boost.",
    "sound": "Soft Chronolith glass chime on the flare.",
-   "notes": "",
+   "notes": "g1: the camera follows a softened copy of Kai's left hand (TR.softHand, lerp 0.06 per frame) so the idle sway reads as a gentle operator drift; Kai's idle animation runs at 0.25 speed; rig off (own practical light). Same staging as s02.",
    "preview": {
     "status": "ok",
     "note": "Band flare reads at 2.2 s; hand idle sway moves the anchored camera slightly."
@@ -258,15 +273,27 @@
    "id": "s04",
    "group": "g1",
    "mission": 1,
-   "beat": "The street clock outside Chrono Repair runs backward, one second per second.",
+   "beat": "The street clock outside Chrono Repair runs backward; Kai stops on the pavement and looks up at it.",
    "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
+     "eval": "(()=>{const done=new Set();let n=0;__game.scene.traverse(o=>{if(!o.isMesh)return;const p=o.geometry&&o.geometry.parameters;for(const m of [].concat(o.material)){const t=m&&m.emissiveMap,im=t&&t.image;if(!t||!im||im.width!==512||im.height!==256||!(p&&p.height===3.2))continue;m.emissiveIntensity=0.8;if(done.has(t))continue;done.add(t);const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');g.filter='blur(7px) saturate(0.35) brightness(0.9)';g.drawImage(im,-12,-12,536,280);t.image=c;t.needsUpdate=true;n++;}});return 'shop windows softened: '+n})()"
     },
     {
-     "wait": 0.5
+     "eval": "(()=>{const t=__game.scene.children.filter(o=>o.isGroup&&Math.abs(o.position.x-13.5)<0.01&&Math.abs(o.position.y-0.05)<0.01&&o.visible);t.forEach(o=>o.visible=false);return 'passing train hidden: '+t.length})()"
+    },
+    {
+     "eval": "(()=>{const g=__game; let rm=null; g.scene.traverse(o=>{if(!rm&&o.userData&&o.userData.rzRain&&o.rzRainSystem)rm=o}); if(!rm) return 'no rain';const R=rm.rzRainSystem; const r2=new R.constructor(2600, 14); r2.uniforms.uArea.value.set(14,14,14); r2.uniforms.uOff.value.set(0,2,0); r2.uniforms.uOp.value=0.45;g.scene.add(r2.mesh); g.onUpdate(dt=>r2.update(dt, g.engine.camera)); return 'near rain added'})()"
+    },
+    {
+     "eval": "(()=>{const g=__game; let face=null, CT=null, cs=null;\n g.scene.traverse(o=>{ if(o.isMesh&&o.geometry&&o.geometry.type==='CylinderGeometry'){const p=o.geometry.parameters; if(Math.abs(p.radiusTop-0.55)<1e-6&&Math.abs(p.height-0.12)<1e-6) face=o;}\n   for(const m of [].concat(o.material||[])) if(!CT&&m&&m.emissiveMap&&m.emissiveMap.isCanvasTexture){CT=m.emissiveMap.constructor; cs=m.emissiveMap.colorSpace;} });\n if(!face||!CT) return 'clock face not found';\n const c=document.createElement('canvas'); c.width=c.height=512; const x=c.getContext('2d'); const R=256;\n const gr=x.createRadialGradient(R,R,40,R,R,256); gr.addColorStop(0,'#f6f0e2'); gr.addColorStop(0.85,'#ece3cf'); gr.addColorStop(1,'#cfc4ad'); x.fillStyle=gr; x.fillRect(0,0,512,512);\n x.strokeStyle='#2a2620'; x.lineWidth=6; x.beginPath(); x.arc(R,R,238,0,7); x.stroke();\n x.lineWidth=2; x.beginPath(); x.arc(R,R,196,0,7); x.stroke();\n for(let i=0;i<60;i++){const a=i/60*Math.PI*2, maj=i%5===0, r0=maj?176:206, r1=230; x.lineWidth=maj?14:4; x.strokeStyle='#1d1a16'; x.beginPath(); x.moveTo(R+Math.cos(a)*r0,R+Math.sin(a)*r0); x.lineTo(R+Math.cos(a)*r1,R+Math.sin(a)*r1); x.stroke();}\n x.fillStyle='#1d1a16'; x.beginPath(); x.arc(R,R,14,0,7); x.fill();\n const t=new CT(c); t.colorSpace=cs; t.anisotropy=8; t.needsUpdate=true;\n const m0=face.material, m1=m0.clone(); m1.map=t; m1.emissiveMap=t; m1.color.set(0xffffff); m1.emissiveIntensity=0.55; m1.roughness=0.35;\n face.material=[m0,m1,m1]; return 'clock face dressed'})()"
+    },
+    {
+     "eval": "(()=>{const g=__game,k=g.player.char,V=k.root.position.constructor; let moved=0;g.scene.children.forEach(o=>{ if(!o.isGroup||o===k.root) return; const p=o.position; if(Math.abs(p.y-0.15)>0.01||p.x<6.6||p.x>8.05||p.z>-20||p.z<-48) return; let sk=false; o.traverse(m=>{if(m.isSkinnedMesh)sk=true}); if(!sk) return; p.x=8.25+(p.x-6.6)*0.3; moved++; });g.player.place(6.9,0.15,-32.2,2.16); g.input.setStick(0,0,0); TR.clockFace=new V(9.53,3.85,-34); k.lookTarget=TR.clockFace;g.onUpdate(()=>{k.lookTarget=TR.clockFace;}); return 'staged s04, walkers moved: '+moved})()"
+    },
+    {
+     "wait": 1.0
     }
    ],
    "frames": 96,
@@ -275,50 +302,51 @@
    "cut_frames": 72,
    "camera": {
     "mode": "path",
+    "focusOn": [
+     9.53,
+     3.85,
+     -34.0
+    ],
     "keys": [
      {
       "t": 0,
       "p": [
-       3.8,
-       1.75,
-       -29.4
+       5.35,
+       1.15,
+       -30.7
       ],
       "l": [
-       9.6,
-       3.45,
-       -34.2
+       9.5,
+       3.5,
+       -34.3
       ],
-      "fov": 30,
-      "roll": 0,
-      "focus": 7.72
+      "fov": 36
      },
      {
       "t": 4.0,
       "p": [
-       4.35,
-       1.8,
-       -30.2
+       5.7,
+       1.3,
+       -31.2
       ],
       "l": [
-       9.6,
-       3.5,
+       9.5,
+       3.65,
        -34.2
       ],
-      "fov": 27,
-      "roll": 0,
-      "focus": 6.82
+      "fov": 32
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0.1
    },
    "actions": [],
    "grade": "rain2049",
    "approved": false,
-   "characters": "none (passers-by in the background)",
-   "lighting": "Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame.",
+   "characters": "Kai (foreground, back to camera, soft), looking up at the clock",
+   "lighting": "Low angle through the rain: the clock face lit warm against the CHRONO REPAIR sign and the facades; focus on the clock face; the near-camera rain layer streaks in front.",
    "sound": "Clock ticks reversed (pre-echo ticks).",
-   "notes": "",
+   "notes": "g1: Kai placed at (6.9,-32.2) looking at the clock face (head look target held every frame); right-pavement walkers shifted clear of him; passing train hidden; near-camera rain.",
    "preview": {
     "status": "ok",
     "note": "Hands visibly turn back; the clock is a simple prop, so it stays mid-frame, not macro."
@@ -328,7 +356,7 @@
    "id": "s09",
    "group": "g1",
    "mission": 2,
-   "beat": "Helix lobby in lockdown red: Dr. Elias Rook, the director, holds Kai's gaze.",
+   "beat": "Helix lobby in lockdown red: Dr. Elias Rook, the director, turns from the alarm and holds Kai's gaze.",
    "url": "index.html?m=1&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control && __game.actors.iven",
    "setup": [
@@ -336,7 +364,7 @@
      "wait": 5.0
     },
     {
-     "eval": "(()=>{const g=__game, r=g.actors.rook; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=0.15; r.speed=0; g.player.place(-0.35,0,-8.4,Math.PI*1.05); r.lookTarget=g.player.char.head; g.player.char.lookTarget=r.head; return 'rook'})()"
+     "eval": "(()=>{const g=__game, r=g.actors.rook, k=g.player.char, V=r.root.position.constructor; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=0.15; r.speed=0;g.player.place(-0.35,0,-8.4,Math.PI*1.05); k.lookTarget=r.head; TR.rookAway=new V(2.6,1.5,-10.2); r.lookTarget=TR.rookAway;g.scene.children.forEach(o=>{const p=o.position; if(o.isGroup&&Math.abs(p.x)<0.01&&Math.abs(p.z+9.5)<0.01) o.visible=false; if(o.isMesh&&o.geometry&&o.geometry.parameters&&o.geometry.parameters.width===5&&o.geometry.parameters.height===2.5&&Math.abs(p.z+13.8)<0.01) o.material.color.setScalar(0.85);});const G=g.engine._light.rig; G.key.color.set(0xd8e6ff); G.rim.color.set(0xff4038); g.scene.userData.rigIntensity=2.2;let src=null; g.scene.traverse(o=>{if(!src&&o.isPointLight)src=o}); const l=src.clone(); l.color.set(0x7fe4ff); l.intensity=10; l.distance=5; l.decay=1.6; l.castShadow=false; l.name='tr_logo'; l.position.set(-0.25,2.15,-11.9); g.scene.add(l);return 'rook staged'})()"
     },
     {
      "wait": 1.5
@@ -348,55 +376,52 @@
    "cut_frames": 55,
    "camera": {
     "mode": "path",
+    "focusOn": "rook",
     "keys": [
      {
       "t": 0,
       "p": [
-       1.28,
-       1.66,
-       -8.75
+       0.22,
+       1.63,
+       -9.28
       ],
       "l": [
-       0.48,
-       1.6,
-       -11.0
+       0.4,
+       1.62,
+       -10.84
       ],
-      "fov": 34,
-      "roll": 0,
-      "focus": 2.39
+      "fov": 26
      },
      {
-      "t": 3.5,
+      "t": 3.3,
       "p": [
-       1.18,
-       1.67,
-       -9.05
+       0.3,
+       1.64,
+       -9.5
       ],
       "l": [
-       0.48,
-       1.6,
-       -11.0
+       0.42,
+       1.63,
+       -10.84
       ],
-      "fov": 32,
-      "roll": 0,
-      "focus": 2.07
+      "fov": 23
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0.08
    },
    "actions": [
     {
-     "t": 1.1,
-     "eval": "DIR.actor('rook').talk = 1.4"
+     "t": 0.95,
+     "eval": "DIR.actor('rook').lookTarget = DIR.actor('kai').head"
     }
    ],
    "grade": "rain2049",
    "approved": false,
-   "characters": "Rook (close-up), Kai (soft foreground shoulder)",
-   "lighting": "Emergency lighting after the lockdown: red key, cyan rim.",
+   "characters": "Rook (close-up, right third), Kai off frame left (Rook's eyeline)",
+   "lighting": "Emergency red down the corridor behind him (vanishing point), HELIX lettering above; dialogue rig tinted red-orange key and cyan rim at 3x; a cool light from the HELIX logo on the wall at his side.",
    "sound": "",
-   "notes": "Rook walks out of the lobby when control returns (4 s); the setup waits for that, brings him back and holds the drones off (control=false).",
+   "notes": "g1: Rook walks out when control returns (4 s); the setup waits for that, brings him back and holds the drones off (control=false). Reception desk (and its flat blue monitor) hidden, logo dimmed to 0.85. Rook looks off to his left, then turns to Kai at 0.95 s. No lip movement: there is no Rook line in the edit here.",
    "preview": {
     "status": "ok",
     "note": "Rook faces camera in the lockdown red."

@@ -1299,11 +1299,12 @@ export default {
       audio.sfxPlay('motif'); W.beam.material.opacity = 0.4;
       await game.shot([7.5, P6.P3y + 0.6, 7.5], [0, P6.P3y + 14, 0], 2.2, { fov: 50 });
       await game.say('m18band', `Pattern: Varen, Mira. ${pattern} percent. Transmitting on every clock on Earth.`);
-      const mira = game.actor('m18mira', null, 0, P6.P3y, 1.4, PI); S.byId.m18mira = mira;
+      // south side of the crown, clear of the emitter post and the horns: the beam rises behind them
+      const mira = game.actor('m18mira', null, 1.5, P6.P3y, 2.0, -PI / 2); S.byId.m18mira = mira;
       try { mira.setGhost(GHOST_MIRA); } catch (err) { void err; }
-      pl.place(0, P6.P3y, -1.6, 0);
+      pl.place(-1.5, P6.P3y, 2.0, PI / 2);
       audio.silence?.(1.2); await game.wait(0.8); audio.unsilence?.();
-      await game.shot([1.6, P6.P3y + 1.7, -2.8], [0, P6.P3y + 1.6, 1.4], 2.0, { fov: 36 });
+      await game.shot([0.3, P6.P3y + 1.8, 5.4], [0, P6.P3y + 1.5, 1.6], 2.0, { fov: 40 });
       await convo(mira, [
         ['m18mira', 'Kai.'],
         ['kai', 'Mira. I found the ring. I found... what\'s in it.'],
