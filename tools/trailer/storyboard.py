@@ -29,7 +29,7 @@ M1_FREEZE = M1_GATE + [{'eval': '__game.player.place(3, 0.15, -106, Math.PI)'}, 
 WRIST = "DIR.actor('kai').arms[1].hand.getWorldPosition(__game.engine.camera.position.clone())"
 KAI = "DIR.actor('kai').root.position"
 # the m1 shop windows are a canvas of bright product squares that reads as noise at 1080p: dim them for the trailer
-DIM_SHOPS = {'eval': "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"}
+DIM_SHOPS = {'eval': "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"}
 
 SHOTS = {}
 
@@ -64,7 +64,7 @@ shot('s02', 'g1', 1, 'The toy that un-falls: a child drops a toy, it lands, then
      actions=[{'t': 3.6, 'eval': "DIR.actor('child').talk = 1.4"}],
      grade='rain2049', chars='The station child (yellow coat, red boots), her mother under a red umbrella',
      look='Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy\'s cyan eye and its reverse trail.',
-     notes='The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO "Mister, your wrist is glowing." lands on the un-fall.')
+     notes='The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO "Mister, your wrist is glowing." lands on the un-fall. Pavement walkers can cross the lens at the head: if one does, add 4 s (one toy cycle) to the setup wait.')
 shot('s03', 'g1', 1, 'Kai\'s wrist: the Chronolith band glows, then flares as the street pulls toward one moment.',
      path([[0, [-0.52, 0.12, -0.55], [0, 0, 0], 30], [3.5, [-0.42, 0.07, -0.46], [0, 0.01, 0], 28]],
           anchor=WRIST, anchorLive=True),
@@ -115,7 +115,7 @@ shot('s07', 'g2', 1, 'Kai walks alone through the frozen station: the only thing
      look='Frozen rain beads catch the station light; Kai the only warm, moving figure.',
      sound='Kai\'s footsteps, glass-harmonic shimmer of the held rain.')
 shot('s08', 'g2', 1, 'In the crowd, a woman with Mira\'s face looks at Kai, then comes apart like light.',
-     path([[0, [-2.75, 1.63, -121.9], [-3.5, 1.58, -125.0], 30, 0, 3.2], [5.5, [-2.86, 1.62, -122.45], [-3.5, 1.58, -125.0], 28, 0, 2.65]]),
+     path([[0, [-2.75, 1.63, -121.9], [-3.5, 1.58, -125.0], 24, 0, 3.2], [5.5, [-2.86, 1.62, -122.45], [-3.5, 1.58, -125.0], 22, 0, 2.65]]),
      setup=M1_FREEZE + [{'until': '__game.flags.frozen && __game.control', 'timeout': 40},
                         {'eval': "[0,1,2].forEach(()=>{const it=__game.interactables.find(i=>i.prompt.includes('safety')); if(it) __game.useInteract(it);})"},
                         {'until': '__game.actors.mira && __game.actors.mira.root.visible', 'timeout': 60}],
@@ -182,7 +182,7 @@ shot('s36', 'g3', 3, 'Button: Kai lifts his hand to the ring. Iven: "Don\'t touc
      grade='rain2049', u=url(3), ready=M3_READY,
      chars='Iven Marr (soft foreground shoulder, right), Kai at the ring', look='Over Iven\'s shoulder; ring flare at the end.',
      notes='The edit cuts to black on the first frame of the switch distortion (about t 2.6).')
-shot('s26', 'g3', 15, 'Montage: Harrow Reach, the city that relives one day, under the Lantern\'s beam.',
+shot('s26', 'g6', 15, 'Montage: Harrow Reach, the city that relives one day, under the Lantern\'s beam.',
      path([[0, [30, 7, 22], [0, 12, -24], 48], [2.1, [28.6, 6.8, 20.6], [0, 12, -24], 48]], ease='linear'),
      setup=[{'wait': 0.5}], grade='ruin2196', u=url(15), chars='none (crowds too small to read)',
      look='The plaza and the Hollow Archive\'s copper dome in the amber haze of the lock.')
@@ -313,14 +313,56 @@ shot('s23', 'g6', 13, 'Montage: 2196, the same yards are a battlefield; shells a
      actions=[{'t': 0.6, 'eval': '__m13.W.tracer([0, 9, -2], [-4, 0.5, 42], 1.6, 7)'}, {'t': 1.3, 'eval': '__m13.W.tracer([0, 9, -2], [3, 0.5, -40], 1.6, 7)'}],
      grade='ruin2196', u=url(13), ready=M13_READY, chars='Unwritten fighters behind the barricade (small)',
      look='Smoke and dust, tracer light from the spire.')
-shot('s24', 'g6', 13, 'Sera Voss, who leads the survivors: "The future that survives long enough to remember us."',
-     path([[0, [0.75, 1.62, -2.3], [0, 1.58, 0], 30], [3.0, [0.68, 1.62, -2.1], [0, 1.58, 0], 29]], anchor="DIR.actor('sera').root.position", anchorLive=False),
-     setup=M13_WAR + [{'until': "__game.control && document.getElementById('objective-text').textContent.includes('Cross the yard')", 'timeout': 200},
-                      {'eval': "(()=>{const g=__game, s=g.actors.sera; const q = s.root.position; g.player.place(q.x - 0.4, q.y, q.z - 2.4, 0); s.root.rotation.y = Math.PI; s.speed = 0; s.lookTarget = g.player.char.head; return 'sera'})()"},
-                      {'wait': 0.8}],
+shot('s24', 'g3', 15, 'Sera Voss, who leads the survivors of 2196, at the shimmering veil of Harrow Reach.',
+     path([[0, [-2.2, 1.62, 0.35], [0, 1.58, 0], 30], [3.0, [-2.05, 1.62, 0.3], [0, 1.58, 0], 29]],
+          anchor="DIR.actor('sera').root.position", anchorLive=False),
+     setup=[{'wait': 0.8}, {'eval': "(()=>{const s=__game.actors.sera; s.root.rotation.y=-Math.PI/2; s.lookTarget=null; return s.root.position.toArray()})()"}],
      actions=[{'t': 0.62, 'eval': "DIR.actor('sera').talk = 2.6"}],
-     grade='ruin2196', u=url(13), ready=M13_READY, chars='Sera Voss (close-up), Kai (soft foreground shoulder)',
-     look='Firelight from the camp on one side, grey war light on the other.')
+     grade='ruin2196', u=url(15), chars='Sera Voss (close-up, the veil of the lock behind her)',
+     look='Amber light of the lock\'s edge, her face half in shadow.',
+     notes='VO from mission 13 ("The future that survives long enough to remember us."); her mouth moves with it (talk action).')
+
+
+# Storyboard review: every shot was run through tools/trailer/preview.mjs (640x296, cut-in / middle / cut-out) and the
+# strips were looked at. 'ok' = framing, staging and timing work; 'weak' = works but worth a better angle or a reshoot.
+PREVIEW = {
+    's01': ('ok', 'Crane reads; the m1 shop-window canvases (bright product squares) stay visible on the left at 1080p.'),
+    's02': ('ok', 'Toy falls, lands, rises (visible at the middle frame). The shop canvases behind her are still bright; a passer-by may cross at the head.'),
+    's03': ('ok', 'Band flare reads at 2.2 s; hand idle sway moves the anchored camera slightly.'),
+    's04': ('ok', 'Hands visibly turn back; the clock is a simple prop, so it stays mid-frame, not macro.'),
+    's05': ('ok', 'Kai left, the train headlight swells at the end; cut before the freeze.'),
+    's06': ('ok', 'Derailing train hangs with frozen sparks in the freeze grade.'),
+    's07': ('ok', 'Kai walks through the held station in the freeze grade.'),
+    's08': ('ok', 'She is solid at the cut-in, violet at the middle, gone at the cut-out. Check her sharpness (DOF) at full size.'),
+    's09': ('ok', 'Rook faces camera in the lockdown red.'),
+    's10': ('ok', 'Ring, Kai and Iven read; the clean lab is bright (exposure lowered to 0.82 for all mission 3 shots).'),
+    's11': ('ok', 'Iven foreground, Kai at the ring; the 2196 flicker (green growth) reads.'),
+    's12': ('ok', 'Golden hour, villagers, the stone ring; faceted low-poly trees (known mission 4 item).'),
+    's13': ('ok', 'Niko medium close-up framed by the village Ring.'),
+    's14': ('ok', 'Thriving village switches to the flooded reservoir with dead trees.'),
+    's15': ('weak', 'The dawn sky renders flat grey from this angle; the night half reads (stars, floodlights). Try a lower angle on the Sun Gate.'),
+    's16': ('ok', 'Hensel in his doorway, warm shop light, Kai\'s shoulder.'),
+    's17': ('ok', 'Overgrown tower canyon with haze and the temporal zones.'),
+    's18': ('ok', 'Strong: Kai under his own statue, plaque legible.'),
+    's19': ('ok', 'Strong: the Witness only from behind, Kai beyond the glass. His face and wrist never face camera.'),
+    's20': ('ok', 'The freeze arrives at the end (desaturation). Few people read in the square at preview size.'),
+    's21': ('ok', 'Strong: the cyan afterimage stays as Kai slips through the shutter.'),
+    's22': ('ok', 'Debris in flight with the reversal rings; the corridor itself is plain.'),
+    's23': ('ok', 'The spire and its field ring at dusk; tracer timing not caught in three stills: check at full rate.'),
+    's24': ('ok', 'Sera close-up at the veil; the skyline behind her is simple boxes.'),
+    's25': ('ok', 'Armillary, scavengers and their gauntlet glow against the dusk.'),
+    's26': ('ok', 'The plaza and the copper dome in the amber haze; plain but readable for one second.'),
+    's27': ('ok', 'Strong: Yara frozen mid-stride inside the containment rings.'),
+    's28': ('weak', 'Night highway with wrecked traffic in rain; the flood is not legible at preview size.'),
+    's29': ('ok', 'The pearl spire against the dusk skyline.'),
+    's30': ('ok', 'Looking up the ruined tower.'),
+    's31': ('ok', 'Dead trees in the reservoir, overcast.'),
+    's32': ('ok', 'Lantern Hall trusses under violet storm light.'),
+    's33': ('ok', 'Kai medium shot; 2196 then 2026 wash over him.'),
+    's34': ('weak', 'A rainy 2049 street; that it is held (people mid-step, rain in the air) does not read at preview size.'),
+    's35': ('ok', 'Symmetric final image, Kai small before the ring.'),
+    's36': ('ok', 'Over Iven\'s shoulder; the ring flares into the switch at the end.'),
+}
 
 # ------------------------------------------------------------------------------------------------------------------
 # EDL (edit decision list): the trailer in order. Boundaries are rounded to whole frames.
@@ -511,8 +553,11 @@ def write(check=False):
         out = dict(id=sid, group=s['group'], mission=s['mission'], beat=s['beat'], url=s['url'], ready=s['ready'],
                    setup=s['setup'], frames=frames, handles=HANDLES, fps=FPS, cut_frames=cut[sid],
                    camera=s['camera'], actions=s['actions'], grade=s['grade'], approved=False,
-                   characters=s['characters'], lighting=s['lighting'], sound=s['sound'], notes=s['notes'])
+                   characters=s['characters'], lighting=s['lighting'], sound=s['sound'], notes=s['notes'],
+                   preview=dict(zip(('status', 'note'), PREVIEW.get(sid, ('pending', 'not previewed')))))
         groups[s['group']].append(out)
+        if not s['url'].startswith('index.html?m=') or int(s['url'].split('m=')[1].split('&')[0]) > 17:
+            problems.append(f'{sid}: URL outside missions 1-18: {s["url"]}')
     for p in problems: print('PROBLEM', p)
     if check: return data, groups
     with open(os.path.join(OUT, 'trailer.json'), 'w') as f: json.dump(data, f, indent=1, ensure_ascii=False)
@@ -538,8 +583,8 @@ edit order) · `timeline[]` `{t, dur, shot | card, transition: cut | dissolve | 
 `vo[]` `{t, speaker, text, key, mission, key_pending, clip_in, clip_out, notes}` · `cards[]` `{id, t, dur, text,
 style: black | line | title | end}` · `music[]` `{t, section, bpm (null = free time), notes}` · `hits[]` (s) ·
 `silences[]` `{t, dur, what}` · `sfx[]` `{t, cue, notes}` · `store_cut[]` `{shot, in, dur}` (in = seconds into the shot
-clip, which starts at the head handle) · extensions: `render` `{width 1920, height 886, gfx}` (what the recorder
-draws), `output` `{width, height, letterbox 2.39, active_height 804}`, `handles`, `store_cut_size`.
+clip, which starts at the head handle) · extensions: `render` `{width, height, gfx}` (what the recorder
+draws: 2.167:1, currently 1280×590, see Director), `output` `{width, height, letterbox 2.39, active_height 804}`, `handles`, `store_cut_size`.
 
 - `transition` says how an event **begins**. `dip` comes up from black over 6 frames. `dissolve` is a 6-frame cross
   dissolve. `switch` is a hard cut in which the last 4 frames of the outgoing shot and the first 4 frames of the
@@ -626,12 +671,12 @@ def doc(data, groups):
     L += ['', '## Shot list', '',
           'Times are trailer times. `rec` is the recorded length including both handles. Camera keys and actions are in '
           'the group files.', '',
-          '| shot | group | mission | trailer | cut (fr) | rec (fr) | camera | grade | on screen | light and mood |', '|---|---|---|---|---|---|---|---|---|---|']
+          '| shot | group | mission | trailer | cut (fr) | rec (fr) | camera | grade | on screen | light and mood | preview |', '|---|---|---|---|---|---|---|---|---|---|---|']
     for sid in data['order']:
         s = sh[sid]; it = next(i for i in data['timeline'] if i.get('shot') == sid); c = s['camera']
         k = c.get('keys') or []
         cam = f'{c["mode"]}, {len(k)} keys, fov {k[0]["fov"]}→{k[-1]["fov"]}' + (', anchored' if c.get('anchor') else '') + (f', shake {c["shake"]}' if c.get('shake') else '')
-        L.append(f'| {sid} | {s["group"]} | {s["mission"]} | {fmt_t(it["t"])} | {s["cut_frames"]} | {s["frames"]} | {cam} | {s["grade"]} | {s["characters"]} | {s["lighting"]} |')
+        L.append(f'| {sid} | {s["group"]} | {s["mission"]} | {fmt_t(it["t"])} | {s["cut_frames"]} | {s["frames"]} | {cam} | {s["grade"]} | {s["characters"]} | {s["lighting"]} | **{s["preview"]["status"]}**: {s["preview"]["note"]} |')
     L += ['', '### Groups', '', '| group | shots | frames | missions |', '|---|---|---|---|']
     for g, lst in groups.items():
         L.append(f'| {g} | {" ".join(s["id"] for s in lst)} | {sum(s["frames"] for s in lst)} | {", ".join(sorted({str(s["mission"]) for s in lst}, key=int))} |')
@@ -654,8 +699,8 @@ def doc(data, groups):
     L += ['', '## Sound-design cues', '', '| time | cue | notes |', '|---|---|---|']
     for x in data['sfx']: L.append(f'| {x["t"]:.2f} | {x["cue"]} | {x["notes"]} |')
     L += ['', '## Store cut (30 s)', '',
-          'App-preview style: in-app footage only, no cards and no letterbox, the full 1920×886 frame (crop the 1080 '
-          'output never; cut from the shot clips). `in` is seconds into the shot clip.', '',
+          'App-preview style: in-app footage only, no cards and no letterbox, the full 2.167:1 render frame delivered at '
+          '1920×886 (`store_cut_size`). Cut it from the shot clips, never from the 1080 output. `in` is seconds into the shot clip.', '',
           '| # | shot | in | dur | starts at |', '|---|---|---|---|---|']
     acc = 0.0
     for n, x in enumerate(data['store_cut'], 1):

@@ -61,7 +61,11 @@
    "characters": "Kai (tiny, at the landing)",
    "lighting": "Morning haze, trees on the roofs, the broken tram viaduct; birds.",
    "sound": "2196 bed: processed wind, birds, a far bell. Sera's line over it.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Overgrown tower canyon with haze and the temporal zones."
+   }
   },
   {
    "id": "s18",
@@ -127,7 +131,11 @@
    "characters": "Kai (back to camera, small, looking up at his own statue)",
    "lighting": "Low angle, the statue against the bright sky; candles and stones at the plinth.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Strong: Kai under his own statue, plaque legible."
+   }
   },
   {
    "id": "s22",
@@ -193,7 +201,11 @@
    "characters": "Kai at the threshold (edge of frame)",
    "lighting": "Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward.",
    "sound": "",
-   "notes": "The corridor's hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight."
+   "notes": "The corridor's hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight.",
+   "preview": {
+    "status": "ok",
+    "note": "Debris in flight with the reversal rings; the corridor itself is plain."
+   }
   },
   {
    "id": "s27",
@@ -256,7 +268,11 @@
    "characters": "Yara (frozen)",
    "lighting": "Containment rings, cold field light.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Strong: Yara frozen mid-stride inside the containment rings."
+   }
   },
   {
    "id": "s28",
@@ -319,7 +335,11 @@
    "characters": "none (the stalled N4 bus far down the road)",
    "lighting": "Night rain on flood water, wrecked traffic, highway lights.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "weak",
+    "note": "Night highway with wrecked traffic in rain; the flood is not legible at preview size."
+   }
   },
   {
    "id": "s30",
@@ -382,7 +402,11 @@
    "characters": "none",
    "lighting": "Looking up the broken tower into storm light.",
    "sound": "",
-   "notes": "?m18part=4 is mission 18's own chapter start (development switch); nothing from later missions is loaded."
+   "notes": "?m18part=4 is mission 18's own chapter start (development switch); nothing from later missions is loaded.",
+   "preview": {
+    "status": "ok",
+    "note": "Looking up the ruined tower."
+   }
   },
   {
    "id": "s32",
@@ -445,7 +469,11 @@
    "characters": "Survivors in the hall (small)",
    "lighting": "Violet storm light over the iron trusses.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Lantern Hall trusses under violet storm light."
+   }
   }
  ]
 }

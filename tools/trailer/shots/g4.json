@@ -69,7 +69,11 @@
    "characters": "Kai walking in, Tala and villagers",
    "lighting": "Low warm sun, long shadows, dust motes; the stone ring at the heart of the village.",
    "sound": "Wind and water bed; the switch transition lands on the cut.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Golden hour, villagers, the stone ring; faceted low-poly trees (known mission 4 item)."
+   }
   },
   {
    "id": "s13",
@@ -140,7 +144,11 @@
    "characters": "Niko (close-up), Kai (soft foreground shoulder)",
    "lighting": "Warm key from the low sun, cool sky fill; shallow focus.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Niko medium close-up framed by the village Ring."
+   }
   },
   {
    "id": "s14",
@@ -212,7 +220,11 @@
    "characters": "Villagers in the lanes (thriving); dead trees standing in the water (flooded)",
    "lighting": "Golden hour to overcast 2049 daylight; water level rises over the same houses.",
    "sound": "Switch stinger, then the causal-consequence resonance under the dam hum.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Thriving village switches to the flooded reservoir with dead trees."
+   }
   },
   {
    "id": "s15",
@@ -284,7 +296,11 @@
    "characters": "Keepers and acolytes on the court (too small to read)",
    "lighting": "Over the drum toward the sunrise, then the same view at night: a starfield over Helix floodlights and scaffolds.",
    "sound": "Night: glass tones under Mira's recorded voice.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "weak",
+    "note": "The dawn sky renders flat grey from this angle; the night half reads (stars, floodlights). Try a lower angle on the Sun Gate."
+   }
   },
   {
    "id": "s25",
@@ -350,7 +366,11 @@
    "characters": "Dace (scavenger boss), scavenger lookouts",
    "lighting": "Sunset behind the broken rim, Venus low in the west, green gauntlet glow.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Armillary, scavengers and their gauntlet glow against the dusk."
+   }
   },
   {
    "id": "s31",
@@ -416,7 +436,11 @@
    "characters": "none",
    "lighting": "Flat overcast light on the water, the dam across the valley.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Dead trees in the reservoir, overcast."
+   }
   }
  ]
 }

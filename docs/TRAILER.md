@@ -146,6 +146,35 @@ music table.
 | Score | original composition for this trailer | — |
 | Instrument samples | none yet. The score step records every sample set used here (name, version, URL, licence, what it plays) | as each licence requires |
 
+## Render budget and how to work
+
+- **Frames.** The recordings total 3200 frames (2810 cut frames plus 12-frame handles on both sides of 36 shots), in
+  six groups of 498-559 frames. Render size and cost are set in "Director" below (`trailer.json` `render`, currently
+  1280×590). In the storyboard previews, a mission load plus its setup took 1-9 minutes per shot (the load average was
+  13-22), and setups with long `until` chains (s19, s21) take the longest.
+- **Before rendering a group**, run `node tools/trailer/preview.mjs gN` (one browser) and look at every strip. The
+  storyboard verdicts are in each shot's `preview` field and in the shot list. Set `approved: true` only after looking
+  at the frames.
+- **Camera keys are resolution-independent.** `fov` is vertical, for the 2.167:1 frame at any size.
+
+## Open questions
+
+1. **Score instruments.** Are the game's procedural instruments enough, or should the score step use CC0 / CC BY
+   samples (VSCO 2 Community Edition strings and percussion, Salamander Grand Piano)? The storyboard assumes felt
+   piano, low strings and bowed metal of sample quality.
+2. **Unrecorded line.** Hensel's "Not today." (mission 6) is not in assets/voice: the voice build skips ternary
+   lines. The trailer does not use it, but every line it does use is recorded. The key it would get is `1qshwuv`.
+3. **Mission 1 shop windows.** The shop-window canvases show bright random product squares that read as noise in
+   s01, s02 and s04. The run-time dimming in the setup does not reach them (static batching). A one-line material
+   change in mission 1 would fix them for the game too. That change belongs to the missions workflow.
+4. **Weak shots** (see the preview column): s15 (flat dawn sky at the Sky House), s28 (the flood does not read) and
+   s34 (the held second does not read). Each has an alternative in its notes. They are one-second montage shots or a
+   dissolve, so the edit survives either way.
+5. **Spoiler line.** Is "For ending it." over the statue acceptable to the owner? It is the game's own mission 10
+   line and the stakes of Act III's opening, but it is the strongest claim in the trailer.
+6. **Length.** The trailer is 117 s. To get it under 90 s, drop s09, s16, s25 and s29 and shorten the hook by 8 s.
+   The beat map keeps the music sections intact either way.
+
 <!-- BEGIN GENERATED (tools/trailer/storyboard.py) -->
 
 ## Beat map
@@ -180,7 +209,7 @@ Total **117.08 s** (2810 frames at 24 fps), 36 shots, 7 cards. Hits (cuts on the
 | 1:19.08 | 2.00 | **s21** (M12) Montage: Echo Step — Kai leaves an afterimage and slips through the jammed lockdown shutter. | cut |  |  | 79.08 Echo Step |
 | 1:21.08 | 2.04 | **s22** (M11) Montage: Halden General's reversed East Corridor: a gurney, a cylinder and glass fly back to where they were at 08:14. | cut |  |  | 81.08 inversion: reversed rain swell |
 | 1:23.12 | 2.04 | **s23** (M13) Montage: 2196, the same yards are a battlefield; shells arc out of the stabilizer's ring. | cut | 83.30 sera: "This is not the future." |  | 83.12 returned shells |
-| 1:25.17 | 2.04 | **s24** (M13) Sera Voss, who leads the survivors: "The future that survives long enough to remember us." | cut | 85.30 sera: "The future that survives long enough to remember us." | 87.21 **montage · half-bar cuts** (118 BPM) |  |
+| 1:25.17 | 2.04 | **s24** (M15) Sera Voss, who leads the survivors of 2196, at the shimmering veil of Harrow Reach. | cut | 85.30 sera: "The future that survives long enough to remember us." | 87.21 **montage · half-bar cuts** (118 BPM) |  |
 | 1:27.21 | 1.00 | **s25** (M7) Montage: dusk on the ruined summit, 2196; the scavenger chief Dace on the pillar, gauntlet glowing. | cut |  | 87.21 **montage · half-bar cuts** (118 BPM) |  |
 | 1:28.21 | 1.04 | **s26** (M15) Montage: Harrow Reach, the city that relives one day, under the Lantern's beam. | cut |  |  |  |
 | 1:29.25 | 1.00 | **s27** (M8) Montage: Dr. Yara Lind, stopped mid-stride inside the containment field for three days. | cut |  |  |  |
@@ -202,44 +231,44 @@ Total **117.08 s** (2810 frames at 24 fps), 36 shots, 7 cards. Hits (cuts on the
 
 Times are trailer times. `rec` is the recorded length including both handles. Camera keys and actions are in the group files.
 
-| shot | group | mission | trailer | cut (fr) | rec (fr) | camera | grade | on screen | light and mood |
-|---|---|---|---|---|---|---|---|---|---|
-| s01 | g1 | 1 | 0:01.50 | 144 | 168 | path, 3 keys, fov 46→42 | rain2049 | Kai (walking away from camera), umbrella crowd on both pavements | Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point. |
-| s02 | g1 | 1 | 0:07.50 | 108 | 132 | path, 2 keys, fov 31→29 | rain2049 | The station child (yellow coat, red boots), her mother under a red umbrella | Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail. |
-| s03 | g1 | 1 | 0:12.00 | 60 | 84 | path, 2 keys, fov 30→28, anchored | rain2049 | Kai (hand and band only, idle) | Macro close-up, DOF on the band; out-of-focus neon and rain behind. |
-| s04 | g1 | 1 | 0:14.50 | 72 | 96 | path, 2 keys, fov 30→27 | rain2049 | none (passers-by in the background) | Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame. |
-| s05 | g2 | 1 | 0:17.50 | 54 | 78 | path, 2 keys, fov 40→39 | rain2049 | Jun Park (transit operator), three civilians on the platform, Kai (foreground left) | Warm platform canopy light, the yellow edge strip, the stopped station clock. |
-| s06 | g2 | 1 | 0:19.75 | 96 | 120 | path, 2 keys, fov 40→38 | rain2049 | Frozen civilians, Jun | The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads. |
-| s07 | g2 | 1 | 0:23.75 | 96 | 120 | path, 2 keys, fov 40→40, anchored | rain2049 | Kai (tracking side-on), frozen commuters and umbrellas between camera and Kai | Frozen rain beads catch the station light; Kai the only warm, moving figure. |
-| s08 | g2 | 1 | 0:27.75 | 108 | 132 | path, 2 keys, fov 30→28 | rain2049 | Mira (close-up, looking at Kai), crowd behind | Helix entrance glow behind her; her violet dissolve (the mission's ghost shader). |
-| s09 | g1 | 2 | 0:35.00 | 55 | 79 | path, 2 keys, fov 34→32 | rain2049 | Rook (close-up), Kai (soft foreground shoulder) | Emergency lighting after the lockdown: red key, cyan rim. |
-| s10 | g3 | 3 | 0:37.29 | 74 | 98 | path, 2 keys, fov 46→43 | rain2049 | Kai (small, foreground left, looking up at the ring); Iven by the consoles | The ring's cyan core light; the chamber in shadow, its rim light strip on the floor. |
-| s11 | g3 | 3 | 0:40.38 | 111 | 135 | path, 2 keys, fov 40→38, shake 0.15 | rain2049 | Kai (three-quarter back, hand toward the ring) | 2026: amber work lights, scaffolds, plastic sheets; 2049: clean cyan lab; 2196: green-grey ruin. Same ring in all three. |
-| s12 | g4 | 4 | 0:45.00 | 74 | 98 | path, 2 keys, fov 44→48 | ancient | Kai walking in, Tala and villagers | Low warm sun, long shadows, dust motes; the stone ring at the heart of the village. |
-| s13 | g4 | 4 | 0:48.08 | 74 | 98 | path, 2 keys, fov 32→30 | ancient | Niko (close-up), Kai (soft foreground shoulder) | Warm key from the low sun, cool sky fill; shallow focus. |
-| s14 | g4 | 5 | 0:51.17 | 110 | 134 | path, 2 keys, fov 50→49 | ancient | Villagers in the lanes (thriving); dead trees standing in the water (flooded) | Golden hour to overcast 2049 daylight; water level rises over the same houses. |
-| s15 | g4 | 7 | 0:55.75 | 74 | 98 | path, 2 keys, fov 48→47 | ancient | Keepers and acolytes on the court (too small to read) | Over the drum toward the sunrise, then the same view at night: a starfield over Helix floodlights and scaffolds. |
-| s16 | g2 | 6 | 0:58.83 | 56 | 80 | path, 2 keys, fov 34→32 | rain2049 | Oskar Hensel (78, clockmaker) in his doorway, Kai (foreground shoulder) | Rain on the old quarter, warm shop light from inside the door. |
-| s17 | g5 | 14 | 1:01.17 | 110 | 134 | path, 2 keys, fov 50→49 | ruin2196 | Kai (tiny, at the landing) | Morning haze, trees on the roofs, the broken tram viaduct; birds. |
-| s18 | g5 | 14 | 1:05.75 | 74 | 98 | path, 2 keys, fov 40→38 | ruin2196 | Kai (back to camera, small, looking up at his own statue) | Low angle, the statue against the bright sky; candles and stones at the plinth. |
-| s19 | g6 | 12 | 1:08.83 | 93 | 117 | path, 2 keys, fov 32→30 | rain2049 | The Witness (back and shoulder only, never his face), Kai behind the glass (in focus) | Test Hall C lights up on him; the gallery glass reflects; his coat a dark silhouette. |
-| s20 | g6 | 9 | 1:15.00 | 98 | 122 | path, 2 keys, fov 42→40 | rain2049 | Continuum troopers in white armour, commuters, the tram | Morning light on the square; the freeze desaturates it as the reset arrives. |
-| s21 | g6 | 12 | 1:19.08 | 48 | 72 | path, 2 keys, fov 50→50 | rain2049 | Kai and his afterimage | Lockdown red on the shutter, cyan afterimage. |
-| s22 | g5 | 11 | 1:21.08 | 49 | 73 | path, 2 keys, fov 48→46 | rain2049 | Kai at the threshold (edge of frame) | Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward. |
-| s23 | g6 | 13 | 1:23.12 | 49 | 73 | path, 2 keys, fov 48→48, shake 0.12 | ruin2196 | Unwritten fighters behind the barricade (small) | Smoke and dust, tracer light from the spire. |
-| s24 | g6 | 13 | 1:25.17 | 49 | 73 | path, 2 keys, fov 30→29, anchored | ruin2196 | Sera Voss (close-up), Kai (soft foreground shoulder) | Firelight from the camp on one side, grey war light on the other. |
-| s25 | g4 | 7 | 1:27.21 | 24 | 48 | path, 2 keys, fov 44→43 | ruin2196 | Dace (scavenger boss), scavenger lookouts | Sunset behind the broken rim, Venus low in the west, green gauntlet glow. |
-| s26 | g3 | 15 | 1:28.21 | 25 | 49 | path, 2 keys, fov 48→48 | ruin2196 | none (crowds too small to read) | The plaza and the Hollow Archive's copper dome in the amber haze of the lock. |
-| s27 | g5 | 8 | 1:29.25 | 24 | 48 | path, 2 keys, fov 40→39 | rain2049 | Yara (frozen) | Containment rings, cold field light. |
-| s28 | g5 | 18 | 1:30.25 | 25 | 49 | path, 2 keys, fov 50→50 | rain2049 | none (the stalled N4 bus far down the road) | Night rain on flood water, wrecked traffic, highway lights. |
-| s29 | g6 | 10 | 1:31.29 | 24 | 48 | path, 2 keys, fov 44→44 | ruin2196 | none | Dusk, the pearl spire lit gold. |
-| s30 | g5 | 18 | 1:32.29 | 24 | 48 | path, 2 keys, fov 54→54 | ruin2196 | none | Looking up the broken tower into storm light. |
-| s31 | g4 | 5 | 1:33.29 | 25 | 49 | path, 2 keys, fov 52→52 | neutral | none | Flat overcast light on the water, the dam across the valley. |
-| s32 | g5 | 18 | 1:34.33 | 24 | 48 | path, 2 keys, fov 50→50 | ruin2196 | Survivors in the hall (small) | Violet storm light over the iron trusses. |
-| s33 | g3 | 3 | 1:35.33 | 25 | 49 | path, 2 keys, fov 40→39, shake 0.35 | rain2049 | Kai (medium shot, facing camera, the ring behind camera) | Hard cyan key from the ring core, era colour washing over his face on each switch. |
-| s34 | g6 | 13 | 1:36.38 | 24 | 48 | path, 2 keys, fov 44→44 | rain2049 | Held residents, a courier, an umbrella | Grey dawn, beads of rain frozen in the air. |
-| s35 | g3 | 3 | 1:38.58 | 96 | 120 | path, 2 keys, fov 40→38 | rain2049 | Kai (silhouette, back to camera, centred) | Symmetric, the ring core the only bright thing; slow push-in. |
-| s36 | g3 | 3 | 1:49.58 | 60 | 84 | path, 2 keys, fov 34→32 | rain2049 | Iven Marr (soft foreground shoulder, right), Kai at the ring | Over Iven's shoulder; ring flare at the end. |
+| shot | group | mission | trailer | cut (fr) | rec (fr) | camera | grade | on screen | light and mood | preview |
+|---|---|---|---|---|---|---|---|---|---|---|
+| s01 | g1 | 1 | 0:01.50 | 144 | 168 | path, 3 keys, fov 46→42 | rain2049 | Kai (walking away from camera), umbrella crowd on both pavements | Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point. | **ok**: Crane reads; the m1 shop-window canvases (bright product squares) stay visible on the left at 1080p. |
+| s02 | g1 | 1 | 0:07.50 | 108 | 132 | path, 2 keys, fov 31→29 | rain2049 | The station child (yellow coat, red boots), her mother under a red umbrella | Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail. | **ok**: Toy falls, lands, rises (visible at the middle frame). The shop canvases behind her are still bright; a passer-by may cross at the head. |
+| s03 | g1 | 1 | 0:12.00 | 60 | 84 | path, 2 keys, fov 30→28, anchored | rain2049 | Kai (hand and band only, idle) | Macro close-up, DOF on the band; out-of-focus neon and rain behind. | **ok**: Band flare reads at 2.2 s; hand idle sway moves the anchored camera slightly. |
+| s04 | g1 | 1 | 0:14.50 | 72 | 96 | path, 2 keys, fov 30→27 | rain2049 | none (passers-by in the background) | Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame. | **ok**: Hands visibly turn back; the clock is a simple prop, so it stays mid-frame, not macro. |
+| s05 | g2 | 1 | 0:17.50 | 54 | 78 | path, 2 keys, fov 40→39 | rain2049 | Jun Park (transit operator), three civilians on the platform, Kai (foreground left) | Warm platform canopy light, the yellow edge strip, the stopped station clock. | **ok**: Kai left, the train headlight swells at the end; cut before the freeze. |
+| s06 | g2 | 1 | 0:19.75 | 96 | 120 | path, 2 keys, fov 40→38 | rain2049 | Frozen civilians, Jun | The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads. | **ok**: Derailing train hangs with frozen sparks in the freeze grade. |
+| s07 | g2 | 1 | 0:23.75 | 96 | 120 | path, 2 keys, fov 40→40, anchored | rain2049 | Kai (tracking side-on), frozen commuters and umbrellas between camera and Kai | Frozen rain beads catch the station light; Kai the only warm, moving figure. | **ok**: Kai walks through the held station in the freeze grade. |
+| s08 | g2 | 1 | 0:27.75 | 108 | 132 | path, 2 keys, fov 24→22 | rain2049 | Mira (close-up, looking at Kai), crowd behind | Helix entrance glow behind her; her violet dissolve (the mission's ghost shader). | **ok**: She is solid at the cut-in, violet at the middle, gone at the cut-out. Check her sharpness (DOF) at full size. |
+| s09 | g1 | 2 | 0:35.00 | 55 | 79 | path, 2 keys, fov 34→32 | rain2049 | Rook (close-up), Kai (soft foreground shoulder) | Emergency lighting after the lockdown: red key, cyan rim. | **ok**: Rook faces camera in the lockdown red. |
+| s10 | g3 | 3 | 0:37.29 | 74 | 98 | path, 2 keys, fov 46→43 | rain2049 | Kai (small, foreground left, looking up at the ring); Iven by the consoles | The ring's cyan core light; the chamber in shadow, its rim light strip on the floor. | **ok**: Ring, Kai and Iven read; the clean lab is bright (exposure lowered to 0.82 for all mission 3 shots). |
+| s11 | g3 | 3 | 0:40.38 | 111 | 135 | path, 2 keys, fov 40→38, shake 0.15 | rain2049 | Kai (three-quarter back, hand toward the ring) | 2026: amber work lights, scaffolds, plastic sheets; 2049: clean cyan lab; 2196: green-grey ruin. Same ring in all three. | **ok**: Iven foreground, Kai at the ring; the 2196 flicker (green growth) reads. |
+| s12 | g4 | 4 | 0:45.00 | 74 | 98 | path, 2 keys, fov 44→48 | ancient | Kai walking in, Tala and villagers | Low warm sun, long shadows, dust motes; the stone ring at the heart of the village. | **ok**: Golden hour, villagers, the stone ring; faceted low-poly trees (known mission 4 item). |
+| s13 | g4 | 4 | 0:48.08 | 74 | 98 | path, 2 keys, fov 32→30 | ancient | Niko (close-up), Kai (soft foreground shoulder) | Warm key from the low sun, cool sky fill; shallow focus. | **ok**: Niko medium close-up framed by the village Ring. |
+| s14 | g4 | 5 | 0:51.17 | 110 | 134 | path, 2 keys, fov 50→49 | ancient | Villagers in the lanes (thriving); dead trees standing in the water (flooded) | Golden hour to overcast 2049 daylight; water level rises over the same houses. | **ok**: Thriving village switches to the flooded reservoir with dead trees. |
+| s15 | g4 | 7 | 0:55.75 | 74 | 98 | path, 2 keys, fov 48→47 | ancient | Keepers and acolytes on the court (too small to read) | Over the drum toward the sunrise, then the same view at night: a starfield over Helix floodlights and scaffolds. | **weak**: The dawn sky renders flat grey from this angle; the night half reads (stars, floodlights). Try a lower angle on the Sun Gate. |
+| s16 | g2 | 6 | 0:58.83 | 56 | 80 | path, 2 keys, fov 34→32 | rain2049 | Oskar Hensel (78, clockmaker) in his doorway, Kai (foreground shoulder) | Rain on the old quarter, warm shop light from inside the door. | **ok**: Hensel in his doorway, warm shop light, Kai's shoulder. |
+| s17 | g5 | 14 | 1:01.17 | 110 | 134 | path, 2 keys, fov 50→49 | ruin2196 | Kai (tiny, at the landing) | Morning haze, trees on the roofs, the broken tram viaduct; birds. | **ok**: Overgrown tower canyon with haze and the temporal zones. |
+| s18 | g5 | 14 | 1:05.75 | 74 | 98 | path, 2 keys, fov 40→38 | ruin2196 | Kai (back to camera, small, looking up at his own statue) | Low angle, the statue against the bright sky; candles and stones at the plinth. | **ok**: Strong: Kai under his own statue, plaque legible. |
+| s19 | g6 | 12 | 1:08.83 | 93 | 117 | path, 2 keys, fov 32→30 | rain2049 | The Witness (back and shoulder only, never his face), Kai behind the glass (in focus) | Test Hall C lights up on him; the gallery glass reflects; his coat a dark silhouette. | **ok**: Strong: the Witness only from behind, Kai beyond the glass. His face and wrist never face camera. |
+| s20 | g6 | 9 | 1:15.00 | 98 | 122 | path, 2 keys, fov 42→40 | rain2049 | Continuum troopers in white armour, commuters, the tram | Morning light on the square; the freeze desaturates it as the reset arrives. | **ok**: The freeze arrives at the end (desaturation). Few people read in the square at preview size. |
+| s21 | g6 | 12 | 1:19.08 | 48 | 72 | path, 2 keys, fov 50→50 | rain2049 | Kai and his afterimage | Lockdown red on the shutter, cyan afterimage. | **ok**: Strong: the cyan afterimage stays as Kai slips through the shutter. |
+| s22 | g5 | 11 | 1:21.08 | 49 | 73 | path, 2 keys, fov 48→46 | rain2049 | Kai at the threshold (edge of frame) | Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward. | **ok**: Debris in flight with the reversal rings; the corridor itself is plain. |
+| s23 | g6 | 13 | 1:23.12 | 49 | 73 | path, 2 keys, fov 48→48, shake 0.12 | ruin2196 | Unwritten fighters behind the barricade (small) | Smoke and dust, tracer light from the spire. | **ok**: The spire and its field ring at dusk; tracer timing not caught in three stills: check at full rate. |
+| s24 | g3 | 15 | 1:25.17 | 49 | 73 | path, 2 keys, fov 30→29, anchored | ruin2196 | Sera Voss (close-up, the veil of the lock behind her) | Amber light of the lock's edge, her face half in shadow. | **ok**: Sera close-up at the veil; the skyline behind her is simple boxes. |
+| s25 | g4 | 7 | 1:27.21 | 24 | 48 | path, 2 keys, fov 44→43 | ruin2196 | Dace (scavenger boss), scavenger lookouts | Sunset behind the broken rim, Venus low in the west, green gauntlet glow. | **ok**: Armillary, scavengers and their gauntlet glow against the dusk. |
+| s26 | g6 | 15 | 1:28.21 | 25 | 49 | path, 2 keys, fov 48→48 | ruin2196 | none (crowds too small to read) | The plaza and the Hollow Archive's copper dome in the amber haze of the lock. | **ok**: The plaza and the copper dome in the amber haze; plain but readable for one second. |
+| s27 | g5 | 8 | 1:29.25 | 24 | 48 | path, 2 keys, fov 40→39 | rain2049 | Yara (frozen) | Containment rings, cold field light. | **ok**: Strong: Yara frozen mid-stride inside the containment rings. |
+| s28 | g5 | 18 | 1:30.25 | 25 | 49 | path, 2 keys, fov 50→50 | rain2049 | none (the stalled N4 bus far down the road) | Night rain on flood water, wrecked traffic, highway lights. | **weak**: Night highway with wrecked traffic in rain; the flood is not legible at preview size. |
+| s29 | g6 | 10 | 1:31.29 | 24 | 48 | path, 2 keys, fov 44→44 | ruin2196 | none | Dusk, the pearl spire lit gold. | **ok**: The pearl spire against the dusk skyline. |
+| s30 | g5 | 18 | 1:32.29 | 24 | 48 | path, 2 keys, fov 54→54 | ruin2196 | none | Looking up the broken tower into storm light. | **ok**: Looking up the ruined tower. |
+| s31 | g4 | 5 | 1:33.29 | 25 | 49 | path, 2 keys, fov 52→52 | neutral | none | Flat overcast light on the water, the dam across the valley. | **ok**: Dead trees in the reservoir, overcast. |
+| s32 | g5 | 18 | 1:34.33 | 24 | 48 | path, 2 keys, fov 50→50 | ruin2196 | Survivors in the hall (small) | Violet storm light over the iron trusses. | **ok**: Lantern Hall trusses under violet storm light. |
+| s33 | g3 | 3 | 1:35.33 | 25 | 49 | path, 2 keys, fov 40→39, shake 0.35 | rain2049 | Kai (medium shot, facing camera, the ring behind camera) | Hard cyan key from the ring core, era colour washing over his face on each switch. | **ok**: Kai medium shot; 2196 then 2026 wash over him. |
+| s34 | g6 | 13 | 1:36.38 | 24 | 48 | path, 2 keys, fov 44→44 | rain2049 | Held residents, a courier, an umbrella | Grey dawn, beads of rain frozen in the air. | **weak**: A rainy 2049 street; that it is held (people mid-step, rain in the air) does not read at preview size. |
+| s35 | g3 | 3 | 1:38.58 | 96 | 120 | path, 2 keys, fov 40→38 | rain2049 | Kai (silhouette, back to camera, centred) | Symmetric, the ring core the only bright thing; slow push-in. | **ok**: Symmetric final image, Kai small before the ring. |
+| s36 | g3 | 3 | 1:49.58 | 60 | 84 | path, 2 keys, fov 34→32 | rain2049 | Iven Marr (soft foreground shoulder, right), Kai at the ring | Over Iven's shoulder; ring flare at the end. | **ok**: Over Iven's shoulder; the ring flares into the switch at the end. |
 
 ### Groups
 
@@ -247,17 +276,17 @@ Times are trailer times. `rec` is the recorded length including both handles. Ca
 |---|---|---|---|
 | g1 | s01 s02 s03 s04 s09 | 559 | 1, 2 |
 | g2 | s05 s06 s07 s08 s16 | 530 | 1, 6 |
-| g3 | s10 s11 s26 s33 s35 s36 | 535 | 3, 15 |
+| g3 | s10 s11 s24 s33 s35 s36 | 559 | 3, 15 |
 | g4 | s12 s13 s14 s15 s25 s31 | 525 | 4, 5, 7 |
 | g5 | s17 s18 s22 s27 s28 s30 s32 | 498 | 8, 11, 14, 18 |
-| g6 | s19 s20 s21 s23 s24 s29 s34 | 553 | 9, 10, 12, 13 |
+| g6 | s19 s20 s21 s23 s26 s29 s34 | 529 | 9, 10, 12, 13, 15 |
 
 ### How each shot is reached
 
-- **s01** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.para…`; eval `__game.player.place(0.5, 0.15, 15.5, Math.PI)`; wait 0.5 s. Actions: t 0.2: down KeyW.
-- **s02** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.para…`; eval `__game.player.place(-4.2, 0.15, -8.5, Math.PI * 0.8)`; until `(__game.time % 4) > 3.45 && (__game.time % 4) < 3.55` (8 s). Actions: t 3.6: `DIR.actor('child').talk = 1.4`. The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO "Mister, your wrist is glowing." lands on the un-fall.
-- **s03** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.para…`; eval `__game.player.place(-1.0, 0.15, -20, Math.PI)`; wait 1.0 s. Actions: t 1.7: `DIR.actor('kai').wristBoost = 9`.
-- **s04** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.para…`; wait 0.5 s.
+- **s01** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.…`; eval `__game.player.place(0.5, 0.15, 15.5, Math.PI)`; wait 0.5 s. Actions: t 0.2: down KeyW.
+- **s02** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.…`; eval `__game.player.place(-4.2, 0.15, -8.5, Math.PI * 0.8)`; until `(__game.time % 4) > 3.45 && (__game.time % 4) < 3.55` (8 s). Actions: t 3.6: `DIR.actor('child').talk = 1.4`. The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO "Mister, your wrist is glowing." lands on the un-fall. Pavement walkers can cross the lens at the head: if one does, add 4 s (one toy cycle) to the setup wait.
+- **s03** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.…`; eval `__game.player.place(-1.0, 0.15, -20, Math.PI)`; wait 1.0 s. Actions: t 1.7: `DIR.actor('kai').wristBoost = 9`.
+- **s04** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.…`; wait 0.5 s.
 - **s05** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(0, 0.15, -79, Math.PI)`; until `__game.interactables.some(i => i.prompt.includes('badge'))` (30 s); eval `__game.use('badge')`; until `__game.flags.gate` (40 s); eval `__game.player.place(2, 0.15, -98, Math.PI)`; wait 1.0 s. Actions: t 0.3: `__game.player.place(3, 0.15, -106, Math.PI)`. The mission freezes ~2.2 s after Kai crosses z -104 (action at t 0.3): cut out on the frame before the freeze.
 - **s06** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(0, 0.15, -79, Math.PI)`; until `__game.interactables.some(i => i.prompt.includes('badge'))` (30 s); eval `__game.use('badge')`; until `__game.flags.gate` (40 s); eval `__game.player.place(2, 0.15, -98, Math.PI)`; wait 1.0 s; eval `__game.player.place(3, 0.15, -106, Math.PI)`; until `__game.flags.frozen` (30 s); wait 0.3 s.
 - **s07** `index.html?m=0&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(0, 0.15, -79, Math.PI)`; until `__game.interactables.some(i => i.prompt.includes('badge'))` (30 s); eval `__game.use('badge')`; until `__game.flags.gate` (40 s); eval `__game.player.place(2, 0.15, -98, Math.PI)`; wait 1.0 s; eval `__game.player.place(3, 0.15, -106, Math.PI)`; until `__game.flags.frozen` (30 s); until `__game.flags.frozen && __game.control` (40 s); eval `__game.player.place(-1.5, 0.15, -100.5, 2.6)`; wait 0.3 s. Actions: t 0.0: down KeyW.
@@ -277,7 +306,7 @@ Times are trailer times. `rec` is the recorded length including both handles. Ca
 - **s21** `index.html?m=11&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(0, 0, -6.4, Math.PI)`; until `__game.control && document.getElementById('objective-text').textContent.includes` (240 s); eval `__game.player.place(10, 0, 0.4, Math.PI)`; until `__m12.S.seen && __m12.S.seen.glimpse1 && __game.control` (120 s); eval `__game.player.place(10, 0, -16.2, Math.PI)`; until `__game.control && document.getElementById('objective-text').textContent.includes` (120 s); eval `__game.player.place(10, 0, -19.9, Math.PI); __game.player.yaw = Math.PI`; wait 0.6 s. Actions: t 0.7: `__m12.echo.trigger()`. Setup follows tools/tests/m12.json up to the shutter.
 - **s22** `index.html?m=10&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(14.6, 0, 3.2, Math.PI / 2)`; wait 1.5 s. The corridor's hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight.
 - **s23** `index.html?m=12&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(2, 0, 51, Math.PI)`; until `__game.temporal.current === '2196'` (60 s); wait 2.0 s. Actions: t 0.6: `__m13.W.tracer([0, 9, -2], [-4, 0.5, 42], 1.6, 7)`; t 1.3: `__m13.W.tracer([0, 9, -2], [3, 0.5, -40], 1.6, 7)`.
-- **s24** `index.html?m=12&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.player.place(2, 0, 51, Math.PI)`; until `__game.temporal.current === '2196'` (60 s); until `__game.control && document.getElementById('objective-text').textContent.includes` (200 s); eval `(()=>{const g=__game, s=g.actors.sera; const q = s.root.position; g.player.place(q.x - 0.4…`; wait 0.8 s. Actions: t 0.62: `DIR.actor('sera').talk = 2.6`.
+- **s24** `index.html?m=14&dtcap=0.25&gfx=high&auto`. Setup: wait 0.8 s; eval `(()=>{const s=__game.actors.sera; s.root.rotation.y=-Math.PI/2; s.lookTarget=null; return …`. Actions: t 0.62: `DIR.actor('sera').talk = 2.6`. VO from mission 13 ("The future that survives long enough to remember us."); her mouth moves with it (talk action).
 - **s25** `index.html?m=6&dtcap=0.25&gfx=high&auto`. Setup: eval `__game.temporal.setImmediate('2196'); __game.player.place(-7.9, 21.06, -21.6, Math.PI / 2)`; wait 0.8 s.
 - **s26** `index.html?m=14&dtcap=0.25&gfx=high&auto`. Setup: wait 0.5 s.
 - **s27** `index.html?m=7&dtcap=0.25&gfx=high&auto`. Setup: wait 0.8 s.
@@ -378,7 +407,7 @@ Every line is the game's own: exact text and speaker id, so the recorded clip is
 
 ## Store cut (30 s)
 
-App-preview style: in-app footage only, no cards and no letterbox, the full 1920×886 frame (crop the 1080 output never; cut from the shot clips). `in` is seconds into the shot clip.
+App-preview style: in-app footage only, no cards and no letterbox, the full 2.167:1 render frame delivered at 1920×886 (`store_cut_size`). Cut it from the shot clips, never from the 1080 output. `in` is seconds into the shot clip.
 
 | # | shot | in | dur | starts at |
 |---|---|---|---|---|
@@ -406,8 +435,8 @@ edit order) · `timeline[]` `{t, dur, shot | card, transition: cut | dissolve | 
 `vo[]` `{t, speaker, text, key, mission, key_pending, clip_in, clip_out, notes}` · `cards[]` `{id, t, dur, text,
 style: black | line | title | end}` · `music[]` `{t, section, bpm (null = free time), notes}` · `hits[]` (s) ·
 `silences[]` `{t, dur, what}` · `sfx[]` `{t, cue, notes}` · `store_cut[]` `{shot, in, dur}` (in = seconds into the shot
-clip, which starts at the head handle) · extensions: `render` `{width 1920, height 886, gfx}` (what the recorder
-draws), `output` `{width, height, letterbox 2.39, active_height 804}`, `handles`, `store_cut_size`.
+clip, which starts at the head handle) · extensions: `render` `{width, height, gfx}` (what the recorder
+draws: 2.167:1, currently 1280×590, see Director), `output` `{width, height, letterbox 2.39, active_height 804}`, `handles`, `store_cut_size`.
 
 - `transition` says how an event **begins**. `dip` comes up from black over 6 frames. `dissolve` is a 6-frame cross
   dissolve. `switch` is a hard cut in which the last 4 frames of the outgoing shot and the first 4 frames of the

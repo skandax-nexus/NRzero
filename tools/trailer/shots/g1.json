@@ -9,7 +9,7 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
     },
     {
      "eval": "__game.player.place(0.5, 0.15, 15.5, Math.PI)"
@@ -88,7 +88,11 @@
    "characters": "Kai (walking away from camera), umbrella crowd on both pavements",
    "lighting": "Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point.",
    "sound": "Rain bed, distant traffic hum, footsteps; piano motif enters at the cut.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Crane reads; the m1 shop-window canvases (bright product squares) stay visible on the left at 1080p."
+   }
   },
   {
    "id": "s02",
@@ -99,7 +103,7 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
     },
     {
      "eval": "__game.player.place(-4.2, 0.15, -8.5, Math.PI * 0.8)"
@@ -164,7 +168,11 @@
    "characters": "The station child (yellow coat, red boots), her mother under a red umbrella",
    "lighting": "Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail.",
    "sound": "",
-   "notes": "The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO \"Mister, your wrist is glowing.\" lands on the un-fall."
+   "notes": "The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO \"Mister, your wrist is glowing.\" lands on the un-fall. Pavement walkers can cross the lens at the head: if one does, add 4 s (one toy cycle) to the setup wait.",
+   "preview": {
+    "status": "ok",
+    "note": "Toy falls, lands, rises (visible at the middle frame). The shop canvases behind her are still bright; a passer-by may cross at the head."
+   }
   },
   {
    "id": "s03",
@@ -175,7 +183,7 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
     },
     {
      "eval": "__game.player.place(-1.0, 0.15, -20, Math.PI)"
@@ -240,7 +248,11 @@
    "characters": "Kai (hand and band only, idle)",
    "lighting": "Macro close-up, DOF on the band; out-of-focus neon and rain behind.",
    "sound": "Soft Chronolith glass chime on the flare.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Band flare reads at 2.2 s; hand idle sway moves the anchored camera slightly."
+   }
   },
   {
    "id": "s04",
@@ -251,7 +263,7 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{if(!o.isMesh) return; for(const m of [].concat(o.material)){const p=o.geometry&&o.geometry.parameters, t=m&&m.emissiveMap; const im=t&&t.image; if(t&&((p&&p.height===3.2)||(im&&im.width===512&&im.height===256&&Math.abs(m.emissiveIntensity-1.1)<1e-6))){m.emissiveIntensity=0.45; n++;}}}); return n})()"
     },
     {
      "wait": 0.5
@@ -306,7 +318,11 @@
    "characters": "none (passers-by in the background)",
    "lighting": "Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame.",
    "sound": "Clock ticks reversed (pre-echo ticks).",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Hands visibly turn back; the clock is a simple prop, so it stays mid-frame, not macro."
+   }
   },
   {
    "id": "s09",
@@ -380,7 +396,11 @@
    "characters": "Rook (close-up), Kai (soft foreground shoulder)",
    "lighting": "Emergency lighting after the lockdown: red key, cyan rim.",
    "sound": "",
-   "notes": "Rook walks out of the lobby when control returns (4 s); the setup waits for that, brings him back and holds the drones off (control=false)."
+   "notes": "Rook walks out of the lobby when control returns (4 s); the setup waits for that, brings him back and holds the drones off (control=false).",
+   "preview": {
+    "status": "ok",
+    "note": "Rook faces camera in the lockdown red."
+   }
   }
  ]
 }

@@ -1021,7 +1021,7 @@ export function buildArray(game, scene, T) {
   box(-1.0, P6.P2y, -4.4, 1.0, P6.P2y + 3, -4.0, '2049'); bat('2049').box(M.panel, -1.0, P6.P2y, -4.4, 1.0, P6.P2y + 3, -4.0);
   plane(signTex('radome', [['RADOME HATCH', 28], ['SEALED · STORM PROTOCOL', 20, '#ffd27a']], { bg: '#202830', border: '#ffd27a', h: 128 }), 1.2, 0.36, 0, P6.P2y + 1.8, -3.98, PI, 0.35, '2049');
   const dome = new THREE.Mesh(new THREE.SphereGeometry(5.6, 32, 18, 0, PI * 2, 0, PI * 0.62), new THREE.MeshStandardMaterial({ color: 0xe8eaec, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide })); dome.position.set(0, P6.P3y - 3, 0); add(dome, '2049');
-  const domeR = new THREE.Mesh(new THREE.SphereGeometry(5.6, 24, 12, 0.6, PI * 0.7, 0, PI * 0.45), new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: 0.8, side: THREE.DoubleSide })); domeR.position.set(0, P6.P3y - 3, 0); add(domeR, '2196');
+  const domeR = new THREE.Mesh(new THREE.SphereGeometry(5.6, 24, 12, 0.6, PI * 0.7, 0, PI * 0.45), new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: 0.8, side: THREE.DoubleSide })); domeR.position.set(0, P6.P3y - 6.4, 0); add(domeR, '2196');   // the broken radome hangs below the crown deck
   // the crown: three feed horns with tuning dials, the emitter
   const hornG = new THREE.ConeGeometry(0.7, 1.6, 20, 1, true);
   P6.horns.forEach(([x, y, z], i) => {

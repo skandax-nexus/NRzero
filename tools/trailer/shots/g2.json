@@ -83,7 +83,11 @@
    "characters": "Jun Park (transit operator), three civilians on the platform, Kai (foreground left)",
    "lighting": "Warm platform canopy light, the yellow edge strip, the stopped station clock.",
    "sound": "Train horn (the game's 311 / 370 Hz pair), rising rail hiss.",
-   "notes": "The mission freezes ~2.2 s after Kai crosses z -104 (action at t 0.3): cut out on the frame before the freeze."
+   "notes": "The mission freezes ~2.2 s after Kai crosses z -104 (action at t 0.3): cut out on the frame before the freeze.",
+   "preview": {
+    "status": "ok",
+    "note": "Kai left, the train headlight swells at the end; cut before the freeze."
+   }
   },
   {
    "id": "s06",
@@ -173,7 +177,11 @@
    "characters": "Frozen civilians, Jun",
    "lighting": "The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads.",
    "sound": "Hard cut into one second of total silence (bible: the Zero Second), then a low metallic resonance.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Derailing train hangs with frozen sparks in the freeze grade."
+   }
   },
   {
    "id": "s07",
@@ -277,7 +285,11 @@
    "characters": "Kai (tracking side-on), frozen commuters and umbrellas between camera and Kai",
    "lighting": "Frozen rain beads catch the station light; Kai the only warm, moving figure.",
    "sound": "Kai's footsteps, glass-harmonic shimmer of the held rain.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Kai walks through the held station in the freeze grade."
+   }
   },
   {
    "id": "s08",
@@ -345,7 +357,7 @@
        1.58,
        -125.0
       ],
-      "fov": 30,
+      "fov": 24,
       "roll": 0,
       "focus": 3.2
      },
@@ -361,7 +373,7 @@
        1.58,
        -125.0
       ],
-      "fov": 28,
+      "fov": 22,
       "roll": 0,
       "focus": 2.65
      }
@@ -375,7 +387,11 @@
    "characters": "Mira (close-up, looking at Kai), crowd behind",
    "lighting": "Helix entrance glow behind her; her violet dissolve (the mission's ghost shader).",
    "sound": "The three-note motif (E-B-A) on felt piano; Kai: \"...Mira?\"",
-   "notes": "The mission fades her out (alpha 0.7 / s) right after Kai's line: about 1.6 s solid, 1.4 s dissolve."
+   "notes": "The mission fades her out (alpha 0.7 / s) right after Kai's line: about 1.6 s solid, 1.4 s dissolve.",
+   "preview": {
+    "status": "ok",
+    "note": "She is solid at the cut-in, violet at the middle, gone at the cut-out. Check her sharpness (DOF) at full size."
+   }
   },
   {
    "id": "s16",
@@ -446,7 +462,11 @@
    "characters": "Oskar Hensel (78, clockmaker) in his doorway, Kai (foreground shoulder)",
    "lighting": "Rain on the old quarter, warm shop light from inside the door.",
    "sound": "",
-   "notes": "The mission stages this scene itself after the knock; the path holds its close shot a little longer."
+   "notes": "The mission stages this scene itself after the knock; the path holds its close shot a little longer.",
+   "preview": {
+    "status": "ok",
+    "note": "Hensel in his doorway, warm shop light, Kai's shoulder."
+   }
   }
  ]
 }

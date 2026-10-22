@@ -67,7 +67,11 @@
    "characters": "Kai (small, foreground left, looking up at the ring); Iven by the consoles",
    "lighting": "The ring's cyan core light; the chamber in shadow, its rim light strip on the floor.",
    "sound": "Low hum at the ring's frequency (41 Hz bed), one glass partial.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Ring, Kai and Iven read; the clean lab is bright (exposure lowered to 0.82 for all mission 3 shots)."
+   }
   },
   {
    "id": "s11",
@@ -177,70 +181,88 @@
    "characters": "Kai (three-quarter back, hand toward the ring)",
    "lighting": "2026: amber work lights, scaffolds, plastic sheets; 2049: clean cyan lab; 2196: green-grey ruin. Same ring in all three.",
    "sound": "The temporal switch (the game's switch stinger) on each flicker, pitched up each time.",
-   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture)."
+   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture).",
+   "preview": {
+    "status": "ok",
+    "note": "Iven foreground, Kai at the ring; the 2196 flicker (green growth) reads."
+   }
   },
   {
-   "id": "s26",
+   "id": "s24",
    "group": "g3",
    "mission": 15,
-   "beat": "Montage: Harrow Reach, the city that relives one day, under the Lantern's beam.",
+   "beat": "Sera Voss, who leads the survivors of 2196, at the shimmering veil of Harrow Reach.",
    "url": "index.html?m=14&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "wait": 0.5
+     "wait": 0.8
+    },
+    {
+     "eval": "(()=>{const s=__game.actors.sera; s.root.rotation.y=-Math.PI/2; s.lookTarget=null; return s.root.position.toArray()})()"
     }
    ],
-   "frames": 49,
+   "frames": 73,
    "handles": 12,
    "fps": 24,
-   "cut_frames": 25,
+   "cut_frames": 49,
    "camera": {
     "mode": "path",
     "keys": [
      {
       "t": 0,
       "p": [
-       30,
-       7,
-       22
+       -2.2,
+       1.62,
+       0.35
       ],
       "l": [
        0,
-       12,
-       -24
+       1.58,
+       0
       ],
-      "fov": 48,
+      "fov": 30,
       "roll": 0,
-      "focus": 55.15
+      "focus": 2.23
      },
      {
-      "t": 2.1,
+      "t": 3.0,
       "p": [
-       28.6,
-       6.8,
-       20.6
+       -2.05,
+       1.62,
+       0.3
       ],
       "l": [
        0,
-       12,
-       -24
+       1.58,
+       0
       ],
-      "fov": 48,
+      "fov": 29,
       "roll": 0,
-      "focus": 53.24
+      "focus": 2.07
      }
     ],
-    "ease": "linear",
-    "shake": 0
+    "ease": "inOut",
+    "shake": 0,
+    "anchor": "DIR.actor('sera').root.position",
+    "anchorLive": false
    },
-   "actions": [],
+   "actions": [
+    {
+     "t": 0.62,
+     "eval": "DIR.actor('sera').talk = 2.6"
+    }
+   ],
    "grade": "ruin2196",
    "approved": false,
-   "characters": "none (crowds too small to read)",
-   "lighting": "The plaza and the Hollow Archive's copper dome in the amber haze of the lock.",
+   "characters": "Sera Voss (close-up, the veil of the lock behind her)",
+   "lighting": "Amber light of the lock's edge, her face half in shadow.",
    "sound": "",
-   "notes": ""
+   "notes": "VO from mission 13 (\"The future that survives long enough to remember us.\"); her mouth moves with it (talk action).",
+   "preview": {
+    "status": "ok",
+    "note": "Sera close-up at the veil; the skyline behind her is simple boxes."
+   }
   },
   {
    "id": "s33",
@@ -325,7 +347,11 @@
    "characters": "Kai (medium shot, facing camera, the ring behind camera)",
    "lighting": "Hard cyan key from the ring core, era colour washing over his face on each switch.",
    "sound": "",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Kai medium shot; 2196 then 2026 wash over him."
+   }
   },
   {
    "id": "s35",
@@ -397,7 +423,11 @@
    "characters": "Kai (silhouette, back to camera, centred)",
    "lighting": "Symmetric, the ring core the only bright thing; slow push-in.",
    "sound": "Piano motif returns, alone.",
-   "notes": ""
+   "notes": "",
+   "preview": {
+    "status": "ok",
+    "note": "Symmetric final image, Kai small before the ring."
+   }
   },
   {
    "id": "s36",
@@ -490,7 +520,11 @@
    "characters": "Iven Marr (soft foreground shoulder, right), Kai at the ring",
    "lighting": "Over Iven's shoulder; ring flare at the end.",
    "sound": "",
-   "notes": "The edit cuts to black on the first frame of the switch distortion (about t 2.6)."
+   "notes": "The edit cuts to black on the first frame of the switch distortion (about t 2.6).",
+   "preview": {
+    "status": "ok",
+    "note": "Over Iven's shoulder; the ring flares into the switch at the end."
+   }
   }
  ]
 }
