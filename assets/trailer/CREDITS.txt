@@ -1,0 +1,19 @@
+AFTERZERO - trailer credits and licences
+========================================
+
+Footage
+  In-engine footage of AFTERZERO, captured with tools/trailer (our own game, our own captures).
+  Three.js r170 (MIT), vendored in vendor/.
+
+Score
+  Original composition for this trailer, following docs/BIBLE.md section 6 (music bible).
+  Instrument samples: none recorded yet. The score step lists every sample set it uses here:
+  name, version, source URL, licence (CC0 / CC BY / MIT only), what it plays in the score, and the required credit.
+
+Voices
+  Piper TTS (MIT, github.com/rhasspy/piper) with the LibriTTS-high voice model.
+  LibriTTS corpus (Zen et al., 2019), CC BY 4.0, https://www.openslr.org/60/
+  The game's own character voices (tools/voice/build_voices.py), LibriTTS speaker ids:
+    Kai Varen 199 · the PA voice 217 · the station child 359 · Niko 526 · Mira (recording) 515 · Sera Voss 279 ·
+    Iven Marr 70 · Oskar Hensel and the 2026 recording: per assets/voice/manifest.json
+  Credit line (end card): "Voices: Piper TTS, LibriTTS voices (CC BY 4.0)"

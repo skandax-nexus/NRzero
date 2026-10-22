@@ -1,0 +1,389 @@
+{
+ "shots": [
+  {
+   "id": "s01",
+   "group": "g1",
+   "mission": 1,
+   "beat": "Rain City at night: a slow crane down through the rain onto Kai walking the wet centre line toward Helix.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+    },
+    {
+     "eval": "__game.player.place(0.5, 0.15, 15.5, Math.PI)"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "frames": 168,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 144,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       2.4,
+       9.0,
+       23.5
+      ],
+      "l": [
+       0,
+       5.0,
+       -40
+      ],
+      "fov": 46,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.5,
+      "p": [
+       1.9,
+       4.0,
+       13.0
+      ],
+      "l": [
+       0.3,
+       2.4,
+       -30
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 7.0,
+      "p": [
+       1.2,
+       1.8,
+       -1.6
+      ],
+      "l": [
+       0.4,
+       1.45,
+       -20
+      ],
+      "fov": 42,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [
+    {
+     "t": 0.2,
+     "down": "KeyW"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (walking away from camera), umbrella crowd on both pavements",
+   "lighting": "Neon blade signs, puddle glow, rain streaks lit by the lamps; Helix tower rings at the vanishing point.",
+   "sound": "Rain bed, distant traffic hum, footsteps; piano motif enters at the cut.",
+   "notes": ""
+  },
+  {
+   "id": "s02",
+   "group": "g1",
+   "mission": 1,
+   "beat": "The toy that un-falls: a child drops a toy, it lands, then rises back into her hand along the same arc.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+    },
+    {
+     "eval": "__game.player.place(-4.2, 0.15, -8.5, Math.PI * 0.8)"
+    },
+    {
+     "until": "(__game.time % 4) > 3.45 && (__game.time % 4) < 3.55",
+     "timeout": 8,
+     "pace": 0
+    }
+   ],
+   "frames": 132,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 108,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -8.0,
+       0.66,
+       -11.0
+      ],
+      "l": [
+       -8.65,
+       0.62,
+       -14.0
+      ],
+      "fov": 36,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.5,
+      "p": [
+       -8.1,
+       0.62,
+       -11.5
+      ],
+      "l": [
+       -8.65,
+       0.6,
+       -14.0
+      ],
+      "fov": 34,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('child').head"
+   },
+   "actions": [
+    {
+     "t": 3.6,
+     "eval": "DIR.actor('child').talk = 1.4"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "The station child (yellow coat, red boots), her mother under a red umbrella",
+   "lighting": "Low, child eye-level, in profile along the pavement: lamps and umbrellas recede behind her; the toy's cyan eye and its reverse trail.",
+   "sound": "",
+   "notes": "The toy loop runs on game time (4 s): the setup waits for cycle 3.5 so the cut holds hand, fall, floor, un-fall, hand. VO \"Mister, your wrist is glowing.\" lands on the un-fall."
+  },
+  {
+   "id": "s03",
+   "group": "g1",
+   "mission": 1,
+   "beat": "Kai's wrist: the Chronolith band glows, then flares as the street pulls toward one moment.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+    },
+    {
+     "eval": "__game.player.place(-1.0, 0.15, -20, Math.PI)"
+    },
+    {
+     "wait": 1.0
+    }
+   ],
+   "frames": 84,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 60,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -0.52,
+       0.12,
+       -0.55
+      ],
+      "l": [
+       0,
+       0,
+       0
+      ],
+      "fov": 30,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.5,
+      "p": [
+       -0.42,
+       0.07,
+       -0.46
+      ],
+      "l": [
+       0,
+       0.01,
+       0
+      ],
+      "fov": 28,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "anchor": "DIR.actor('kai').arms[1].hand.getWorldPosition(__game.engine.camera.position.clone())",
+    "anchorLive": true,
+    "focusOn": "DIR.actor('kai').arms[1].hand.getWorldPosition(__game.engine.camera.position.clone())"
+   },
+   "actions": [
+    {
+     "t": 1.7,
+     "eval": "DIR.actor('kai').wristBoost = 9"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (hand and band only, idle)",
+   "lighting": "Macro close-up, DOF on the band; out-of-focus neon and rain behind.",
+   "sound": "Soft Chronolith glass chime on the flare.",
+   "notes": ""
+  },
+  {
+   "id": "s04",
+   "group": "g1",
+   "mission": 1,
+   "beat": "The street clock outside Chrono Repair runs backward, one second per second.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{const m=o.material, p=o.geometry&&o.geometry.parameters; if(o.isMesh&&m&&m.emissiveMap&&p&&p.height===3.2){m.emissiveIntensity=0.45; n++;}}); return n})()"
+    },
+    {
+     "wait": 0.5
+    }
+   ],
+   "frames": 96,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 72,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       3.8,
+       1.75,
+       -29.4
+      ],
+      "l": [
+       9.6,
+       3.45,
+       -34.2
+      ],
+      "fov": 30,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.0,
+      "p": [
+       4.35,
+       1.8,
+       -30.2
+      ],
+      "l": [
+       9.6,
+       3.5,
+       -34.2
+      ],
+      "fov": 27,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "none (passers-by in the background)",
+   "lighting": "Across the street through the rain: the clock face lit warm over Chrono Repair, hands visibly turning back, passers-by under umbrellas crossing frame.",
+   "sound": "Clock ticks reversed (pre-echo ticks).",
+   "notes": ""
+  },
+  {
+   "id": "s09",
+   "group": "g1",
+   "mission": 2,
+   "beat": "Helix lobby in lockdown red: Dr. Elias Rook, the director, holds Kai's gaze.",
+   "url": "index.html?m=1&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.actors.iven",
+   "setup": [
+    {
+     "wait": 5.0
+    },
+    {
+     "eval": "(()=>{const g=__game, r=g.actors.rook; g.control=false; r.root.visible=true; r.root.position.set(0.5,0,-11); r.root.rotation.y=Math.PI*0.95; r.speed=0; g.player.place(-0.35,0,-8.4,Math.PI*1.05); r.lookTarget=g.player.char.head; g.player.char.lookTarget=r.head; return 'rook'})()"
+    },
+    {
+     "wait": 1.5
+    }
+   ],
+   "frames": 79,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 55,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       1.28,
+       1.66,
+       -8.75
+      ],
+      "l": [
+       0.48,
+       1.6,
+       -11.0
+      ],
+      "fov": 34,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.5,
+      "p": [
+       1.18,
+       1.67,
+       -9.05
+      ],
+      "l": [
+       0.48,
+       1.6,
+       -11.0
+      ],
+      "fov": 32,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('rook').head"
+   },
+   "actions": [
+    {
+     "t": 1.1,
+     "eval": "DIR.actor('rook').talk = 1.4"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Rook (close-up), Kai (soft foreground shoulder)",
+   "lighting": "Emergency lighting after the lockdown: red key, cyan rim.",
+   "sound": "",
+   "notes": "Rook walks out of the lobby when control returns (4 s); the setup waits for that, brings him back and holds the drones off (control=false)."
+  }
+ ]
+}

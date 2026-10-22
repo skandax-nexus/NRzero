@@ -1,0 +1,498 @@
+{
+ "shots": [
+  {
+   "id": "s10",
+   "group": "g3",
+   "mission": 3,
+   "beat": "The Chronolith: a black ring older than the building, turning in its sealed chamber.",
+   "url": "index.html?m=2&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))",
+   "setup": [
+    {
+     "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
+    },
+    {
+     "eval": "__game.player.place(-1.1, 0, 5.4, Math.PI)"
+    },
+    {
+     "wait": 1.0
+    }
+   ],
+   "frames": 98,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 74,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       0.7,
+       1.35,
+       11.4
+      ],
+      "l": [
+       0,
+       3.5,
+       -2
+      ],
+      "fov": 46,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.1,
+      "p": [
+       0.35,
+       2.1,
+       8.4
+      ],
+      "l": [
+       0,
+       3.6,
+       -2
+      ],
+      "fov": 43,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (small, foreground left, looking up at the ring); Iven by the consoles",
+   "lighting": "The ring's cyan core light; the chamber in shadow, its rim light strip on the floor.",
+   "sound": "Low hum at the ring's frequency (41 Hz bed), one glass partial.",
+   "notes": ""
+  },
+  {
+   "id": "s11",
+   "group": "g3",
+   "mission": 3,
+   "beat": "The first switch: Kai reaches for the ring and the room flickers through 2026, 2196 and back to 2049.",
+   "url": "index.html?m=2&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))",
+   "setup": [
+    {
+     "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
+    },
+    {
+     "eval": "__game.player.place(0, 0, 0.95, Math.PI)"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 135,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 111,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       4.6,
+       1.5,
+       4.6
+      ],
+      "l": [
+       -0.6,
+       2.5,
+       -2.2
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.6,
+      "p": [
+       3.9,
+       1.55,
+       3.8
+      ],
+      "l": [
+       -0.6,
+       2.5,
+       -2.2
+      ],
+      "fov": 38,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0.15
+   },
+   "actions": [
+    {
+     "t": 0.8,
+     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.6)"
+    },
+    {
+     "t": 0.8,
+     "eval": "DIR.actor('kai').pose = 'work'; DIR.actor('kai').wristBoost = 12"
+    },
+    {
+     "t": 1.5,
+     "eval": "DIR.era('2026', 0.45)"
+    },
+    {
+     "t": 1.55,
+     "eval": "__game.engine.setGrade('helix2026')"
+    },
+    {
+     "t": 2.35,
+     "eval": "DIR.era('2196', 0.45)"
+    },
+    {
+     "t": 2.4,
+     "eval": "__game.engine.setGrade('ruin2196')"
+    },
+    {
+     "t": 3.15,
+     "eval": "DIR.era('2026', 0.4)"
+    },
+    {
+     "t": 3.2,
+     "eval": "__game.engine.setGrade('helix2026')"
+    },
+    {
+     "t": 3.95,
+     "eval": "DIR.era('2049', 0.5)"
+    },
+    {
+     "t": 4.0,
+     "eval": "__game.engine.setGrade('rain2049')"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (three-quarter back, hand toward the ring)",
+   "lighting": "2026: amber work lights, scaffolds, plastic sheets; 2049: clean cyan lab; 2196: green-grey ruin. Same ring in all three.",
+   "sound": "The temporal switch (the game's switch stinger) on each flicker, pitched up each time.",
+   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture)."
+  },
+  {
+   "id": "s26",
+   "group": "g3",
+   "mission": 15,
+   "beat": "Montage: Harrow Reach, the city that relives one day, under the Lantern's beam.",
+   "url": "index.html?m=14&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "frames": 49,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 25,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       30,
+       7,
+       22
+      ],
+      "l": [
+       0,
+       12,
+       -24
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       28.6,
+       6.8,
+       20.6
+      ],
+      "l": [
+       0,
+       12,
+       -24
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "none (crowds too small to read)",
+   "lighting": "The plaza and the Hollow Archive's copper dome in the amber haze of the lock.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s33",
+   "group": "g3",
+   "mission": 3,
+   "beat": "Montage: Kai's face in the ring light as the room tears between eras.",
+   "url": "index.html?m=2&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))",
+   "setup": [
+    {
+     "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
+    },
+    {
+     "eval": "__game.player.place(0, 0, 0.95, Math.PI)"
+    },
+    {
+     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.9)"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 49,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 25,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       0.22,
+       1.62,
+       -0.25
+      ],
+      "l": [
+       -0.02,
+       1.6,
+       0.95
+      ],
+      "fov": 34,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       0.28,
+       1.6,
+       -0.1
+      ],
+      "l": [
+       -0.02,
+       1.6,
+       0.95
+      ],
+      "fov": 33,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0.35,
+    "focusOn": "DIR.actor('kai').head"
+   },
+   "actions": [
+    {
+     "t": 0.55,
+     "eval": "DIR.era('2196', 0.3)"
+    },
+    {
+     "t": 1.05,
+     "eval": "DIR.era('2026', 0.3)"
+    },
+    {
+     "t": 1.5,
+     "eval": "DIR.era('2049', 0.3)"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (close-up, facing camera, the ring behind camera)",
+   "lighting": "Hard cyan key from the ring core, era colour washing over his face on each switch.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s35",
+   "group": "g3",
+   "mission": 3,
+   "beat": "Final image: Kai alone before the Chronolith, small against the ring.",
+   "url": "index.html?m=2&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))",
+   "setup": [
+    {
+     "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
+    },
+    {
+     "eval": "__game.player.place(0, 0, 2.4, Math.PI)"
+    },
+    {
+     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.75)"
+    },
+    {
+     "wait": 1.0
+    }
+   ],
+   "frames": 120,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 96,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       0,
+       1.65,
+       10.2
+      ],
+      "l": [
+       0,
+       3.15,
+       -2
+      ],
+      "fov": 38,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.0,
+      "p": [
+       0,
+       1.72,
+       8.6
+      ],
+      "l": [
+       0,
+       3.2,
+       -2
+      ],
+      "fov": 36,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "sine",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (silhouette, back to camera, centred)",
+   "lighting": "Symmetric, the ring core the only bright thing; slow push-in.",
+   "sound": "Piano motif returns, alone.",
+   "notes": ""
+  },
+  {
+   "id": "s36",
+   "group": "g3",
+   "mission": 3,
+   "beat": "Button: Kai lifts his hand to the ring. Iven: \"Don't touch it. Varen. Don't—\" Cut on the switch.",
+   "url": "index.html?m=2&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))",
+   "setup": [
+    {
+     "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
+    },
+    {
+     "eval": "__game.player.place(0, 0, 1.0, Math.PI)"
+    },
+    {
+     "eval": "(()=>{const i=__game.actors.iven; i.root.position.set(3.5,0,4); i.lookTarget=__game.player.char.head; return 'iven'})()"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 84,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 60,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       4.25,
+       1.74,
+       5.25
+      ],
+      "l": [
+       0.25,
+       1.95,
+       -0.4
+      ],
+      "fov": 34,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.5,
+      "p": [
+       4.0,
+       1.72,
+       4.9
+      ],
+      "l": [
+       0.2,
+       2.0,
+       -0.6
+      ],
+      "fov": 32,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('kai').head"
+   },
+   "actions": [
+    {
+     "t": 0.8,
+     "eval": "DIR.actor('iven').talk = 2.2"
+    },
+    {
+     "t": 1.6,
+     "eval": "DIR.actor('kai').pose = 'work'"
+    },
+    {
+     "t": 2.3,
+     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.95)"
+    },
+    {
+     "t": 2.3,
+     "eval": "DIR.actor('kai').wristBoost = 14"
+    },
+    {
+     "t": 2.55,
+     "eval": "DIR.era('2196', 0.9)"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Iven Marr (soft foreground shoulder, right), Kai at the ring",
+   "lighting": "Over Iven's shoulder; ring flare at the end.",
+   "sound": "",
+   "notes": "The edit cuts to black on the first frame of the switch distortion (about t 2.6)."
+  }
+ ]
+}

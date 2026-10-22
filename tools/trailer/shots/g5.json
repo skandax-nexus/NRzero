@@ -1,0 +1,449 @@
+{
+ "shots": [
+  {
+   "id": "s17",
+   "group": "g5",
+   "mission": 14,
+   "beat": "Welcome to 2196: Rain City a hundred and forty-seven years on, overgrown, silent, beautiful.",
+   "url": "index.html?m=13&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 134,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 110,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       9,
+       30,
+       142
+      ],
+      "l": [
+       -2,
+       10,
+       80
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.6,
+      "p": [
+       7,
+       21,
+       130
+      ],
+      "l": [
+       -2,
+       8,
+       84
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "Kai (tiny, at the landing)",
+   "lighting": "Morning haze, trees on the roofs, the broken tram viaduct; birds.",
+   "sound": "2196 bed: processed wind, birds, a far bell. Sera's line over it.",
+   "notes": ""
+  },
+  {
+   "id": "s18",
+   "group": "g5",
+   "mission": 14,
+   "beat": "The memorial square: a bronze statue of Kai before a ring, \"ARCHITECT OF THE FRACTURE\".",
+   "url": "index.html?m=13&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.player.place(-6.0, 0, -46.8, -2.903)"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 98,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 74,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -3.2,
+       0.75,
+       -42.0
+      ],
+      "l": [
+       -8,
+       5.4,
+       -55
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.1,
+      "p": [
+       -4.4,
+       0.9,
+       -44.2
+      ],
+      "l": [
+       -8,
+       5.6,
+       -55
+      ],
+      "fov": 38,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "Kai (back to camera, small, looking up at his own statue)",
+   "lighting": "Low angle, the statue against the bright sky; candles and stones at the plinth.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s22",
+   "group": "g5",
+   "mission": 11,
+   "beat": "Montage: Halden General, rain falling upward past the East Wing.",
+   "url": "index.html?m=10&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 73,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 49,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       24,
+       1.4,
+       25
+      ],
+      "l": [
+       34,
+       9,
+       15
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.05,
+      "p": [
+       24.4,
+       1.55,
+       24.2
+      ],
+      "l": [
+       34,
+       9.3,
+       15
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Paramedics and evacuees at the cordon (small)",
+   "lighting": "Night, rain streaks rising instead of falling, hospital windows.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s27",
+   "group": "g5",
+   "mission": 8,
+   "beat": "Montage: Dr. Yara Lind, stopped mid-stride inside the containment field for three days.",
+   "url": "index.html?m=7&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 48,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 24,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       1.8,
+       1.5,
+       -63.0
+      ],
+      "l": [
+       -0.6,
+       1.25,
+       -66.6
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       1.45,
+       1.5,
+       -63.5
+      ],
+      "l": [
+       -0.6,
+       1.25,
+       -66.6
+      ],
+      "fov": 39,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0,
+    "focusOn": "DIR.actor('yara').head"
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Yara (frozen)",
+   "lighting": "Containment rings, cold field light.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s28",
+   "group": "g5",
+   "mission": 18,
+   "beat": "Montage: the flooded Eastway at night, the N4 bus stalled with its passengers on the roof.",
+   "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=3",
+   "ready": "window.__game && __game.control && window.__m18 && __m18.ch3",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 49,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 25,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       2.0,
+       4.6,
+       -84
+      ],
+      "l": [
+       8,
+       3.0,
+       -80
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       2.5,
+       4.4,
+       -83.3
+      ],
+      "l": [
+       8,
+       3.0,
+       -80
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Jun Park and six passengers on the bus roof",
+   "lighting": "Night rain, flood water, the Line 6 bridge.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s30",
+   "group": "g5",
+   "mission": 18,
+   "beat": "Montage: the Corran Building, its upper floors torn away by the storm.",
+   "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=4",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 48,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 24,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       8,
+       1.6,
+       34
+      ],
+      "l": [
+       0,
+       20,
+       -2
+      ],
+      "fov": 54,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       7.2,
+       2.0,
+       31.5
+      ],
+      "l": [
+       0,
+       20,
+       -2
+      ],
+      "fov": 54,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "none",
+   "lighting": "Looking up the broken tower into storm light.",
+   "sound": "",
+   "notes": "?m18part=4 is mission 18's own chapter start (development switch); nothing from later missions is loaded."
+  },
+  {
+   "id": "s32",
+   "group": "g5",
+   "mission": 18,
+   "beat": "Montage: the storm front bearing down on Lantern Hall as its anchor fails.",
+   "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=1",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 48,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 24,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       10,
+       16,
+       -62
+      ],
+      "l": [
+       -2,
+       6,
+       -118
+      ],
+      "fov": 50,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       9.0,
+       15.2,
+       -64.5
+      ],
+      "l": [
+       -2,
+       6,
+       -118
+      ],
+      "fov": 50,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "Survivors in the hall (small)",
+   "lighting": "Violet storm light over the iron trusses.",
+   "sound": "",
+   "notes": ""
+  }
+ ]
+}

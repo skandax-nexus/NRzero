@@ -1,0 +1,1039 @@
+{
+ "title": "AFTERZERO · theatrical trailer",
+ "fps": 24,
+ "width": 1920,
+ "height": 1080,
+ "length": 117.083,
+ "render": {
+  "width": 1920,
+  "height": 886,
+  "gfx": "high"
+ },
+ "output": {
+  "width": 1920,
+  "height": 1080,
+  "letterbox": 2.39,
+  "active_height": 804
+ },
+ "handles": 12,
+ "order": [
+  "s01",
+  "s02",
+  "s03",
+  "s04",
+  "s05",
+  "s06",
+  "s07",
+  "s08",
+  "s09",
+  "s10",
+  "s11",
+  "s12",
+  "s13",
+  "s14",
+  "s15",
+  "s16",
+  "s17",
+  "s18",
+  "s19",
+  "s20",
+  "s21",
+  "s22",
+  "s23",
+  "s24",
+  "s25",
+  "s26",
+  "s27",
+  "s28",
+  "s29",
+  "s30",
+  "s31",
+  "s32",
+  "s33",
+  "s34",
+  "s35",
+  "s36"
+ ],
+ "timeline": [
+  {
+   "t": 0.0,
+   "dur": 1.5,
+   "card": "black0",
+   "transition": "cut",
+   "frames": 36,
+   "at_frame": 0
+  },
+  {
+   "t": 1.5,
+   "dur": 6.0,
+   "shot": "s01",
+   "transition": "dip",
+   "frames": 144,
+   "at_frame": 36
+  },
+  {
+   "t": 7.5,
+   "dur": 4.5,
+   "shot": "s02",
+   "transition": "cut",
+   "frames": 108,
+   "at_frame": 180
+  },
+  {
+   "t": 12.0,
+   "dur": 2.5,
+   "shot": "s03",
+   "transition": "cut",
+   "frames": 60,
+   "at_frame": 288
+  },
+  {
+   "t": 14.5,
+   "dur": 3.0,
+   "shot": "s04",
+   "transition": "cut",
+   "frames": 72,
+   "at_frame": 348
+  },
+  {
+   "t": 17.5,
+   "dur": 2.25,
+   "shot": "s05",
+   "transition": "cut",
+   "frames": 54,
+   "at_frame": 420
+  },
+  {
+   "t": 19.75,
+   "dur": 4.0,
+   "shot": "s06",
+   "transition": "cut",
+   "frames": 96,
+   "at_frame": 474
+  },
+  {
+   "t": 23.75,
+   "dur": 4.0,
+   "shot": "s07",
+   "transition": "cut",
+   "frames": 96,
+   "at_frame": 570
+  },
+  {
+   "t": 27.75,
+   "dur": 4.5,
+   "shot": "s08",
+   "transition": "cut",
+   "frames": 108,
+   "at_frame": 666
+  },
+  {
+   "t": 32.25,
+   "dur": 2.75,
+   "card": "black1",
+   "transition": "cut",
+   "frames": 66,
+   "at_frame": 774
+  },
+  {
+   "t": 35.0,
+   "dur": 2.292,
+   "shot": "s09",
+   "transition": "cut",
+   "frames": 55,
+   "at_frame": 840
+  },
+  {
+   "t": 37.292,
+   "dur": 3.083,
+   "shot": "s10",
+   "transition": "cut",
+   "frames": 74,
+   "at_frame": 895
+  },
+  {
+   "t": 40.375,
+   "dur": 4.625,
+   "shot": "s11",
+   "transition": "cut",
+   "frames": 111,
+   "at_frame": 969
+  },
+  {
+   "t": 45.0,
+   "dur": 3.083,
+   "shot": "s12",
+   "transition": "switch",
+   "frames": 74,
+   "at_frame": 1080
+  },
+  {
+   "t": 48.083,
+   "dur": 3.083,
+   "shot": "s13",
+   "transition": "cut",
+   "frames": 74,
+   "at_frame": 1154
+  },
+  {
+   "t": 51.167,
+   "dur": 4.583,
+   "shot": "s14",
+   "transition": "switch",
+   "frames": 110,
+   "at_frame": 1228
+  },
+  {
+   "t": 55.75,
+   "dur": 3.083,
+   "shot": "s15",
+   "transition": "dissolve",
+   "frames": 74,
+   "at_frame": 1338
+  },
+  {
+   "t": 58.833,
+   "dur": 2.333,
+   "shot": "s16",
+   "transition": "cut",
+   "frames": 56,
+   "at_frame": 1412
+  },
+  {
+   "t": 61.167,
+   "dur": 4.583,
+   "shot": "s17",
+   "transition": "switch",
+   "frames": 110,
+   "at_frame": 1468
+  },
+  {
+   "t": 65.75,
+   "dur": 3.083,
+   "shot": "s18",
+   "transition": "cut",
+   "frames": 74,
+   "at_frame": 1578
+  },
+  {
+   "t": 68.833,
+   "dur": 3.875,
+   "shot": "s19",
+   "transition": "dip",
+   "frames": 93,
+   "at_frame": 1652
+  },
+  {
+   "t": 72.708,
+   "dur": 2.292,
+   "card": "c1",
+   "transition": "dip",
+   "frames": 55,
+   "at_frame": 1745
+  },
+  {
+   "t": 75.0,
+   "dur": 4.083,
+   "shot": "s20",
+   "transition": "cut",
+   "frames": 98,
+   "at_frame": 1800
+  },
+  {
+   "t": 79.083,
+   "dur": 2.0,
+   "shot": "s21",
+   "transition": "cut",
+   "frames": 48,
+   "at_frame": 1898
+  },
+  {
+   "t": 81.083,
+   "dur": 2.042,
+   "shot": "s22",
+   "transition": "cut",
+   "frames": 49,
+   "at_frame": 1946
+  },
+  {
+   "t": 83.125,
+   "dur": 2.042,
+   "shot": "s23",
+   "transition": "cut",
+   "frames": 49,
+   "at_frame": 1995
+  },
+  {
+   "t": 85.167,
+   "dur": 2.042,
+   "shot": "s24",
+   "transition": "cut",
+   "frames": 49,
+   "at_frame": 2044
+  },
+  {
+   "t": 87.208,
+   "dur": 1.0,
+   "shot": "s25",
+   "transition": "cut",
+   "frames": 24,
+   "at_frame": 2093
+  },
+  {
+   "t": 88.208,
+   "dur": 1.042,
+   "shot": "s26",
+   "transition": "cut",
+   "frames": 25,
+   "at_frame": 2117
+  },
+  {
+   "t": 89.25,
+   "dur": 1.0,
+   "shot": "s27",
+   "transition": "cut",
+   "frames": 24,
+   "at_frame": 2142
+  },
+  {
+   "t": 90.25,
+   "dur": 1.042,
+   "shot": "s28",
+   "transition": "cut",
+   "frames": 25,
+   "at_frame": 2166
+  },
+  {
+   "t": 91.292,
+   "dur": 1.0,
+   "shot": "s29",
+   "transition": "cut",
+   "frames": 24,
+   "at_frame": 2191
+  },
+  {
+   "t": 92.292,
+   "dur": 1.0,
+   "shot": "s30",
+   "transition": "cut",
+   "frames": 24,
+   "at_frame": 2215
+  },
+  {
+   "t": 93.292,
+   "dur": 1.042,
+   "shot": "s31",
+   "transition": "switch",
+   "frames": 25,
+   "at_frame": 2239
+  },
+  {
+   "t": 94.333,
+   "dur": 1.0,
+   "shot": "s32",
+   "transition": "cut",
+   "frames": 24,
+   "at_frame": 2264
+  },
+  {
+   "t": 95.333,
+   "dur": 1.042,
+   "shot": "s33",
+   "transition": "cut",
+   "frames": 25,
+   "at_frame": 2288
+  },
+  {
+   "t": 96.375,
+   "dur": 1.0,
+   "shot": "s34",
+   "transition": "switch",
+   "frames": 24,
+   "at_frame": 2313
+  },
+  {
+   "t": 97.375,
+   "dur": 1.208,
+   "card": "silence",
+   "transition": "cut",
+   "frames": 29,
+   "at_frame": 2337
+  },
+  {
+   "t": 98.583,
+   "dur": 4.0,
+   "shot": "s35",
+   "transition": "cut",
+   "frames": 96,
+   "at_frame": 2366
+  },
+  {
+   "t": 102.583,
+   "dur": 2.5,
+   "card": "tagline",
+   "transition": "dip",
+   "frames": 60,
+   "at_frame": 2462
+  },
+  {
+   "t": 105.083,
+   "dur": 4.5,
+   "card": "title",
+   "transition": "dip",
+   "frames": 108,
+   "at_frame": 2522
+  },
+  {
+   "t": 109.583,
+   "dur": 2.5,
+   "shot": "s36",
+   "transition": "dip",
+   "frames": 60,
+   "at_frame": 2630
+  },
+  {
+   "t": 112.083,
+   "dur": 5.0,
+   "card": "end",
+   "transition": "cut",
+   "frames": 120,
+   "at_frame": 2690
+  }
+ ],
+ "vo": [
+  {
+   "t": 10.6,
+   "speaker": "child",
+   "text": "Mister, your wrist is glowing.",
+   "key": "a3vccu",
+   "key_pending": null,
+   "mission": 1,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "on the un-fall; the child's mouth moves (talk action)"
+  },
+  {
+   "t": 24.0,
+   "speaker": "kai",
+   "text": "…Nothing is moving. The rain. The train. Me — only me.",
+   "key": "1mxi9tr",
+   "key_pending": null,
+   "mission": 1,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "quiet, close; the only voice in the held second"
+  },
+  {
+   "t": 28.95,
+   "speaker": "kai",
+   "text": "…Mira?",
+   "key": "1apo1ny",
+   "key_pending": null,
+   "mission": 1,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "barely voiced; just before she dissolves"
+  },
+  {
+   "t": 32.35,
+   "speaker": "voice",
+   "text": "Kai Varen. Do not build the machine.",
+   "key": "1kqxwai",
+   "key_pending": null,
+   "mission": 1,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "over black: the station PA voice, wide reverb"
+  },
+  {
+   "t": 38.55,
+   "speaker": "kai",
+   "text": "The Chronolith.",
+   "key": "tic1bp",
+   "key_pending": null,
+   "mission": 2,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": ""
+  },
+  {
+   "t": 41.0,
+   "speaker": "kai",
+   "text": "Which one is real?",
+   "key": "17yoic2",
+   "key_pending": null,
+   "mission": 3,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": ""
+  },
+  {
+   "t": 42.45,
+   "speaker": "voice",
+   "text": "All of them. That's why this is dangerous.",
+   "key": "8g0b9u",
+   "key_pending": null,
+   "mission": 3,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "same PA voice as the hook"
+  },
+  {
+   "t": 48.5,
+   "speaker": "niko",
+   "text": "The ring on your wrist is the Ring in our valley. You came before the first fire.",
+   "key": "1nqqt7g",
+   "key_pending": null,
+   "mission": 4,
+   "clip_in": 1.78,
+   "clip_out": 3.2,
+   "notes": "use only the tail: \"You came before the first fire.\""
+  },
+  {
+   "t": 50.2,
+   "speaker": "kai",
+   "text": "I've never been here.",
+   "key": "1nj55dj",
+   "key_pending": null,
+   "mission": 4,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": ""
+  },
+  {
+   "t": 51.75,
+   "speaker": "niko",
+   "text": "That is what the others said.",
+   "key": "1915njc",
+   "key_pending": null,
+   "mission": 4,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "carries over the switch into s14"
+  },
+  {
+   "t": 56.0,
+   "speaker": "mirarec",
+   "text": "It doesn't record you, Kai. It's been waiting for you. Every instrument in this house points at one night — the night you were born.",
+   "key": "1w7a1pr",
+   "key_pending": null,
+   "mission": 7,
+   "clip_in": 0.0,
+   "clip_out": 2.95,
+   "notes": "use only: \"It doesn't record you, Kai. It's been waiting for you.\""
+  },
+  {
+   "t": 59.55,
+   "speaker": "oskar",
+   "text": "You're late.",
+   "key": "w80eae",
+   "key_pending": null,
+   "mission": 6,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "Hensel's mouth moves (talk action)"
+  },
+  {
+   "t": 61.8,
+   "speaker": "sera",
+   "text": "In my time, your face is on every memorial.",
+   "key": "mz37we",
+   "key_pending": null,
+   "mission": 10,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "over 2196 (the line is from mission 10)"
+  },
+  {
+   "t": 64.5,
+   "speaker": "kai",
+   "text": "For saving the world?",
+   "key": "akh5rp",
+   "key_pending": null,
+   "mission": 10,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": ""
+  },
+  {
+   "t": 66.6,
+   "speaker": "sera",
+   "text": "For ending it.",
+   "key": "1bo9mx7",
+   "key_pending": null,
+   "mission": 10,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "land on the statue reveal"
+  },
+  {
+   "t": 70.4,
+   "speaker": "recording",
+   "text": "…do not let him see the ninth minute.",
+   "key": "1ut2v8m",
+   "key_pending": null,
+   "mission": 6,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "the older-Kai recording voice, over the man behind the glass"
+  },
+  {
+   "t": 75.3,
+   "speaker": "voice",
+   "text": "You have nine minutes.",
+   "key": "f16rch",
+   "key_pending": null,
+   "mission": 9,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "the Meridian PA"
+  },
+  {
+   "t": 83.3,
+   "speaker": "sera",
+   "text": "This is not the future.",
+   "key": "1jmejt5",
+   "key_pending": null,
+   "mission": 13,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": ""
+  },
+  {
+   "t": 85.3,
+   "speaker": "sera",
+   "text": "The future that survives long enough to remember us.",
+   "key": "15c3wvq",
+   "key_pending": null,
+   "mission": 13,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "on screen (s24, talk action)"
+  },
+  {
+   "t": 109.9,
+   "speaker": "iven",
+   "text": "Don't touch it. Varen. Don't—",
+   "key": "axhhnj",
+   "key_pending": null,
+   "mission": 3,
+   "clip_in": null,
+   "clip_out": null,
+   "notes": "the button; the cut eats the last syllable"
+  }
+ ],
+ "cards": [
+  {
+   "id": "black0",
+   "t": 0.0,
+   "dur": 1.5,
+   "text": "",
+   "style": "black"
+  },
+  {
+   "id": "black1",
+   "t": 32.25,
+   "dur": 2.75,
+   "text": "",
+   "style": "black"
+  },
+  {
+   "id": "c1",
+   "t": 72.708,
+   "dur": 2.292,
+   "text": "SOMEONE HAS BEEN HERE BEFORE YOU",
+   "style": "line"
+  },
+  {
+   "id": "silence",
+   "t": 97.375,
+   "dur": 1.208,
+   "text": "",
+   "style": "black"
+  },
+  {
+   "id": "tagline",
+   "t": 102.583,
+   "dur": 2.5,
+   "text": "A SECOND THAT SHOULD NOT EXIST",
+   "style": "line"
+  },
+  {
+   "id": "title",
+   "t": 105.083,
+   "dur": 4.5,
+   "text": "AFTERZERO\nTHE LAST VERSION OF EARTH",
+   "style": "title"
+  },
+  {
+   "id": "end",
+   "t": 112.083,
+   "dur": 5.0,
+   "text": "AFTERZERO\nPlay on mobile and web\nAn original game · in-engine footage · original score · voices: Piper TTS, LibriTTS voices (CC BY 4.0)",
+   "style": "end"
+  }
+ ],
+ "music": [
+  {
+   "t": 0.0,
+   "section": "rain",
+   "bpm": null,
+   "notes": "No score. Rain City bed fades up from silence: rain, far traffic, a murmur of the crowd."
+  },
+  {
+   "t": 1.5,
+   "section": "hook · AFTERZERO main theme, intimate",
+   "bpm": 78,
+   "notes": "Felt piano alone: the three-note motif E-B-A (Kai and Mira's shared memory), rubato, lots of air. A low cello pedal joins at 7.5. Breath-like texture, no drums. Minor mode with a suspended chord."
+  },
+  {
+   "t": 17.5,
+   "section": "approach",
+   "bpm": 78,
+   "notes": "A muted low piano ostinato starts to drift off the grid (Kai's \"need to fix it\" cell); bowed metal swells under the train horn pair (311 / 370 Hz, from the game)."
+  },
+  {
+   "t": 19.75,
+   "section": "SILENCE · the Zero Second",
+   "bpm": null,
+   "notes": "One second of digital silence: rain, crowd and score all stop (bible section 7, silence as storytelling)."
+  },
+  {
+   "t": 20.75,
+   "section": "the held second",
+   "bpm": null,
+   "notes": "Free time: glass harmonics, a sub drone, the causal-consequence resonance; nothing on the beat."
+  },
+  {
+   "t": 27.75,
+   "section": "Mira · memory without a body",
+   "bpm": 64,
+   "notes": "The motif on felt piano, closer and warmer, one warm cello harmonic; unresolved. A reversed tail, used once."
+  },
+  {
+   "t": 32.25,
+   "section": "the voice",
+   "bpm": null,
+   "notes": "Everything drops to a low sub and one sustained cello note under the voice."
+  },
+  {
+   "t": 35.0,
+   "section": "world · main theme expands",
+   "bpm": 78,
+   "notes": "Piano motif plus low strings in octaves; slowly expanding; every cut lands on a beat."
+  },
+  {
+   "t": 45.0,
+   "section": "world · the past",
+   "bpm": 78,
+   "notes": "Frame drum on beats 1 and 3, breathy flute counter-line, plucked strings and water texture for the valley (no cultural pastiche)."
+  },
+  {
+   "t": 55.75,
+   "section": "world · night glass",
+   "bpm": 78,
+   "notes": "Glass tones and sparse piano for the observatory night and the clockmaker; strings hold."
+  },
+  {
+   "t": 61.167,
+   "section": "world · beautiful catastrophe",
+   "bpm": 78,
+   "notes": "Wide strings, distant brass, processed wind; sparse piano; no heavy drums (bible 2196 cue)."
+  },
+  {
+   "t": 68.833,
+   "section": "the Witness",
+   "bpm": 54,
+   "notes": "The motif slower and lower in bowed bass and bowed metal, irregular pulse; the three glass taps are its last notes."
+  },
+  {
+   "t": 72.708,
+   "section": "card · breath",
+   "bpm": null,
+   "notes": "Near silence; one reversed glass swell rises into the montage downbeat."
+  },
+  {
+   "t": 75.0,
+   "section": "montage · the Nine-Minute War",
+   "bpm": 118,
+   "notes": "Precise layered percussion (frame drum, low toms, ticks), short string ostinati; every 7th bar slips by an eighth; brief gaps and reversed impacts before hits; no trailer booms."
+  },
+  {
+   "t": 87.208,
+   "section": "montage · half-bar cuts",
+   "bpm": 118,
+   "notes": "All layers; the string ostinato doubles; a reversed impact before every second cut; the last bar thins to ticks alone."
+  },
+  {
+   "t": 97.375,
+   "section": "SILENCE",
+   "bpm": null,
+   "notes": "Hard stop: 1.2 s of digital silence."
+  },
+  {
+   "t": 98.583,
+   "section": "title · main theme reprise",
+   "bpm": 78,
+   "notes": "Piano motif alone, then cello; strings bloom under the tagline; the hopeful suspended chord on the title card, its top note left unresolved."
+  },
+  {
+   "t": 109.583,
+   "section": "button",
+   "bpm": null,
+   "notes": "Only diegetic sound: ring hum, Iven's voice, the switch stinger, then silence on the cut."
+  },
+  {
+   "t": 112.083,
+   "section": "end card",
+   "bpm": null,
+   "notes": "One low piano A ringing out under a rain tail; fade over the last second."
+  }
+ ],
+ "hits": [
+  19.75,
+  35.0,
+  45.0,
+  51.167,
+  61.167,
+  68.833,
+  75.0,
+  79.083,
+  81.083,
+  83.125,
+  85.167,
+  87.208,
+  88.208,
+  89.25,
+  90.25,
+  91.292,
+  92.292,
+  93.292,
+  94.333,
+  95.333,
+  96.375,
+  97.375,
+  98.583,
+  105.083,
+  112.083
+ ],
+ "silences": [
+  {
+   "t": 19.75,
+   "dur": 1.0,
+   "what": "the Zero Second"
+  },
+  {
+   "t": 97.375,
+   "dur": 1.2,
+   "what": "before the final image"
+  }
+ ],
+ "sfx": [
+  {
+   "t": 0.0,
+   "cue": "rain bed (Rain City)",
+   "notes": "Fade in over 1.5 s; the game's rain + crowd beds."
+  },
+  {
+   "t": 9.9,
+   "cue": "toy un-fall: reverse whoosh",
+   "notes": "The toy rises back into her hand (the game's rewind voice, soft)."
+  },
+  {
+   "t": 13.2,
+   "cue": "Chronolith glass chime",
+   "notes": "The band flares on Kai's wrist."
+  },
+  {
+   "t": 14.5,
+   "cue": "reversed clock ticks",
+   "notes": "Each tick with its pre-echo; one per second."
+  },
+  {
+   "t": 17.6,
+   "cue": "train horn",
+   "notes": "The game's 311 / 370 Hz sawtooth pair, then rail hiss rising."
+  },
+  {
+   "t": 19.75,
+   "cue": "the Zero Second: total silence",
+   "notes": "1.0 s, rain included."
+  },
+  {
+   "t": 20.75,
+   "cue": "causal-consequence resonance",
+   "notes": "Low metallic resonance followed by a brief dropout (bible section 7)."
+  },
+  {
+   "t": 24.0,
+   "cue": "Kai's footsteps in the held rain",
+   "notes": "The only moving sound; glass-harmonic shimmer from the frozen drops."
+  },
+  {
+   "t": 28.6,
+   "cue": "motif sting",
+   "notes": "The game's motif stinger as Mira looks at Kai."
+  },
+  {
+   "t": 35.0,
+   "cue": "lockdown alarm (muffled)",
+   "notes": "Helix alarm through glass, two pulses."
+  },
+  {
+   "t": 40.375,
+   "cue": "temporal switch ×4",
+   "notes": "The switch stinger on each era flicker in s11 (t 41.4, 42.2, 43.0, 43.8)."
+  },
+  {
+   "t": 45.0,
+   "cue": "temporal switch (transition)",
+   "notes": "Into the ancient valley; wind and water bed."
+  },
+  {
+   "t": 51.167,
+   "cue": "temporal switch + causal resonance",
+   "notes": "The valley floods; the dam hum under it."
+  },
+  {
+   "t": 58.833,
+   "cue": "door, rain",
+   "notes": "Hensel's door opening in the rain."
+  },
+  {
+   "t": 61.167,
+   "cue": "temporal switch (transition)",
+   "notes": "Into 2196: wind, birds, a far bell."
+  },
+  {
+   "t": 70.2,
+   "cue": "three notes on glass",
+   "notes": "E-B-A tapped on the gallery glass (the game's glass voice), 0.55 s apart."
+  },
+  {
+   "t": 75.0,
+   "cue": "heartbeat at 08:14",
+   "notes": "As Meridian freezes; then the rewind ripple."
+  },
+  {
+   "t": 79.083,
+   "cue": "Echo Step",
+   "notes": "Afterimage swish, a doubled transient."
+  },
+  {
+   "t": 81.083,
+   "cue": "inversion: reversed rain swell",
+   "notes": "Rain played backward under the upward rain."
+  },
+  {
+   "t": 83.125,
+   "cue": "returned shells",
+   "notes": "Reversed impacts, never a boom: incoming whistle reversed into a dry crack."
+  },
+  {
+   "t": 90.25,
+   "cue": "flood siren",
+   "notes": "Surge siren, one wail."
+  },
+  {
+   "t": 92.292,
+   "cue": "tower collapse groan",
+   "notes": "Low steel groan."
+  },
+  {
+   "t": 93.292,
+   "cue": "temporal switch (transition)",
+   "notes": "Into the drowned valley."
+  },
+  {
+   "t": 94.333,
+   "cue": "storm front",
+   "notes": "Wind roar with the anchor hum failing."
+  },
+  {
+   "t": 96.375,
+   "cue": "temporal switch (transition)",
+   "notes": "Into the held yards."
+  },
+  {
+   "t": 97.375,
+   "cue": "silence",
+   "notes": "1.2 s."
+  },
+  {
+   "t": 98.583,
+   "cue": "Chronolith hum",
+   "notes": "Low ring hum under the final image."
+  },
+  {
+   "t": 111.9,
+   "cue": "temporal switch",
+   "notes": "The cut to black lands on it."
+  },
+  {
+   "t": 112.083,
+   "cue": "rain tail",
+   "notes": "Light rain under the end card."
+  }
+ ],
+ "store_cut": [
+  {
+   "shot": "s01",
+   "in": 1.0,
+   "dur": 3.6
+  },
+  {
+   "shot": "s07",
+   "in": 0.6,
+   "dur": 3.0
+  },
+  {
+   "shot": "s11",
+   "in": 0.9,
+   "dur": 3.5
+  },
+  {
+   "shot": "s14",
+   "in": 1.2,
+   "dur": 3.5
+  },
+  {
+   "shot": "s17",
+   "in": 0.8,
+   "dur": 3.0
+  },
+  {
+   "shot": "s21",
+   "in": 0.4,
+   "dur": 2.0
+  },
+  {
+   "shot": "s22",
+   "in": 0.5,
+   "dur": 2.0
+  },
+  {
+   "shot": "s23",
+   "in": 0.4,
+   "dur": 2.0
+  },
+  {
+   "shot": "s28",
+   "in": 0.2,
+   "dur": 1.5
+  },
+  {
+   "shot": "s30",
+   "in": 0.2,
+   "dur": 1.5
+  },
+  {
+   "shot": "s35",
+   "in": 0.5,
+   "dur": 4.4
+  }
+ ],
+ "store_cut_size": [
+  1920,
+  886
+ ]
+}

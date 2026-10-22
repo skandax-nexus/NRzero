@@ -1,0 +1,455 @@
+{
+ "shots": [
+  {
+   "id": "s05",
+   "group": "g2",
+   "mission": 1,
+   "beat": "Central Station platform: people waiting in the rain; a train's light swells up the track.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0.15, -79, Math.PI)"
+    },
+    {
+     "until": "__game.interactables.some(i => i.prompt.includes('badge'))",
+     "timeout": 30
+    },
+    {
+     "eval": "__game.use('badge')"
+    },
+    {
+     "until": "__game.flags.gate",
+     "timeout": 40
+    },
+    {
+     "eval": "__game.player.place(2, 0.15, -98, Math.PI)"
+    },
+    {
+     "wait": 1.0
+    }
+   ],
+   "frames": 78,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 54,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       6.0,
+       1.5,
+       -114.0
+      ],
+      "l": [
+       13.2,
+       2.0,
+       -88
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.25,
+      "p": [
+       6.3,
+       1.5,
+       -113.0
+      ],
+      "l": [
+       13.2,
+       2.0,
+       -88
+      ],
+      "fov": 39,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [
+    {
+     "t": 0.3,
+     "eval": "__game.player.place(3, 0.15, -106, Math.PI)"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Jun Park (transit operator), three civilians on the platform, Kai (foreground left)",
+   "lighting": "Warm platform canopy light, the yellow edge strip, the stopped station clock.",
+   "sound": "Train horn (the game's 311 / 370 Hz pair), rising rail hiss.",
+   "notes": "The mission freezes ~2.2 s after Kai crosses z -104 (action at t 0.3): cut out on the frame before the freeze."
+  },
+  {
+   "id": "s06",
+   "group": "g2",
+   "mission": 1,
+   "beat": "The Zero Second: the derailing train hangs in the air, sparks and rain frozen around it.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0.15, -79, Math.PI)"
+    },
+    {
+     "until": "__game.interactables.some(i => i.prompt.includes('badge'))",
+     "timeout": 30
+    },
+    {
+     "eval": "__game.use('badge')"
+    },
+    {
+     "until": "__game.flags.gate",
+     "timeout": 40
+    },
+    {
+     "eval": "__game.player.place(2, 0.15, -98, Math.PI)"
+    },
+    {
+     "wait": 1.0
+    },
+    {
+     "eval": "__game.player.place(3, 0.15, -106, Math.PI)"
+    },
+    {
+     "until": "__game.flags.frozen",
+     "timeout": 30
+    },
+    {
+     "wait": 0.3
+    }
+   ],
+   "frames": 120,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 96,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       8.3,
+       1.25,
+       -101.5
+      ],
+      "l": [
+       12.3,
+       1.3,
+       -92
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.0,
+      "p": [
+       8.7,
+       1.4,
+       -99.8
+      ],
+      "l": [
+       12.4,
+       1.5,
+       -90
+      ],
+      "fov": 38,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Frozen civilians, Jun",
+   "lighting": "The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads.",
+   "sound": "Hard cut into one second of total silence (bible: the Zero Second), then a low metallic resonance.",
+   "notes": ""
+  },
+  {
+   "id": "s07",
+   "group": "g2",
+   "mission": 1,
+   "beat": "Kai walks alone through the frozen station: the only thing still moving.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0.15, -79, Math.PI)"
+    },
+    {
+     "until": "__game.interactables.some(i => i.prompt.includes('badge'))",
+     "timeout": 30
+    },
+    {
+     "eval": "__game.use('badge')"
+    },
+    {
+     "until": "__game.flags.gate",
+     "timeout": 40
+    },
+    {
+     "eval": "__game.player.place(2, 0.15, -98, Math.PI)"
+    },
+    {
+     "wait": 1.0
+    },
+    {
+     "eval": "__game.player.place(3, 0.15, -106, Math.PI)"
+    },
+    {
+     "until": "__game.flags.frozen",
+     "timeout": 30
+    },
+    {
+     "until": "__game.flags.frozen && __game.control",
+     "timeout": 40
+    },
+    {
+     "eval": "__game.player.place(-1.5, 0.15, -100.5, 2.6)"
+    },
+    {
+     "wait": 0.3
+    }
+   ],
+   "frames": 120,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 96,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -1.93,
+       1.5,
+       -1.87
+      ],
+      "l": [
+       0.41,
+       1.3,
+       -0.69
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.0,
+      "p": [
+       -2.05,
+       1.55,
+       -1.7
+      ],
+      "l": [
+       0.41,
+       1.3,
+       -0.69
+      ],
+      "fov": 40,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0,
+    "anchor": "DIR.actor('kai').root.position",
+    "anchorLive": true,
+    "focusOn": "DIR.actor('kai').head"
+   },
+   "actions": [
+    {
+     "t": 0.0,
+     "down": "KeyW"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai (tracking side-on), frozen commuters and umbrellas between camera and Kai",
+   "lighting": "Frozen rain beads catch the station light; Kai the only warm, moving figure.",
+   "sound": "Kai's footsteps, glass-harmonic shimmer of the held rain.",
+   "notes": ""
+  },
+  {
+   "id": "s08",
+   "group": "g2",
+   "mission": 1,
+   "beat": "In the crowd, a woman with Mira's face looks at Kai, then comes apart like light.",
+   "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0.15, -79, Math.PI)"
+    },
+    {
+     "until": "__game.interactables.some(i => i.prompt.includes('badge'))",
+     "timeout": 30
+    },
+    {
+     "eval": "__game.use('badge')"
+    },
+    {
+     "until": "__game.flags.gate",
+     "timeout": 40
+    },
+    {
+     "eval": "__game.player.place(2, 0.15, -98, Math.PI)"
+    },
+    {
+     "wait": 1.0
+    },
+    {
+     "eval": "__game.player.place(3, 0.15, -106, Math.PI)"
+    },
+    {
+     "until": "__game.flags.frozen",
+     "timeout": 30
+    },
+    {
+     "until": "__game.flags.frozen && __game.control",
+     "timeout": 40
+    },
+    {
+     "eval": "[0,1,2].forEach(()=>{const it=__game.interactables.find(i=>i.prompt.includes('safety')); if(it) __game.useInteract(it);})"
+    },
+    {
+     "until": "__game.actors.mira && __game.actors.mira.root.visible",
+     "timeout": 60
+    }
+   ],
+   "frames": 132,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 108,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -2.75,
+       1.63,
+       -121.9
+      ],
+      "l": [
+       -3.5,
+       1.58,
+       -125.0
+      ],
+      "fov": 30,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.5,
+      "p": [
+       -2.86,
+       1.62,
+       -122.45
+      ],
+      "l": [
+       -3.5,
+       1.58,
+       -125.0
+      ],
+      "fov": 28,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('mira').head"
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Mira (close-up, looking at Kai), crowd behind",
+   "lighting": "Helix entrance glow behind her; her violet dissolve (the mission's ghost shader).",
+   "sound": "The three-note motif (E-B-A) on felt piano; Kai: \"...Mira?\"",
+   "notes": "The mission fades her out (alpha 0.7 / s) right after Kai's line: about 1.6 s solid, 1.4 s dissolve."
+  },
+  {
+   "id": "s16",
+   "group": "g2",
+   "mission": 6,
+   "beat": "The clockmaker opens his door before Kai knocks: \"You're late.\"",
+   "url": "index.html?m=5&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "until": "__game.control && __game.interactables.some(i=>i.prompt.includes('Knock'))",
+     "timeout": 600
+    },
+    {
+     "eval": "__game.player.place(0, 0, 9.8, Math.PI); __game.use('Knock')"
+    },
+    {
+     "until": "__game.actors.oskar && __game.actors.oskar.root.visible && __game.actors.oskar.root.position.z > 7.85",
+     "timeout": 30
+    }
+   ],
+   "frames": 80,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 56,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       0.95,
+       1.72,
+       9.75
+      ],
+      "l": [
+       0.1,
+       1.62,
+       7.95
+      ],
+      "fov": 34,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.0,
+      "p": [
+       0.85,
+       1.72,
+       9.55
+      ],
+      "l": [
+       0.1,
+       1.62,
+       7.95
+      ],
+      "fov": 32,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('oskar').head"
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Oskar Hensel (78, clockmaker) in his doorway, Kai (foreground shoulder)",
+   "lighting": "Rain on the old quarter, warm shop light from inside the door.",
+   "sound": "",
+   "notes": "The mission stages this scene itself after the knock; the path holds its close shot a little longer."
+  }
+ ]
+}

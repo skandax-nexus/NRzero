@@ -1,0 +1,524 @@
+{
+ "shots": [
+  {
+   "id": "s19",
+   "group": "g6",
+   "mission": 12,
+   "beat": "The man behind the glass: from behind a grey-haired man in a long coat, Kai beyond the glass. He taps three notes.",
+   "url": "index.html?m=11&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && window.__m12 && __game.control && document.getElementById('objective-text').textContent.includes('Rook')",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0, -6.4, Math.PI)"
+    },
+    {
+     "until": "__game.actors.witness && __game.actors.witness.root.visible",
+     "timeout": 40
+    },
+    {
+     "wait": 3.4
+    }
+   ],
+   "frames": 117,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 93,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       3.0,
+       1.55,
+       -12.9
+      ],
+      "l": [
+       1.6,
+       1.6,
+       -7.5
+      ],
+      "fov": 32,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.9,
+      "p": [
+       2.85,
+       1.58,
+       -12.55
+      ],
+      "l": [
+       1.6,
+       1.6,
+       -7.5
+      ],
+      "fov": 30,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('kai').head"
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "The Witness (back and shoulder only, never his face), Kai behind the glass (in focus)",
+   "lighting": "Test Hall C lights up on him; the gallery glass reflects; his coat a dark silhouette.",
+   "sound": "Three notes tapped on the glass (E-B-A), the game's glass voice; then silence.",
+   "notes": "Spoiler rule: his face and wrist are never in frame."
+  },
+  {
+   "id": "s20",
+   "group": "g6",
+   "mission": 9,
+   "beat": "Montage: Meridian Square at 08:14:00 — the whole district stops, then rewinds to 08:05.",
+   "url": "index.html?m=8&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.player.place(-31, 7.2, -24, Math.PI / 2)"
+    },
+    {
+     "wait": 0.5
+    },
+    {
+     "eval": "import('/src/systems/loops.js').then(m => { const L = m.loopState.active; L.skipTo(535.4); return L.t; })"
+    }
+   ],
+   "frames": 122,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 98,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -29.4,
+       9.2,
+       -21.5
+      ],
+      "l": [
+       8,
+       2,
+       -34
+      ],
+      "fov": 50,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.1,
+      "p": [
+       -28.4,
+       8.9,
+       -22.6
+      ],
+      "l": [
+       8,
+       2,
+       -34
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Continuum troopers in white armour, commuters, the tram",
+   "lighting": "Morning light on the square; the freeze desaturates it as the reset arrives.",
+   "sound": "",
+   "notes": "The loop fires its reset at loop time 538.6 (DUR - 1.4): about 3.2 s after the skip."
+  },
+  {
+   "id": "s21",
+   "group": "g6",
+   "mission": 12,
+   "beat": "Montage: Echo Step — Kai leaves an afterimage and slips through the jammed lockdown shutter.",
+   "url": "index.html?m=11&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && window.__m12 && __game.control && document.getElementById('objective-text').textContent.includes('Rook')",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0, -6.4, Math.PI)"
+    },
+    {
+     "until": "__game.control && document.getElementById('objective-text').textContent.includes('Chase')",
+     "timeout": 240
+    },
+    {
+     "eval": "__game.player.place(10, 0, 0.4, Math.PI)"
+    },
+    {
+     "until": "__m12.S.seen && __m12.S.seen.glimpse1 && __game.control",
+     "timeout": 120
+    },
+    {
+     "eval": "__game.player.place(10, 0, -16.2, Math.PI)"
+    },
+    {
+     "until": "__game.control && document.getElementById('objective-text').textContent.includes('Echo Step')",
+     "timeout": 120
+    },
+    {
+     "eval": "__game.player.place(10, 0, -19.9, Math.PI); __game.player.yaw = Math.PI"
+    },
+    {
+     "wait": 0.6
+    }
+   ],
+   "frames": 72,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 48,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       12.6,
+       1.35,
+       -17.6
+      ],
+      "l": [
+       9.8,
+       1.1,
+       -21.0
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.05,
+      "p": [
+       12.3,
+       1.35,
+       -18.1
+      ],
+      "l": [
+       9.8,
+       1.1,
+       -21.4
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [
+    {
+     "t": 0.7,
+     "eval": "__m12.echo.trigger()"
+    }
+   ],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Kai and his afterimage",
+   "lighting": "Lockdown red on the shutter, cyan afterimage.",
+   "sound": "",
+   "notes": "Setup follows tools/tests/m12.json up to the shutter."
+  },
+  {
+   "id": "s23",
+   "group": "g6",
+   "mission": 13,
+   "beat": "Montage: 2196, the same yards are a battlefield; shells arc out of the stabilizer's ring.",
+   "url": "index.html?m=12&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && window.__m13 && __game.control && document.getElementById('objective-text').textContent.includes('held district')",
+   "setup": [
+    {
+     "eval": "__game.player.place(2, 0, 51, Math.PI)"
+    },
+    {
+     "until": "__game.temporal.current === '2196'",
+     "timeout": 60
+    },
+    {
+     "wait": 2.0
+    }
+   ],
+   "frames": 73,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 49,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -3,
+       8.5,
+       40
+      ],
+      "l": [
+       0,
+       9,
+       -6
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.0,
+      "p": [
+       -2.5,
+       8.0,
+       36.8
+      ],
+      "l": [
+       0,
+       9,
+       -6
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0.12
+   },
+   "actions": [
+    {
+     "t": 0.6,
+     "eval": "__m13.W.tracer([0, 9, -2], [-4, 0.5, 42], 1.6, 7)"
+    },
+    {
+     "t": 1.3,
+     "eval": "__m13.W.tracer([0, 9, -2], [3, 0.5, -40], 1.6, 7)"
+    }
+   ],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "Unwritten fighters behind the barricade (small)",
+   "lighting": "Smoke and dust, tracer light from the spire.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s24",
+   "group": "g6",
+   "mission": 13,
+   "beat": "Sera Voss, who leads the survivors: \"The future that survives long enough to remember us.\"",
+   "url": "index.html?m=12&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && window.__m13 && __game.control && document.getElementById('objective-text').textContent.includes('held district')",
+   "setup": [
+    {
+     "eval": "__game.player.place(2, 0, 51, Math.PI)"
+    },
+    {
+     "until": "__game.temporal.current === '2196'",
+     "timeout": 60
+    },
+    {
+     "until": "__game.control && document.getElementById('objective-text').textContent.includes('Cross the yard')",
+     "timeout": 200
+    },
+    {
+     "eval": "(()=>{const g=__game, s=g.actors.sera; g.player.place(2.3, 0.15, 51.4, 0.3); s.root.position.set(2.6, 0.15, 54.0); s.root.rotation.y = Math.PI + 0.2; s.speed = 0; s.lookTarget = g.player.char.head; return 'sera'})()"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 73,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 49,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       3.3,
+       1.62,
+       51.75
+      ],
+      "l": [
+       2.6,
+       1.6,
+       54.0
+      ],
+      "fov": 30,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 3.0,
+      "p": [
+       3.22,
+       1.62,
+       51.95
+      ],
+      "l": [
+       2.6,
+       1.6,
+       54.0
+      ],
+      "fov": 29,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('sera').head"
+   },
+   "actions": [
+    {
+     "t": 0.62,
+     "eval": "DIR.actor('sera').talk = 2.6"
+    }
+   ],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "Sera Voss (close-up), Kai (soft foreground shoulder)",
+   "lighting": "Firelight from the camp on one side, grey war light on the other.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s29",
+   "group": "g6",
+   "mission": 10,
+   "beat": "Montage: the Continuum spire grafted onto the ruin of Helix, dusk, 2196.",
+   "url": "index.html?m=9&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "frames": 48,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 24,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       150,
+       22,
+       50
+      ],
+      "l": [
+       70,
+       30,
+       0
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       146,
+       21,
+       46.5
+      ],
+      "l": [
+       70,
+       30,
+       0
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "none",
+   "lighting": "Dusk, the pearl spire lit gold.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s34",
+   "group": "g6",
+   "mission": 13,
+   "beat": "Montage: the Sable Yards held in one second — people mid-step, rain hanging in the air.",
+   "url": "index.html?m=12&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && window.__m13 && __game.control && document.getElementById('objective-text').textContent.includes('held district')",
+   "setup": [
+    {
+     "wait": 0.5
+    }
+   ],
+   "frames": 48,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 24,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       4.2,
+       1.5,
+       61
+      ],
+      "l": [
+       -8.2,
+       1.1,
+       55.4
+      ],
+      "fov": 36,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       3.7,
+       1.5,
+       59.9
+      ],
+      "l": [
+       -8.2,
+       1.1,
+       55.4
+      ],
+      "fov": 36,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "rain2049",
+   "approved": false,
+   "characters": "Held residents, a courier, an umbrella",
+   "lighting": "Grey dawn, beads of rain frozen in the air.",
+   "sound": "",
+   "notes": ""
+  }
+ ]
+}

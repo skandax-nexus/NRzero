@@ -1,0 +1,423 @@
+{
+ "shots": [
+  {
+   "id": "s12",
+   "group": "g4",
+   "mission": 4,
+   "beat": "The ancient settlement at golden hour: a valley built around a ring of stone.",
+   "url": "index.html?m=3&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.actors.niko",
+   "setup": [
+    {
+     "eval": "__game.player.place(0, 0, 21.5, Math.PI)"
+    },
+    {
+     "wait": 0.6
+    }
+   ],
+   "frames": 98,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 74,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       4.5,
+       1.6,
+       27.5
+      ],
+      "l": [
+       0,
+       2.4,
+       -10
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.1,
+      "p": [
+       3.0,
+       6.2,
+       25.0
+      ],
+      "l": [
+       0,
+       3.0,
+       -12
+      ],
+      "fov": 48,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [
+    {
+     "t": 0.3,
+     "down": "KeyW"
+    }
+   ],
+   "grade": "ancient",
+   "approved": false,
+   "characters": "Kai walking in, Tala and villagers",
+   "lighting": "Low warm sun, long shadows, dust motes; the stone ring at the heart of the village.",
+   "sound": "Wind and water bed; the switch transition lands on the cut.",
+   "notes": ""
+  },
+  {
+   "id": "s13",
+   "group": "g4",
+   "mission": 4,
+   "beat": "Niko, keeper of the Telling, reads the ring on Kai's wrist: \"You came before the first fire.\"",
+   "url": "index.html?m=3&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control && __game.actors.niko",
+   "setup": [
+    {
+     "eval": "(()=>{const g=__game, n=g.actors.niko; g.player.place(1.14, 0.6, -4.1, 2.57); n.root.rotation.y=-0.373; n.lookTarget=g.player.char.head; g.player.char.lookTarget=n.head; return 'niko'})()"
+    },
+    {
+     "wait": 1.0
+    }
+   ],
+   "frames": 98,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 74,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       1.3,
+       2.0,
+       -3.35
+      ],
+      "l": [
+       2.5,
+       2.08,
+       -6.2
+      ],
+      "fov": 32,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.1,
+      "p": [
+       1.45,
+       1.99,
+       -3.75
+      ],
+      "l": [
+       2.5,
+       2.08,
+       -6.2
+      ],
+      "fov": 30,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0,
+    "focusOn": "DIR.actor('niko').head"
+   },
+   "actions": [
+    {
+     "t": 0.9,
+     "eval": "DIR.actor('niko').talk = 1.5"
+    }
+   ],
+   "grade": "ancient",
+   "approved": false,
+   "characters": "Niko (close-up), Kai (soft foreground shoulder)",
+   "lighting": "Warm key from the low sun, cool sky fill; shallow focus.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s14",
+   "group": "g4",
+   "mission": 5,
+   "beat": "One valley, two ages: the thriving village switches to Helix's drowned Reservoir 7.",
+   "url": "index.html?m=4&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 134,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 110,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       4.6,
+       9.0,
+       14.6
+      ],
+      "l": [
+       -6,
+       1,
+       -6
+      ],
+      "fov": 50,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 5.6,
+      "p": [
+       3.2,
+       8.6,
+       13.3
+      ],
+      "l": [
+       -6,
+       1,
+       -6
+      ],
+      "fov": 49,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [
+    {
+     "t": 2.6,
+     "eval": "DIR.era('flooded', 1.0)"
+    },
+    {
+     "t": 3.0,
+     "eval": "__game.engine.setGrade('neutral')"
+    }
+   ],
+   "grade": "ancient",
+   "approved": false,
+   "characters": "Villagers in the lanes (thriving); dead trees standing in the water (flooded)",
+   "lighting": "Golden hour to overcast 2049 daylight; water level rises over the same houses.",
+   "sound": "Switch stinger, then the causal-consequence resonance under the dam hum.",
+   "notes": ""
+  },
+  {
+   "id": "s15",
+   "group": "g4",
+   "mission": 7,
+   "beat": "The Sky House: the observatory at dawn c. 1000 BCE switches to Helix's floodlit 2049 night.",
+   "url": "index.html?m=6&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 98,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 74,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       22,
+       18,
+       72
+      ],
+      "l": [
+       2,
+       10,
+       -10
+      ],
+      "fov": 46,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 4.1,
+      "p": [
+       19.5,
+       17.2,
+       66.5
+      ],
+      "l": [
+       2,
+       10.5,
+       -10
+      ],
+      "fov": 45,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "inOut",
+    "shake": 0
+   },
+   "actions": [
+    {
+     "t": 2.2,
+     "eval": "DIR.era('2049', 1.0)"
+    },
+    {
+     "t": 2.6,
+     "eval": "__game.engine.setGrade('rain2049')"
+    }
+   ],
+   "grade": "ancient",
+   "approved": false,
+   "characters": "Keepers and acolytes on the court (too small to read)",
+   "lighting": "Dawn sun behind the drum, then a starfield over Helix floodlights and scaffolds.",
+   "sound": "Night: glass tones under Mira's recorded voice.",
+   "notes": ""
+  },
+  {
+   "id": "s25",
+   "group": "g4",
+   "mission": 7,
+   "beat": "Montage: dusk on the ruined summit, 2196; the scavenger chief Dace on the pillar, gauntlet glowing.",
+   "url": "index.html?m=6&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.temporal.setImmediate('2196'); __game.player.place(-7.9, 21.06, -21.6, Math.PI / 2)"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 48,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 24,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       7.5,
+       23.1,
+       -11.6
+      ],
+      "l": [
+       0,
+       21.9,
+       -16
+      ],
+      "fov": 44,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       7.0,
+       23.0,
+       -12.2
+      ],
+      "l": [
+       0,
+       21.9,
+       -16
+      ],
+      "fov": 43,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "ruin2196",
+   "approved": false,
+   "characters": "Dace (scavenger boss), scavenger lookouts",
+   "lighting": "Sunset behind the broken rim, Venus low in the west, green gauntlet glow.",
+   "sound": "",
+   "notes": ""
+  },
+  {
+   "id": "s31",
+   "group": "g4",
+   "mission": 5,
+   "beat": "Montage: Reservoir 7, dead trees standing in the water over a village that never existed.",
+   "url": "index.html?m=4&dtcap=0.25&gfx=high&auto",
+   "ready": "window.__game && __game.control",
+   "setup": [
+    {
+     "eval": "__game.temporal.setImmediate('flooded')"
+    },
+    {
+     "wait": 0.8
+    }
+   ],
+   "frames": 49,
+   "handles": 12,
+   "fps": 24,
+   "cut_frames": 25,
+   "camera": {
+    "mode": "path",
+    "keys": [
+     {
+      "t": 0,
+      "p": [
+       -17,
+       10,
+       -4
+      ],
+      "l": [
+       16,
+       1,
+       40
+      ],
+      "fov": 52,
+      "roll": 0,
+      "focus": null
+     },
+     {
+      "t": 2.1,
+      "p": [
+       -15.8,
+       9.7,
+       -3.0
+      ],
+      "l": [
+       16,
+       1,
+       40
+      ],
+      "fov": 52,
+      "roll": 0,
+      "focus": null
+     }
+    ],
+    "ease": "linear",
+    "shake": 0
+   },
+   "actions": [],
+   "grade": "neutral",
+   "approved": false,
+   "characters": "none",
+   "lighting": "Flat overcast light on the water, the dam across the valley.",
+   "sound": "",
+   "notes": ""
+  }
+ ]
+}
