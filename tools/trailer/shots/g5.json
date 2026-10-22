@@ -82,7 +82,10 @@
      "eval": "(async()=>{const T=await import('/vendor/three.module.min.js'); const L=new T.SpotLight(0xffe2c0,60,30,0.35,0.6,1.5); L.position.set(-5.5,3.5,-44); L.target.position.set(-8,5,-54.7); __game.scene.add(L,L.target); return 'statue key on'})()"
     },
     {
-     "eval": "__game.player.place(-4.4, 0, -44.4, Math.PI + 0.1)"
+     "eval": "(()=>{let iv=null; __game.scene.traverse(o=>{ if(o.isMesh && o.name==='ivy') iv=o; }); if(!iv) return 'no ivy'; const a=iv.geometry.attributes.position; let n=0; for(let i=0;i<a.count;i++){ const x=a.getX(i),y=a.getY(i),z=a.getZ(i); if(x>-10.5&&x<-5.5&&z>-51.6&&z<-51.0&&y<2.2){ a.setZ(i,-55); n++; } } a.needsUpdate=true; iv.geometry.computeBoundingSphere(); return 'ivy off the plaque: '+n})()"
+    },
+    {
+     "eval": "__game.player.place(-5.4, 0, -44.0, Math.PI + 0.12)"
     },
     {
      "wait": 0.8
@@ -98,12 +101,12 @@
      {
       "t": 0,
       "p": [
-       -3.6,
-       0.62,
-       -42.0
+       -5.5,
+       0.65,
+       -41.5
       ],
       "l": [
-       -7.0,
+       -7.4,
        4.3,
        -55.0
       ],
@@ -114,13 +117,13 @@
      {
       "t": 4.08,
       "p": [
-       -3.85,
-       0.85,
-       -42.8
+       -5.75,
+       1.15,
+       -42.3
       ],
       "l": [
-       -7.3,
-       4.75,
+       -7.6,
+       4.8,
        -55.0
       ],
       "fov": 40,
@@ -140,38 +143,44 @@
    "actions": [
     {
      "t": 0,
-     "eval": "__game.input.setStick(-0.1, 0.99, 0.3)"
+     "eval": "__game.input.setStick(-0.12, 0.99, 0.3)"
     },
     {
      "t": 1.2,
      "eval": "TR.look('kai', [-8, 5.8, -54.7])"
     },
     {
-     "t": 2.7,
+     "t": 3.6,
      "eval": "__game.input.setStick(0, 0, 0)"
     }
    ],
    "grade": "ruin2196",
-   "approved": false,
+   "approved": true,
    "characters": "Kai (back to camera, walking in from beside the lens, stopping right of the plaque and looking up); the bronze statue",
-   "lighting": "Low angle against the morning sky; a warm run-time key on the bronze from the camera side so it reads as metal, not a silhouette; the plaque lamp moved 2 m forward and up (it burned out a flower bunch beside the plaque).",
+   "lighting": "Low angle against the morning sky; a warm run-time key on the bronze from the camera side so it reads as metal, not a silhouette; the plaque lamp moved 2 m forward and up (it burned out the ivy beside the plaque).",
    "sound": "",
-   "notes": "g5: Kai walks on the touch stick (0.3 = walk) with player.camYaw pinned to 0 for the shot (the game's camera yaw drifts behind a moving Kai and bent his path onto the plaque). He stops at t 2.7 right of the plaque, in front of the east bush. Focus on the statue's head: Kai walks from soft into the focal plane. The memorial cutscene's trigger is registered later in the mission, so the square is free to stage.",
+   "notes": "g5: Kai walks on the touch stick (0.3 = walk) with player.camYaw pinned to 0 for the shot (the game's camera yaw drifts behind a moving Kai and bent his path). His path runs between the plaque and the east bush (the bush at (-4.5, -47.4) has no collision: an earlier path walked through it). The ivy patch hanging in front of the plaque (472 vertices of the merged ivy mesh) is pushed inside the plinth so ARCHITECT OF THE FRACTURE stays legible. Focus on the statue's head: Kai walks from soft into the focal plane. The memorial cutscene's trigger is registered later in the mission, so the square is free to stage.",
    "preview": {
     "status": "ok",
-    "note": "Strong: Kai under his own statue, plaque legible."
+    "note": "g5 final: Kai walks away from the lens to stand beneath his bronze statue; the plaque reads KAI VAREN · ARCHITECT OF THE FRACTURE."
    }
   },
   {
    "id": "s22",
    "group": "g5",
    "mission": 11,
-   "beat": "Montage: Halden General's reversed East Corridor: a gurney, a cylinder and glass fly back to where they were at 08:14.",
+   "beat": "Montage: Halden General's reversed East Corridor, seen from the lab through its empty window: the glass that burst at 08:14 lifts off the floor around Kai, flies back at the lens and seals into the pane, with Kai behind it.",
    "url": "index.html?m=10&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "__game.player.place(14.6, 0, 3.2, Math.PI / 2)"
+     "eval": "__game.control = false"
+    },
+    {
+     "eval": "__game.player.place(32.3, 0, 4.7, Math.PI)"
+    },
+    {
+     "eval": "TR.look('kai', [32, 0.3, 3.0])"
     },
     {
      "wait": 1.5
@@ -187,49 +196,59 @@
      {
       "t": 0,
       "p": [
-       16.4,
-       2.4,
-       2.2
+       32.15,
+       1.6,
+       -0.9
       ],
       "l": [
-       24,
-       0.8,
+       32.15,
+       1.52,
        4.6
       ],
-      "fov": 48,
+      "fov": 44,
       "roll": 0,
-      "focus": 8.13
+      "focus": null
      },
      {
-      "t": 3.05,
+      "t": 3.0,
       "p": [
-       17.3,
-       2.2,
-       2.6
+       32.05,
+       1.62,
+       -0.55
       ],
       "l": [
-       24,
-       0.9,
+       32.1,
+       1.55,
        4.6
       ],
-      "fov": 46,
+      "fov": 42,
       "roll": 0,
-      "focus": 7.11
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0,
+    "focusOn": "kai"
    },
-   "actions": [],
+   "actions": [
+    {
+     "t": 0,
+     "eval": "(()=>{__m11.zones.zCorr.dir=()=>-0.45; const T=__m11.corrTracks; T[2].clock=2.4-0.45*0.45; return T.map(t=>t.o.label+' '+t.clock.toFixed(2)).join(' | ')})()"
+    },
+    {
+     "t": 0.6,
+     "eval": "TR.look('kai', [32, 1.7, 1.2])"
+    }
+   ],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Kai at the threshold (edge of frame)",
-   "lighting": "Hospital corridor in night emergency light; the reversal chevrons on the floor; debris travelling backward.",
+   "approved": true,
+   "characters": "Kai (facing camera in the corridor beyond the window, looking down at the glass, then up as it rises)",
+   "lighting": "The corridor's cold ceiling panels behind and above Kai; the dim lab around the window frame; the hazards' floor rings glowing.",
    "sound": "",
-   "notes": "The corridor's hazards cycle (land, return, hold) on their own schedule; check the strip that one is in flight.",
+   "notes": "g5: camera inside the lab (x 29..35, z -2.4..1) pushing 0.35 m toward the window opening (x 30.5..33.5), which fills the frame. The corridor zone's reversal rate is slowed to 0.45 at run time (zCorr.dir) so the 0.8 s glass return plays over 1.8 s (t 0.45 -> 2.23, sealed before the cut-out); everything in the corridor slows together. game.control is off for the shot (no hazard hits; the mission is still waiting at the cordon, |x| > 9). The storyboard's corridor angle was replaced: plain walls, small hazards, Kai at the frame edge.",
    "preview": {
     "status": "ok",
-    "note": "Debris in flight with the reversal rings; the corridor itself is plain."
+    "note": "g5 final: through the lab window, the 08:14 glass flies back at the lens in slow motion and seals into the pane with Kai behind it."
    }
   },
   {
@@ -241,7 +260,10 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "wait": 0.8
+     "eval": "__game.player.place(4.6, 0.12, -64.4, Math.PI)"
+    },
+    {
+     "wait": 1.2
     }
    ],
    "frames": 48,
@@ -254,38 +276,39 @@
      {
       "t": 0,
       "p": [
-       1.8,
-       1.5,
-       -63.0
+       1.9,
+       1.45,
+       -67.9
       ],
       "l": [
        -0.6,
-       1.25,
+       1.5,
        -66.6
       ],
-      "fov": 40,
+      "fov": 36,
       "roll": 0,
-      "focus": 4.33
+      "focus": null
      },
      {
-      "t": 2.1,
+      "t": 2.0,
       "p": [
-       1.45,
+       1.3,
        1.5,
-       -63.5
+       -68.4
       ],
       "l": [
        -0.6,
-       1.25,
+       1.5,
        -66.6
       ],
-      "fov": 39,
+      "fov": 34,
       "roll": 0,
-      "focus": 3.72
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0,
+    "focusOn": "yara"
    },
    "actions": [],
    "grade": "rain2049",

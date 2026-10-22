@@ -1,0 +1,3 @@
+{ "name": "m4_ancient", "m": 3, "ready": "window.__game && __game.control && __game.actors.niko", "hide": ["niko"],
+  "spot": { "x": 2.5, "y": 0.6, "z": -6.2, "cam": [1.05, -2.95] },
+  "subjects": [ { "name": "villager", "look": { "costume": "villager" } }, { "name": "niko", "role": "niko" }, { "name": "crowd_anc_f1", "look": { "costume": "anc_f1" } }, { "name": "crowd_anc_m2", "look": { "costume": "anc_m2" } }, { "name": "crowd_anc_kid_m", "look": { "costume": "anc_kid_m" } } ] }

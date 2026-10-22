@@ -1,0 +1,3 @@
+{ "name": "m3_2196", "m": 2, "era": "2196", "ready": "window.__game && __game.control && __game.interactables.some(i=>i.prompt.includes('Touch'))",
+  "spot": { "x": 1.6, "y": 0, "z": -21, "cam": [1.2, -16.5] },
+  "subjects": [ { "name": "sera", "role": "sera" }, { "name": "continuum_1", "look": { "costume": "continuum_1" } }, { "name": "continuum_2", "look": { "costume": "continuum_2" } }, { "name": "crowd_surv_f1", "look": { "costume": "surv_f1" } }, { "name": "kai", "player": true } ] }

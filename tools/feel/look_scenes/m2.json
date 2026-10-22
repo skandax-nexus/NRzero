@@ -1,0 +1,3 @@
+{ "name": "m2_helix", "m": 1, "ready": "window.__game && __game.control && __game.actors.iven", "hide": ["iven"],
+  "spot": { "x": 7.2, "y": 0, "z": -43.5, "cam": [4.75, -42.35] },
+  "subjects": [ { "name": "iven", "role": "iven" }, { "name": "rook", "role": "rook" }, { "name": "kai", "player": true }, { "name": "crowd_helix_sci_f", "look": { "costume": "helix_sci_f" } } ] }

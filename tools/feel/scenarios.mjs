@@ -38,7 +38,7 @@ export function scenarios() {
   add({ name: 'cam_wall', frames: 90, place: [24.6, 0, -2, -PI / 2], camYaw: -PI / 2 + PI, timeline: [{ f: 5, down: ['KeyS'] }, { f: 60, up: ['KeyS'] }, { f: 61, camYawRate: 2 }, { f: 85, camYawRate: 0 }], render: SHEET(6, ['chase']), meta: { note: 'backing toward the 3 m platform wall (camera blocker) with the camera behind' } });
   add({ name: 'crowd', frames: 180, place: [-3, 0, 14, PI], npc: true,
     setup: `for (let i = 0; i < 6; i++) FEEL.walker({ x: 1.5 + i * 1.2, z0: 2, z1: 12, speed: 0.9 + 0.12 * i }, 11 + i * 7); FEEL.actor('iven', -1.5, 0, 6, 0.4);`,
-    wide: { p: [-4.5, 1.6, 9], l: [4, 1.0, 6], fov: 55 }, render: SHEET(6, ['wide']), meta: { note: 'Walker crowd (props.js) + a standing NPC' } });
+    wide: { p: [-1.5, 1.5, 13.5], l: [4.5, 0.9, 6.5], fov: 42 }, render: SHEET(6, ['wide']), meta: { note: 'Walker crowd (props.js) + a standing NPC' } });
   // ---------------- physics only (no render) ----------------
   for (const fps of [15, 30, 60, 144]) {
     const dt = 1 / fps, F = s => Math.round(s * fps);

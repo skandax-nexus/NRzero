@@ -236,17 +236,20 @@
    "notes": "A slow crane down and in from the north end of the valley (10.4 to 8.4 m, 5 m forward, 44 to 43 deg) over the rooftops toward the plaza fire, the waterwheel on the channel at left and the Water Ring on the retaining wall at right. At 2.6 s DIR.era switches to the flooded state: the same Water Ring stands on the same wall over the survey buoy, dead trees in the water, the outlet tower and the dam across the valley. GTAO fades out at 24-44 m (uFade) because the engine's GTAO bands the distant hillsides into horizontal stripes.",
    "preview": {
     "status": "ok",
-    "note": "Thriving village switches to the flooded reservoir with dead trees."
+    "note": "Golden village with the plaza fire and the Water Ring switches to the cold reservoir: same wall, same ring, the buoy, dead trees, the tower and the dam."
    }
   },
   {
    "id": "s15",
    "group": "g4",
    "mission": 7,
-   "beat": "The Sky House: the observatory at dawn c. 1000 BCE switches to Helix's floodlit 2049 night.",
+   "beat": "The Sky House: the bronze Sun Gate at dawn c. 1000 BCE, keepers below it, switches to Helix's 2049 night: the same gate dark under the stars, the drum under its glowing survey canopy.",
    "url": "index.html?m=6&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
+    {
+     "eval": "(()=>{const g=__game, m=window.__m7, W=m.W; m.sunGate.set(62, 6, false); W.setBeam(true); W.sunBeam.visible = true; const s=g.actors.sefa; if (s) s.lookTarget = new TR.V(40, 9, 12); return 'sun gate aimed at the sunrise (062, 6), weight-beam lowered as the bridge, sunbeam on'})()"
+    },
     {
      "wait": 0.8
     }
@@ -261,70 +264,78 @@
      {
       "t": 0,
       "p": [
-       -9,
-       26,
-       -2
+       23.9,
+       7.5,
+       34.7
       ],
       "l": [
-       12,
-       4,
-       30
+       2.0,
+       12.6,
+       12.0
       ],
-      "fov": 48,
+      "fov": 40,
       "roll": 0,
-      "focus": 44.15
+      "focus": null
      },
      {
-      "t": 4.1,
+      "t": 4.08,
       "p": [
-       -6.5,
-       24.5,
-       0.5
+       22.3,
+       7.0,
+       33.1
       ],
       "l": [
-       12,
-       4.5,
-       30
+       2.0,
+       12.2,
+       12.0
       ],
-      "fov": 47,
+      "fov": 38.5,
       "roll": 0,
-      "focus": 40.16
+      "focus": null
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0.06,
+    "rig": false
    },
    "actions": [
     {
-     "t": 2.2,
-     "eval": "DIR.era('2049', 1.0)"
+     "t": 1.55,
+     "eval": "DIR.era('2049', 0.9)"
     },
     {
-     "t": 2.6,
+     "t": 2.0,
      "eval": "__game.engine.setGrade('rain2049')"
+    },
+    {
+     "t": 2.05,
+     "eval": "(()=>{const r=__game.engine.renderer; r.toneMappingExposure = 2.0; return [__game.temporal.current, r.toneMappingExposure]})()"
     }
    ],
    "grade": "ancient",
-   "approved": false,
-   "characters": "Keepers and acolytes on the court (too small to read)",
-   "lighting": "Over the drum toward the sunrise, then the same view at night: a starfield over Helix floodlights and scaffolds.",
+   "approved": true,
+   "characters": "Dawn: Sefa, the old Sky Keeper, beside the Sun Gate, an acolyte with a staff at the left post and a woman with a water jar on the East Terrace. 2049: nobody.",
+   "lighting": "Dawn: the mission's low ENE sun from behind the camera's right glints on the bronze rings; the gate is aimed at the sunrise (Instrument.set(62, 6)) and its sunbeam shaft crosses the terrace toward the sun stone. 2049: the mission's night (starfield, the survey canopy glowing over the drum, a floodlight at right), exposure lifted to 2.0 at the swap (the mission sets 1.25) so the night reads under the dawn's locked eye adaptation.",
    "sound": "Night: glass tones under Mira's recorded voice.",
-   "notes": "",
+   "notes": "Replaces the storyboard's high view over the drum (the dawn sky rendered flat grey from up there). From just off the East Terrace the camera pushes in 2.3 m and settles 0.5 m (40 to 38.5 deg) on the aligned Sun Gate; its weight-beam, lowered as the bridge to the first roof (as after the alignment), leads the eye to the drum. DIR.era('2049', 0.9) at 1.55 s swaps at 2.0 s, so the dawn plays under \"It doesn't record you, Kai.\" and the night under \"It's been waiting for you.\" (1.1 s of clean night before the cut-out). Staging is run-time only (the gate's own set(), W.setBeam, W.sunBeam).",
    "preview": {
-    "status": "weak",
-    "note": "The dawn sky renders flat grey from this angle; the night half reads (stars, floodlights). Try a lower angle on the Sun Gate."
+    "status": "ok",
+    "note": "Sun Gate at dawn with Sefa and the keepers; the same gate under the 2049 stars with the canopy over the drum."
    }
   },
   {
    "id": "s25",
    "group": "g4",
    "mission": 7,
-   "beat": "Montage: dusk on the ruined summit, 2196; the scavenger chief Dace on the pillar, gauntlet glowing.",
+   "beat": "Montage: dusk on the ruined summit, 2196; the scavenger chief Dace by the Wandering Ring, his rewind gauntlet charging green.",
    "url": "index.html?m=6&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "__game.temporal.setImmediate('2196'); __game.player.place(-7.9, 21.06, -21.6, Math.PI / 2)"
+     "eval": "__game.temporal.setImmediate('2196'); 'era 2196, Kai stays at the foot of the steps (placing him up here would start the Sefa scene)'"
+    },
+    {
+     "eval": "(()=>{const g=__game; let L; g.scene.traverse(o=>{ if(o.isDirectionalLight && o.castShadow) L=o; }); if (L) { L.target.position.set(1, 21, -15); L.target.position.set = function(){ return this; }; }\nconst d=window.__m7.scavs.find(s=>s.id==='dace'); d.c.faceTowards = ()=>{}; d.c.root.rotation.y = 1.75; d.active = true; d.state = 'aim'; d.t = 0;\nreturn 'shadow map pinned to the summit, dace aiming east: ' + !!L })()"
     },
     {
      "wait": 0.8
@@ -340,49 +351,67 @@
      {
       "t": 0,
       "p": [
-       7.0,
-       23.4,
-       -15.0
+       5.7,
+       21.7,
+       -15.55
       ],
       "l": [
-       -10,
-       22.2,
-       -16.5
+       0.9,
+       22.55,
+       -14.6
       ],
-      "fov": 44,
+      "fov": 30,
       "roll": 0,
-      "focus": 17.11
+      "focus": null
      },
      {
-      "t": 2.1,
+      "t": 2.0,
       "p": [
-       6.6,
-       23.3,
-       -15.6
+       5.1,
+       21.78,
+       -15.4
       ],
       "l": [
-       -10,
-       22.2,
-       -16.5
+       0.9,
+       22.6,
+       -14.6
       ],
-      "fov": 43,
+      "fov": 29,
       "roll": 0,
-      "focus": 16.66
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0.1,
+    "focusOn": "dace"
    },
-   "actions": [],
+   "actions": [
+    {
+     "t": 0,
+     "eval": "(()=>{const d=window.__m7.scavs.find(s=>s.id==='dace'); d.state='aim'; d.t=-0.3; return 'gauntlet charge starts'})()"
+    },
+    {
+     "t": 0.1,
+     "eval": "(()=>{const d=window.__m7.scavs.find(s=>s.id==='dace'); d.c.pose='look'; return TR.clip('dace','look',0.25,0.6)})()"
+    },
+    {
+     "t": 1.55,
+     "eval": "(()=>{const d=window.__m7.scavs.find(s=>s.id==='dace'); d.t=1.0; return 'hold the charge (no shot inside the handles)'})()"
+    },
+    {
+     "t": 1.8,
+     "eval": "(()=>{const d=window.__m7.scavs.find(s=>s.id==='dace'); d.t=1.0; return 'hold'})()"
+    }
+   ],
    "grade": "ruin2196",
-   "approved": false,
-   "characters": "Dace (scavenger boss), scavenger lookouts",
-   "lighting": "Sunset behind the broken rim, Venus low in the west, green gauntlet glow.",
+   "approved": true,
+   "characters": "Dace (2196 scavenger boss, respirator hood) in the game's own aim state: the 'look' stance with the gauntlet raised to his chest, its glow charging from 3 to 9 (the Scav aim curve); a lookout behind him on the rim. Kai stays at the foot of the steps (out of shot) so the mission does not start the Sefa scene.",
+   "lighting": "The 2196 sunset sky behind Dace (west), clouds lit pink, the green gauntlet glow keys his coat; the sun's shadow map is pinned to the summit (the mission centres it on Kai).",
    "sound": "",
-   "notes": "",
+   "notes": "Low medium-wide from the east rim (30 to 29 deg, a 0.6 m linear creep in, light hand-held), focus on Dace, the armillary of the Wandering Ring frame right. Dace is turned to face the lens (faceTowards disabled, rotation 1.75) and set active in the aim state at t = -0.3, so the charge builds through the cut and would fire at 1.6 s; actions at 1.55 / 1.8 s hold it at t = 1.0 so no shot leaves inside the tail handle. His 'look' aim stance is started at 0.1 s at 0.6x (TR.clip): later in that clip he turns his back to the lens. Stills: stills/s25_lookdev (rendered by the look-dev page, same setup and actions).",
    "preview": {
     "status": "ok",
-    "note": "Armillary, scavengers and their gauntlet glow against the dusk."
+    "note": "Dace in his aim stance, the gauntlet glowing, the Wandering Ring and the dusk sky."
    }
   },
   {
@@ -394,7 +423,10 @@
    "ready": "window.__game && __game.control",
    "setup": [
     {
-     "eval": "__game.temporal.setImmediate('flooded')"
+     "eval": "__game.temporal.setImmediate('flooded'); 'era flooded (2049)'"
+    },
+    {
+     "eval": "(()=>{const g=__game; let L; g.scene.traverse(o=>{ if(o.isDirectionalLight && o.castShadow) L=o; }); if (L) { L.target.position.set(8, 0, 22); L.target.position.set = function(){ return this; }; }\nTR.hide('kai'); TR.hide('niko'); g.engine.aoPass.comp.uniforms.uFade.value.set(24, 44);\nreturn 'sun shadow map pinned over the reservoir, Kai and Niko hidden, AO faded before the hills: ' + !!L })()"
     },
     {
      "wait": 0.8
@@ -410,49 +442,50 @@
      {
       "t": 0,
       "p": [
-       -17,
-       10,
-       -4
+       0.6,
+       3.05,
+       -0.6
       ],
       "l": [
-       16,
-       1,
-       40
+       18,
+       2.5,
+       46.5
       ],
-      "fov": 52,
+      "fov": 40,
       "roll": 0,
-      "focus": 55.73
+      "focus": null
      },
      {
-      "t": 2.1,
+      "t": 2.04,
       "p": [
-       -15.8,
-       9.7,
-       -3.0
+       1.6,
+       3.05,
+       -0.1
       ],
       "l": [
-       16,
-       1,
-       40
+       18,
+       2.5,
+       46.5
       ],
-      "fov": 52,
+      "fov": 40,
       "roll": 0,
-      "focus": 54.18
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0.05,
+    "rig": false
    },
    "actions": [],
    "grade": "neutral",
-   "approved": false,
-   "characters": "none",
-   "lighting": "Flat overcast light on the water, the dam across the valley.",
+   "approved": true,
+   "characters": "Nobody: Kai and Niko are hidden; a drowned dead tree stands in the foreground.",
+   "lighting": "The mission's flat 2049 day light on the reservoir, haze on the hills; the sun's shadow map is pinned over the water (the mission centres it on Kai).",
    "sound": "",
-   "notes": "",
+   "notes": "Low over the water, 1 m above the surface (40 deg), a 1 m linear truck right so the dead tree at (2, 8) slides against the far shore: the outlet tower G-2 on the left third, the dam across the valley, the drowned tree on the right third. GTAO fades out at 24-44 m (the engine's GTAO bands the distant hillsides). Stills: stills/s31_lookdev (rendered by the look-dev page, same setup).",
    "preview": {
     "status": "ok",
-    "note": "Dead trees in the reservoir, overcast."
+    "note": "Dead tree in the water, the outlet tower and the dam beyond."
    }
   }
  ]

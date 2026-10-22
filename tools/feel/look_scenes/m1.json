@@ -1,0 +1,6 @@
+{ "name": "m1_2049night", "m": 0, "ready": "window.__game && __game.control && __game.actors.hale", "hide": ["hale"],
+  "spot": { "x": 2.4, "y": 0.15, "z": -81.2, "cam": [0.55, -77.55] },
+  "subjects": [ { "name": "kai", "player": true }, { "name": "jun", "role": "jun" }, { "name": "child", "role": "child" },
+    { "name": "mira", "role": "mira" }, { "name": "witness", "role": "witness" }, { "name": "hale", "role": "hale" },
+    { "name": "crowd_c49_f1", "look": { "costume": "c49_f1" } }, { "name": "crowd_c49_m5", "look": { "costume": "c49_m5" } },
+    { "name": "crowd_c49_kid_f", "look": { "costume": "c49_kid_f" } } ] }
