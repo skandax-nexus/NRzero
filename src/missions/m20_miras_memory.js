@@ -321,7 +321,7 @@ export default {
           mira.setGadget?.('gorget_resonance', 3);
           await game.shot([mira.root.position.x + 1.6, 1.7, mira.root.position.z - 1.4], [mira.root.position.x, 1.5, mira.root.position.z], 1.0, { fov: 34 });
           mira.pose = 'sad';
-          await game.say('mira', ['That one never happened, Kai. You'd be choosing a morning nobody lived.', 'Then the girl in the cupboard never heard anything. You'd be cutting her out.', 'Then I never let go. Then I never chose anything at all.'][e]);
+          await game.say('mira', ["That one never happened, Kai. You'd be choosing a morning nobody lived.", "Then the girl in the cupboard never heard anything. You'd be cutting her out.", 'Then I never let go. Then I never chose anything at all.'][e]);
           await game.say('mira', 'If you cut me down to one story, you cut me.');
           await tween(1.6, k => { W.rings.forEach((g, r) => { g.rotation.y += (r + 1) * 0.06 * (1 - k); }); });
           G.loomOff = [1, 3, 2]; loom.off = G.loomOff; G.solved = false; W.place(); W.spokes();
@@ -363,7 +363,7 @@ export default {
       await ui.fade(1, 900);
       await newPlace({ background: 0xbcd0e0, fog: [0xd8dce0, 0.006], exposure: 1.0, bloom: 0.5, bloomThreshold: 0.9, envIntensity: 0.9, killY: -8 }, {
         id: 'calder', title: 'Calder Row · summer 2025',
-        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'CALDER ROW · SUMMER 2025', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'CALDER ROW · SUMMER 2025', color: '#b9a4ff', glyph: '◑' }],
+        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'KAI · CALDER ROW 2025', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'MIRA · CALDER ROW 2025', color: '#b9a4ff', glyph: '◑' }],
         initial: 'kai',
         bounds: {
           kai: [[-7, -36.6, 7, 34], [7, -7, 14.7, 7], [-9.4, -44.4, -7, -36], [-26, -50, 26, -44.2], [-1.6, -80, 1.6, -36, -0.8]],
@@ -419,7 +419,6 @@ export default {
         S.phase = 'hide'; hideState.hiding = true; kk.pose = null;
         game.checkpoint(pl.pos.x, pl.pos.y, pl.pos.z, pl.yaw);
       }
-      act({ pos: () => null, radius: 0, prompt: '' }).done();
       const foundIt = act({ pos: [0, 0, 0], radius: 1.9, prompt: 'Found you!', enabled: () => S.phase === 'hide' && kid.root.visible && Math.hypot(pl.pos.x - kid.root.position.x, pl.pos.z - kid.root.position.z) < 1.9 && Math.abs(pl.pos.y - kid.root.position.y) < 1.2, onUse: () => side(found) });
       game.onUpdate(() => { foundIt.pos.set(kid.root.position.x, kid.root.position.y + 0.8, kid.root.position.z); });
       async function found() {
@@ -462,7 +461,7 @@ export default {
       (document.getElementById('hud') || document.body).appendChild(meter);
       let mu = 0, mOn = false;
       game.onUpdate(dt => { if (!mOn) return; mu += dt * 0.9; const x = (Math.sin(mu * PI) + 1) / 2; meter.querySelector('.m20cur').style.left = `calc(${(x * 100).toFixed(1)}% - 3px)`; S.mx = x; if (game.autoplay && Math.abs(x - 0.72) < 0.04) release.onUse(); });
-      const release = act({ pos: [0, -100, 0], radius: 0.1, prompt: 'Release the stone', onUse: () => { if (mOn) { mOn = false; S.released = true; } } });
+      const release = game.interact({ pos: [0, -100, 0], radius: 0.1, once: false, prompt: 'Release the stone', enabled: () => mOn, onUse: () => { if (mOn) { mOn = false; S.released = true; } } });
       game.onUpdate(() => { release.pos.set(pl.pos.x, pl.pos.y + 1, pl.pos.z); release.radius = mOn ? 2 : 0.01; });
       act({ pos: [P1.throw[0], -1.6, P1.throw[2]], radius: 1.8, prompt: 'Skip a stone', enabled: () => S.phase === 'stones' && S.pebbles > 0, onUse: () => side(async () => {
         S.pebbles--; G.throws++; pl.yaw = PI; kai.root.rotation.y = PI;
@@ -633,7 +632,7 @@ export default {
       await ui.fade(1, 900);
       await newPlace({ background: 0x1a1c22, fog: [0x2a2c34, 0.01], exposure: 1.0, bloom: 0.6, bloomThreshold: 0.85, envIntensity: 0.5, killY: -6, dark: false }, {
         id: 'hall', title: 'Test Hall Zero · 19.10.2026',
-        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'TEST HALL ZERO · 19.10.2026', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'TEST HALL ZERO · 19.10.2026', color: '#b9a4ff', glyph: '◑' }],
+        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'KAI · 19.10.2026', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'MIRA · 19.10.2026', color: '#b9a4ff', glyph: '◑' }],
         initial: 'kai', bounds: [[-16, -36, 16, 16]],
       });
       W = buildTestHall(game, game.scene, T); prevRoot.push(W.root);
@@ -819,7 +818,7 @@ export default {
       await ui.fade(1, 900);
       await newPlace({ background: 0x0a0c12, fog: [0x141a24, 0.016], exposure: 1.05, bloom: 0.8, bloomThreshold: 0.75, envIntensity: 0.45, killY: -6, dark: true }, {
         id: 'w0907', title: 'World 0907 · Rain City 2049',
-        holders: [{ id: 'mira', key: '1', name: 'AS SHE LIVED IT', year: 'WORLD 0907 · 14.11.2049', color: '#b9a4ff', glyph: '◑' }, { id: 'gap', key: '2', name: 'THE SHAPE KAI LEFT', year: 'WORLD 0907 · NOBODY HERE', color: '#5fe6ff', glyph: '○' }],
+        holders: [{ id: 'mira', key: '1', name: 'AS SHE LIVED IT', year: 'HER LIFE · 14.11.2049', color: '#b9a4ff', glyph: '◑' }, { id: 'gap', key: '2', name: 'THE SHAPE KAI LEFT', year: 'THE GAP · NOBODY HERE', color: '#5fe6ff', glyph: '○' }],
         initial: 'mira', bounds: [[-8.5, -40.4, 8.5, 44], [8.5, -14, 30, -6], [-10, -68, 10, -40]],
         onEdge: () => ui.subtitle('mira', 'I never went that way. Not in that life.', 2200),
       });
@@ -1101,7 +1100,7 @@ export default {
       await convo(mira, [
         ['mira', 'You came after me.'],
         ['kai', 'You said I\'d been trying to reach the version of you that would forgive me.'],
-        ['mira', 'And you said you wanted to understand me instead. Did you mean it?'],
+        ['mira', ({ ask: 'And you said you were asking now. Did you mean it?', live: 'And you said you only wanted me to live. Will you try to understand me as well?', sorry: 'And you said you were sorry. I would rather you understood. Will you try?' })[F.m19miraAnswer] || 'And you said you wanted to understand me instead. Did you mean it?'],
         ['kai', 'Yes.'],
         ['mira', 'Then come and see what I\'m made of.'],
       ]);

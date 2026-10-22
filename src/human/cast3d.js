@@ -8,6 +8,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { lookPerson } from './skin.js';    // the look shading and facial life (docs/CHARACTER_LOOK.md); ?look=classic: off
 import { MOTION, Motion, analyseTemplate, gaitProfile } from './locomotion.js';   // walking style (docs/MOTION.md); ?motion=classic: off
+import { prepareTemplate as prepareSprings, attachSprings } from './springs.js';   // coat tails and hair (docs/MOTION.md)
 
 const T = {};            // id -> { root, clips, speeds, height, box }
 const key = n => n.replace(/_\d+$/, '');
@@ -124,7 +125,7 @@ function retarget(srcRoot, clip, dstRoot, fps = 30) {
   if (!sHips || !dHips) return { clip, speed: info.speed || 0 };
   const restHipPos = dHips.position.clone();
   const sHip0 = sHips.getWorldPosition(new THREE.Vector3()), dHip0 = dHips.getWorldPosition(new THREE.Vector3());
-  const ratio = dHip0.y / Math.max(1e-3, sHip0.y), seated = !!info.seat || clip.name === 'sit', grounded = !seated && clip.name !== 'fall';
+  const ratio = dHip0.y / Math.max(1e-3, sHip0.y), seated = !!info.seat || clip.name === 'sit', grounded = !seated && clip.name !== 'fall' && !info.air;
   const sSole = grounded ? solePoints(srcRoot, Object.values(sb)) : [], dSole = grounded ? solePoints(dstRoot, db) : [];
   const seat = info.seat || 0.466;
   const mixer = new THREE.AnimationMixer(srcRoot);
@@ -248,6 +249,11 @@ function glowGroupMaterial(src) {
  */
 export function makePerson(id, opts = {}) {
   const t = T[id] || T[cast.ids[0]];
+  // the new motion: gait data and (once per template, before any clone) the spring bones for loose cloth and hair
+  if (!MOTION.classic) {
+    clipsFor(t);
+    if (t.motionInfo && !MOTION.off.has('spring')) try { prepareSprings(t); } catch (e) { console.warn('springs: none for', t.root.name, e && e.message); }
+  }
   const root = SkeletonUtils.clone(t.root);
   root.position.set(0, 0, 0); root.rotation.set(0, 0, 0);
   const seed = opts.seed ?? Math.floor(Math.random() * 1e6);
@@ -341,6 +347,7 @@ export function makePerson(id, opts = {}) {
     const ix = cast.index[t.root.name] || {};
     h.motion = new Motion(h, t.motionInfo, seed, gaitProfile(t.root.name, ix));
     h.motion.meta = ix;
+    if (t.springRig) try { h.motion.springs = attachSprings(h, t.springRig); } catch (e) { console.warn('springs: not attached for', h.id, e && e.message); }
   }
   h.update = dt => (h.motion ? h.motion.update(dt) : mixer.update(dt));
   h.play('idle', 0);

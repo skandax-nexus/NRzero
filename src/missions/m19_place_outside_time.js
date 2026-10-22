@@ -217,11 +217,11 @@ export default {
       pl.place(...AV.start); game.checkpoint(...AV.start);
       // ---------- opening ----------
       cine(true); S.main = true;
-      await game.shot([14, 9, 58], [0, 30, -20], 0.01, { fov: 54 });
+      await game.shot([1.5, 7, 60], [0, 22, -40], 0.01, { fov: 54 });
       await ui.fade(0, 2200);
       lockMusic('m19-outside', 0.5);
       await ui.chapterCard('ACT IV · THE UNWRITTEN SECOND', 'The Place Outside Time', 'Mission 19 · beyond the Chronolith', 4200);
-      await game.shot([10, 6, 52], [0, 46, -60], 4.6, { fov: 56 });
+      await game.shot([-2, 3.5, 51], [0, 44, -60], 4.6, { fov: 56 });
       await game.say('m19band', 'No state. No year. Time index: eight fourteen and seven seconds. Holding.');
       await game.shot([3.2, 1.7, 44.5], [0, 1.6, 40], 2.4, { fov: 40 });
       await game.say('kai', 'Meridian Avenue. The rain\'s stopped in mid-air.');
@@ -400,8 +400,8 @@ export default {
       const enter = (i, sd) => { R.show(i); S.room = i; musicState.rooms = i; const p = inside(i, sd); pl.place(...p); game.checkpoint(...p, () => { R.show(i); S.room = i; }); };
       enter(0, 'S'); R.cur = 0;
       const orren = game.actor('orren', null, ROOM_X(3) + 2.4, 0, 1.2, -PI * 0.75); S.byId.orren = orren; orren.root.visible = false;
-      await ui.fade(0, 1400);
       cine(true); S.main = true;
+      await ui.fade(0, 1400);
       await game.shot([ROOM_X(0) - 3.4, 2.6, 3.8], [ROOM_X(0) + 1.5, 1.6, -4.5], 3.0, { fov: 52 });
       await chapterTitle('II', 'The House of Rooms', 'Joined by what you recognise');
       await game.say('kai', 'Hensel\'s workshop. The real one, in 2049. Except the door I came through is painted on the wall.');
@@ -577,7 +577,7 @@ export default {
       const Hh = buildHall(game, scene, low); await tick();
       W = { M, Hh, lightSrc: [...M.lightSrc, ...Hh.lightSrc] }; prevRoot.push(M.root, Hh.root);
       game.onUpdate((dt, t) => { M.update(dt, t); if (Hh.root.visible) Hh.update(dt, t); });
-      const R = rig(W, { fog: [0xc0c8d4, 0.0085], env: 0.9, hemi: [0xe8eef8, 0x40444c, 0.55], sun: [0xffe2c8, 1.7], dir: [-0.5, 0.36, 0.55], exp: 1.0, beds: { wind: 0.07, water: 0.04, hum: 0.015, hz: 40 } },
+      rig(W, { fog: [0xc0c8d4, 0.0085], env: 0.9, hemi: [0xe8eef8, 0x40444c, 0.55], sun: [0xffe2c8, 1.7], dir: [-0.5, 0.36, 0.55], exp: 1.0, beds: { wind: 0.07, water: 0.04, hum: 0.015, hz: 40 } },
         { preset: 'golden-hour', elevation: 6, azimuth: 150, turbidity: 2.5, cover: 0.35, stratus: 0.2 });
       themeFor = () => (S.phase === 'door' ? 'm19-door' : 'm19-mirror');
       setSecond('08:14:09 · —');
@@ -620,8 +620,8 @@ export default {
       if (!part4) {
         pl.place(...BR.start); game.checkpoint(...BR.start);
         S.phase = 'intro';
-        await ui.fade(0, 1400);
         cine(true); S.main = true;
+        await ui.fade(0, 1400);
         await game.shot([9, 4, 30], [0, LAKE, -10], 3.2, { fov: 56 });
         await chapterTitle('III', 'The Mirror Gorge', 'A bridge that was never built');
         await game.shot([0.6, 2.4, 19.6], [0, LAKE - 2, 2], 3.2, { fov: 50 });

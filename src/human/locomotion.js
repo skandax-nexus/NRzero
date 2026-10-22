@@ -33,7 +33,7 @@ export const MOTION = {
 };
 const on = k => !MOTION.off.has(k);
 // The world the feet stand in. The game may set these; otherwise window.__game is used.
-export const motionWorld = { collision: null, scene: null, state: undefined };
+export const motionWorld = { collision: null, scene: null, state: undefined, wind: null };   // wind: a Vector3 (m/s^2) for cloth and hair
 // Camera and tier for the level of detail (character.js copies charView here every frame).
 export const motionView = { camera: null, low: false };
 
@@ -41,11 +41,13 @@ const key = n => n.replace(/_\d+$/, '');
 const WALKS = ['walk_slow', 'walk'], RUNS = ['jog', 'run', 'sprint'];
 export const GAIT_CLIPS = new Set([...WALKS, ...RUNS, 'crouch']);
 const NO_IK = new Set(['sit', 'fall']);       // poses whose feet are not on the ground under the root
+const AIR = new Set(['jump', 'jump_run']);    // our authored air clips (anims_extra.glb), sampled by vertical speed
 const NS = 48;                                // samples per clip loop (contact curves)
 const G = 9.81;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+const len2 = (x, z) => Math.max(1e-6, Math.hypot(x, z));
 const approach = (x, to, rate, dt) => x + (to - x) * (1 - Math.exp(-rate * dt));
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 // critically damped spring toward `to` (o = { x, v }), angular frequency w
@@ -109,11 +111,14 @@ export function analyseTemplate(t) {
     const sole = side => {
       const out = new Float32Array(NS), F = P['foot_' + side], T = P['toe_' + side];
       let a0 = ank[side], t0 = toe[side];
-      if (!GAIT_CLIPS.has(name)) { a0 = Infinity; t0 = Infinity; for (let i = 0; i < NS; i++) { a0 = Math.min(a0, F[i * 3 + 1]); t0 = Math.min(t0, T[i * 3 + 1]); } }
+      if (!GAIT_CLIPS.has(name) && !AIR.has(name)) { a0 = Infinity; t0 = Infinity; for (let i = 0; i < NS; i++) { a0 = Math.min(a0, F[i * 3 + 1]); t0 = Math.min(t0, T[i * 3 + 1]); } }
       for (let i = 0; i < NS; i++) out[i] = Math.min(F[i * 3 + 1] - a0, T[i * 3 + 1] - t0);
       return out;
     };
     const sL = sole('L'), sR = sole('R');
+    // the planted ankle / ball heights this clip means by "on the ground" (gaits: the gaits' own; poses: their lowest)
+    const ref = { L: [ank.L, toe.L], R: [ank.R, toe.R] };
+    if (!GAIT_CLIPS.has(name) && !AIR.has(name)) for (const side of ['L', 'R']) { const F = P['foot_' + side], T = P['toe_' + side]; let a0 = Infinity, t0 = Infinity; for (let i = 0; i < NS; i++) { a0 = Math.min(a0, F[i * 3 + 1]); t0 = Math.min(t0, T[i * 3 + 1]); } ref[side] = [a0, t0]; }
     // contact: the sole within ~2 cm of its planted height and the foot (nearly) still on the ground: in the clip the
     // body travels at the clip's speed along +z, so a planted foot moves back at that speed
     // the speed a planted foot really moves back at in the clip (the trial's mean root speed is 5-13 % off it, which
@@ -159,7 +164,7 @@ export function analyseTemplate(t) {
       ampL = rng('hand_L'); ampR = rng('hand_R');
     }
     const speed = speed0;
-    clips[name] = { D, n, o: oL.length ? oL[0] / NS : 0, oR: oR.length ? oR[0] / NS : 0.5, cL, cR, stand, speed, dist: speed * D, stride: speed * D / n, ampL, ampR, qs };
+    clips[name] = { D, n, ref, o: oL.length ? oL[0] / NS : 0, oR: oR.length ? oR[0] / NS : 0.5, cL, cR, stand, speed, dist: speed * D, stride: speed * D / n, ampL, ampR, qs };
   }
   t.motionInfo = { clips, ank, toe, leg, hipH: w('hips').y };
   return t.motionInfo;
@@ -185,7 +190,7 @@ export function gaitProfile(id, meta = {}, look = {}) {
   P.cadence = Math.sqrt(1.8 / h) * (1 + 0.03 * (female ? 1 : 0) + 0.05 * old - 0.04 * heavy + (child ? 0.04 : 0));
   P.stride = 1 - 0.1 * old - 0.03 * heavy;
   P.arm = (1 - 0.3 * old) * (uniform ? 0.82 : 1) * (child ? 1.12 : 1) * (female ? 0.92 : 1);
-  P.stoop = 0.1 * old + (id === 'witness' ? 0.07 : 0);
+  P.stoop = 0.1 * old + (id === 'witness' ? 0.04 : 0);
   P.upright = uniform ? 0.035 : 0;
   P.sway = female ? 1.25 : 1;
   P.runAt = 2.1 * Math.sqrt(h / 1.8) * (1 + 0.1 * old);
@@ -212,8 +217,12 @@ const _hipP = new THREE.Vector3(), _e = new THREE.Euler(), UP = new THREE.Vector
 class Foot {
   constructor(B, side) {
     this.side = side; this.th = B['thigh_' + side]; this.sh = B['shin_' + side]; this.ft = B['foot_' + side]; this.toe = B['toe_' + side];
-    this.lock = new THREE.Vector3(); this.locked = false; this.lockW = 0; this.lockYaw = 0; this.lockG = 0;
-    this.step = null; this.delta = 0; this.c = 0;
+    // lock: the planted ankle; ball: the planted ball of the foot (pivot 1: the heel has come up, the foot rolls on
+    // the ball); pin: where the ankle is held this frame; lockGY / lockBox: the ground under the plant (a lift moves it)
+    this.lock = new THREE.Vector3(); this.ball = new THREE.Vector3(); this.pin = new THREE.Vector3(); this.pivot = 0;
+    this.locked = false; this.lockW = 0; this.lockYaw = 0; this.lockG = 0; this.lockGY = 0; this.lockBox = null; this.lockBoxY = 0;
+    this.step = null; this.delta = 0; this.c = 0; this.heelH = 0; this.ballH = 0; this.prevSole = 1; this.prevC = 0;
+    this.shX = 0; this.shZ = 0; this.shW = 0; this.shSign = 0;     // landing moved onto one tread (stairs, kerbs)
     this.anim = new THREE.Vector3(); this.prev = new THREE.Vector3(); this.prevOk = false; this.toeP = new THREE.Vector3(); this.target = new THREE.Vector3(); this.q = new THREE.Quaternion();
   }
 }
@@ -308,6 +317,18 @@ export class Motion {
       this.h.mixer.update(dt);
     }
     if (t0) { MOTION.stats.ms += globalThis.performance.now() - t0; }
+    // missions turn their people after the people have been updated (game.js runs actors before updaters): a yaw
+    // snap made then is caught just before the render (lateYaw) so it never shows for a frame
+    if (!this.hero && this.valid && this.ch) { LATE.push(this); const sc = this.ground.world && this.ground.world.scene; if (sc && !sc.userData.azMotionLate) installLate(sc); }
+  }
+
+  lateYaw() {
+    const R = this.ch.root, d = wrap(R.rotation.y - this.prevYaw);
+    if (Math.abs(d) < 0.35 || !on('lean')) return;
+    this.yawOff = wrap(this.yawOff - d); this.prevYaw = R.rotation.y;
+    _e.set(this.pitch.x, this.yawOff, this.roll.x, 'YZX');
+    this.h.root.quaternion.setFromEuler(_e);
+    this.h.root.updateMatrixWorld(true);
   }
 
   frame(dt) {
@@ -322,7 +343,7 @@ export class Motion {
     let pose = ch ? (ch.pose && A[ch.pose] && !GAIT_CLIPS.has(ch.pose) ? ch.pose : ch.talk > 0 ? 'talk' : 'idle') : this.cmd.pose;
     if (!A[pose]) pose = 'idle';
     const air = this.hero && !this.grounded && (this.airT > 0.09 || this.vel.y > 1.0);
-    this.wAir = approach(this.wAir, air ? 1 : 0, air ? 9 : 16, dt);
+    this.wAir = approach(this.wAir, air ? 1 : 0, air ? 7 : 16, dt);
     if (tele) this.wAir = air ? 1 : 0;
     // locomotion weight: on with speed; stopping lets the stride finish on a plant
     const locoT = smooth(0.05, 0.45, v);
@@ -332,7 +353,9 @@ export class Motion {
     const runAt = P.runAt;
     if (!this.runMode && v > runAt * 1.07) this.runMode = true;
     else if (this.runMode && v < runAt * 0.92) this.runMode = false;
-    this.F = tele ? (this.runMode ? 1 : 0) : clamp(this.F + (this.runMode ? 1 : -1) * dt / 0.28, 0, 1);
+    // a quick switch when the speed is well past the walk-run speed (a sprint start does not jog through a walk)
+    const fT = this.runMode ? (v > runAt * 1.5 ? 0.12 : 0.28) : (v < runAt * 0.6 ? 0.15 : 0.28);
+    this.F = tele ? (this.runMode ? 1 : 0) : clamp(this.F + (this.runMode ? 1 : -1) * dt / fT, 0, 1);
     // ---- weights inside each family (by the template's clip speeds)
     const C = I.clips, sp = n => (C[n] ? C[n].speed : 0);
     const ww = {};
@@ -354,9 +377,11 @@ export class Motion {
     const fW = 1.0 + 0.6 * vv, fR = 2.4 + 0.12 * vv, fC = 0.8 + 0.6 * vv;           // steps per second
     let f = fW * (1 - this.F) + fR * this.F; f = f * (1 - crouch) + fC * crouch;
     f *= P.cadence;
-    const Stgt = 2 * vv / f * P.stride;
+    // stairs and steep ground: shorter, quicker steps (fewer treads skipped per step)
+    const stairs = smooth(0.15, 0.5, this.slope || 0);
+    const Stgt = 2 * vv / f * P.stride * (1 - 0.35 * stairs);
     const warp = this.lod === 0 && !this.inPlace && on('warp') && on('ik');
-    const kT = warp ? clamp(Stgt / Math.max(0.2, Sgeo), 0.82, 1.14) : 1;
+    const kT = warp ? clamp(Stgt / Math.max(0.2, Sgeo), 0.82 - 0.2 * stairs, 1.14 + 0.24 * crouch) : 1;     // a crouched sneak takes longer steps, not a scuttle
     this.k = tele || !warp ? kT : approach(this.k, kT, 5, dt);
     const S = Math.max(0.2, Sgeo * this.k);
     // ---- the gait phase (cycles; 0 = left heel strike)
@@ -387,18 +412,25 @@ export class Motion {
     this.fadePoses(pose, dt, tele);
     let pw = 0; for (const [, e] of this.poses) pw += e.w;
     for (const [n, e] of this.poses) W[n] += wp * (1 - crouch) * (pw > 0 ? e.w / pw : 0);
-    if (A.fall) W.fall += wA; else W.idle += wA;
+    // in the air: our jump clips (a standing jump or a stride in the air, by ground speed), else the old fall / idle
+    if (A.jump && A.jump_run) { const r = smooth(1.2, 3.8, v); W.jump += wA * (1 - r); W.jump_run += wA * r; }
+    else if (A.fall) W.fall += wA; else W.idle += wA;
     // times: gait clips from the shared phase, the fall clip from the vertical speed
     const timeOf = n => { const c = C[n]; const fr = c.o + this.phi / c.n; return (fr - Math.floor(fr)) * c.D; };
     for (const n of GAIT_CLIPS) {
       const a = A[n]; if (!a) continue;
       if (W[n] > 0 || a.isScheduled()) { a.timeScale = 0; a.time = timeOf(n); }
     }
-    if (A.fall) { this.vy = this.hero ? this.vel.y : 0; A.fall.timeScale = 0; A.fall.time = clamp(0.5 - this.vy * 0.07, 0, 0.5) * C.fall.D; }
+    this.vy = this.hero ? this.vel.y : 0;
+    if (!air) this.airJump = false; else if (this.airT < 0.12 && this.vy > 1.5) this.airJump = true;
+    if (A.fall && W.fall > 0) { A.fall.timeScale = 0; A.fall.time = clamp(0.5 - this.vy * 0.07, 0, 0.5) * C.fall.D; }
+    // phase: 0 take-off, 0.5 apex, 1 reaching for the ground (a step off a ledge starts with the legs down)
+    const ph = this.airJump ? clamp(0.5 - this.vy * 0.125, 0, 1) : clamp(0.8 - this.vy * 0.05, 0.8, 1);
+    for (const n of AIR) { const a = A[n]; if (a && (W[n] > 0 || a.isScheduled())) { a.timeScale = 0; a.time = ph * C[n].D * 0.999; } }
     let top = 0, topN = h.current;
     for (const n in A) {
       const a = A[n], w = W[n];
-      if (w > 0.0005) { if (!a.isScheduled()) { a.play(); if (!GAIT_CLIPS.has(n) && n !== 'fall') a.time = this.poseStart(n); } a.enabled = true; a.weight = w; if (w > top) { top = w; topN = n; } }
+      if (w > 0.0005) { if (!a.isScheduled()) { a.play(); if (!GAIT_CLIPS.has(n) && n !== 'fall' && !AIR.has(n)) a.time = this.poseStart(n); } a.enabled = true; a.weight = w; if (w > top) { top = w; topN = n; } }
       else if (a.isScheduled()) { a.weight = 0; a.stop(); }
     }
     if (topN !== h.current) { const prev = h.current; h.current = topN; if (h.postureChanged) h.postureChanged(prev, topN); }
@@ -409,11 +441,18 @@ export class Motion {
       for (const n in A) {
         const w = W[n]; if (!(w > 0.0005)) continue;
         const ci = C[n]; cw += w;
-        if (!ci || NO_IK.has(n)) continue;
+        if (!ci || NO_IK.has(n) || AIR.has(n)) continue;
         const a = A[n], fr = a.time / ci.D;
         c += w * contactAt(ft.side === 'L' ? ci.cL : ci.cR, fr);
       }
       ft.c = cw > 0 ? c / cw : 0;
+    }
+    // the planted heights of the clips in play (idle stands 2-4 cm higher at the ankle than a walking plant)
+    const R = this.ref || (this.ref = { L: [0, 0], R: [0, 0] });
+    for (const side of ['L', 'R']) {
+      let a = 0, t = 0, w = 0;
+      for (const n in A) { const wn = W[n], ci = C[n]; if (!(wn > 0.0005) || !ci || !ci.ref || NO_IK.has(n)) continue; a += wn * ci.ref[side][0]; t += wn * ci.ref[side][1]; w += wn; }
+      R[side][0] = w > 0 ? a / w : I.ank[side]; R[side][1] = w > 0 ? t / w : I.toe[side];
     }
     this.poseNoIK = NO_IK.has(topN) || NO_IK.has(pose) && wp > 0.5;
     this.layers(dt, tele, pose);
@@ -445,14 +484,14 @@ export class Motion {
     if (tele) { this.roll.x = roll; this.roll.v = 0; this.pitch.x = pitch; this.pitch.v = 0; }
     spring(this.roll, roll, 9, dt); spring(this.pitch, pitch, 7, dt);
     if (dt > 0 && this.yawOff !== 0) {
-      const r = Math.min(Math.abs(this.yawOff), (2 + 7 * Math.abs(this.yawOff)) * dt);
+      const r = Math.min(Math.abs(this.yawOff), (1.5 + 2.6 * Math.abs(this.yawOff)) * dt);     // a half turn takes about 0.6 s
       this.yawOff -= Math.sign(this.yawOff) * r;
       if (Math.abs(this.yawOff) < 1e-3) this.yawOff = 0;
     }
     _e.set(this.pitch.x, this.yawOff, this.roll.x, 'YZX');
     h.root.quaternion.setFromEuler(_e);
     // the landing: the pelvis dips by the impact (knees take it through the leg IK)
-    if (this.landing > 0.5 && this.hero) this.dip.v -= Math.min(9, this.landing * 0.9);
+    if (this.landing > 0.5 && this.hero) this.dip.v -= clamp(0.01 + this.landing * 0.022, 0, 0.15) * 13 * Math.E;
     spring(this.dip, 0, 13, dt);
     if (this.dip.x < -0.17) { this.dip.x = -0.17; this.dip.v = Math.max(0, this.dip.v); }
     this.exert = clamp(this.exert + (v > 2.5 ? (v / 5.6) * 0.25 : -0.06) * dt, 0, 1);
@@ -463,7 +502,12 @@ export class Motion {
     if (this.ikW > 0 || this.dip.x < -0.002) this.legs(dt, tele);
     // upper body: posture, arm swing, breathing, head
     if (this.lod < 2) this.upper(dt, pose);
-    if (this.springs && this.lod === 0 && on('spring')) this.springs.update(dt, this);
+    // secondary motion (springs.js): full dynamics near the camera, collision only further away, nothing on a low LOD
+    if (this.springs && this.h.lod !== 1) {
+      if (tele) this.springs.reset();
+      if (motionWorld.wind) this.springs.wind.copy(motionWorld.wind);
+      this.springs.update(dt, this.lod === 0 && on('spring'));
+    }
   }
 
   // ground height under (x, z) near the plane y0, or null
@@ -471,13 +515,14 @@ export class Motion {
     const G0 = this.ground, W = G0.world;
     if (!W) return null;
     const col = W.collision, st = W.state;
-    let top = null; const lim = y0 + 0.5;
+    let top = null, box = null; const lim = y0 + 0.5;
     for (const b of G0.boxes) {
       if (!b.enabled || (st !== undefined && b.states && !b.states.includes(st))) continue;
       if (x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z) continue;
       const t = b.ramp && col.topAt ? col.topAt(b, x, z) : b.max.y;
-      if (t <= lim && (top === null || t > top)) top = t;
+      if (t <= lim && (top === null || t > top)) { top = t; box = b; }
     }
+    this.gbox = box;
     return top;
   }
   refreshGround(dt, x, z) {
@@ -508,7 +553,13 @@ export class Motion {
     root.getWorldPosition(_v3);
     const plane = _v3.y, sc = root.getWorldScale(_v2).y;
     this.refreshGround(dt, _v3.x, _v3.z);
-    const grounded = this.grounded && this.wAir < 0.5;
+    // how steep the ground ahead is (stairs, ramps): rise over 0.6 m along the motion
+    if (this.ground.world && this.v > 0.3 && this.vel) {
+      const vh = Math.hypot(this.vel.x, this.vel.z) || 1, ax = _v3.x + this.vel.x / vh * 0.6, az = _v3.z + this.vel.z / vh * 0.6;
+      const g0 = this.groundAt(_v3.x, _v3.z, _v3.y), g1 = this.groundAt(ax, az, _v3.y + 0.3);
+      this.slope = approach(this.slope || 0, g0 !== null && g1 !== null ? Math.min(1, Math.abs(g1 - g0) / 0.6) : 0, 6, dt);
+    } else this.slope = approach(this.slope || 0, 0, 6, dt);
+    const grounded = this.grounded && this.wAir < 0.5, world = !!this.ground.world;
     // forward axis of the body, for stride warping
     root.getWorldQuaternion(_q);
     _fwd.set(0, 0, 1).applyQuaternion(_q); _fwd.y = 0; _fwd.normalize();
@@ -516,6 +567,16 @@ export class Motion {
     const hipP = hips.getWorldPosition(_hipP);
     const kw = (this.k - 1) * this.wLoco;
     const lockOn = on('lock') && grounded;
+    // gait style on the pelvis (before the feet are read, the leg IK keeps them planted): more pelvic rotation and
+    // side sway for a female gait profile, the chest counter-rotating
+    const sw = (this.P.sway - 1) * 4 * this.wLoco * (1 - this.F) * (1 - this.cr);
+    if (sw > 0.01 && on('profile')) {
+      const c2 = Math.cos(2 * Math.PI * this.phi), s2 = Math.sin(4 * Math.PI * this.phi);
+      rotateWorld(hips, _q2.setFromAxisAngle(UP, -0.07 * sw * c2));
+      rotateWorld(hips, _q2.setFromAxisAngle(_fwd, 0.035 * sw * s2 * (c2 > 0 ? 1 : -1)));
+      if (B.chest) rotateWorld(B.chest, _q2.setFromAxisAngle(UP, 0.08 * sw * c2));
+      hipP.copy(hips.getWorldPosition(_v));
+    }
     for (const f of feet) {
       f.ft.getWorldPosition(f.anim); f.toe.getWorldPosition(f.toeP); f.ft.getWorldQuaternion(f.q);
       // stride warp: the foot's distance ahead of / behind the hips grows or shrinks by k
@@ -524,43 +585,78 @@ export class Motion {
         f.anim.x += _fwd.x * along * kw; f.anim.z += _fwd.z * along * kw;
         f.toeP.x += _fwd.x * along * kw; f.toeP.z += _fwd.z * along * kw;
       }
+      // the clip's own heel and ball heights above the plane the body stands on (what it means by "down")
+      const ah = this.ref[f.side][0] * sc, th = this.ref[f.side][1] * sc;
+      f.heelH = f.anim.y - plane - ah; f.ballH = f.toeP.y - plane - th;
+      const sole = Math.min(f.heelH, f.ballH);
+      // a foot coming down across a step edge (stairs, kerbs) lands on one tread: its landing point slides forward
+      // (heel past the edge) or back (toe short of it), whichever is nearer, as it comes down
+      const ox = f.toeP.x - f.anim.x, oz = f.toeP.z - f.anim.z;
+      if (world && grounded && !f.locked && !f.step && on('tread')) {
+        const gh = this.groundAt(f.anim.x - ox * 0.25, f.anim.z - oz * 0.25, plane), gt = this.groundAt(f.anim.x + ox * 1.4, f.anim.z + oz * 1.4, plane);
+        let want = 0;
+        if (gh !== null && gt !== null && Math.abs(gt - gh) > 0.04 && sole < 0.2) {
+          // where along heel -> tip the ground changes
+          const x0 = f.anim.x - ox * 0.25, z0 = f.anim.z - oz * 0.25, x1 = f.anim.x + ox * 1.4, z1 = f.anim.z + oz * 1.4;
+          let lo = 0, hi = 1;
+          for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2, gm = this.groundAt(x0 + (x1 - x0) * m, z0 + (z1 - z0) * m, plane); if (gm !== null && Math.abs(gm - gh) < 0.02) lo = m; else hi = m; }
+          const len = Math.hypot(x1 - x0, z1 - z0), e = (lo + hi) / 2;
+          const fwdS = e * len + 0.03, backS = (1 - e) * len + 0.03;
+          if (!f.shSign) f.shSign = fwdS <= backS * 1.3 ? 1 : -1;
+          want = f.shSign > 0 ? fwdS : -backS;
+          if (Math.abs(want) > 0.24) want = 0;
+        } else if (sole > 0.2) f.shSign = 0;
+        const ux = len2(ox, oz);
+        const sx = want ? ox / ux * want : 0, sz = want ? oz / ux * want : 0;
+        f.shX = sx; f.shZ = sz;
+        f.shW = want ? clamp(1 - sole / 0.14, 0, 1) : approach(f.shW, 0, 10, dt);
+      } else if (!f.locked) { f.shW = approach(f.shW, 0, 10, dt); if (f.shW < 0.01) { f.shW = 0; f.shSign = 0; } }
+      const sx = f.shX * f.shW, sz = f.shZ * f.shW;
       // the ground under heel and toe (and ahead of a swinging foot), relative to the drawn plane
       let d = 0;
-      if (this.ground.world) {
-        const gh = this.groundAt(f.anim.x, f.anim.z, plane), gt = this.groundAt(f.toeP.x, f.toeP.z, plane);
+      if (world) {
+        const gh = this.groundAt(f.anim.x + sx, f.anim.z + sz, plane), gt = this.groundAt(f.toeP.x + sx, f.toeP.z + sz, plane);
         let g = gh === null ? gt : gt === null ? gh : Math.max(gh, gt);
         if (f.c < 0.5 && this.v > 0.3 && this.vel) {
           const la = 0.16, ga = this.groundAt(f.toeP.x + this.vel.x * la, f.toeP.z + this.vel.z * la, plane);
           if (ga !== null && (g === null || ga > g)) g = ga;
         }
-        if (g !== null && Math.abs(g - plane) < 0.55) d = g - plane;
+        if (!grounded) d = g !== null ? Math.max(0, g + 0.005 - Math.min(f.anim.y - ah, f.toeP.y - th)) : 0;     // air: never through the floor
+        else if (g !== null && Math.abs(g - plane) < 0.55) d = g - plane;
       }
       if (tele || f.c > 0.6) f.delta = d;
       else f.delta = d > f.delta ? approach(f.delta, d, 28, dt) : approach(f.delta, d, 14, dt);
-      f.target.copy(f.anim); f.target.y += f.delta;
-      if (tele) f.prevOk = false;
-      // foot locking: a planted foot stays where it was planted
-      if (lockOn && !tele) {
-        // lock once the foot is down and (nearly) still in the world: no locking a foot that is still swinging in
-        const still = !f.prevOk || dt <= 0 || Math.hypot(f.target.x - f.prev.x, f.target.z - f.prev.z) < 0.9 * dt;
-        if (!f.locked && !f.step && f.c > 0.62 && still) { f.locked = true; f.lock.copy(f.target); f.lockYaw = yawW; f.lockG = f.delta; }
-        // let go once the clip lifts the foot off (heel and toe up), not merely when its contact weight fades: a
-        // stopping body keeps its feet down
-        else if (f.locked && f.c < 0.35) {
-          const ah = I.ank[f.side] * sc, th = I.toe[f.side] * sc, base = plane + f.delta;
-          const sole = Math.min(f.anim.y - base - ah, f.toeP.y - base - th);
-          if (sole > 0.03) f.locked = false;
-        }
-      } else if (!lockOn || tele) { f.locked = false; f.step = null; if (tele) f.lockW = 0; }
-      f.lockW = f.locked ? Math.min(1, f.lockW + dt / 0.06) : Math.max(0, f.lockW - dt / 0.12);
-      if (f.locked) {
-        // the ground under the lock (a lift, a moving box) and the clip's own lift of the foot (heel off, toe roll)
-        let g = this.ground.world ? this.groundAt(f.lock.x, f.lock.z, plane) : null;
-        f.lockG = g !== null && Math.abs(g - plane) < 0.55 ? g - plane : 0;
+      f.target.set(f.anim.x + sx, f.anim.y + f.delta, f.anim.z + sz);
+      // a swinging foot that moves fast clears the ground (blended starts can drag a low swing along the floor)
+      if (grounded && !f.locked && f.prevOk && dt > 0) {
+        const fv = Math.hypot(f.anim.x - f.prev.x, f.anim.z - f.prev.z) / dt;
+        if (fv > 1.2 && sole < 0.04) f.target.y += smooth(1.2, 2.4, fv) * (0.04 - Math.max(0, sole)) + (sole < 0 ? -sole : 0) * smooth(1.2, 2.4, fv);
       }
-      f.prev.copy(f.anim); f.prevOk = true;
+      if (tele) f.prevOk = false;
+      // foot locking: a foot is pinned where it touched down (no blend-in: it is already there) and lets go when the
+      // clip lifts both heel and ball off
+      if (lockOn && !tele) {
+        const down = sole < 0.02 || (sole < 0.035 && f.prevOk && sole < f.prevSole - 0.004 && f.c > 0.05);
+        if (!f.locked && !f.step && down && (f.c > 0.2 || (f.c > 0.05 && f.c > f.prevC))) {
+          if (f.lockW > 0) f.target.lerp(_v.set(f.pin.x, f.target.y, f.pin.z), f.lockW);    // re-planted while letting go
+          f.locked = true; f.lockW = 1; f.pivot = 0; f.lock.copy(f.target); f.pin.copy(f.target); f.lockYaw = yawW;
+          f.lockGY = plane + f.delta; f.lockBox = null;
+          if (world) { const g = this.groundAt(f.target.x, f.target.z, plane); if (g !== null && Math.abs(g - f.lockGY) < 0.03 && this.gbox) { f.lockBox = this.gbox; f.lockBoxY = this.gbox.max.y; } }
+          f.shSign = 0;
+        } else if (f.locked && f.heelH > 0.03 && f.ballH > 0.025 && f.c < 0.6) f.locked = false;
+      } else if (!lockOn || tele) { f.locked = false; f.step = null; if (tele) f.lockW = 0; }
+      if (!f.locked) f.lockW = Math.max(0, f.lockW - dt / 0.1);
+      if (f.locked) f.lockG = f.lockGY + (f.lockBox ? f.lockBox.max.y - f.lockBoxY : 0) - plane;
+      f.prev.copy(f.anim); f.prevOk = true; f.prevSole = sole; f.prevC = f.c;
       if (f.lockW > 0) {
-        _v.set(f.lock.x, f.anim.y + f.lockG, f.lock.z);
+        if (f.locked) {
+          // heel-down: the ankle is pinned; heel-off: the ball is, and the ankle turns about it with the clip's roll
+          const yc = wrap(f.lockYaw - yawW), cy = Math.cos(yc), sy = Math.sin(yc);
+          const rx = ox * cy + oz * sy, rz = -ox * sy + oz * cy;
+          if (!f.pivot && f.heelH > 0.012 && f.ballH < 0.03) { f.pivot = 1; f.ball.set(f.lock.x + rx, 0, f.lock.z + rz); }
+          if (f.pivot) f.pin.set(f.ball.x - rx, 0, f.ball.z - rz); else f.pin.copy(f.lock);
+        }
+        _v.set(f.pin.x, f.anim.y + (f.locked ? f.lockG : f.delta), f.pin.z);
         f.target.lerp(_v, f.lockW);
       }
     }
@@ -570,23 +666,33 @@ export class Motion {
       const o = f === feet[0] ? feet[1] : feet[0];
       if (f.step) {
         // the clip lifts this foot higher than the step would: the clip's own swing takes over
-        const ah = I.ank[f.side] * sc, base = plane + f.delta;
-        if (moving && f.anim.y - base - ah > f.step.lift + 0.03) { f.step = null; f.lockW = 0; continue; }
+        const ah = this.ref[f.side][0] * sc, base = plane + f.delta;
+        if (moving && f.anim.y - base - ah > f.step.lift + 0.03) {
+          // the clip's own swing takes over: let go from where the step has got to (a short blend, no jump)
+          _v.set(f.anim.x, f.anim.y + f.delta, f.anim.z);
+          f.pin.copy(f.step.from).lerp(_v, f.step.e); f.target.copy(f.pin);
+          f.lockYaw = yawW + f.step.yaw * (1 - f.step.e); f.locked = false; f.lockW = 1; f.step = null;
+          continue;
+        }
         f.step.t += dt;
-        const s = clamp(f.step.t / f.step.dur, 0, 1), e = s * s * (3 - 2 * s);
+        const s = clamp(f.step.t / f.step.dur, 0, 1), e = s * s * (3 - 2 * s); f.step.e = e;
         _v.set(f.anim.x, f.anim.y + f.delta, f.anim.z);
         f.target.lerpVectors(f.step.from, _v, e); f.target.y += Math.sin(Math.PI * s) * f.step.lift;
-        if (s >= 1) { f.step = null; f.locked = lockOn && f.c > 0.5; f.lockW = f.locked ? 1 : 0; f.lock.copy(_v); f.lockYaw = yawW; }
+        if (s >= 1) {
+          f.step = null; f.locked = lockOn && f.c > 0.5; f.lockW = f.locked ? 1 : 0; f.lock.copy(_v); f.pin.copy(_v); f.pivot = 0; f.lockYaw = yawW;
+          f.lockGY = plane + f.delta; f.lockBox = null; f.lockG = f.delta;
+        }
         continue;
       }
       if (!f.locked) continue;
-      const dx = f.lock.x - f.anim.x, dz = f.lock.z - f.anim.z, drift = Math.hypot(dx, dz);
+      const dx = f.pin.x - f.anim.x - f.shX * f.shW, dz = f.pin.z - f.anim.z - f.shZ * f.shW, drift = Math.hypot(dx, dz);
       const twist = Math.abs(wrap(yawW - f.lockYaw));
       // a planted foot the body has left behind (or turned away from) takes a step to where the clip wants it:
       // settling after a stop, turning on the spot, a start from an odd stance
       if (drift > maxD || twist > (moving ? 1.2 : 0.7)) {
         if (o.step && drift < maxD + 0.2) continue;
-        f.step = { from: f.target.clone(), t: 0, dur: clamp(0.16 + drift * 0.3, 0.18, 0.3), lift: clamp(0.04 + drift * 0.12, 0.04, 0.09) };
+        // the foot keeps its planted heading and turns to the clip's over the step (no snap)
+        f.step = { from: f.target.clone(), t: 0, e: 0, yaw: wrap(f.lockYaw - yawW) * f.lockW, dur: clamp(0.16 + drift * 0.3, 0.18, 0.3), lift: clamp(0.04 + drift * 0.12, 0.04, 0.09) };
         f.locked = false; f.lockW = 0;
       }
     }
@@ -603,7 +709,7 @@ export class Motion {
       if (hd < Lmax) { const vy = Math.sqrt(Lmax * Lmax - hd * hd), cur = _v.y - need - f.target.y; if (cur > vy) reach = Math.max(reach, cur - vy); }
     }
     need += Math.min(reach, 0.05 * sc);
-    need = Math.min(need * this.ikW, 0.42 * sc);
+    need = Math.min(need * this.ikW, 0.3 * sc);       // deeper than this, the trailing foot pushes off from its toes
     this.drop = tele ? need : need > this.drop ? approach(this.drop, need, 30, dt) : approach(this.drop, need, 10, dt);
     const dy = -this.drop + this.dip.x;
     if (Math.abs(dy) > 1e-4) {
@@ -617,7 +723,8 @@ export class Motion {
     if (this.ikW > 0) for (const f of feet) {
       if (this.wLoco > 0 || this.wAir > 0.99 || f.lockW > 0 || f.step || Math.abs(f.delta) > 1e-3 || Math.abs(dy) > 1e-4) {
         twoBoneIK(f.th, f.sh, f.ft, f.target, _fwd, this.ikW);
-        if (f.lockW > 0 && !f.step) { _q2.setFromAxisAngle(UP, wrap(f.lockYaw - yawW) * f.lockW); f.q.premultiply(_q2); }
+        const yc = f.step ? f.step.yaw * (1 - f.step.e) : f.lockW > 0 ? wrap(f.lockYaw - yawW) * f.lockW : 0;
+        if (yc) { _q2.setFromAxisAngle(UP, yc); f.q.premultiply(_q2); }
         setWorldQuat(f.ft, f.q);
       }
     }
@@ -630,7 +737,7 @@ export class Motion {
     _right.set(1, 0, 0).applyQuaternion(_q);
     // posture: age stoop, uniform bearing, a slump when sad, a forward lean when tired
     const sad = pose === 'sad' || (ch && ch.mood === 'sad') ? 1 : 0;
-    const stoop = P.stoop - P.upright + 0.12 * sad * this.wLoco + 0.03 * this.exert * this.wLoco;
+    const stoop = P.stoop - P.upright + 0.12 * sad * this.wLoco + 0.03 * this.exert * this.wLoco - this.dip.x * 1.6;     // a landing folds the trunk too
     // breathing: slow at rest, deeper and quicker after running
     this.breath += dt * (1.45 + 2.6 * this.exert) * (on('idle') ? 1 : 0);
     const br = Math.sin(this.breath) * (0.012 + 0.025 * this.exert) * (1 - 0.6 * this.wLoco);
@@ -704,6 +811,16 @@ export class Motion {
   }
 }
 
+const LATE = [];
+function installLate(scene) {
+  scene.userData.azMotionLate = true;
+  const prev = scene.onBeforeRender;
+  scene.onBeforeRender = function (...args) {
+    if (prev) prev.apply(this, args);
+    for (const m of LATE) try { m.lateYaw(); } catch { /* never break a render */ }
+    LATE.length = 0;
+  };
+}
 let tierCache = 'medium', tierT = 0;
 function tierName() {
   const now = globalThis.performance ? globalThis.performance.now() : 0;

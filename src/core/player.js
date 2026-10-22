@@ -12,6 +12,7 @@ const SPEED = { crouch: 1.7, walk: 3.1, stroll: 1.5, sprint: 5.6, stickMin: 0.6 
 const FACE_K = 14, FACE_RATE = 12;      // facing: eases at 14/s, at most 12 rad/s (about 690 deg/s)
 const CROUCH_H = 1.1;
 const _v = new THREE.Vector3(), _d = new THREE.Vector3(), _r = new THREE.Vector3(), _s = new THREE.Vector3();
+const _c = new THREE.Vector3(), _e = new THREE.Vector3();
 
 // Critically damped spring step towards 0 (x, v in an object), angular frequency w.
 function spring(o, w, dt) {
@@ -170,19 +171,25 @@ export class Player {
     }).then(done, done);
   }
 
-  // Distance along the camera arm (from o, unit dir d) to the first person cylinder (0.5 m: body + near-plane margin).
+  // People between Kai and the camera (arm from o along unit dir d, length far; person = cylinder of radius 0.5 m up
+  // to head height). Preferred: crane the camera up so the line of sight passes over their heads (this._pLift, metres
+  // at the camera end, at most 1.2 m). Only someone too close behind Kai to look over shortens the arm: the return
+  // value is the arm length that stays in front of them (far when nobody needs it).
   peopleArm(o, d, far) {
-    let best = far;
+    let best = far, lift = 0;
+    this._pLift = 0;
     const ps = this._camPeople; if (!ps?.length) return best;
     const a = d.x * d.x + d.z * d.z; if (a < 1e-6) return best;
     for (const p of ps) {
       const ox = o.x - p.x, oz = o.z - p.z, b = ox * d.x + oz * d.z, c = ox * ox + oz * oz - 0.5 * 0.5;
       if (c < 0) continue;                                       // the pivot is inside: ignore (the motor keeps people off Kai)
       const disc = b * b - a * c; if (disc < 0) continue;
-      const t = (-b - Math.sqrt(disc)) / a; if (t <= 0 || t >= best) continue;
-      const y = o.y + d.y * t; if (y < p.y - 0.1 || y > p.y + 1.9) continue;
-      best = t - 0.15;
+      const t = (-b - Math.sqrt(disc)) / a; if (t <= 0 || t >= far) continue;
+      const top = p.y + 1.95 * (p.s || 1), y = o.y + d.y * t; if (y < p.y - 0.1 || y > top) continue;
+      const need = (top - y) * far / t;                          // camera lift that takes the sight line over the head
+      if (need <= 1.2) { if (need > lift) lift = need; } else if (t - 0.15 < best) best = t - 0.15;
     }
+    this._pLift = lift;
     return best;
   }
 
@@ -228,7 +235,7 @@ export class Player {
       const p = r.position, dx = p.x - this.pos.x, dz = p.z - this.pos.z;
       if (dx * dx + dz * dz > 9 || Math.abs(p.y - this.pos.y) > 2) continue;
       const o = this._peopleBuf?.[n] || ((this._peopleBuf ||= [])[n] = {});
-      o.x = p.x; o.y = p.y; o.z = p.z; o.r = PHYS.personR * (c.scale3d || 1); o.key = c; out.push(o); n++;
+      o.x = p.x; o.y = p.y; o.z = p.z; o.r = PHYS.personR * (c.scale3d || 1); o.s = c.scale3d || 1; o.key = c; out.push(o); n++;
     }
     return out;
   }
@@ -263,13 +270,20 @@ export class Player {
     C.arm = this.first || want < C.arm ? want : C.arm + (want - C.arm) * Math.min(1, dt * 4);
     // people between Kai and the camera: the arm slides in front of them (quickly, not in one frame), never closer
     // than 0.7 m, so the camera does not pass through a head
-    const pw = Math.max(0.7, this.peopleArm(shoulder, dir, this.camDist));
+    const pw = Math.max(0.7, this.peopleArm(shoulder, dir, this.camDist)), pl = this._pLift || 0;
     C.pArm = this.first || C.pArm === undefined ? pw : C.pArm + (pw - C.pArm) * Math.min(1, dt * (pw < C.pArm ? 10 : 3));
+    C.lift = this.first || C.lift === undefined ? pl : C.lift + (pl - C.lift) * Math.min(1, dt * (pl > C.lift ? 8 : 2));
     const arm = Math.min(C.arm, C.pArm);
     this.first = false;
     // backed into a wall, the arm is too short to see past Kai's shoulder: hide his model until it opens again
     if (arm < 0.6) this.showKai(false); else if (arm > 0.75) this.showKai(true);
     this.camSmooth.copy(shoulder).addScaledVector(dir, arm);
+    if (C.lift > 0.005) {                                // craned over people: the lifted spot is checked against ceilings
+      const e = _e.copy(this.camSmooth); e.y += C.lift * arm / this.camDist;
+      const v = _c.subVectors(e, shoulder), len = v.length(); v.divideScalar(len);
+      const hl = col.rayCast(shoulder, v, len + R, R, state);
+      this.camSmooth.copy(shoulder).addScaledVector(v, hl < Infinity ? Math.max(0.3, Math.min(len, hl - 0.02)) : len);
+    }
     cam.position.copy(this.camSmooth);
     cam.lookAt(shoulder.x, shoulder.y - 0.05, shoulder.z);
   }

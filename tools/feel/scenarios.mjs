@@ -39,6 +39,13 @@ export function scenarios() {
   add({ name: 'crowd', frames: 180, place: [-3, 0, 14, PI], npc: true,
     setup: `for (let i = 0; i < 6; i++) FEEL.walker({ x: 1.5 + i * 1.2, z0: 2, z1: 12, speed: 0.9 + 0.12 * i }, 11 + i * 7); FEEL.actor('iven', -1.5, 0, 6, 0.4);`,
     wide: { p: [-1.5, 1.5, 13.5], l: [4.5, 0.9, 6.5], fov: 42 }, render: SHEET(6, ['wide']), meta: { note: 'Walker crowd (props.js) + a standing NPC' } });
+  // ---- locomotion & secondary motion step additions: mission-style NPCs (root moved, .speed set) of the principals ----
+  add({ name: 'cast_walk', frames: 240, place: [-12, 0, 0, PI / 2], npc: true,
+    setup: `[['witness', 0, 1.25], ['rook', 1.6, 1.3], ['niko', 3.2, 1.45], ['mira', 4.8, 1.35], ['child', 6.4, 1.5], ['sera', 8, 1.6]].forEach(([id, x, v]) => FEEL.pacer(id, x, -5, 5, v, 0.6, id === 'child' ? FEEL.childLook : null));`,
+    wide: { p: [-3.5, 1.7, -11], l: [4, 0.9, 0], fov: 42 }, render: SHEET(4, ['wide']), meta: { note: 'principals walked the way missions do it: root moved, speed set, 180 degree turns at the lane ends' } });
+  for (const [id, v] of [['witness', 1.25], ['niko', 1.45], ['mira', 1.35], ['child', 1.5], ['rook', 1.3]]) {
+    add({ name: 'npc_' + id, frames: 150, place: [-6, 0, 0, PI / 2], npc: true, setup: `FEEL.focus = FEEL.pacer('${id}', 0, -6, 6, ${v}, 0.6, '${id}' === 'child' ? FEEL.childLook : null);`, sideDir: [1, 0], sideDist: 3.4, render: CLIP(['npc'], { every: 2 }), meta: { id, speed: v } });
+  }
   // ---------------- physics only (no render) ----------------
   for (const fps of [15, 30, 60, 144]) {
     const dt = 1 / fps, F = s => Math.round(s * fps);

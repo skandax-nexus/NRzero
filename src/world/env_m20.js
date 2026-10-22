@@ -503,7 +503,6 @@ export function buildTestHall(game, scene, T) {
     yellow: pm('paintedMetalPanel', { color: 0xd8b020, cols: 1, rows: 1, wear: 0.2, grime: 0.2, gloss: 0.5 }), desk: pm('wood', { color: 0xc8b49a, planks: 1 }), rubber: pm('rubber', { color: 0x1a1a1a }),
     red: pm('paintedMetalPanel', { color: 0x8a1a1a, cols: 1, rows: 1, wear: 0.1, grime: 0.1, gloss: 0.5 }),
   };
-  const glass = new THREE.MeshStandardMaterial({ color: 0xb8c8d4, roughness: 0.06, metalness: 0.2, transparent: true, opacity: 0.25, depthWrite: false });
   // shell: floor, walls, roof trusses, the foyer partition with three openings
   solid(M.floor, -16, -0.6, -36, 16, 0, 16);
   solid(M.wall, -16.4, 0, -36, -16, 11, 16); solid(M.wall, 16, 0, -36, 16.4, 11, 16); solid(M.wall, -16.4, 0, -36.4, 16.4, 11, -36); solid(M.wall, -16.4, 0, 16, 16.4, 11, 16.4);
@@ -558,7 +557,7 @@ export function buildRainCity(game, scene, T) {
     white: pm('paintedMetalPanel', { color: 0xdfe3e6, cols: 4, rows: 2, wear: 0.05, grime: 0.1, gloss: 0.5 }), floor: pm('ceramicTile', { color: 0xc8ccd0 }),
   };
   const glass = new THREE.MeshStandardMaterial({ color: 0x9ab8c8, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.3, depthWrite: false });
-  const cyan = glowMat(0x5fe6ff, 1.6), amber = glowMat(0xffb060, 2.2), violet = glowMat(0x9a7bff, 2.0);
+  const cyan = glowMat(0x5fe6ff, 1.6), amber = glowMat(0xffb060, 2.2);
   // street
   solid(M.asphalt, -5, -0.6, -40, 5, 0, 44); solid(M.pave, -8.5, -0.6, -40, -5, 0.15, 44); solid(M.pave, 5, -0.6, -40, 8.5, 0.15, 44);
   solid(M.pave, 8.5, -0.6, -14, 30, 0.15, -6);                                                                      // Calder Row (2049) to the east

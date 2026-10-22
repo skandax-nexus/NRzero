@@ -51,6 +51,8 @@
     FEEL.actors = [];
     for (const w of FEEL.walkers) { w.c.root.parent?.remove(w.c.root); w.off?.(); }
     FEEL.walkers = []; FEEL.lift = null;
+    for (const q of FEEL.pacers || []) q.off?.();
+    FEEL.pacers = []; FEEL.focus = null;
     if (FEEL.killY0 !== undefined) { g.killY = FEEL.killY0; FEEL.killY0 = undefined; }
   };
 
@@ -131,7 +133,7 @@
       const r3 = x => +(+x).toFixed(3);
       out.m = { wl: r3(M.wLoco), wa: r3(M.wAir), phi: r3(M.phi), k: r3(M.k), F: r3(M.F), drop: r3(M.drop), dip: r3(M.dip.x), v: r3(M.v), turn: r3(M.turn), lod: M.lod,
         acts: Object.entries(P.actions).filter(([, a]) => a.isScheduled() && a.weight > 0).map(([n, a]) => n + ':' + a.weight.toFixed(2) + '@' + a.time.toFixed(3)).join(' '),
-        roll: r3(M.roll.x), pitch: r3(M.pitch.x), yo: r3(M.yawOff), feet: M.feet.map(f => [r3(f.c), r3(f.lockW), f.step ? 1 : 0, r3(f.delta)]) };
+        roll: r3(M.roll.x), pitch: r3(M.pitch.x), yo: r3(M.yawOff), feet: M.feet.map(f => [r3(f.c), r3(f.lockW), f.step ? 1 : 0, r3(f.delta), f.pivot || 0, r3(f.shW || 0)]), pl: r3(P.root.getWorldPosition(v).y) };
     }
     return out;
   }
@@ -150,6 +152,11 @@
       const d = FEEL.sideDir || [1, 0], dist = FEEL.sideDist || 3.6, h = FEEL.sideH ?? 1.0;
       cam.position.set(p.x + d[0] * dist, p.y + h, p.z + d[1] * dist); cam.fov = FEEL.sideFov || 50; cam.updateProjectionMatrix();
       cam.lookAt(p.x, p.y + 0.85, p.z);
+    } else if (view === 'npc' && FEEL.focus) {
+      // side camera tracking one NPC (FEEL.focus), from FEEL.sideDir at FEEL.sideDist
+      const q = FEEL.focus.root.position, d = FEEL.sideDir || [1, 0], dist = FEEL.sideDist || 3.6, h = FEEL.sideH ?? 1.0;
+      cam.position.set(q.x + d[0] * dist, q.y + h, q.z + d[1] * dist); cam.fov = FEEL.sideFov || 50; cam.updateProjectionMatrix();
+      cam.lookAt(q.x, q.y + 0.85, q.z);
     } else if (view === 'wide') {
       const w = FEEL.wide; cam.position.set(...w.p); cam.fov = w.fov || 50; cam.updateProjectionMatrix(); cam.lookAt(w.l[0], w.l[1], w.l[2]);
     }
@@ -196,6 +203,8 @@
       cost += performance.now() - t0;
       inp.endFrame();
       if (FEEL.lift) FEEL.lift(dt, g.time);
+      // what the renderer does first (scene.onBeforeRender: e.g. the motion's late yaw catch), so samples show the drawn pose
+      if (g.scene.onBeforeRender) g.scene.onBeforeRender(E.renderer, g.scene, E.camera, null);
       const s = { f, t: +(f * dt).toFixed(4), p: [pl.pos.x, pl.pos.y, pl.pos.z].map(x => +x.toFixed(4)), v: [pl.vel.x, pl.vel.y, pl.vel.z].map(x => +x.toFixed(3)),
         gr: pl.grounded ? 1 : 0, yaw: +pl.yaw.toFixed(4), cr: pl.crouching ? 1 : 0, sp: pl.sprinting ? 1 : 0,
         cam: [E.camera.position.x, E.camera.position.y, E.camera.position.z].map(x => +x.toFixed(3)), camYaw: +pl.camYaw.toFixed(4) };
@@ -221,10 +230,24 @@
   };
 
   // NPC helpers for scenarios
-  FEEL.actor = (id, x, y, z, ry) => { const c = g.actor(id, null, x, y, z, ry); FEEL.actors.push(c); return c; };
+  FEEL.actor = (id, x, y, z, ry, look = null) => { const c = g.actor(id, look, x, y, z, ry); FEEL.actors.push(c); return c; };
   FEEL.walker = (lane, seed) => {
     let s = seed || 1; const rng = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
     const w = new props.Walker(g, castMod.citizenLook(rng), lane); FEEL.walkers.push(w); w.off = g.onUpdate(dt => w.update(dt)); return w;
   };
+  // a mission-style NPC: moved along a lane by setting root.position / rotation.y and .speed only (as missions do),
+  // turning on the spot at the lane ends (rotation snapped at once, like most mission code)
+  FEEL.pacer = (id, x, z0, z1, speed, pause = 0.6, look = null) => {
+    const c = FEEL.actor(id, x, 0, z0, 0, look), st = { c, dir: 1, wait: 0 };
+    st.off = g.onUpdate(dt => {
+      const p = c.root.position, tz = st.dir > 0 ? z1 : z0, d = tz - p.z;
+      if (st.wait > 0) { st.wait -= dt; c.speed = 0; return; }
+      if (Math.abs(d) < 0.02) { st.dir = -st.dir; c.root.rotation.y = st.dir > 0 ? 0 : Math.PI; c.speed = 0; st.wait = pause; return; }
+      p.z += Math.sign(d) * Math.min(Math.abs(d), speed * dt); c.speed = speed; c.root.rotation.y = d > 0 ? 0 : Math.PI;
+    });
+    (FEEL.pacers || (FEEL.pacers = [])).push(st);
+    return c;
+  };
+  FEEL.childLook = { template: 'kid_kai', era: '2049', height: 1.27 };
   FEEL.release = () => { E.render = draw; g.paused = false; };
 })();

@@ -177,6 +177,17 @@ for (const n of ['wall_30', 'wall_80', 'corner']) {
     out.push({ speed: S[S.length - 1].n[j].speed, clip: [...new Set(S.map(s => s.n[j].clip))].join('/'), ts: r2(mean(S.map(s => s.n[j].ts))), maxTurnPerFrameDeg: r2(Math.max(...snaps)), boneAngVelMax: r2(Math.max(...S.map(s => s.n[j].wmax))), footSegs: F.segs.length, slideMedCm: r2(med(F.slide)), slideP90Cm: r2(pct(F.slide, 0.9)) });
   }
   M.crowd = out; } }
+// mission-style NPCs of the principals (locomotion & secondary motion step): per person foot slide, turn snaps, pops
+for (const n of Object.keys(Object.fromEntries(fs.readdirSync(dir).filter(f => /^(npc_|cast_walk).*\.json$/.test(f) && f !== 'npc_bump.json').map(f => [f.slice(0, -5), 1])))) {
+  const d = load(n); if (!d) continue; const S = d.samples; if (!S[0] || !S[0].n) continue; const out = [];
+  for (let j = 0; j < S[0].n.length; j++) {
+    const key = s => s.n[j]; const F = feet(S, { key, rest: 'auto' });
+    const ry = S.map(s => s.n[j].ry); const snaps = ry.slice(1).map((y, i) => Math.abs(Math.atan2(Math.sin(y - ry[i]), Math.cos(y - ry[i]))) * 180 / Math.PI);
+    const lods = [...new Set(S.map(s => s.n[j].m ? s.n[j].m.lod : '-'))].join('/');
+    out.push({ speed: Math.max(...S.map(s => s.n[j].speed || 0)), lod: lods, footSegs: F.segs.length, slideMedCm: r2(med(F.slide)), slideP90Cm: r2(pct(F.slide, 0.9)), maxTurnPerFrameDeg: r2(Math.max(...snaps)), boneAngVelMax: r2(Math.max(...S.slice(2).map(s => s.n[j].wmax))) });
+  }
+  M[n] = out;
+}
 // ---------------- physics ----------------
 const jumpStats = (S, dt) => {
   const iT = S.findIndex((s, i) => i > 0 && !s.gr && S[i - 1].gr && s.v[1] > 1); if (iT < 0) return null;

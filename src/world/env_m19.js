@@ -339,7 +339,7 @@ export function buildAvenue(game, scene, low) {
   // ---------- alleys: floors, back walls, seams ----------
   const alleyMat = RZ.pbrMaterial('concrete', { mapping: 'world', params: { color: 0x6a6866 } });
   const veilM = veilMaterial(); W.veilMat = veilM;
-  for (const [id, [side, zc]] of Object.entries(AV.alleys)) {
+  for (const [side, zc] of Object.values(AV.alleys)) {
     const xa = side * 10, xb = side * 24;
     const fl = add(plane(14, 8, alleyMat)); fl.rotation.x = -PI / 2; fl.position.set((xa + xb) / 2, 0.151, zc); fl.receiveShadow = true;
     solid(Math.min(xa, xb), -1, zc - 4, Math.max(xa, xb), 0.15, zc + 4);
@@ -788,6 +788,8 @@ export function buildMirror(game, scene, low) {
   const motes = new Motes(low ? 200 : 420, [-30, 0.4, -120, 30, 10, 30], 0xfff0d8, 0.05, 0.08); add(motes.mesh);
   W.updaters.push((dt, t) => { fr.userData.update(t); motes.update(dt); });
   W.lightSrc.push({ p: [0, 3, -60], c: 0xffe8c8, i: 6, d: 12 }, { p: [-14, 2.5, -74], c: 0xffe0b0, i: 5, d: 9 }, { p: [10, 2.5, -110], c: 0xe0e8ff, i: 5, d: 9 }, { p: [2, 3, -116], c: 0xfff0d8, i: 8, d: 10 });
+  // the reflection lies under the lake: it never casts a shadow (halves the shadow pass over the gorge)
+  refl.traverse(o => { o.castShadow = false; });
   W.update = (dt, t) => { for (const u of W.updaters) u(dt, t); };
   return W;
 }

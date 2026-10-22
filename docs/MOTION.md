@@ -480,7 +480,9 @@ What was built from the physics half of the plan, with before / after numbers fr
   - The spring arm sphere-casts (radius 0.2 m) against the collision boxes as well as `camBlockers`. It pulls in
     at once and eases back out at a rate of 4/s.
   - The shoulder offset shrinks when a wall is close on that side.
-  - People between Kai and the camera pull the arm in front of them, over about 0.1 s, to no closer than 0.7 m.
+  - People between Kai and the camera: the camera cranes up (up to 1.2 m, easing in at 8/s and out at 2/s, checked
+    against ceilings) so the line of sight passes over their heads, and the arm keeps its length. Only someone too
+    close behind Kai to look over pulls the arm in front of them, over about 0.1 s, to no closer than 0.7 m.
   - When the arm is shorter than 0.6 m (backed into a wall), Kai's model hides until the arm reaches 0.75 m.
   - Hard landings (over 2 m/s) dip the pivot gently.
   - `Collision.rayCast` allocates nothing, so the camera's two casts per frame stay cheap on phones.
