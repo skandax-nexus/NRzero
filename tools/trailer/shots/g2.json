@@ -4,7 +4,7 @@
    "id": "s05",
    "group": "g2",
    "mission": 1,
-   "beat": "Central Station platform: people waiting in the rain; a train's light swells up the track.",
+   "beat": "Central Station platform in the rain: Kai, Jun and the commuters wait at the edge; a train's headlights appear far up the track and swell until they flood the frame; heads turn toward it.",
    "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
@@ -27,6 +27,15 @@
     },
     {
      "wait": 1.0
+    },
+    {
+     "eval": "(()=>{const T=__game.scene.children.filter(o=>o.isGroup&&Math.abs(o.position.x-13.5)<0.01);const p=T.find(o=>o.children.length===3);if(p)p.visible=false;return 'passer hidden: '+!!p})()"
+    },
+    {
+     "eval": "(()=>{const g=__game;\nconst T=g.scene.children.find(o=>o.isGroup&&o.children.length===4&&o.children[3].children.some(c=>c.isSpotLight));\nif(!T) return 'no train';\nconst S=window.__s05={T,lock:true};\nconst P=T.position,set=P.set.bind(P);P.set=function(x,y,z){if(S.lock)return this;return set(x,y,z);};\nconst R=T.rotation,rset=R.set.bind(R);R.set=function(x,y,z,o){if(S.lock)return this;return rset(x,y,z,o);};\nT.visible=true;P.x=13.5;P.y=0.05;\nconst t0=g.time,zn0=+12,v=33;\ng.onUpdate(()=>{if(S.lock){P.z=zn0-v*(g.time-t0)+8;P.x=13.5;P.y=0.05;}});\nconst kai=g.player.char,nose=T.children[3];S.nose=nose;\ng.player.place(10.5,0.15,-103.9,0.75);kai.lookTarget=null;\nconst J=g.actors.jun;J.root.position.set(9.6,0.15,-100.8);J.root.rotation.y=1.15;J.lookTarget=null;\nreturn 'staged s05'})()"
+    },
+    {
+     "eval": "(()=>{const n=window.__s05.nose;n.children.forEach(c=>{if(c.isMesh)c.material.emissiveIntensity=10;if(c.isSpotLight)c.intensity=25;});return 'nose lamps 10 / spot 25'})()"
     }
    ],
    "frames": 78,
@@ -39,43 +48,56 @@
      {
       "t": 0,
       "p": [
-       6.0,
-       1.5,
-       -114.0
+       12.25,
+       1.3,
+       -112.5
       ],
       "l": [
-       13.2,
-       2.0,
-       -88
+       12.5,
+       1.85,
+       -70.0
       ],
-      "fov": 40,
+      "fov": 30,
       "roll": 0,
-      "focus": 26.98
+      "focus": null
      },
      {
       "t": 3.25,
       "p": [
-       6.3,
-       1.5,
-       -113.0
+       12.1,
+       1.36,
+       -111.1
       ],
       "l": [
-       13.2,
-       2.0,
-       -88
+       12.4,
+       1.8,
+       -70.0
       ],
-      "fov": 39,
+      "fov": 28.5,
       "roll": 0,
-      "focus": 25.94
+      "focus": null
      }
     ],
-    "ease": "inOut",
-    "shake": 0
+    "ease": "linear",
+    "shake": 0.1,
+    "focusOn": "kai"
    },
    "actions": [
     {
-     "t": 0.3,
-     "eval": "__game.player.place(3, 0.15, -106, Math.PI)"
+     "t": 0.55,
+     "eval": "__game.player.place(10.5, 0.15, -104.05, 0.75)"
+    },
+    {
+     "t": 0.6,
+     "eval": "(__game.player.char.lookTarget = window.__s05.nose, 1)"
+    },
+    {
+     "t": 0.85,
+     "eval": "(__game.actors.jun.lookTarget = window.__s05.nose, 1)"
+    },
+    {
+     "t": 1.0,
+     "eval": "(()=>{for(const o of __game.scene.children){const c=o.userData.character;if(c&&o.position.x>8.9&&o.position.x<11&&o.position.z<-104&&o.position.z>-117)c.lookTarget=window.__s05.nose;}return 1})()"
     }
    ],
    "grade": "rain2049",
@@ -83,7 +105,7 @@
    "characters": "Jun Park (transit operator), three civilians on the platform, Kai (foreground left)",
    "lighting": "Warm platform canopy light, the yellow edge strip, the stopped station clock.",
    "sound": "Train horn (the game's 311 / 370 Hz pair), rising rail hiss.",
-   "notes": "The mission freezes ~2.2 s after Kai crosses z -104 (action at t 0.3): cut out on the frame before the freeze.",
+   "notes": "Low on the track bed looking up the line, a slow push. The train is driven at run time (its nose from z +12 at 33 m/s, so the light swells from ~120 m to ~35 m by the cut-out; the mission's own train starts out of sight) and the mission's teleports of it are blocked for this shot. Kai crosses the mission's line at t 0.55 (a 15 cm step), so the Zero Second lands on frame 68, after the cut-out (frame 66): cut out on the white-out, hard cut to s06 in silence. Heads turn to the light: Kai 0.6, Jun 0.85, the commuters 1.0. Frames 68+ (handle) are frozen.",
    "preview": {
     "status": "ok",
     "note": "Kai left, the train headlight swells at the end; cut before the freeze."
@@ -128,7 +150,7 @@
      "timeout": 30
     },
     {
-     "eval": "(()=>{const T=__game.scene.children.find(o=>o.isGroup&&o.children.length===4&&o.children[3].children.some(c=>c.isSpotLight));if(!T)return 'no train';const n=T.children[3];n.children.forEach(c=>{if(c.isMesh)c.material.emissiveIntensity=3;if(c.isSpotLight)c.intensity=20;});return 'train lamps 3 / spot 20'})()"
+     "eval": "(()=>{const T=__game.scene.children.find(o=>o.isGroup&&o.children.length===4&&o.children[3].children.some(c=>c.isSpotLight));if(!T)return 'no train';const n=T.children[3];n.children.forEach(c=>{if(c.isMesh)c.material.emissiveIntensity=3;if(c.isSpotLight)c.intensity=6;});return 'train lamps 3 / spot 6'})()"
     },
     {
      "wait": 0.3
@@ -160,16 +182,16 @@
      {
       "t": 5.0,
       "p": [
-       11.95,
-       0.72,
-       -98.6
+       11.9,
+       0.7,
+       -99.1
       ],
       "l": [
        14.0,
        2.4,
        -89.0
       ],
-      "fov": 40,
+      "fov": 40.5,
       "roll": 0,
       "focus": null
      }
@@ -189,7 +211,7 @@
    "characters": "Frozen civilians, Jun",
    "lighting": "The freeze grade (desaturated, cold); sparks as hanging points of light; rain as beads.",
    "sound": "Hard cut into one second of total silence (bible: the Zero Second), then a low metallic resonance.",
-   "notes": "Camera on the track bed in the train's path, pushing 2 m toward the nose (linear: no ease at the cut points). Focus held on the nose so the frozen sparks between camera and train fall into soft points. The nose lamps / spot are toned down at run time (glow 8 -> 3, spot 60 -> 20): at full strength their bloom flooded the left half of the frame. The passing ambient train is hidden (it shares the track).",
+   "notes": "Camera on the track bed in the train's path, pushing 2 m toward the nose (linear: no ease at the cut points). Focus held on the nose so the frozen sparks between camera and train fall into soft points. The nose lamps / spot are toned down at run time (glow 8 -> 3, spot 60 -> 6): at full strength their bloom flooded the left half of the frame. The passing ambient train is hidden (it shares the track).",
    "preview": {
     "status": "ok",
     "note": "Derailing train hangs with frozen sparks in the freeze grade."
@@ -199,7 +221,7 @@
    "id": "s07",
    "group": "g2",
    "mission": 1,
-   "beat": "Kai walks alone through the frozen station toward us, the derailed train hanging behind him: he passes a frozen Jun, glances at him, then looks straight at us. The only thing still moving.",
+   "beat": "Kai walks alone down the frozen platform toward us, the derailed train hanging behind him: he passes a frozen Jun, glances at him, then looks straight at us. The only thing still moving.",
    "url": "index.html?m=0&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
@@ -238,10 +260,13 @@
      "timeout": 40
     },
     {
-     "eval": "(()=>{const T=__game.scene.children.find(o=>o.isGroup&&o.children.length===4&&o.children[3].children.some(c=>c.isSpotLight));if(!T)return 'no train';const n=T.children[3];n.children.forEach(c=>{if(c.isMesh)c.material.emissiveIntensity=3;if(c.isSpotLight)c.intensity=20;});return 'train lamps 3 / spot 20'})()"
+     "eval": "(()=>{const T=__game.scene.children.find(o=>o.isGroup&&o.children.length===4&&o.children[3].children.some(c=>c.isSpotLight));if(!T)return 'no train';const n=T.children[3];n.children.forEach(c=>{if(c.isMesh)c.material.emissiveIntensity=3;if(c.isSpotLight)c.intensity=6;});return 'train lamps 3 / spot 6'})()"
     },
     {
-     "eval": "__game.player.place(7.9, 0.15, -98.35, Math.PI)"
+     "eval": "(()=>{const g=__game;const mv=[[10.2,-106.5,[10.75,-106.9,1.9]],[9.2,-111.2,[10.9,-111.6,1.3]]];let n=0;\nfor(const o of g.scene.children){const c=o.userData.character;if(!c||c===g.player.char)continue;for(const [x,z,to] of mv){if(Math.abs(o.position.x-x)<0.3&&Math.abs(o.position.z-z)<0.3){o.position.set(to[0],0.15,to[1]);o.rotation.y=to[2];n++;}}}\nconst J=g.actors.jun;J.root.position.set(10.7,0.15,-102.3);J.root.rotation.y=0.5;\nreturn 'frozen platform staged: '+n})()"
+    },
+    {
+     "eval": "__game.player.place(9.75, 0.15, -99.35, Math.PI)"
     },
     {
      "eval": "__game.input.setStick(0, 1, 0.3)"
@@ -262,28 +287,28 @@
      {
       "t": 0,
       "p": [
-       -2.0,
+       -0.4,
        1.2,
-       -6.0
+       -5.6
       ],
       "l": [
-       1.0,
-       2.0,
+       1.4,
+       1.95,
        3.0
       ],
-      "fov": 27,
+      "fov": 28,
       "roll": 0,
       "focus": null
      },
      {
       "t": 5.0,
       "p": [
-       -0.95,
-       1.4,
+       -0.3,
+       1.35,
        -3.3
       ],
       "l": [
-       0.45,
+       0.9,
        1.75,
        3.0
       ],
@@ -298,11 +323,11 @@
    },
    "actions": [
     {
-     "t": 1.6,
-     "eval": "TR.look('kai', [9.4, 1.55, -103])"
+     "t": 1.2,
+     "eval": "TR.look('kai', [10.7, 1.55, -102.3])"
     },
     {
-     "t": 3.7,
+     "t": 3.5,
      "eval": "TR.look('kai', 'camera')"
     }
    ],
@@ -311,7 +336,7 @@
    "characters": "Kai (tracking side-on), frozen commuters and umbrellas between camera and Kai",
    "lighting": "Frozen rain beads catch the station light; Kai the only warm, moving figure.",
    "sound": "Kai's footsteps, glass-harmonic shimmer of the held rain.",
-   "notes": "Leading Steadicam: the camera is anchored to Kai and backs away as he walks, closing from a full figure (27 deg) to a knees-up mid shot (31 deg). Kai walks at 1.26 m/s on the touch stick (setStick 0.3) so the 'walk' clip plays, not the jog. He glances at the frozen Jun as he passes (t 1.6) and finds the lens at t 3.7, under the VO line. Dialogue rig on Kai.",
+   "notes": "Leading Steadicam on the platform (between the canopy pillars and the edge): the camera is anchored to Kai and backs away as he walks, closing from a full figure (28 deg) to a knees-up mid shot (31 deg). Jun is staged frozen at the edge facing up the line (Kai passes him at ~1.8 s), two commuters moved to the edge so Kai's path is clear. Kai walks at 1.26 m/s on the touch stick (setStick 0.3) so the 'walk' clip plays, not the jog; he glances at Jun at 1.2 and finds the lens at 3.5, under the VO line. Dialogue rig on Kai. Train lamps toned down (glow 3, spot 6).",
    "preview": {
     "status": "ok",
     "note": "Kai walks through the held station in the freeze grade."
@@ -363,7 +388,7 @@
      "eval": "[0,1,2].forEach(()=>{const it=__game.interactables.find(i=>i.prompt.includes('safety')); if(it) __game.useInteract(it);})"
     },
     {
-     "until": "__game.engine.fx.uTint.value.x > 1.1",
+     "until": "__game.engine.fx.uTint.value.r > 1.1",
      "timeout": 90
     },
     {
@@ -373,7 +398,7 @@
      "eval": "(()=>{const g=__game,m=g.actors.mira;g.engine.fx.uTint.value.set(1,1,1);g.player.place(-4.85,0.15,-119.4,2.85);m.root.visible=true;m.lookTarget=g.player.char.head;const o=m.setGhost.bind(m);m.setGhost=c=>{const gm=o(c);gm.side=0;gm.depthWrite=true;gm.needsUpdate=true;return gm};return 'mira revealed'})()"
     },
     {
-     "eval": "(()=>{const g=__game;const spots=[[-4.38,-101,[-6.6,-131.5,2.4]],[-5.89,-112,[0.4,-133.5,-0.9]],[3.23,-124,[2.4,-129.8,-2.0]]];let n=0;for(const o of g.scene.children){const c=o.userData.character;if(!c)continue;for(const [x,z,to] of spots){if(Math.abs(o.position.x-x)<0.6&&Math.abs(o.position.z-z)<0.6){o.position.set(to[0],0.15,to[1]);o.rotation.y=to[2];n++;}}}return 'crowd behind her: '+n})()"
+     "eval": "(()=>{const g=__game;const spots=[[-4.38,-101,[-5.4,-135.5,2.4]],[-5.89,-112,[4.4,-138.6,-0.9]],[3.23,-124,[5.0,-135.5,-2.0]]];let n=0;for(const o of g.scene.children){const c=o.userData.character;if(!c)continue;for(const [x,z,to] of spots){if(Math.abs(o.position.x-x)<0.6&&Math.abs(o.position.z-z)<0.6){o.position.set(to[0],0.15,to[1]);o.rotation.y=to[2];n++;}}}return 'crowd behind her: '+n})()"
     },
     {
      "wait": 0.3

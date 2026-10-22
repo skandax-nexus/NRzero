@@ -75,14 +75,14 @@
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Kai (foreground silhouette, hands on hips, looking the ring over: the game's 'look' clip); Iven working at a far console (off frame left)",
    "lighting": "The chamber dimmed at run time (lab lights 1.2, env 0.14, fog 0.03): the ring and its event-horizon disc (power 0.45) are the key; Kai rim-lit against the inner glow.",
    "sound": "Low hum at the ring's frequency (41 Hz bed), one glass partial.",
    "notes": "Low crane-and-arc reveal: starts low behind Kai, whose silhouette covers the core, and arcs right and up until the ring stands in three-quarter view over him. Halo fragments are re-oriented at the end of setup (G3frags) so no arc crosses Kai or the lens.",
    "preview": {
     "status": "ok",
-    "note": "Ring, Kai and Iven read; the clean lab is bright (exposure lowered to 0.82 for all mission 3 shots)."
+    "note": "g3 review: full-res stills 12/49/85 checked; dark chamber, ring reveal over Kai, halos clear of him."
    }
   },
   {
@@ -106,7 +106,7 @@
      "eval": "(async () => { window.THREE = await import('three');\nwindow.G3reach = (id, side = 0, w = 1, up = -1.25, el = -0.25, dur = 0.6) => {\n  const c = id === 'kai' ? __game.player.char : __game.actors[id]; if (!c) return 'no ' + id;\n  const T = window.THREE;\n  if (!c.__reach) {\n    const orig = c.update3d; c.__reach = { w: 0, to: 0, side, up, el, dur, yaw: 0 };\n    const q = new T.Quaternion(), q2 = new T.Quaternion(), v = new T.Vector3();\n    c.update3d = function (dt) {\n      orig.call(this, dt);\n      const R = this.__reach; if (dt > 0) R.w += Math.sign(R.to - R.w) * Math.min(Math.abs(R.to - R.w), dt / R.dur);\n      if (R.w <= 1e-3) return;\n      const s = R.w * R.w * (3 - 2 * R.w);\n      const a = this.arms[R.side].bone; if (!a.up || !a.el) return;\n      const right = v.set(1, 0, 0).applyQuaternion(this.root.quaternion);\n      for (const [b, ang] of [[a.up, R.up * s], [a.el, R.el * s]]) {\n        b.getWorldQuaternion(q); q2.setFromAxisAngle(right, ang); q.premultiply(q2);\n        b.parent.getWorldQuaternion(q2).invert(); b.quaternion.copy(q2.multiply(q)); b.updateMatrixWorld(true);\n      }\n    };\n  }\n  Object.assign(c.__reach, { to: w, side, up, el, dur });\n  return c.__reach;\n};\n\nwindow.G3frags = (avoid, frames = 140, seed = 7, minR = 0) => {\n  const T = window.THREE, ch = __game.scene.children.find(o => o.userData && o.userData.frags);\n  const F = ch.userData.frags; ch.updateMatrixWorld(true);\n  let s = seed >>> 0; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };\n  const pts = avoid.map(a => ({ p: new T.Vector3(...a.p), q: a.q ? new T.Vector3(...a.q) : null, r: a.r }));\n  const segD = (v, a) => { if (!a.q) return v.distanceTo(a.p); const ab = a.q.clone().sub(a.p), t = Math.max(0, Math.min(1, v.clone().sub(a.p).dot(ab) / ab.lengthSq())); return v.distanceTo(a.p.clone().addScaledVector(ab, t)); };\n  const out = [];\n  F.children.forEach((f, i) => {\n    const g = f.geometry.parameters, R = g.radius, arc = g.arc, e = new T.Euler(), m = new T.Matrix4(), v = new T.Vector3();\n    let best = null;\n    for (let tries = 0; tries < 400; tries++) {\n      const rx = rnd() * 6.283, ry = rnd() * 6.283; let ok = true, mind = 1e9;\n      for (let k = 0; k <= frames && ok; k += 3) {\n        e.set(rx + 0.003 * (i + 1) * k, ry + 0.002 * (i + 1) * k, f.rotation.z);\n        m.makeRotationFromEuler(e).premultiply(F.matrixWorld);\n        for (let j = 0; j <= 24; j++) { const th = arc * j / 24; v.set(R * Math.cos(th), R * Math.sin(th), 0).applyMatrix4(m); for (const a of pts) { const d = segD(v, a) - a.r; if (d < mind) mind = d; if (d < 0) { ok = false; break; } } if (!ok) break; }\n      }\n      if (ok && mind >= minR) { best = [rx, ry, mind]; break; }\n    }\n    if (best) { f.rotation.x = best[0]; f.rotation.y = best[1]; out.push(+best[2].toFixed(2)); } else out.push('none');\n  });\n  return out;\n};\n\nreturn 'helpers'; })()"
     },
     {
-     "eval": "(()=>{const g=__game;g.player.char.lookTarget=new THREE.Vector3(0,2.0,-1.6);const c=g.scene.children.find(o=>o.userData&&o.userData.disc);c.userData.disc.material.uniforms.uPower.value=0.3;let n=0;g.scene.traverse(m=>{if(m.isMesh&&m.geometry.type==='ConeGeometry'&&m.material.color&&m.material.color.getHex()===0x3a6a2a){m.visible=false;n++}});return n})()"
+     "eval": "(()=>{const g=__game;g.player.char.lookTarget=new THREE.Vector3(0,2.0,-1.6);const c=g.scene.children.find(o=>o.userData&&o.userData.disc);c.userData.disc.material.uniforms.uPower.value=0.3;let n=0;g.scene.traverse(m=>{if(m.isMesh&&((m.geometry.type==='ConeGeometry'&&m.material.color&&m.material.color.getHex()===0x3a6a2a)||(m.geometry.type==='CylinderGeometry'&&m.geometry.parameters.radiusBottom===3&&m.geometry.parameters.height===18))){m.visible=false;n++}});return n})()"
     },
     {
      "wait": 0.8
@@ -198,21 +198,21 @@
     }
    ],
    "grade": "rain2049",
-   "approved": false,
+   "approved": true,
    "characters": "Kai in profile from his left, reaching his banded left hand to the ring (run-time arm blend over the idle clip, G3reach); Iven behind him on the right, watching him (2049 only, so he vanishes in 2026 / 2196 and returns)",
    "lighting": "2049: dimmed lab, ring key, dialogue rig on Kai (focusOn). 2026: amber work lights, scaffolds, plastic sheets. 2196: green-grey ruin, vines, moon shaft (the toy grass cones hidden). Same ring in all three.",
    "sound": "The temporal switch (the game's switch stinger) on each flicker, pitched up each time.",
-   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture). Switch starts at shot t 1.5 / 2.35 / 3.15 / 3.95 = trailer 41.4 / 42.2 / 43.0 / 43.8 (the sfx table). Halo fragments re-oriented at the end of setup (G3frags) to stay clear of Kai, Iven, the lens and the sight line.",
+   "notes": "DIR.era drives the switch on game time (temporal.switchTo runs on wall time and would be skipped by a frame-stepped capture). Switch starts at shot t 1.5 / 2.35 / 3.15 / 3.95 = trailer 41.4 / 42.2 / 43.0 / 43.8 (the sfx table). Halo fragments re-oriented at the end of setup (G3frags) to stay clear of Kai, Iven, the lens and the sight line. The 2196 grass cones and the mission's hard-edged moon-shaft cylinder are hidden at run time (the engine's own soft spot-light shaft remains).",
    "preview": {
     "status": "ok",
-    "note": "Iven foreground, Kai at the ring; the 2196 flicker (green growth) reads."
+    "note": "g3 review: full-res stills 12/46/67/90/122 checked; Kai's banded hand reaches, the room flickers 2049 -> 2026 (amber scaffolds) -> 2196 (dark green ruin) -> 2026 -> 2049, Iven vanishes outside 2049."
    }
   },
   {
    "id": "s24",
    "group": "g3",
    "mission": 15,
-   "beat": "Sera Voss, who leads the survivors of 2196, at the shimmering veil of Harrow Reach.",
+   "beat": "Sera Voss, who leads the survivors of 2196, at the shimmering veil of Harrow Reach, speaking to Kai inside the lock.",
    "url": "index.html?m=14&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
@@ -220,7 +220,10 @@
      "wait": 0.8
     },
     {
-     "eval": "(()=>{const s=__game.actors.sera; s.root.rotation.y=-Math.PI/2; s.lookTarget=null; return s.root.position.toArray()})()"
+     "eval": "(async()=>{window.THREE=await import('three');const g=__game,s=g.actors.sera;s.root.position.set(71.4,0,12.6);s.root.rotation.y=1.25;g.player.place(62.7,0,11.86,1.49);s.lookTarget=g.player.char.head;g.player.char.lookTarget=s.head;if(window.__m15&&__m15.W.gateVeil)__m15.W.gateVeil.material.opacity=0.28;const l=new THREE.PointLight(0xffd2a8,3,5,2);l.position.set(73.2,1.9,13.9);g.engine.scene.add(l);const l2=new THREE.PointLight(0xffc896,3.5,4,2);l2.position.set(70.0,2.0,13.6);g.engine.scene.add(l2);return 'staged'})()"
+    },
+    {
+     "wait": 0.6
     }
    ],
    "frames": 73,
@@ -233,40 +236,39 @@
      {
       "t": 0,
       "p": [
-       -2.2,
-       1.62,
-       0.35
+       74.7,
+       1.38,
+       14.15
       ],
       "l": [
-       0,
-       1.58,
-       0
+       71.1,
+       1.74,
+       12.75
       ],
-      "fov": 30,
+      "fov": 25,
       "roll": 0,
-      "focus": 2.23
+      "focus": 3.6
      },
      {
-      "t": 3.0,
+      "t": 3.04,
       "p": [
-       -2.05,
-       1.62,
-       0.3
+       74.25,
+       1.4,
+       13.95
       ],
       "l": [
-       0,
-       1.58,
-       0
+       71.15,
+       1.73,
+       12.75
       ],
-      "fov": 29,
+      "fov": 21,
       "roll": 0,
-      "focus": 2.07
+      "focus": 3.2
      }
     ],
     "ease": "inOut",
-    "shake": 0,
-    "anchor": "DIR.actor('sera').root.position",
-    "anchorLive": false
+    "shake": 0.05,
+    "focusOn": "sera"
    },
    "actions": [
     {
@@ -276,10 +278,10 @@
    ],
    "grade": "ruin2196",
    "approved": false,
-   "characters": "Sera Voss (close-up, the veil of the lock behind her)",
-   "lighting": "Amber light of the lock's edge, her face half in shadow.",
+   "characters": "Sera Voss (medium close-up, right third, outside the lock, turning her head to Kai and speaking); Kai small and soft in the haze beyond the veil, left third, facing her",
+   "lighting": "Late gold of the lock (2196 golden-hour sky and haze through the gate); two warm bounce fills (run-time point lights: one from the camera side, one ahead of her face so it stays lit when she turns to Kai), the dialogue rig on her (focusOn); the veil's shimmer raised to 0.28.",
    "sound": "",
-   "notes": "VO from mission 13 (\"The future that survives long enough to remember us.\"); her mouth moves with it (talk action).",
+   "notes": "Restaged from the storyboard (camera west of her into the boxy outer skyline): now from the east through the Lock Gate, the hazy golden city behind her (clock, colonnade). VO from mission 13 (\"The future that survives long enough to remember us.\"); her mouth moves with it (talk action at 0.62 = trailer 85.3).",
    "preview": {
     "status": "ok",
     "note": "Sera close-up at the veil; the skyline behind her is simple boxes."
@@ -297,13 +299,22 @@
      "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
     },
     {
-     "eval": "__game.player.place(0, 0, 0.95, Math.PI)"
+     "eval": "(()=>{const g=__game;g.player.place(0,0,0.95,Math.PI);g.actors.iven.root.visible=false;return 'staged'})()"
     },
     {
-     "eval": "(v => { const c = __game.scene.children.find(o => o.userData && o.userData.disc); if (c) c.userData.disc.material.uniforms.uPower.value = v; return !!c; })(0.9)"
+     "eval": "(()=>{const g=__game,E=g.engine,s=E.scene;E._batch.reset();E.batchOn=false;s.environmentIntensity=0.14;const L=[];s.traverse(x=>{if(x.isLight)L.push(x)});L.forEach(l=>{if(l.isPointLight&&l.color.getHex()===0xdff4ff&&l.position.y>7&&Math.hypot(l.position.x,l.position.z)<10)l.intensity=1.2;if(l.isPointLight&&l.position.y>3.5&&l.position.y<3.7&&l.position.z===0)l.intensity=45;if(l.isHemisphereLight)l.intensity=0.08});s.fog.density=0.03;s.traverse(m=>{const p=m.isMesh&&m.geometry.parameters;if(!p)return;if(p.width===1.2&&p.depth===0.3&&Math.abs(m.position.y-8.7)<0.2)m.material.emissiveIntensity=0.3;if(p.width===1.4&&p.height===0.6&&m.material.emissive)m.material.emissiveIntensity=0.08;if(p.width===4&&p.height===4.5&&Math.abs(m.position.z+12)<0.05){m.material.clearcoatRoughness=0.6;m.material.roughness=0.6}});return 'mood'})()"
+    },
+    {
+     "eval": "(async () => { window.THREE = await import('three');\nwindow.G3reach = (id, side = 0, w = 1, up = -1.25, el = -0.25, dur = 0.6) => {\n  const c = id === 'kai' ? __game.player.char : __game.actors[id]; if (!c) return 'no ' + id;\n  const T = window.THREE;\n  if (!c.__reach) {\n    const orig = c.update3d; c.__reach = { w: 0, to: 0, side, up, el, dur, yaw: 0 };\n    const q = new T.Quaternion(), q2 = new T.Quaternion(), v = new T.Vector3();\n    c.update3d = function (dt) {\n      orig.call(this, dt);\n      const R = this.__reach; if (dt > 0) R.w += Math.sign(R.to - R.w) * Math.min(Math.abs(R.to - R.w), dt / R.dur);\n      if (R.w <= 1e-3) return;\n      const s = R.w * R.w * (3 - 2 * R.w);\n      const a = this.arms[R.side].bone; if (!a.up || !a.el) return;\n      const right = v.set(1, 0, 0).applyQuaternion(this.root.quaternion);\n      for (const [b, ang] of [[a.up, R.up * s], [a.el, R.el * s]]) {\n        b.getWorldQuaternion(q); q2.setFromAxisAngle(right, ang); q.premultiply(q2);\n        b.parent.getWorldQuaternion(q2).invert(); b.quaternion.copy(q2.multiply(q)); b.updateMatrixWorld(true);\n      }\n    };\n  }\n  Object.assign(c.__reach, { to: w, side, up, el, dur });\n  return c.__reach;\n};\n\nwindow.G3frags = (avoid, frames = 140, seed = 7, minR = 0) => {\n  const T = window.THREE, ch = __game.scene.children.find(o => o.userData && o.userData.frags);\n  const F = ch.userData.frags; ch.updateMatrixWorld(true);\n  let s = seed >>> 0; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };\n  const pts = avoid.map(a => ({ p: new T.Vector3(...a.p), q: a.q ? new T.Vector3(...a.q) : null, r: a.r }));\n  const segD = (v, a) => { if (!a.q) return v.distanceTo(a.p); const ab = a.q.clone().sub(a.p), t = Math.max(0, Math.min(1, v.clone().sub(a.p).dot(ab) / ab.lengthSq())); return v.distanceTo(a.p.clone().addScaledVector(ab, t)); };\n  const out = [];\n  F.children.forEach((f, i) => {\n    const g = f.geometry.parameters, R = g.radius, arc = g.arc, e = new T.Euler(), m = new T.Matrix4(), v = new T.Vector3();\n    let best = null;\n    for (let tries = 0; tries < 400; tries++) {\n      const rx = rnd() * 6.283, ry = rnd() * 6.283; let ok = true, mind = 1e9;\n      for (let k = 0; k <= frames && ok; k += 3) {\n        e.set(rx + 0.003 * (i + 1) * k, ry + 0.002 * (i + 1) * k, f.rotation.z);\n        m.makeRotationFromEuler(e).premultiply(F.matrixWorld);\n        for (let j = 0; j <= 24; j++) { const th = arc * j / 24; v.set(R * Math.cos(th), R * Math.sin(th), 0).applyMatrix4(m); for (const a of pts) { const d = segD(v, a) - a.r; if (d < mind) mind = d; if (d < 0) { ok = false; break; } } if (!ok) break; }\n      }\n      if (ok && mind >= minR) { best = [rx, ry, mind]; break; }\n    }\n    if (best) { f.rotation.x = best[0]; f.rotation.y = best[1]; out.push(+best[2].toFixed(2)); } else out.push('none');\n  });\n  return out;\n};\n\nreturn 'helpers'; })()"
+    },
+    {
+     "eval": "(()=>{const g=__game,k=g.player.char;k.lookTarget=new THREE.Vector3(0,2.0,-1.6);G3reach('kai',1,1,-1.25,-0.25,0.5);k.wristBoost=10;const c=g.scene.children.find(o=>o.userData&&o.userData.disc);c.userData.disc.material.uniforms.uPower.value=0.9;let n=0;g.scene.traverse(m=>{if(m.isMesh&&((m.geometry.type==='ConeGeometry'&&m.material.color&&m.material.color.getHex()===0x3a6a2a)||(m.geometry.type==='CylinderGeometry'&&m.geometry.parameters.radiusBottom===3&&m.geometry.parameters.height===18))){m.visible=false;n++}});return n})()"
     },
     {
      "wait": 0.8
+    },
+    {
+     "eval": "G3frags([{p:[0,0.1,0.95],q:[0,1.9,0.95],r:0.6},{p:[0,1.4,0.95],q:[-0.5,1.4,0.3],r:0.4},{p:[0.62,1.53,-0.5],q:[0.0,1.6,3.5],r:0.6}],60)"
     }
    ],
    "frames": 49,
@@ -316,38 +327,39 @@
      {
       "t": 0,
       "p": [
-       0.38,
-       1.5,
-       -0.6
+       0.62,
+       1.53,
+       -0.5
       ],
       "l": [
-       0,
-       1.45,
+       -0.45,
+       1.57,
        0.95
       ],
-      "fov": 40,
+      "fov": 38,
       "roll": 0,
       "focus": 1.6
      },
      {
-      "t": 2.1,
+      "t": 2.04,
       "p": [
-       0.42,
-       1.5,
-       -0.45
+       0.58,
+       1.54,
+       -0.38
       ],
       "l": [
-       0,
-       1.45,
+       -0.45,
+       1.58,
        0.95
       ],
-      "fov": 39,
+      "fov": 37,
       "roll": 0,
-      "focus": 1.46
+      "focus": 1.45
      }
     ],
     "ease": "inOut",
-    "shake": 0.35
+    "shake": 0.35,
+    "focusOn": "kai"
    },
    "actions": [
     {
@@ -364,14 +376,14 @@
     }
    ],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Kai (medium shot, facing camera, the ring behind camera)",
-   "lighting": "Hard cyan key from the ring core, era colour washing over his face on each switch.",
+   "approved": true,
+   "characters": "Kai (medium close-up, facing camera from the ring's side, his banded left hand raised toward the ring, eyes on it)",
+   "lighting": "Ring light from above / behind camera, dialogue rig key on his face (focusOn kai); era light washes over him: 2196 green-grey with vines, 2026 amber work lights and scaffolds.",
    "sound": "",
-   "notes": "",
+   "notes": "Iven hidden. The 2196 grass cones hidden (toy-like at this distance). Halo fragments re-oriented (G3frags) to stay off Kai and the lens. The 2196 grass cones and the mission's hard-edged moon-shaft cylinder are hidden at run time (the engine's own soft spot-light shaft remains).",
    "preview": {
     "status": "ok",
-    "note": "Kai medium shot; 2196 then 2026 wash over him."
+    "note": "g3 review: full-res stills 12/22/34 checked; 2049 -> 2196 -> 2026 wash over Kai's face, banded hand raised; Iven hidden."
    }
   },
   {
@@ -410,32 +422,32 @@
       "p": [
        0,
        1.0,
-       12.4
+       12.6
       ],
       "l": [
        0,
-       3.3,
+       2.9,
        -2
       ],
       "fov": 38,
       "roll": 0,
-      "focus": 7.8
+      "focus": 8.0
      },
      {
       "t": 5.0,
       "p": [
        0,
        1.12,
-       11.0
+       11.6
       ],
       "l": [
        0,
-       3.35,
+       2.67,
        -2
       ],
-      "fov": 37,
+      "fov": 38,
       "roll": 0,
-      "focus": 6.4
+      "focus": 7.0
      }
     ],
     "ease": "sine",
@@ -443,14 +455,14 @@
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Kai (silhouette, back to camera, centred)",
-   "lighting": "Symmetric, the ring core the only bright thing; slow push-in.",
+   "approved": true,
+   "characters": "Kai (silhouette, back to camera, centred, idle breathing; his head breaks the bright core)",
+   "lighting": "Symmetric. The chamber dimmed at run time (lab lights 1.2, env 0.14, fog 0.03, screens 0.08): the ring's event horizon (power 0.95) the only bright thing; slow low push-in.",
    "sound": "Piano motif returns, alone.",
-   "notes": "",
+   "notes": "Kai stays whole inside the 2.39 band through the push (feet clear of the bottom edge, ring top clear of the top).",
    "preview": {
     "status": "ok",
-    "note": "Symmetric final image, Kai small before the ring."
+    "note": "g3 review: full-res stills 12/60/107 checked; symmetric low push-in, dark chamber, Kai whole in the 2.39 band."
    }
   },
   {
@@ -465,13 +477,22 @@
      "eval": "__game.engine.renderer.toneMappingExposure = 0.82"
     },
     {
-     "eval": "__game.player.place(0, 0, 1.0, Math.PI)"
+     "eval": "(()=>{const g=__game;g.player.place(0,0,1.0,Math.PI);const i=g.actors.iven;i.root.visible=true;i.root.position.set(2.4,0,3.0);i.root.rotation.y=Math.atan2(-2.4,-2.0);i.pose=null;i.lookTarget=g.player.char.head;return 'staged'})()"
     },
     {
-     "eval": "(()=>{const i=__game.actors.iven; i.root.position.set(2.9,0,4.6); i.lookTarget=__game.player.char.head; return 'iven'})()"
+     "eval": "(()=>{const g=__game,E=g.engine,s=E.scene;E._batch.reset();E.batchOn=false;s.environmentIntensity=0.14;const L=[];s.traverse(x=>{if(x.isLight)L.push(x)});L.forEach(l=>{if(l.isPointLight&&l.color.getHex()===0xdff4ff&&l.position.y>7&&Math.hypot(l.position.x,l.position.z)<10)l.intensity=1.2;if(l.isPointLight&&l.position.y>3.5&&l.position.y<3.7&&l.position.z===0)l.intensity=45;if(l.isHemisphereLight)l.intensity=0.08});s.fog.density=0.03;s.traverse(m=>{const p=m.isMesh&&m.geometry.parameters;if(!p)return;if(p.width===1.2&&p.depth===0.3&&Math.abs(m.position.y-8.7)<0.2)m.material.emissiveIntensity=0.3;if(p.width===1.4&&p.height===0.6&&m.material.emissive)m.material.emissiveIntensity=0.08;if(p.width===4&&p.height===4.5&&Math.abs(m.position.z+12)<0.05){m.material.clearcoatRoughness=0.6;m.material.roughness=0.6}});return 'mood'})()"
+    },
+    {
+     "eval": "(async () => { window.THREE = await import('three');\nwindow.G3reach = (id, side = 0, w = 1, up = -1.25, el = -0.25, dur = 0.6) => {\n  const c = id === 'kai' ? __game.player.char : __game.actors[id]; if (!c) return 'no ' + id;\n  const T = window.THREE;\n  if (!c.__reach) {\n    const orig = c.update3d; c.__reach = { w: 0, to: 0, side, up, el, dur, yaw: 0 };\n    const q = new T.Quaternion(), q2 = new T.Quaternion(), v = new T.Vector3();\n    c.update3d = function (dt) {\n      orig.call(this, dt);\n      const R = this.__reach; if (dt > 0) R.w += Math.sign(R.to - R.w) * Math.min(Math.abs(R.to - R.w), dt / R.dur);\n      if (R.w <= 1e-3) return;\n      const s = R.w * R.w * (3 - 2 * R.w);\n      const a = this.arms[R.side].bone; if (!a.up || !a.el) return;\n      const right = v.set(1, 0, 0).applyQuaternion(this.root.quaternion);\n      for (const [b, ang] of [[a.up, R.up * s], [a.el, R.el * s]]) {\n        b.getWorldQuaternion(q); q2.setFromAxisAngle(right, ang); q.premultiply(q2);\n        b.parent.getWorldQuaternion(q2).invert(); b.quaternion.copy(q2.multiply(q)); b.updateMatrixWorld(true);\n      }\n    };\n  }\n  Object.assign(c.__reach, { to: w, side, up, el, dur });\n  return c.__reach;\n};\n\nwindow.G3frags = (avoid, frames = 140, seed = 7, minR = 0) => {\n  const T = window.THREE, ch = __game.scene.children.find(o => o.userData && o.userData.frags);\n  const F = ch.userData.frags; ch.updateMatrixWorld(true);\n  let s = seed >>> 0; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };\n  const pts = avoid.map(a => ({ p: new T.Vector3(...a.p), q: a.q ? new T.Vector3(...a.q) : null, r: a.r }));\n  const segD = (v, a) => { if (!a.q) return v.distanceTo(a.p); const ab = a.q.clone().sub(a.p), t = Math.max(0, Math.min(1, v.clone().sub(a.p).dot(ab) / ab.lengthSq())); return v.distanceTo(a.p.clone().addScaledVector(ab, t)); };\n  const out = [];\n  F.children.forEach((f, i) => {\n    const g = f.geometry.parameters, R = g.radius, arc = g.arc, e = new T.Euler(), m = new T.Matrix4(), v = new T.Vector3();\n    let best = null;\n    for (let tries = 0; tries < 400; tries++) {\n      const rx = rnd() * 6.283, ry = rnd() * 6.283; let ok = true, mind = 1e9;\n      for (let k = 0; k <= frames && ok; k += 3) {\n        e.set(rx + 0.003 * (i + 1) * k, ry + 0.002 * (i + 1) * k, f.rotation.z);\n        m.makeRotationFromEuler(e).premultiply(F.matrixWorld);\n        for (let j = 0; j <= 24; j++) { const th = arc * j / 24; v.set(R * Math.cos(th), R * Math.sin(th), 0).applyMatrix4(m); for (const a of pts) { const d = segD(v, a) - a.r; if (d < mind) mind = d; if (d < 0) { ok = false; break; } } if (!ok) break; }\n      }\n      if (ok && mind >= minR) { best = [rx, ry, mind]; break; }\n    }\n    if (best) { f.rotation.x = best[0]; f.rotation.y = best[1]; out.push(+best[2].toFixed(2)); } else out.push('none');\n  });\n  return out;\n};\n\nreturn 'helpers'; })()"
+    },
+    {
+     "eval": "(()=>{const g=__game;g.player.char.lookTarget=new THREE.Vector3(0,2.0,-1.6);const c=g.scene.children.find(o=>o.userData&&o.userData.disc);c.userData.disc.material.uniforms.uPower.value=0.45;let n=0;g.scene.traverse(m=>{if(m.isMesh&&((m.geometry.type==='ConeGeometry'&&m.material.color&&m.material.color.getHex()===0x3a6a2a)||(m.geometry.type==='CylinderGeometry'&&m.geometry.parameters.radiusBottom===3&&m.geometry.parameters.height===18))){m.visible=false;n++}});return n})()"
     },
     {
      "wait": 0.8
+    },
+    {
+     "eval": "G3frags([{p:[0,0.1,1.0],q:[0,1.9,1.0],r:0.6},{p:[0,1.4,1.0],q:[-0.3,1.4,0.25],r:0.4},{p:[2.4,0.1,3.0],q:[2.4,1.9,3.0],r:0.6},{p:[4.3,1.66,3.3],q:[4.18,1.66,3.2],r:1.0},{p:[4.2,1.66,3.2],q:[-1.4,1.95,-0.2],r:0.4},{p:[4.2,1.66,3.2],q:[0,5.8,-2],r:0.9},{p:[4.2,1.66,3.2],q:[0,3.6,-2],r:0.7}],90)"
     }
    ],
    "frames": 84,
@@ -484,38 +505,39 @@
      {
       "t": 0,
       "p": [
-       4.7,
-       1.72,
-       5.3
+       4.3,
+       1.66,
+       3.3
       ],
       "l": [
-       0,
+       0.1,
        1.9,
-       0.2
+       0.4
       ],
-      "fov": 34,
+      "fov": 38,
       "roll": 0,
-      "focus": 6.4
+      "focus": 5.1
      },
      {
       "t": 3.5,
       "p": [
-       4.45,
-       1.72,
-       5.0
+       4.18,
+       1.66,
+       3.2
       ],
       "l": [
-       0,
-       1.95,
-       0.0
+       0.1,
+       1.92,
+       0.37
       ],
-      "fov": 32,
+      "fov": 36,
       "roll": 0,
-      "focus": 6.1
+      "focus": 4.7
      }
     ],
     "ease": "inOut",
-    "shake": 0
+    "shake": 0.1,
+    "focusOn": "kai"
    },
    "actions": [
     {
@@ -523,8 +545,12 @@
      "eval": "DIR.actor('iven').talk = 2.2"
     },
     {
-     "t": 1.6,
-     "eval": "DIR.actor('kai').pose = 'work'"
+     "t": 1.5,
+     "eval": "G3reach('kai',1,1,-1.25,-0.25,0.8)"
+    },
+    {
+     "t": 1.9,
+     "eval": "G3reach('iven',0,0.55,-1.0,-0.4,0.5)"
     },
     {
      "t": 2.3,
@@ -540,14 +566,14 @@
     }
    ],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Iven Marr (soft foreground shoulder, right), Kai at the ring",
-   "lighting": "Over Iven's shoulder; ring flare at the end.",
+   "approved": true,
+   "characters": "Iven Marr (over-the-shoulder, soft foreground left, talking, his hand coming up to stop him); Kai mid-frame in profile, lifting his banded hand to the ring",
+   "lighting": "Dimmed lab, the ring the key; rig light on Kai (focusOn); the ring flares (power 0.95, band boost) into the switch at the end.",
    "sound": "",
-   "notes": "The edit cuts to black on the first frame of the switch distortion (about t 2.6).",
+   "notes": "Iven's mouth moves with the VO (talk 2.2 s from t 0.8 = trailer 109.9). The edit cuts to black on the switch distortion (DIR.era from t 2.55, peak at 3.0 = the cut-out). Halo fragments re-oriented (G3frags) to stay off both men, the lens and the sight line. The 2196 grass cones and the mission's hard-edged moon-shaft cylinder are hidden at run time (the engine's own soft spot-light shaft remains).",
    "preview": {
     "status": "ok",
-    "note": "Over Iven's shoulder; the ring flares into the switch at the end."
+    "note": "g3 review: full-res stills 12/42/60/71 checked; over Iven's shoulder, Kai lifts the banded hand, Iven's hand comes up, switch distortion at the cut."
    }
   }
  ]
