@@ -273,7 +273,7 @@ function analyse(mesh, mat) {
     for (const i of queue) { const p = P(i); for (const j of nb[i]) { if (!isHair[j]) continue; const pj = P(j), d = hairDist[i] + Math.hypot(pj[0] - p[0], pj[1] - p[1], pj[2] - p[2]); if (d < hairDist[j] - 1e-5) { hairDist[j] = d; next.push(j); } } }
     queue.length = 0; for (const j of new Set(next)) queue.push(j);
   }
-  const crown = [Mc[0], Mc[1] + 1.55 * u, Mc[2] - 0.9 * u];
+  const crown = [Mc[0], Mc[1] + 2.3 * u, Mc[2] - 1.5 * u];   // above the back of the crown, outside the head
   // ---- attributes
   const F1 = new Uint8Array(n * 4), F2 = new Uint8Array(n * 4), HT = new Int8Array(n * 4), DET = new Float32Array(n);
   const q8 = v => Math.round(Math.max(0, Math.min(1, v)) * 255), s8 = v => Math.round(Math.max(-1, Math.min(1, v)) * 127);
@@ -333,7 +333,7 @@ function analyse(mesh, mat) {
       if (L < 1e-5) { tg = [-q[0] * q[1], 1 - q[1] * q[1], -q[2] * q[1]].map(v => -v); L = Math.hypot(...tg) || 1; }
       const cd = Math.hypot(...d) / u;
       // root to tip by the distance from the crown only (overlapping shell layers then shade alike: no seams)
-      const tip = smooth(1.0, 4.2, cd) * 0.85 + 0.15 * smooth(0.4, 2.0, cd);
+      const tip = smooth(1.4, 5.0, cd) * 0.85 + 0.15 * smooth(0.8, 2.6, cd);
       HT.set([s8(tg[0] / L), s8(tg[1] / L), s8(tg[2] / L), s8(tip)], i * 4);
     }
   }
@@ -514,11 +514,17 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
 	  if ( azFade > 0.0 && azSkin > 0.5 && azEyeK < 0.5 && azLook.x > 0.02 ) {
 		// forehead lines and crow's feet (rest space, so they move with the skin), deeper with age
 		vec3 azP = vAzRest;
-		float azH = - pow( 0.5 + 0.5 * sin( azP.y * 680.0 + 2.0 * sin( azP.x * 55.0 ) ), 6.0 ) * vAzFace2.y * smoothstep( 0.2, 0.9, vAzFace2.y );
+		// a few broken forehead lines, each with its own depth along its length
+		float azPh = azP.y * 680.0 + 2.0 * sin( azP.x * 55.0 ) + 0.7 * sin( azP.x * 131.0 );
+		float azLi = floor( azPh / 6.2832 + 0.5 );
+		float azBr = smoothstep( 0.1, 0.7, sin( azP.x * ( 70.0 + 23.0 * fract( azLi * 0.618 ) ) + azLi * 2.4 ) * 0.5 + 0.5 );
+		float azH = - pow( 0.5 + 0.5 * cos( azPh ), 10.0 ) * azBr * vAzFace2.y * smoothstep( 0.2, 0.9, vAzFace2.y ) * ( 1.0 - smoothstep( 0.6, 1.6, fwidth( azPh ) ) );
+		// crow's feet: a few fine lines fanning out from the outer eye corner
 		vec3 azEc = azP.x > azEyeL.x * 0.5 + azEyeR.x * 0.5 ? azEyeL.xyz : azEyeR.xyz;
 		vec2 azD = azP.xy - azEc.xy - vec2( sign( azP.x - azEc.x ) * azEyeL.w * 0.42, 0.0 );
-		azH -= pow( 0.5 + 0.5 * sin( atan( azD.y, abs( azD.x ) ) * 15.0 + length( azD ) * 300.0 ), 8.0 ) * vAzFace2.z;
-		azH *= azLook.x * 0.0007 * azFade;
+		float azCa = atan( azD.y, abs( azD.x ) ) * 7.0 + sin( length( azD ) * 400.0 ) * 0.3;
+		azH -= pow( 0.5 + 0.5 * cos( azCa ), 14.0 ) * vAzFace2.z * smoothstep( 0.004, 0.009, length( azD ) ) * ( 1.0 - smoothstep( 0.6, 1.6, fwidth( azCa ) ) );
+		azH *= azLook.x * 0.00035 * azFade;
 		vec2 azHd = vec2( dFdx( azH ), dFdy( azH ) );
 		vec3 azR1 = cross( azQ1, normal ), azR2 = cross( normal, azQ0 ); float azDet = dot( azQ0, azR1 ) * faceDirection;
 		normal = normalize( abs( azDet ) * normal - sign( azDet ) * ( azHd.x * azR1 + azHd.y * azR2 ) );
@@ -558,6 +564,9 @@ float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0;
   F = F.replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
 	material.roughness = min( 1.0, material.roughness + ( 1.0 - azMicro ) * 0.25 * azSkin );
 	material.roughness = mix( material.roughness, max( material.roughness, 0.36 ), azHair );
+	// the cornea: a wet, nearly smooth surface (no geometry roughness: the shell is small and curved)
+	// (its tear film reflects a little more than the 4 % of a dry dielectric, so catch-lights read in dim places)
+	if ( azEyeK > 0.5 ) { material.roughness = mix( mix( 0.09, 0.06, azTear ), material.roughness, azLidK ); material.specularColor *= mix( 2.2, 1.0, azLidK ); }
 	material.specularColor *= mix( 1.0, azMicro, azSkin );`);
   F = F.replace('#include <lights_physical_pars_fragment>', lightsChunk());
   // ---- indirect light: occlusion in cavities and contacts; a fresnel sheen driven by the scene's own ambient (no
@@ -627,7 +636,7 @@ export function lookPerson(h, seed = 1) {
     azEyeL: { value: E ? new THREE.Vector4(...E.L.c, Fc.u) : new THREE.Vector4(Fc.M[0] + 0.032, Fc.M[1], Fc.M[2], Fc.u) },
     azEyeR: { value: E ? new THREE.Vector4(...E.Rr.c, Fc.u) : new THREE.Vector4(Fc.M[0] - 0.032, Fc.M[1], Fc.M[2], Fc.u) },
     azExpr: { value: new THREE.Vector4(0, 0, 0, 0) },
-    azCrown: { value: new THREE.Vector4(Fc.M[0], Fc.M[1] + 1.55 * Fc.u, Fc.M[2] - 0.9 * Fc.u, 0) },
+    azCrown: { value: new THREE.Vector4(Fc.M[0], Fc.M[1] + 2.3 * Fc.u, Fc.M[2] - 1.5 * Fc.u, 0) },
   };
   if (age == null) ageWait.push(() => { const a = AGES[h.id]?.age; if (a != null) U.azLook.value.x = Math.max(0, Math.min(1, (a - 22) / 50)); });
   const mats = new Map();
