@@ -618,14 +618,15 @@ export default {
         const k6 = game.actor('m18kai6', null, -3.6, -16, 18.4, PI / 2), m9 = game.actor('m18mira9', null, -4.4, -16, 17.2, PI / 2);
         try { k6.setGhost(GHOST_KID); m9.setGhost(GHOST_MIRA); } catch (err) { void err; }
         small.add(k6); small.add(m9);
-        await game.shot([P2.carving[0] + 2.4, -14.8, P2.carving[2] + 1.2], [P2.carving[0] + 0.9, -15.2, P2.carving[2]], 1.4, { fov: 34 });
+        pl.place(P2.carving[0] + 1.7, -16, P2.carving[2] + 1.5, -PI / 2 - 0.5);
+        await game.shot([P2.carving[0] + 2.6, -14.7, P2.carving[2] - 2.2], [P2.carving[0] + 0.95, -15.2, P2.carving[2]], 1.4, { fov: 36 });
         await game.say('kai', 'K plus M. Twenty twenty-five. Dad\'s penknife. She did the M.');
         await game.shot([-7.6, -14.6, 21.6], [-3.8, -15.2, 17.6], 1.6, { fov: 40 });
         m9.pose = 'look'; await game.say('m18mira9', 'Four skips! That\'s four! You saw it!');
         await game.say('m18kai6', 'It sank on three.');
         await game.say('m18mira9', 'It sank after four. You count the splashes, not the sinking. That\'s the rule.');
         audio.sfxPlay('motif');
-        await game.shot([P2.carving[0] + 2.4, -14.8, P2.carving[2] + 1.2], [P2.carving[0] + 0.9, -15.2, P2.carving[2]], 1.2, { fov: 36 });
+        await game.shot([P2.carving[0] + 3.4, -14.5, P2.carving[2] - 1.6], [P2.carving[0] + 1.4, -15.0, P2.carving[2] + 1.0], 1.2, { fov: 40 });
         await game.say('kai', 'Count the splashes, not the sinking. I\'d forgotten she said that.');
         ev('K + M · 2025', 'A carving on a boulder by the Varrow river: "K + M · 2025". Kai and Mira, the summer before the open day. Residue: Mira counting stone skips. "You count the splashes, not the sinking."', 'Varrow Gorge · 2026');
         k6.root.visible = false; m9.root.visible = false; S.memory = false; S.main = false; music();
