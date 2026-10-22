@@ -7,6 +7,7 @@
 // Auto-enabled on touch-first devices and hidden again when a keyboard is used.
 // URL ?touch=1 / ?touch=0 forces it on / off (testing on desktop, or keyboard on a tablet).
 import { STICK_SPRINT } from './player.js';
+import { PHYS_CLASSIC } from './physics.js';
 
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -142,6 +143,8 @@ export class TouchControls {
     const s = Math.min(window.innerWidth, window.innerHeight);
     this.stickR = clamp(Math.round(s * 0.15), 44, 72);
     this.root.style.setProperty('--stick-r', this.stickR + 'px');
+    // CROUCH a little further from JUMP (a 26-30 px gap instead of 14-16 px), so a jump tap never toggles crouch
+    if (!PHYS_CLASSIC && this.el?.crouch) this.el.crouch.style.right = `calc(${window.innerHeight >= 600 && window.innerWidth >= 900 ? 128 : 112}px + var(--sr))`;
   }
 
   setEnabled(on) {
@@ -159,7 +162,7 @@ export class TouchControls {
     if (btn) { this.pressButton(btn, e.pointerId); return; }
     const W = window.innerWidth, H = window.innerHeight, x = e.clientX, y = e.clientY;
     if (this.stickId === null && x < W * 0.42 && y > H * 0.2) this.startStick(e);
-    else if (this.lookId === null) { this.lookId = e.pointerId; this.lookLast.x = x; this.lookLast.y = y; this.input.lookActive = true; }
+    else if (this.lookId === null) { this.lookId = e.pointerId; this.lookLast.x = x; this.lookLast.y = y; this.input.lookActive = true; this.lookT = null; this.lookGain = 1; }
   }
 
   onMove(e) {
@@ -167,9 +170,22 @@ export class TouchControls {
     else if (e.pointerId === this.lookId) {
       const dx = e.clientX - this.lookLast.x, dy = e.clientY - this.lookLast.y;
       this.lookLast.x = e.clientX; this.lookLast.y = e.clientY;
-      // a drag across the long side of the screen turns the camera ~225 degrees
-      const k = this.sensitivity * 1.25 * Math.PI / Math.max(window.innerWidth, window.innerHeight);
-      this.input.addLook(dx * k, dy * k * 0.8);
+      const long = Math.max(window.innerWidth, window.innerHeight);
+      if (PHYS_CLASSIC) {
+        // a drag across the long side of the screen turns the camera ~225 degrees
+        const k = this.sensitivity * 1.25 * Math.PI / long;
+        this.input.addLook(dx * k, dy * k * 0.8);
+      } else {
+        // ~270 degrees across the long side for a slow, aiming drag; a quick swipe turns up to 1.5x as far, so a
+        // half turn fits in one swipe of the right half of the screen
+        const now = e.timeStamp || performance.now(), dtm = Math.max(4, Math.min(100, now - (this.lookT || now - 16)));
+        this.lookT = now;
+        const v = Math.hypot(dx, dy) / dtm * (844 / long);            // px per ms, normalised to a phone's long side
+        const gain = 1 + 0.5 * Math.min(1, Math.max(0, (v - 0.6) / 1.6));
+        this.lookGain = (this.lookGain ?? 1) + (gain - (this.lookGain ?? 1)) * 0.5;
+        const k = this.sensitivity * 1.5 * Math.PI / long * this.lookGain;
+        this.input.addLook(dx * k, dy * k * 0.75);
+      }
     }
   }
 
@@ -211,8 +227,10 @@ export class TouchControls {
     this.input.setStick(nx * mag, -ny * mag, mag);
     this.el.base.style.transform = `translate(${o.x - R}px,${o.y - R}px)`;
     this.el.knob.style.transform = `translate(${nx * m * R}px,${ny * m * R}px)`;
-    this.el.stick.classList.toggle('sprint', mag >= STICK_SPRINT && !this.game.player.crouching);
+    this.el.stick.classList.toggle('sprint', PHYS_CLASSIC ? mag >= STICK_SPRINT && !this.game.player.crouching : this.sprintShown(mag));
   }
+  // the sprint glow follows the player's latched stick sprint (it holds down to STICK_SPRINT_EXIT)
+  sprintShown(mag) { const p = this.game.player; return p.stickSprint || (mag >= STICK_SPRINT && !p.crouching); }
 
   pressButton(btn, id) {
     const kind = btn.dataset.tc, g = this.game, inp = this.input;
@@ -270,6 +288,7 @@ export class TouchControls {
     if (hold !== this.shown.hold) { this.el.ring.style.strokeDashoffset = 100 - hold; this.shown.hold = hold; }
 
     this.toggle(this.el.crouch, 'on', g.player.crouching);
+    if (!PHYS_CLASSIC && this.stickId !== null) this.toggle(this.el.stick, 'sprint', this.sprintShown(this.input.stick.mag));
     this.toggle(this.el.residue, 'hidden', !g.residueUnlocked);
     this.toggle(this.el.residue, 'on', !!g.residueOn);
     this.toggle(this.el.lamp, 'hidden', !g.lampAvailable);

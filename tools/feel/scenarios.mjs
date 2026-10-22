@@ -58,9 +58,19 @@ export function scenarios() {
   for (const mode of ['walk', 'sprint']) for (const h of [0.6, 0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.23, 1.25, 1.3, 1.4]) {
     // jump from a running start: the jump is pressed 0.9 m (walk) / 1.6 m (sprint) before the face
     const keys = mode === 'sprint' ? ['KeyW', 'ShiftLeft'] : ['KeyW'];
-    add({ name: `climb_${mode}_${h}`, frames: 90, place: [0, 0, z0 - 6, 0], setup: `FEEL.dynSolid([-1, 0, ${z0 + 2}], [1, ${h}, ${z0 + 4}]); FEEL.jumpAt = ${z0 + 2 - (mode === 'sprint' ? 1.6 : 0.9)}; FEEL.jumped = false;`,
+    add({ name: `climb_${mode}_${h}`, frames: 110, place: [0, 0, z0 - 6, 0], setup: `FEEL.dynSolid([-1, 0, ${z0 + 2}], [1, ${h}, ${z0 + 4}]); FEEL.jumpAt = ${z0 + 2 - (mode === 'sprint' ? 1.6 : 0.9)}; FEEL.jumped = false;`,
       timeline: [{ f: 1, down: keys }, ...Array.from({ length: 80 }, (_, i) => ({ f: 2 + i, eval: 'if (!FEEL.jumped && __game.player.pos.z >= FEEL.jumpAt) { __game.input.pressed.add("Space"); FEEL.jumped = true; }' }))], meta: { h, mode } });
   }
+  // standing jump-climb (the m18 van: the roof is 1.15 m above a 1 m deep bonnet): start 0.7 m from the face
+  for (const h of [1.0, 1.15, 1.2]) add({ name: `climb_stand_${h}`, frames: 90, place: [0, 0, z0 + 0.3, 0], setup: `FEEL.dynSolid([-1, 0, ${z0 + 1}], [1, ${h}, ${z0 + 3}])`, timeline: [{ f: 1, down: ['KeyW'] }, { f: 3, press: ['Space'] }], meta: { h } });
+  // upper bound: sprinted gaps between two 2 m slabs (the authored Echo Step gaps are 5 m and more). 'late' presses
+  // the jump as late as the coyote window allows (airborne for 0.06 s), 'edge' on the last grounded frame.
+  for (const w of [4.0, 4.4, 4.6, 4.8, 5.0]) for (const mode of ['late', 'edge']) add({ name: `gap_${mode}_${w}`, dt: 1 / 60, frames: 200, place: [50, 2, -14, 0],
+    setup: `FEEL.dynSolid([48, 0, -20], [52, 2, 0]); FEEL.dynSolid([48, 0, ${w}], [52, 2, ${w + 6}]); FEEL.jumped = false; FEEL.air = 0;`,
+    timeline: [{ f: 1, down: ['KeyW', 'ShiftLeft'] }, ...Array.from({ length: 180 }, (_, i) => ({ f: 2 + i, eval: mode === 'late'
+      ? 'if (!FEEL.jumped && !__game.player.grounded && __game.player.vel.y <= 0 && __game.player.pos.z > -0.5) { FEEL.air = (FEEL.air || 0) + 1 / 60; if (FEEL.air >= 0.06) { __game.input.pressed.add("Space"); FEEL.jumped = true; } }'
+      : 'if (!FEEL.jumped && __game.player.grounded && __game.player.pos.z + __game.player.vel.z / 60 > 0.16) { __game.input.pressed.add("Space"); FEEL.jumped = true; }' }))],
+    meta: { w, mode } });
   // ledge tolerance: walk slowly off the 1.0 m platform edge (x = 36) and record where Kai starts to fall
   for (const [nm, tl] of [['ledge_key', [{ f: 1, down: ['KeyW'] }]], ['ledge_stick', [{ f: 1, stick: [0, 0.15, 0.15] }]]]) add({ name: nm, frames: 120, place: [34.5, 1.0, -2, PI / 2], camYaw: PI / 2 + PI, touch: nm === 'ledge_stick', timeline: tl });
   // jump buffering / coyote time probes: Space pressed 2 frames before landing, and 3 frames after walking off a ledge

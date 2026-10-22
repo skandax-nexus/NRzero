@@ -21,8 +21,9 @@ Owner rules that bind every item of the plan:
 | studio close-up (head and shoulders), mid shot (head to hips, hands visible), full body, three-quarter view, the cast viewer's lights (RoomEnvironment 0.6, warm key, cool rim), idle clip at 0.7 s | `node tools/feel/look_studio.mjs <out> <ids> 640` | `$LOOK/studio/<id>_{head,mid,full}.png`, contact sheets `$LOOK/studio/sheet_{a,b,c,d}.png` |
 | how faces react to the key light (front, side, behind) | `look_studio.mjs ... --light=front,side,back --shots=head,mid` | `$LOOK/studio_light/*.png`, sheet `$LOOK/studio_light/light_sheet.png` |
 | idle over 4 s, a head shot every 0.25 s (blinks, eye and face motion) | `look_studio.mjs ... --shots=head --seq` | `$LOOK/studio_seq/<id>_seqNN.png`, `$LOOK/studio_seq/kai_seq_sheet.png` |
-| in-game, the mission's own lighting, dialogue rig and depth of field exactly as `game.shot()` gives them | `node tools/feel/look_ingame.mjs tools/feel/look_scenes/mN.json <gfx> W H <out> [--mobile] [--measure]` | `$LOOK/game_high/<scene>_<subject>_<shot>.png` (gfx=high, 1280x720), `$LOOK/game_low/...` (gfx=low, 844x390, `--mobile`), `stats.jsonl` per folder |
-| per-character triangles, textures, draw calls | `$LOOK/glbstats.cjs` on `assets/models/cast.glb`, in-game `CAP.stats()` and an A/B frame with the person shown and hidden | numbers below |
+| in-game, the mission's own lighting, dialogue rig and depth of field exactly as `game.shot()` gives them | `node tools/feel/look_ingame.mjs tools/feel/look_scenes/mN.json <gfx> W H <out> [--mobile] [--measure]` | `$LOOK/game_high/<scene>_<subject>_<shot>.png` (gfx=high, 1280x720), `$LOOK/game_low/...` (gfx=low, 844x390, `--mobile`), `stats.jsonl` per folder; contact sheets `$LOOK/v_m1_sheet{1,2,3}.png`, `$LOOK/v_m3_sheet.png`, `$LOOK/v_m4_sheet.png`, `$LOOK/v_m2.png`, low `$LOOK/vl_m1_sheet.png`, `$LOOK/vl_m34.png` |
+| hands close-up | `look_studio.mjs ... --shots=hand` | `$LOOK/studio_hand/hands_sheet.png` |
+| per-character triangles, textures, draw calls | `node tools/feel/look_glbstats.cjs assets/models/cast.glb`, in-game `CAP.stats()` and an A/B frame with the person shown and hidden | numbers below |
 | skin and normal-map detail | atlases pulled out of `cast.glb`: `$LOOK/atlas_<id>.png`, `$LOOK/atlas_<id>_n.png` | numbers below |
 | likeness targets | `assets/cast/*_face.jpg` (the owner's art) | `$LOOK/refs_faces.png` |
 
@@ -30,7 +31,9 @@ In-game scenes (`tools/feel/look_scenes/`): **m1** Rain City 2049 at night, in t
 spot (Kai, Jun, the station child, Mira, the Witness, Hale, crowd `c49_f1`, `c49_m5`, `c49_kid_f`); **m3** the 2196
 ruin (Sera, Continuum trooper and officer, survivor `surv_f1`, Kai); **m4** the ancient valley at sunset at Niko's spot
 (villager, Niko, settlers `anc_f1`, `anc_m2`, `anc_kid_m`); **m2** the Helix interior (Iven, Rook). Each subject is
-spawned with `game.actor` (Kai is the player), faces the camera direction and is shot after 12 settle frames.
+spawned with `game.actor` (Kai is the player), faces the camera direction and is shot after 12 settle frames. The idle
+clip turns and leans the head, so some head shots sit off-centre; the full shots in m1 and m4 have street furniture
+in front of the legs. Neither affects the findings.
 
 The machine was shared with two other workflows and a render farm (load average 30-44), so the in-game frame times
 measured here are not usable; draw calls and triangles are exact.
@@ -69,7 +72,7 @@ From `cast.glb` (glbstats) and in game (`CAP.stats()`, `$LOOK/game_high/stats.js
 | who | triangles | draw calls (scene) | + shadow pass | textures (decoded, with mips) | low tier |
 |---|---|---|---|---|---|
 | Kai | 15 999 | 2 (atlas mesh + glow group) | +2 on high / medium (shadows off on low) | 2048² + 2048² + 1024² ≈ **48 MB** | the same 16 000 triangles and 2048² maps (no tier variant) |
-| named NPC (Mira, Witness, Sera, Rook, Iven, Jun, Hale, villager ...) | 11 000 | 2 (+1 per visible hand prop) | +2 | 1024² + 1024² + 512² ≈ 12 MB | the same: `game.actor` people never use the LOD |
+| named NPC (Mira, Witness, Sera, Rook, Iven, Jun, Hale, villager ...) | 11 000 | 2 (+1 per visible hand prop) | +2 | 1024² + 1024² + 512² ≈ 12 MB | the same: named builds have no LOD mesh |
 | child, crowd, Continuum, settlers | 9 000 | 1 (+1 per hand prop) | +1 | 1024² + 512² + 512² ≈ 7 MB | `look.lod` walkers switch to the 6 000 LOD beyond 14 m and always on `characterDetail: 'low'`; spawned actors do not |
 | whole cast file | 66 builds | | | 180 images, 2.3 MB compressed, **≈ 620 MB if every atlas were decoded** (a mission decodes only the builds it uses) | |
 
@@ -123,7 +126,8 @@ Seen: in the 2049 night street, the 2196 ruin and the studio, faces have the sam
 whichever way the light comes from. They do not darken in shadow, do not take the colour of neon or sunset, and never
 show a strong form-defining shadow side. They look pasted onto the scene.
 - `$LOOK/studio_light/light_sheet.png` (rows Kai, Mira, `c49_f1`; key light in front, at the side, behind)
-- `$LOOK/game_high/m3_2196_sera_head.png` (a dim green-grey ruin, an evenly lit warm face)
+- `$LOOK/game_high/m3_2196_sera_head.png` and sheet `$LOOK/v_m3_sheet.png` (a dim green-grey ruin: every face
+  is evenly lit and warm), `$LOOK/game_high/m2_helix_*.png` (dim red interior, peach faces)
 
 Evidence: with the key moved from in front of the face to behind the head, the mean face luminance only drops
 **134 → 109 (-19 %)** for Kai, **136 → 115 (-15 %)** for Mira, **179 → 161 (-10 %)** for `c49_f1`; left / right
@@ -205,8 +209,8 @@ of jackets the skin ends in a hard horizontal edge (Kai, Sera in game).
 
 Cause: the whole person is simplified as one mesh to 9 000-16 000 triangles; the simplifier weighs normals, uv,
 mask and skin weights but has no "face importance", so the face gets roughly what its area deserves (the triangle
-split per region is measured in §3.13). Normals are quantised to 8 bits (`compress_cast.sh`: meshopt "normal 8"),
-which adds visible banding on large smooth faces. Helmets and plates are low-segment hard-surface pieces.
+split per region is measured in §3.13). Normals are also quantised to 8 bits (`compress_cast.sh`: meshopt "normal 8"), which can add
+banding on large smooth surfaces (helmets, cheeks); check it when the face budget changes. Helmets and plates are low-segment hard-surface pieces.
 
 ### 3.7 Hands and fingers
 
@@ -214,6 +218,8 @@ Seen: in every mid shot the hands hang with stiff, evenly spread, slightly hooke
 around a prop (Iven's tools, the staffs and spears, the umbrella handle float in an open hand), never relax, never
 gesture. Bare hands are one flat skin colour with no nails, knuckles or creases; gloved hands are the same shape
 painted dark.
+- close-ups `$LOOK/studio_hand/hands_sheet.png` (Kai, Mira, Iven's fingerless glove with a ragged cut edge, the
+  elder `anc_m2`): smooth wax fingers with rounded tips, no nails, no knuckles, no tendons, one tone
 - `$LOOK/studio/kai_mid.png`, `mira_mid.png`, `iven_mid.png`, `sheet_d.png` (staff and spear grips),
   in game `$LOOK/game_high/m1_2049night_kai_mid.png`, `m1_2049night_hale_mid.png`
 
@@ -239,7 +245,7 @@ to the legs and spine only): see docs/MOTION.md.
 
 Seen: adult proportions are believable (≈ 7.5 heads, COSTUMES.md); heads look slightly small against the inflated
 shoulders and sleeves. The station child and the kids read as small adults with a doll's face. The mocap idle holds
-the elbows bent and the hands forward of the hips, the head turned ~30° to the left of the body, so a person facing
+the elbows bent and the hands forward of the hips, the head swinging up to ~30° away from the body's facing during the loop, so a person facing
 the camera in a dialogue looks past it unless the mission sets `lookTarget`.
 - `$LOOK/studio/kai_full.png`, `child_full.png`, `$LOOK/game_high/m1_2049night_kai_full.png`,
   `$LOOK/studio_seq/kai_seq_sheet.png`
@@ -262,23 +268,54 @@ the body are in docs/MOTION.md; the face part (blinks, saccades, glances) belong
 | Kai | sawtooth helmet fringe instead of thick messy waves; stubble barely visible (spec: heavy); orange-tan skin; vinyl hair in the rain; jacket inflated at the shoulders; the AR monocle reads as a line drawing | `$LOOK/studio/kai_{head,mid,full}.png`, `$LOOK/game_high/m1_2049night_kai_*.png` |
 | Mira | bowl helmet with a jagged fringe and flat side ribbons instead of wavy hair with a side part; grey-blue eyes as stickers; pale flat skin | `$LOOK/studio/mira_head.png`, `$LOOK/game_high/m1_2049night_mira_*.png` |
 | The Witness | ribbed grey cap instead of swept-back silver hair; the short grey beard and moustache read as white paint on the chin; no age in the skin (spec: hollow cheeks, deep lines); the scar is a faint line | `$LOOK/studio/witness_head.png`, `$LOOK/game_high/m1_2049night_witness_*.png` |
-| Rook | knitted-looking grey hair, waxy white skin with no age spots or crow's feet; the rimless glasses are fine | `$LOOK/studio/rook_head.png` |
-| Iven | chalky skin without the freckles and flushed cheeks of the spec; reddish stubble missing; good hat and vest | `$LOOK/studio/iven_head.png` |
+| Rook | knitted-looking grey hair, waxy white skin with no age spots or crow's feet; the rimless glasses are fine; the lab coat is a puffy white column with no folds | `$LOOK/studio/rook_head.png`, `$LOOK/game_high/m2_helix_rook_{head,mid}.png` |
+| Iven | chalky skin without the freckles and flushed cheeks of the spec; reddish stubble missing; good hat and vest; in the dim red Helix interior his face keeps the same even peach tone as in the studio | `$LOOK/studio/iven_head.png`, `$LOOK/game_high/m2_helix_iven_{head,mid}.png` |
 | Jun | a pale, featureless face under the cap; eyes reduced to slits | `$LOOK/studio/jun_head.png`, `$LOOK/game_high/m1_2049night_jun_head.png` |
 | Hale | the best of the buzz cuts; waxy flat face | `$LOOK/game_high/m1_2049night_hale_*.png` |
 | the station child | doll face: porcelain skin, dark mouth-corner smudges, a hard straight bob, adult idle stance | `$LOOK/studio/child_head.png`, `$LOOK/game_high/m1_2049night_child_*.png` |
 | Sera | black swim cap with pale scratch marks instead of loose pulled-back hair; the scar is two orange paint lines; saturated orange skin; turquoise sticker eyes | `$LOOK/studio/sera_head.png`, `$LOOK/game_high/m3_2196_sera_*.png` |
 | Continuum trooper / officer | faceted, plastic-white helmet and plates ("action figure"); the officer's hood frames the face like a rubber cap with crack lines | `$LOOK/studio/continuum_{1,2}_*.png`, `$LOOK/game_high/m3_2196_continuum_*.png` |
 | crowds 2049 | the same issues at lower texel density; `c49_f1`'s glasses run wider than the face; `c49_kid_f`'s puffs are spheres | `$LOOK/studio/sheet_c.png`, `sheet_d.png`, `$LOOK/game_high/m1_2049night_crowd_*.png` |
-| ancient villager and settlers | best cloth in the game (linen slub, dye unevenness); hair as caps; the elder's beard is paint | `$LOOK/studio/villager_*.png`, `anc_*`, `$LOOK/game_high/m4_ancient_*.png` |
+| ancient villager and settlers | best cloth in the game (linen slub, dye unevenness); hair as caps; the villager's and the elder's (`anc_m2`) beards are flat grey / white paint on the jaw; the warm sunset hides the flat skin best of all scenes | `$LOOK/studio/villager_*.png`, `anc_*`, `$LOOK/game_high/m4_ancient_*.png`, sheet `$LOOK/v_m4_sheet.png` (the full shots there have the camera behind a crate: framing only) |
 
 ### 3.12 Phone tier (gfx=low, 844x390 `--mobile`)
 
-PHONE_TIER_PLACEHOLDER
+Images: `$LOOK/game_low/m1_2049night_{kai,jun,child,mira,crowd_c49_f1}_{head,mid,full}.png`,
+`$LOOK/game_low/m3_2196_{sera,continuum_1}_*.png`, `$LOOK/game_low/m4_ancient_{villager,crowd_anc_f1}_*.png`,
+contact sheets `$LOOK/vl_m1_sheet.png`, `$LOOK/vl_m34.png`.
+
+- Everything in §3.1-3.10 holds, and reads worse: low has no shadow map, no depth of field and only the rim spot of the
+  dialogue rig, so faces get the constant fill + rim of `skinShade` and the probe's flat ambient: a uniform orange
+  or beige mask with a bright rim on the ear (`$LOOK/game_low/m1_2049night_kai_head.png`).
+- No anti-aliasing on low (RENDERING.md G1): the helmet-hair silhouette, the ears and the jaw stair-step and crawl.
+- At 844x390 a dialogue close-up still puts the face at ~150 px tall: eyes, mouth and hairline are clearly visible,
+  so the face fixes matter on phones too; skin pores (#2) do not, and are gated off there.
+- Cost measured in the m1 view (same frame, person shown / hidden): Kai +3 calls (116 / 113), +16 400 triangles
+  (no shadow pass on low); Jun and Mira +2 calls, +11 000; the child and `c49_f1` +1 call, +9 000 triangles. The
+  spawned `c49_f1` stays on its 9 000-triangle build on low (`lod: 0` in `$LOOK/game_low/stats.jsonl`): only Walker
+  looks with `look.lod` use the 6 000 LOD; named and spawned people always render full. Kai's 2048² maps are loaded
+  on low as on desktop (48 MB).
 
 ### 3.13 Triangles by body region
 
-REGION_PLACEHOLDER
+Measured on the shipped meshes (`node tools/feel/look_meshstats.mjs <ids>`: a triangle belongs to the bone that dominates its first
+vertex; "head" includes the neck, hair, eyes and head gadgets):
+
+| build | total | head + neck + hair | hands | feet | body + clothes | skin-mask / hair-mask triangles |
+|---|---|---|---|---|---|---|
+| kai | 15 999 | 3 906 (24 %) | 1 772 | 1 014 | 9 307 | 2 792 / 1 222 |
+| mira | 11 000 | 3 500 (32 %) | 884 | 907 | 5 709 | 2 110 / 1 773 |
+| witness | 11 000 | 2 644 (24 %) | 993 | 887 | 6 476 | 1 108 / 647 |
+| sera | 11 000 | **1 668 (15 %)** | 639 | 586 | 8 107 | 1 052 / 495 |
+| jun | 11 000 | 2 844 (26 %) | 893 | 790 | 6 473 | 2 041 / 569 |
+| child | 9 000 | 3 108 (35 %) | 733 | 933 | 4 226 | 1 802 / 1 701 |
+| c49_f1 | 8 984 | 3 470 (39 %) | 669 | 720 | 4 125 | 1 630 / 1 804 |
+| continuum_1 | 8 999 | 2 488 (28 %) | 557 | 610 | 5 344 | 644 / 383 |
+
+Sera's layered 2196 gear takes the triangles from her face: 1 668 for head, neck, hair and gadgets is why her cheeks
+and jaw are visibly faceted (`$LOOK/studio/sera_head.png`). The Witness's long coat does the same to him. A good
+real-time hero face needs ~3 000-5 000 triangles for the face and scalp alone; crowd faces seen at 5+ m are fine at
+1 500-2 000. Hands get 600-1 800 triangles but no bones, so the triangles buy nothing in motion.
 
 ## 4. What already works (keep it)
 

@@ -255,7 +255,7 @@
    "id": "s27",
    "group": "g5",
    "mission": 8,
-   "beat": "Montage: Dr. Yara Lind, stopped mid-stride inside the containment field for three days.",
+   "beat": "Montage: Dr. Yara Lind, stopped mid-stride inside the containment field for three days, seen from beyond the vessel through its glowing rings as the camera slides past her.",
    "url": "index.html?m=7&dtcap=0.25&gfx=high&auto",
    "ready": "window.__game && __game.control",
    "setup": [
@@ -276,32 +276,32 @@
      {
       "t": 0,
       "p": [
-       1.9,
-       1.45,
-       -67.9
+       -2.75,
+       1.32,
+       -72.1
       ],
       "l": [
        -0.6,
-       1.5,
+       1.42,
        -66.6
       ],
-      "fov": 36,
+      "fov": 32,
       "roll": 0,
       "focus": null
      },
      {
       "t": 2.0,
       "p": [
-       1.3,
-       1.5,
-       -68.4
+       -1.7,
+       1.28,
+       -71.6
       ],
       "l": [
        -0.6,
-       1.5,
+       1.45,
        -66.6
       ],
-      "fov": 34,
+      "fov": 30,
       "roll": 0,
       "focus": null
      }
@@ -312,26 +312,41 @@
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "Yara (frozen)",
-   "lighting": "Containment rings, cold field light.",
+   "approved": true,
+   "characters": "Yara (frozen mid-run toward the vessel, facing camera)",
+   "lighting": "The vessel's cyan rings in the foreground (soft, out of focus), cold field light on her face; the chamber door behind her.",
    "sound": "",
-   "notes": "",
+   "notes": "g5: camera on the far (north) side of the containment vessel, dollying 1.1 m sideways so the rings slide past in front of a motionless Yara (parallax sells the stopped time); focus on her head. Kai is placed inside the chamber out of frame so mission 8 lights the chamber zone (its zone follows Kai, and from the mission start it rendered with the street/rain settings).",
    "preview": {
     "status": "ok",
-    "note": "Strong: Yara frozen mid-stride inside the containment rings."
+    "note": "g5 final: Yara frozen mid-stride, seen through the vessel rings sliding past in the foreground."
    }
   },
   {
    "id": "s28",
    "group": "g5",
    "mission": 18,
-   "beat": "Montage: the Eastway at night, the sea of 2196 poured into 2049's highway.",
+   "beat": "Montage: the Eastway at night, the sea of 2196 poured into 2049's highway: from just above the churning water, Kai stranded on the roof of a submerged van under the gantry sign HELIX 7 · KEEP LEFT · FLOODING, rain driving down.",
    "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=3",
    "ready": "window.__game && __game.control && window.__m18 && __m18.ch3",
    "setup": [
     {
-     "wait": 0.8
+     "eval": "__game.player.place(-2.6, 2.2, -48.5, Math.PI)"
+    },
+    {
+     "wait": 0.5
+    },
+    {
+     "eval": "(()=>{const S=__m18.S; __game.control=false; S.firstSurge=true; S.t=S.period*0.72; return 'surge held at u '+(S.t/S.period).toFixed(2)})()"
+    },
+    {
+     "eval": "(async()=>{const T=await import('/vendor/three.module.min.js'); const w=__m18.W.water, m=w.material, U=m.userData.rzUniforms; const d=U.rzWD.value.image.data, h=T.DataUtils; for(let i=0;i<d.length;i+=4){ d[i]=h.toHalfFloat(h.fromHalfFloat(d[i])+1.05); d[i+1]=h.toHalfFloat(0.55); } U.rzWD.value.needsUpdate=true; m.envMapIntensity=2.5; U.rzWaves.value=1.3; U.rzSpecMax.value=30; return 'flood: depth +1.05 m, foam 0.55'})()"
+    },
+    {
+     "eval": "TR.look('kai', [8, 3, -80])"
+    },
+    {
+     "wait": 2.0
     }
    ],
    "frames": 49,
@@ -344,59 +359,63 @@
      {
       "t": 0,
       "p": [
-       8,
-       6,
-       40
+       3.8,
+       1.6,
+       -42.7
       ],
       "l": [
-       -2,
-       0,
-       -20
+       -3.6,
+       3.0,
+       -50.5
       ],
-      "fov": 50,
+      "fov": 36,
       "roll": 0,
-      "focus": 61.12
+      "focus": null
      },
      {
-      "t": 2.1,
+      "t": 2.04,
       "p": [
-       7.2,
-       5.6,
-       36.5
+       3.2,
+       1.66,
+       -43.6
       ],
       "l": [
-       -2,
-       0,
-       -20
+       -3.6,
+       3.0,
+       -50.5
       ],
-      "fov": 50,
+      "fov": 35,
       "roll": 0,
-      "focus": 57.52
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0.25,
+    "focusOn": "kai"
    },
    "actions": [],
    "grade": "rain2049",
-   "approved": false,
-   "characters": "none (the stalled N4 bus far down the road)",
-   "lighting": "Night rain on flood water, wrecked traffic, highway lights.",
+   "approved": true,
+   "characters": "Kai (on the van roof, looking down the flooded road toward the stalled N4 bus)",
+   "lighting": "Night rain, sodium lamps, the lit gantry sign; foam-streaked flood water a hand's width below the lens.",
    "sound": "",
-   "notes": "",
+   "notes": "g5: the surge is held at its peak (S.t = 0.72 period, control off so the cycle and the swept-away fail stay still; set after Kai is placed, because Kai crossing z 30 makes the mission reset S.t). The game's flood shader keeps the depth map baked at the 0.3 m base level, so at surge height it still renders a transparent film with the road markings showing through: the trailer adds the surge height to the depth map and a foam mask at run time, and raises the reflections (envMapIntensity 2.5, waves 1.3). Game note for the missions workflow: the surge water reads poorly in play for the same reason.",
    "preview": {
-    "status": "weak",
-    "note": "Night highway with wrecked traffic in rain; the flood is not legible at preview size."
+    "status": "ok",
+    "note": "g5 final: from just above the churning surge, Kai stranded on a submerged van under the HELIX 7 · FLOODING gantry, rain driving down."
    }
   },
   {
    "id": "s30",
    "group": "g5",
    "mission": 18,
-   "beat": "Montage: the Corran Building, its upper floors torn away by the storm.",
+   "beat": "Montage: the Corran Building from over the river, its upper thirty floors torn away by the storm: broken column stubs and a water tank on the open frame, its roof crane's jib fallen across the gorge, violet storm light behind.",
    "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=4",
    "ready": "window.__game && __game.control",
    "setup": [
+    {
+     "eval": "(()=>{let n=0; __game.scene.traverse(o=>{ if(o.name==='skyline'){ o.visible=false; n++; } }); return 'skyline hidden: '+n})()"
+    },
     {
      "wait": 0.8
     }
@@ -411,59 +430,62 @@
      {
       "t": 0,
       "p": [
-       8,
-       1.6,
-       34
+       28.6,
+       3.6,
+       -25.2
       ],
       "l": [
-       0,
-       20,
-       -2
+       4.0,
+       12.5,
+       -6.0
       ],
-      "fov": 54,
+      "fov": 50,
       "roll": 0,
-      "focus": 41.21
+      "focus": null
      },
      {
-      "t": 2.1,
+      "t": 2.0,
       "p": [
-       7.2,
-       2.0,
-       31.5
+       27.2,
+       4.4,
+       -24.0
       ],
       "l": [
-       0,
-       20,
-       -2
+       4.0,
+       13.0,
+       -6.0
       ],
-      "fov": 54,
+      "fov": 49,
       "roll": 0,
-      "focus": 38.71
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0.12
    },
    "actions": [],
    "grade": "ruin2196",
-   "approved": false,
+   "approved": true,
    "characters": "none",
-   "lighting": "Looking up the broken tower into storm light.",
+   "lighting": "Low drone over the river toward the tower; the violet-to-amber storm wall on the horizon; storm cells glowing inside the floors.",
    "sound": "",
-   "notes": "?m18part=4 is mission 18's own chapter start (development switch); nothing from later missions is loaded.",
+   "notes": "g5: replaced the storyboard's look up the south face (a plain grid against a grey sky) with the view from the east over the river, which shows the torn-off top and the fallen jib. The chapter's distant skyline set (flat-shaded boxes in the haze, 170-300 m out) is hidden at run time so the storm wall forms the horizon.",
    "preview": {
     "status": "ok",
-    "note": "Looking up the ruined tower."
+    "note": "g5 final: from over the river, the Corran frame with its torn-off top and fallen crane jib against the violet storm."
    }
   },
   {
    "id": "s32",
    "group": "g5",
    "mission": 18,
-   "beat": "Montage: the storm front bearing down on Lantern Hall as its anchor fails.",
+   "beat": "Montage: the storm front bearing down on Lantern Hall as its anchor fails: from above the gate, the settlement's garden beds, stalls, lantern strings and iron trusses run to the beacon, and the violet wall of loose time advances behind it while the last survivors hurry for the gate.",
    "url": "index.html?m=17&dtcap=0.25&gfx=high&auto&m18part=1",
    "ready": "window.__game && __game.control",
    "setup": [
+    {
+     "eval": "(()=>{__game.control=false; __m18.S.anchor=0.34; window.__stormT=null; window.__stormHook=__game.onUpdate(dt=>{ if(window.__stormT!=null){ __stormT+=dt; __m18.S.anchor=Math.max(0.05, 0.34-__stormT*0.11); } }); return 'storm hook: anchor 0.34 -> 0.12 over the shot'})()"
+    },
     {
      "wait": 0.8
     }
@@ -478,46 +500,51 @@
      {
       "t": 0,
       "p": [
-       10,
-       16,
-       -62
+       6.5,
+       11.5,
+       -66.5
       ],
       "l": [
-       -2,
-       6,
-       -118
+       -1.0,
+       6.0,
+       -120.0
       ],
-      "fov": 50,
+      "fov": 48,
       "roll": 0,
-      "focus": 58.14
+      "focus": null
      },
      {
-      "t": 2.1,
+      "t": 2.0,
       "p": [
-       9.0,
-       15.2,
-       -64.5
+       5.6,
+       10.4,
+       -69.5
       ],
       "l": [
-       -2,
-       6,
-       -118
+       -1.0,
+       6.2,
+       -120.0
       ],
-      "fov": 50,
+      "fov": 47,
       "roll": 0,
-      "focus": 55.39
+      "focus": null
      }
     ],
     "ease": "linear",
-    "shake": 0
+    "shake": 0.1
    },
-   "actions": [],
+   "actions": [
+    {
+     "t": 0,
+     "eval": "(()=>{window.__stormT=0; TR.act('ama',null); TR.walk('ama',[[-4.2,-92],[-5.5,-84]],1.9); TR.act('m18teacher',null); TR.walk('m18teacher',[[14.5,-92],[12,-86]],1.7); TR.look('joss',[0,12,-150]); return 'flee'})()"
+    }
+   ],
    "grade": "ruin2196",
    "approved": false,
-   "characters": "Survivors in the hall (small)",
-   "lighting": "Violet storm light over the iron trusses.",
+   "characters": "Survivors (small: Ama leaving her beds, the teacher on the east platform, Joss at the beacon)",
+   "lighting": "The storm wall's violet and cyan light behind the hall's north wall; lantern strings and the cook fire inside.",
    "sound": "",
-   "notes": "",
+   "notes": "g5: the storm front is set from the anchor (front = -132 - 150 * anchor): a run-time hook lowers the anchor from 0.34 to 0.12 over the shot, so the wall advances about 33 m toward the beacon while the camera pushes in. game.control is off for the shot (the mission's own anchor drain and the anchor-fail trigger only run with control). Tried and rejected: low views in the aisle and at the beacon (the hall's north brick wall fills the frame and the storm reads as a flat backdrop).",
    "preview": {
     "status": "ok",
     "note": "Lantern Hall trusses under violet storm light."

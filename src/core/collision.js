@@ -1,11 +1,18 @@
 import * as THREE from 'three';
 
 // Axis-aligned box collision world. Boxes may be restricted to temporal states.
+// Box shape (missions read and write these fields directly): { min, max (Vector3), states, enabled, tag, walkOnly }.
+// Opt-in extras (docs/MISSION_GUIDE.md "Physics API"):
+//   carry: true          a moving platform: the player standing on it is carried by its per-frame movement
+//   ramp: {axis, c0, c1, y0, y1}  (made by addRamp) a sloped top surface: height y0 at axis coordinate c0, y1 at c1
+// The player's own movement lives in physics.js (Motor); resolve() below is the original solver, kept for the
+// NPC bodies that missions move with it (the m2 Warden, m10 Sera, combat enemies) and for ?phys=classic.
 export class Collision {
   constructor() { this.boxes = []; }
   clear() { this.boxes = []; }
   add(min, max, opts = {}) {
     const b = { min: new THREE.Vector3(...min), max: new THREE.Vector3(...max), states: opts.states || null, enabled: true, tag: opts.tag, walkOnly: !!opts.walkOnly };
+    if (opts.carry) b.carry = true;
     this.boxes.push(b); return b;
   }
   // Box centred at (x,y-bottom,z) with size
@@ -14,9 +21,78 @@ export class Collision {
     const bb = new THREE.Box3().setFromObject(obj);
     return this.add(bb.min.toArray(), bb.max.toArray(), opts);
   }
+  /**
+   * A ramp (sloped walkable surface) filling the box min..max: solid from min.y up to a top that rises linearly
+   * along `dir` ('+x', '-x', '+z' or '-z'): from opts.low (default min.y) at the low side to max.y at the high side.
+   * It is an ordinary box in `boxes` (missions that scan boxes see its bounds); the player and groundHeight() walk
+   * on the slope. Example: a 3 m long ramp rising 1 m towards -z: collision.addRamp([0, 0, -3], [2, 1, 0], '-z').
+   */
+  addRamp(min, max, dir = '+z', opts = {}) {
+    const b = this.add(min, max, opts), axis = dir[1] === 'x' ? 'x' : 'z', up = dir[0] !== '-';
+    const lo = b.min[axis], hi = b.max[axis];
+    b.ramp = { axis, c0: up ? lo : hi, c1: up ? hi : lo, y0: opts.low ?? b.min.y, y1: b.max.y };
+    return b;
+  }
   isActive(b, state) { return b.enabled && (!b.states || b.states.includes(state)); }
+  /** Height of box b's walkable top at (x, z) (clamped into the box): max.y, or the slope height for a ramp. */
+  topAt(b, x, z) {
+    const r = b.ramp; if (!r) return b.max.y;
+    const c = r.axis === 'x' ? x : z, t = Math.max(0, Math.min(1, (c - r.c0) / (r.c1 - r.c0 || 1)));
+    return r.y0 + (r.y1 - r.y0) * t;
+  }
+  /**
+   * Ground under a point: the highest walkable top (boxes and ramps, walkOnly included) containing (x, z) that is
+   * at most 0.5 m above yHint (pass null for no limit), in temporal state `state` (default: every active box
+   * regardless of state). Returns the height, or null when there is nothing underneath. For foot IK and NPC grounding.
+   */
+  groundHeight(x, z, yHint = null, state) {
+    let top = null; const lim = yHint == null ? Infinity : yHint + 0.5;
+    for (const b of this.boxes) {
+      if (!b.enabled || (state !== undefined && b.states && !b.states.includes(state))) continue;
+      if (x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z) continue;
+      const t = b.ramp ? this.topAt(b, x, z) : b.max.y;
+      if (t <= lim && (top === null || t > top)) top = t;
+    }
+    return top;
+  }
+  /** Active boxes whose bounds touch the XZ rectangle (out: an array to fill, reused by the caller). */
+  gather(out, minx, maxx, minz, maxz, state) {
+    out.length = 0;
+    for (const b of this.boxes) {
+      if (!this.isActive(b, state)) continue;
+      if (b.max.x < minx || b.min.x > maxx || b.max.z < minz || b.min.z > maxz) continue;
+      out.push(b);
+    }
+    return out;
+  }
+  /**
+   * First hit distance of a ray (origin o, unit direction d, length far) against active solid boxes grown by
+   * `radius` (a cheap sphere cast, for the camera arm). walkOnly boxes count only as floors (when o is above them);
+   * boxes that already contain o are skipped. Returns the distance or Infinity.
+   */
+  rayCast(o, d, far, radius, state) {
+    let best = Infinity;
+    for (const b of this.boxes) {
+      if (!this.isActive(b, state)) continue;
+      if (b.walkOnly && o.y <= b.max.y) continue;
+      if (o.x > b.min.x && o.x < b.max.x && o.y > b.min.y && o.y < b.max.y && o.z > b.min.z && o.z < b.max.z) continue;
+      let t0 = 0, t1 = Math.min(far, best);
+      const lo = [b.min.x - radius, b.min.y - radius, b.min.z - radius], hi = [b.max.x + radius, b.max.y + radius, b.max.z + radius];
+      const oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
+      let miss = false;
+      for (let i = 0; i < 3; i++) {
+        if (Math.abs(dd[i]) < 1e-9) { if (oo[i] < lo[i] || oo[i] > hi[i]) { miss = true; break; } continue; }
+        let ta = (lo[i] - oo[i]) / dd[i], tb = (hi[i] - oo[i]) / dd[i];
+        if (ta > tb) { const s = ta; ta = tb; tb = s; }
+        if (ta > t0) t0 = ta; if (tb < t1) t1 = tb;
+        if (t0 > t1) { miss = true; break; }
+      }
+      if (!miss && t0 < best) best = t0;
+    }
+    return best;
+  }
 
-  // Resolve a vertical cylinder (pos = feet). Returns { grounded, groundY }.
+  // Resolve a vertical cylinder (pos = feet). Returns { grounded, groundY }. (The original solver: see the header.)
   resolve(pos, vel, radius, height, state, dt, prevY = pos.y) {
     let grounded = false, groundY = -Infinity;
     const step = 0.42;
@@ -24,16 +100,18 @@ export class Collision {
     for (const b of this.boxes) {
       if (!this.isActive(b, state)) continue;
       if (pos.x + radius * 0.5 < b.min.x || pos.x - radius * 0.5 > b.max.x || pos.z + radius * 0.5 < b.min.z || pos.z - radius * 0.5 > b.max.z) continue;
-      if (b.max.y <= Math.max(pos.y, prevY) + step && b.max.y > groundY) groundY = b.max.y;
+      const top = b.ramp ? this.topAt(b, pos.x, pos.z) : b.max.y;
+      if (top <= Math.max(pos.y, prevY) + step && top > groundY) groundY = top;
     }
     if (vel.y <= 0 && pos.y <= groundY + 0.05) { pos.y = groundY; vel.y = 0; grounded = true; }
     // horizontal push-out
     for (let it = 0; it < 2; it++) {
       for (const b of this.boxes) {
         if (!this.isActive(b, state) || b.walkOnly) continue;
-        if (b.max.y <= pos.y + step || b.min.y >= pos.y + height) continue;
         const cx = Math.max(b.min.x, Math.min(pos.x, b.max.x));
         const cz = Math.max(b.min.z, Math.min(pos.z, b.max.z));
+        const top = b.ramp ? this.topAt(b, cx, cz) : b.max.y;
+        if (top <= pos.y + step || b.min.y >= pos.y + height) continue;
         let dx = pos.x - cx, dz = pos.z - cz;
         const d2 = dx * dx + dz * dz;
         if (d2 >= radius * radius) continue;

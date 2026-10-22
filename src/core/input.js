@@ -18,7 +18,7 @@ export class Input {
     addEventListener('keydown', e => {
       if (e.repeat) return;
       this.down.add(e.code); this.pressed.add(e.code);
-      if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+      if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'AltLeft', 'AltRight'].includes(e.code)) e.preventDefault();   // Alt: hold to walk
     });
     addEventListener('keyup', e => this.down.delete(e.code));
     addEventListener('blur', () => this.releaseAll());
