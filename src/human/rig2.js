@@ -62,7 +62,7 @@ function cardMaterial(src, tier, pass = 0) {
 	vec4 azT = texture2D( map, vMapUv );
 	float azLum = sqrt( azT.r );
 	// root occlusion: the strands near the scalp sit under the others (uv v = 0 at the root)
-	azcRoot = mix( 0.55, 1.0, smoothstep( 0.0, 0.5, vMapUv.y ) );
+	azcRoot = mix( 0.72, 1.0, smoothstep( 0.0, 0.45, vMapUv.y ) );      // proto:makehuman: 0.55 (the cards' root colour already darkens)
 	diffuseColor.rgb = vHCol * ( 0.5 + 0.5 * azLum ) * ( 0.82 + 0.18 * azT.b ) * azcRoot;      // proto:makehuman: more strand-to-strand contrast (0.6 + 0.4: flat ribbons)
 	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.65 + 0.6 * azT.g ) * azLum * azcRoot;
 	// brows and lashes carry no strand tangent (look2.py, MATTE_FINE): matte fine hairs, no sheen stripes
@@ -98,9 +98,9 @@ function cardMaterial(src, tier, pass = 0) {
     vec3 H = normalize( L + V );
     vec3 T1 = normalize( T + N * ( azcShift - 0.08 ) ), T2 = normalize( T + N * ( azcShift + 0.12 ) );
     float d1 = dot( T1, H ), d2 = dot( T2, H );
-    float s1 = pow( sqrt( max( 0.0, 1.0 - d1 * d1 ) ), 80.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - d2 * d2 ) ), 26.0 );
+    float s1 = pow( sqrt( max( 0.0, 1.0 - d1 * d1 ) ), 64.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - d2 * d2 ) ), 22.0 );
     // a coherent sheen band across the head (v6: sparse white flecks from a sharper, more random primary lobe)
-    return vec3( s1 * 0.16 * azcSpark ) + col * s2 * 0.34 * azcSpark;
+    return vec3( s1 * 0.2 * azcSpark ) + col * s2 * 0.42 * azcSpark;      // proto:makehuman: 0.16 / 0.34 (no readable sheen band)
   }
 ` + lp.replace(c, c + `
     irradiance = mix( irradiance, saturate( dot( geometryNormal, directLight.direction ) * 0.8 + 0.2 ) * directLight.color, azcExtra );`)

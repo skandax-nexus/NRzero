@@ -1288,7 +1288,9 @@ def paint(c, B, cov, res, path_out):
         reg *= 1 - lipm
         reg *= 1 - 0.85 * g2(t ** 2 + ((d + 0.0) / 0.012) ** 2, 1.0) * (np.abs(t) < 1.2)
         dots = (hash01(pos, 2600, seed) > 0.55).astype(float) * 0.7 + 0.3
-        a = np.clip(stub * reg * (0.3 + 0.4 * dots), 0, 0.62)
+        # proto:makehuman: a soft even shadow with a faint grain (0.3 + 0.4 dots: 0.4 mm specks alias to sand in the atlas)
+        grain = vnoise(pos, 1400, seed + 0.7)
+        a = np.clip(stub * reg * (0.46 + 0.1 * dots + 0.12 * (grain - 0.5)), 0, 0.62)
         tint(a * 0.5, [0.86, 0.86, 0.9])
         over(a * 0.4, hair_c * 0.8)
         # ---- beard (0..1, needs stubble): dense short hair over the same region, strands running down the jaw ----
@@ -1307,7 +1309,8 @@ def paint(c, B, cov, res, path_out):
                 regb *= 1 - 0.5 * g2(t ** 2 + ((d + 0.0) / 0.006) ** 2, 1.0) * (np.abs(t) < 1.05)
                 dens = np.clip(brd * 2.0, 0, 1) * regb
                 speck = (hash01(pos, 4200, seed + 9.3) < 0.55 * dens).astype(float)
-                ab = np.clip(dens * (0.24 + 0.42 * speck + 0.08 * (fine - 0.5)), 0, 0.66)
+                # proto:makehuman: dense and even with a fine directional grain (hard specks read as sand at atlas resolution)
+                ab = np.clip(dens * (0.5 + 0.1 * speck + 0.14 * (strands - 0.5) + 0.05 * (fine - 0.5)), 0, 0.66)
             else:
                 ab = np.clip(brd * reg * edge * (0.62 + 0.3 * strands + 0.12 * (fine - 0.5)), 0, 0.93)
             over(ab, bc_ * 0.95)

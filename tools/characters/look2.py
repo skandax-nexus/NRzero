@@ -641,8 +641,8 @@ def _teeth_crowns(P, upper, k, yc, a0, a1):
         s0 = 0.0
         for ti, (w, hgt, dep) in enumerate(crowns):
             w, hgt, dep = w * 0.001 * k, hgt * 0.001 * k, dep * 0.001 * k
-            sc = s0 + w / 2 + 0.00008 * k
-            s0 += w + 0.00016 * k
+            sc = s0 + w / 2 + 0.00002 * k
+            s0 += w + 0.00004 * k          # proto:makehuman: neighbouring crowns touch (0.16 mm gaps showed the gum between them)
             xc = np.interp(sc, arc, xs)
             zc = np.interp(sc, arc, zs)
             dz = np.interp(sc + 1e-4, arc, zs) - np.interp(sc - 1e-4, arc, zs)
@@ -661,13 +661,13 @@ def _teeth_crowns(P, upper, k, yc, a0, a1):
             for u in us:
                 uu = max(u, 0.0)
                 if kind == "inc":
-                    ww = w / 2 * (0.72 + 0.28 * BH.ss(0.0, 0.55, uu)) * (1 - 0.06 * BH.ss(0.85, 1.0, uu))
+                    ww = w / 2 * (0.8 + 0.22 * BH.ss(0.0, 0.55, uu)) * (1 - 0.05 * BH.ss(0.85, 1.0, uu))
                     dd = dep / 2 * (1 - 0.78 * uu ** 1.4)
                 elif kind == "can":
-                    ww = w / 2 * (0.78 + 0.22 * BH.ss(0.0, 0.5, uu)) * (1 - 0.45 * BH.ss(0.65, 1.0, uu))
+                    ww = w / 2 * (0.84 + 0.18 * BH.ss(0.0, 0.5, uu)) * (1 - 0.4 * BH.ss(0.65, 1.0, uu))
                     dd = dep / 2 * (1 - 0.55 * uu ** 1.4)
                 else:
-                    ww = w / 2 * (0.84 + 0.16 * BH.ss(0.0, 0.5, uu))
+                    ww = w / 2 * (0.88 + 0.14 * BH.ss(0.0, 0.5, uu))
                     dd = dep / 2 * (0.88 + 0.12 * BH.ss(0.0, 0.5, uu))
                 y = ye + (yg - ye) * (1 - u)          # u = 0 at the gum, 1 at the biting edge
                 for si in range(seg):
@@ -743,7 +743,7 @@ def _gum_band(P, upper, k, yc, a_gum):
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0
     edge0 = yc - 0.0026 * k if upper else yc - 0.0007 * k
-    bounds = np.concatenate([[0.0], np.cumsum([(w + 0.16) * 0.001 * k for w, _, _ in crowns])])
+    bounds = np.concatenate([[0.0], np.cumsum([(w + 0.04) * 0.001 * k for w, _, _ in crowns])])
     smax = bounds[-1]
     ns = 34
     V_, F_, UV_ = [], [], []
@@ -925,7 +925,7 @@ def paint_mouth_cell(c, img, mask, grid, put):
 # (strands at the card's centre lie on top), A: coverage. Drawn 2x and box-filtered.
 # ---------------------------------------------------------------------------------------------------------------
 HT_W, HT_H, HT_COLS = 1024, 1024, 8
-HT_VERSION = 8
+HT_VERSION = 9
 # column kinds (same slots as v1, so a build's uvs keep their meaning): 0-2 clump cards (dense centre, sparse edges,
 # staggered tapered tips), 3 tight clump (strands gather to a point: tips of short textured cuts), 4-5 wisps (a few
 # loose strands: flyaways, edges), 6 wavy / curly, 7 fine short strokes (lashes, brows, beard)
@@ -954,16 +954,20 @@ def strand_texture(path):
         # v6: clumps spread wider with feathered, staggered ends (v5's strands converged into one point, so every
         # short card read as a spike); a clean single strand at the right edge of the fine column (HT_SINGLE: lashes and
         # brow hairs, one hair per ribbon)
-        n = {"clump": 150, "tight": 110, "wisp": 22, "curl": 90, "fine": 48}[kind]
+        # v9 (proto:makehuman): clump cards carry twice the strands, finer, spread evenly (sub-clumps only bunch them a
+        # little, no see-through slots) and end over the whole last half (a feathered tip, never a converging point)
+        n = {"clump": 230, "tight": 110, "wisp": 22, "curl": 90, "fine": 48}[kind]
         sig = {"clump": 0.21, "tight": 0.17, "wisp": 0.2, "curl": 0.17, "fine": 0.26}[kind]
         # v8 (proto:makehuman): a clump card is 3-4 sub-clumps with gaps between them (piecey, never a flat ribbon), and
         # every strand fades in at its own root (no straight-cut card start where a card lies on the hair below)
         subs = np.sort(rng.uniform(0.18, 0.82, 4 if col % 2 else 3)) if kind == "clump" else None
         for s in range(n):
             if kind == "clump":
-                x0 = float(subs[int(rng.integers(0, len(subs)))] + rng.normal(0, 0.07))
-                while not 0.06 < x0 < 0.94:
-                    x0 = float(subs[int(rng.integers(0, len(subs)))] + rng.normal(0, 0.07))
+                x0 = float(rng.normal(0.5, 0.3))
+                while not 0.04 < x0 < 0.96:
+                    x0 = float(rng.normal(0.5, 0.3))
+                sx = float(subs[np.argmin(np.abs(subs - x0))])
+                x0 = x0 + (sx - x0) * 0.12
             elif kind != "fine":       # resampled, not clipped (v5 piled the outliers up on one straight edge line)
                 x0 = float(rng.normal(0.5, sig))
                 while not 0.07 < x0 < 0.93:
@@ -973,11 +977,14 @@ def strand_texture(path):
             if kind == "fine":       # brow and beard hairs: rooted at the card's root edge, tapering to a fine tip
                 t0, t1 = rng.uniform(0.0, 0.06), rng.uniform(0.6, 1.0)
             else:
-                t0 = rng.uniform(0.0, 0.16 if kind == "clump" else 0.07)
+                t0 = rng.uniform(0.0, 0.12 if kind == "clump" else 0.07)
                 # staggered, feathered ends: the centre strands are a little longer, the rest end anywhere in the last half
                 edge = abs(x0 - 0.5) * 2
-                t1 = float(np.clip(rng.uniform(0.42, 1.0) * (1 - 0.22 * edge ** 1.5), 0.25, 1.0))
-            wid = rng.uniform(1.1, 2.0) * S * (0.8 if kind in ("fine", "wisp") else 1.0)
+                if kind == "clump":
+                    t1 = float(np.clip((1.0 - 0.55 * rng.random() ** 1.3) * (1 - 0.2 * edge ** 2), 0.3, 0.995))
+                else:
+                    t1 = float(np.clip(rng.uniform(0.42, 1.0) * (1 - 0.22 * edge ** 1.5), 0.25, 1.0))
+            wid = (rng.uniform(0.8, 1.5) if kind == "clump" else rng.uniform(1.1, 2.0)) * S * (0.8 if kind in ("fine", "wisp") else 1.0)
             ph, fr = rng.uniform(0, 6.3), rng.uniform(0.8, 2.2)
             amp = {"clump": 2.5, "tight": 2.0, "wisp": 7.0, "curl": 12.0, "fine": 1.5}[kind] * S
             if kind == "curl":
@@ -986,11 +993,11 @@ def strand_texture(path):
             if kind == "wisp":
                 xc = xc + rng.normal(0, 7 * S) * y ** 2
             if kind in ("clump", "tight"):       # strands gather toward the card's centre line near the tip
-                pull = 0.14 if kind == "clump" else 0.34
+                pull = 0.04 if kind == "clump" else 0.34
                 xc = xc + (cw * 0.5 - xc) * (np.clip((y - t0) / max(t1 - t0, 1e-3), 0, 1) ** 1.8) * pull
             tt = np.clip((y - t0) / max(t1 - t0, 1e-3), 0, 1)
             inside = (y >= t0) & (y <= t1)
-            taper = np.where(inside, (1 - tt) ** 1.4 * np.clip(tt * 25, 0, 1) if kind == "fine" else (1 - tt ** 2.2) * (np.clip(tt * 9, 0, 1) if kind == "clump" else 1.0), 0.0)
+            taper = np.where(inside, (1 - tt) ** 1.4 * np.clip(tt * 25, 0, 1) if kind == "fine" else (1 - tt ** (3.0 if kind == "clump" else 2.2)) * (np.clip(tt * 9, 0, 1) if kind == "clump" else 1.0), 0.0)
             w = wid * (0.3 + 0.7 * taper)
             rows = np.nonzero(taper > 0.02)[0]
             if not len(rows):
@@ -1001,7 +1008,7 @@ def strand_texture(path):
             d = np.abs(xs[None, :] - xc[rows, None])
             cov = np.clip(1.0 - (d - w[rows, None] * 0.5) / (0.9 * S), 0, 1)
             cov *= np.clip(taper[rows, None] * 3.0, 0, 1)
-            br = rng.uniform(0.55, 1.0)
+            br = rng.uniform(0.3, 1.0) ** 0.8 if kind == "clump" else rng.uniform(0.55, 1.0)
             a_ = A[rows, lo_x:hi_x]
             newA = a_ + cov * (1 - a_)
             Rr[rows, lo_x:hi_x] = np.where(cov > 0, (Rr[rows, lo_x:hi_x] * a_ + br * cov * (1 - a_)) / np.maximum(newA, 1e-6), Rr[rows, lo_x:hi_x])
@@ -1268,12 +1275,12 @@ CUTS["lead_part"] = dict(base="short", hero="part", stiff=0.9, top=0.075, front=
 # the ears; two close alternatives: a shaggier middle-parted cut (curtain fringe, flicked ends) and a slightly shorter
 # tousled cut with a side fringe. Lengths (m, 1.75 m person) by root region; `_messy_cards` grows them as clumped
 # strands inside a smooth envelope around the head (ears and collar included, so the hair drapes over them).
-CUTS["lead_messy"] = dict(base="short", hero="messy", stiff=0.4, top=0.110, front=0.086, side=0.080, nape=0.060, comb="tousle", lift=0.0, frontLift=0.0,
-                          wave=0.35, W=0.0088, side_dens=1.0, wisp=0.06, scalp="full", tousle=0.55, floor=(0.02, 0.07), hem=(-0.034, -0.084), flick=0.2)
+CUTS["lead_messy"] = dict(base="short", hero="messy", stiff=0.4, top=0.110, front=0.086, side=0.072, nape=0.060, comb="tousle", lift=0.0, frontLift=0.0,
+                          wave=0.35, W=0.0105, side_dens=1.0, wisp=0.06, scalp="full", tousle=0.6, floor=(0.004, 0.06), hem=(-0.022, -0.078), flick=0.45)
 CUTS["lead_shag"] = dict(base="short", hero="shag", stiff=0.35, top=0.118, front=0.100, side=0.090, nape=0.070, comb="part", lift=0.0, frontLift=0.0,
-                         wave=0.4, W=0.0085, side_dens=1.0, wisp=0.08, scalp="full", tousle=0.45, floor=(0.012, 0.040), hem=(-0.048, -0.092), flick=0.5)
+                         wave=0.4, W=0.0102, side_dens=1.0, wisp=0.08, scalp="full", tousle=0.45, floor=(0.012, 0.040), hem=(-0.048, -0.092), flick=0.5)
 CUTS["lead_tousle"] = dict(base="short", hero="tousle", stiff=0.5, top=0.090, front=0.085, side=0.058, nape=0.045, comb="side", lift=0.0, frontLift=0.0,
-                           wave=0.3, W=0.0082, side_dens=1.0, wisp=0.05, scalp="full", tousle=0.45, floor=(0.018, 0.05), hem=(-0.02, -0.074), flick=0.15)
+                           wave=0.3, W=0.0100, side_dens=1.0, wisp=0.05, scalp="full", tousle=0.45, floor=(0.018, 0.05), hem=(-0.02, -0.074), flick=0.15)
 MESSY = ("messy", "shag", "tousle")
 HERO_SHELL = 0.5        # the shell carries this share of the volume; the cards build the rest
 
@@ -1293,7 +1300,7 @@ def hero_T(c, rel, part_x=0.024):
     top = BH.ss(0.05, 0.6, up)
     if kind in MESSY:           # messy medium: a full, soft, rounded volume (thicker on the crown and the top front)
         front = BH.ss(-0.2, 0.6, fwd) * BH.ss(0.0, 0.5, up)
-        Ttop = {"messy": 0.023, "shag": 0.021, "tousle": 0.019}[kind] + 0.004 * front
+        Ttop = {"messy": 0.028, "shag": 0.024, "tousle": 0.023}[kind] + 0.005 * front
         Tside = {"messy": 0.008, "shag": 0.010, "tousle": 0.0065}[kind] * BH.ss(-0.75, -0.1, up) + 0.002
         if kind == "shag":      # the middle part: a shallow dip along the top front
             Ttop = Ttop * (1 - 0.35 * np.exp(-(rel[:, 0] / 0.006) ** 2) * BH.ss(0.25, 0.6, up) * BH.ss(-0.4, 0.2, fwd))
@@ -1675,7 +1682,7 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         sidew = BH.ss(0.45, 0.85, abs(u[0])) * BH.ss(0.7, 0.3, u[1])
         away = away + tg(np.array([0.0, -0.3, -0.45]), u) * sidew       # over the ears: down and a little back
         if kind == "messy":            # the fringe falls a little toward the side away from the whorl
-            d = away + gw * down + tg(np.array([-side * 0.4, 0.0, 0.0]), u) * fringe
+            d = away + gw * down * (1 - 0.45 * fringe) + tg(np.array([-side * 1.3, -0.15, 0.1]), u) * fringe
         elif kind == "shag":       # middle part: the top falls away from the part to both sides; a curtain fringe
             s_ = np.sign(p[0]) if abs(p[0]) > 0.002 else (1.0 if rng.random() < 0.5 else -1.0)
             d = (away + gw * down) * (1 - topf) + tg(np.array([s_ * 1.0, -0.2, 0.45]), u) * topf * 1.4
@@ -1696,7 +1703,7 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         u = q / np.linalg.norm(q)
         p = q + head_c - eye
         fringe = BH.ss(0.35, 0.7, u[2]) * BH.ss(0.75, 0.35, u[1])
-        amp = C.get("tousle", 0.5) * (1 - 0.4 * fringe)
+        amp = C.get("tousle", 0.5) * (1 - 0.1 * fringe)
         return float(amp * (2 * BH.vnoise(p[None], 45 / k, seed)[0] - 1) * 1.8)
 
     def floor_of(p, base):
@@ -1705,7 +1712,8 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             return base + 0.016 - 0.024 * BH.ss(0.008, 0.045, abs(p[0]))
         if kind == "tousle":       # swept to one side: longer on the side it falls to
             return base - 0.014 * BH.ss(0.0, 0.05, -side * p[0]) + 0.006 * BH.ss(0.0, 0.04, side * p[0])
-        return base
+        # messy: a diagonal fringe, short (forehead showing) on the whorl side, to the brow where it falls
+        return base + 0.016 * BH.ss(-0.01, 0.045, side * p[0]) - 0.012 * BH.ss(0.0, 0.05, -side * p[0])
 
     def stopped(q, flo, hem=None):
         p = q + head_c - eye
@@ -1810,7 +1818,7 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
     groots = pool[gi_] - head_c
     cards = []
 
-    def card(pts, f, wf, cf, imp, column, Wv, tipw=0.62):
+    def card(pts, f, wf, cf, imp, column, Wv, tipw=0.74):
         if len(pts) < 3:
             return
         P = pts + head_c
@@ -1818,8 +1826,8 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         w0 = C["W"] * wf * rng.uniform(0.8, 1.2) * k
         width = w0 * (1 - (1 - tipw) * np.linspace(0, 1, len(P)) ** 1.2)
         v = rng.normal(1.0, 0.035)
-        root = hc * 0.66 * cf * v
-        tip = hc * rng.uniform(0.98, 1.08) * cf * v
+        root = hc * 0.74 * cf * v
+        tip = hc * rng.uniform(1.0, 1.1) * cf * v
         if grey and rng.random() < 0.18:
             kq = rng.uniform(0.7, 0.88)
             root, tip = root * kq, tip * kq
@@ -1840,10 +1848,16 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         Wv = hW[si]
         ln = length(u) * rng.uniform(0.82, 1.12)
         nseg = nseg_of(ln)
-        flo = rng.uniform(*C["floor"])
-        hem = (C["hem"][0] + rng.normal(0, 0.006), C["hem"][1] + rng.normal(0, 0.011))
+        # an uneven fringe line: neighbouring pieces end at similar heights (a smooth field), each a little on its own
+        nz_ = float(BH.vnoise((g + head_c - eye)[None], 28 / k, seed + 1.7)[0])
+        flo = C["floor"][0] + (C["floor"][1] - C["floor"][0]) * float(np.clip(0.5 * nz_ + 0.5 * rng.random(), 0, 1))
+        hem = (C["hem"][0] + float(np.clip(rng.normal(0, 0.008), -0.012, 0.012)), C["hem"][1] + float(np.clip(rng.normal(0, 0.012), -0.016, 0.02)))
         flick = rng.random() < C.get("flick", 0.2)
         lift_g = rng.uniform(0.0015, 0.004) * k if flick else 0.0
+        if fr_g > 0.3:                         # the fringe stands a little off the forehead toward its tips
+            lift_g = max(lift_g, rng.uniform(0.001, 0.0028) * k)
+        if kind == "messy" and u[1] < 0.4 and flick:     # messy: some ends over the ears and the nape flick out
+            lift_g = max(lift_g, rng.uniform(0.002, 0.005) * k)
         if kind == "shag" and u[1] < 0.45:     # shaggy: the ends over the ears and the nape flip out
             lift_g = max(lift_g, rng.uniform(0.003, 0.007) * k)
         ga = tousle(g) + rng.normal(0, 0.12)
@@ -1854,8 +1868,8 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         if lift_g > 0:
             nflick += 1
         soft = max(fr_g, temple)
-        card(gp, fg, 1.05 - 0.3 * soft, 0.97, 2.2, int(rng.integers(0, 3)), Wv, tipw=0.62 + 0.25 * soft)
-        conv = rng.uniform(0.04, 0.18) * (1 - 0.7 * fr_g)
+        card(gp, fg, 1.05 - 0.3 * soft, 0.97, 2.2, int(rng.integers(0, 3)), Wv, tipw=0.74 + 0.16 * soft)
+        conv = rng.uniform(0.08, 0.22) * (1 + 0.8 * fr_g)       # proto:makehuman: fringe pieces gather (was * (1 - 0.7 fr))
         for _ in range(per - 1 + int(round(2 * soft))):
             # a child root a few mm from the guide's (on the scalp), its own layer
             off = rng.normal(0, 0.0065 * k, 3)
@@ -1874,7 +1888,7 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             pp, _ = march(r0, f, cl, max(3, int(round(nseg * cl / ln))), 0.0, lift_g * BH.ss(0.75, 0.97, f) * rng.uniform(0.5, 1.1),
                           flo + rng.normal(0, 0.005), guide=(gp, gd, ga), conv=conv, hem=(hem[0] + rng.normal(0, 0.003), hem[1] + rng.normal(0, 0.004)))
             col_ = (4 + int(rng.integers(0, 2))) if rng.random() < 0.35 * soft else int(rng.integers(0, 4))
-            card(pp, f, wf * (1 - 0.35 * soft), cf, imp, col_, Wv, tipw=0.62 + 0.25 * soft)
+            card(pp, f, wf * (1 - 0.35 * soft), cf, imp, col_, Wv, tipw=0.74 + 0.16 * soft)
         ntri += sum(2 * (len(cd[0]) - 1) for cd in cards[n0:])
     # loose strands: thin wisps above the outer layer (they break the silhouette a little; never long, never stiff)
     nwisp = int(len(cards) * C.get("wisp", 0.06))
@@ -2517,7 +2531,27 @@ def hair_cards(c, B, cov, parts, ex):
     col = np.clip(np.concatenate(K.col), 0, 1) ** (1 / 2.2)     # stored gamma-encoded: 8 bits keep dark hair's steps
     a = me.attributes.new("_hcol", "FLOAT_VECTOR", "POINT")
     a.data.foreach_set("vector", np.ascontiguousarray(col, np.float32).ravel())
-    tan = BH.to_bl_np(np.concatenate(K.tan))
+    tan_mh = np.concatenate(K.tan)
+    if os.environ.get("HAIR_TSMOOTH", "0.6") != "0":
+        # proto:makehuman: the strand sheen follows the cut's flow, not each card's own turn (per-card tangents lit up
+        # card by card as glossy shards): scalp-card tangents blend with the mean tangent of their neighbourhood (1.2 cm)
+        ws_ = float(os.environ.get("HAIR_TSMOOTH", "0.6"))
+        kinds0 = np.concatenate([np.full(len(v_), kd_) for v_, kd_ in zip(K.v, K.kind)])
+        sel = np.nonzero(kinds0 == 0)[0]
+        if len(sel) > 16:
+            kd_ = kdtree.KDTree(len(sel))
+            for j, i in enumerate(sel):
+                kd_.insert(verts[i], j)
+            kd_.balance()
+            tn = tan_mh[sel] / np.maximum(np.linalg.norm(tan_mh[sel], axis=1, keepdims=True), 1e-9)
+            avg = np.zeros_like(tn)
+            for j, i in enumerate(sel):
+                nb_ = [x[1] for x in kd_.find_range(verts[i], 0.012)]
+                avg[j] = tn[nb_].sum(0) if nb_ else tn[j]
+            avg /= np.maximum(np.linalg.norm(avg, axis=1, keepdims=True), 1e-9)
+            tan_mh = tan_mh.copy()
+            tan_mh[sel] = tn * (1 - ws_) + avg * ws_
+    tan = BH.to_bl_np(tan_mh)
     tan /= np.maximum(np.linalg.norm(tan, axis=1, keepdims=True), 1e-9)
     if os.environ.get("MATTE_FINE") != "0":      # proto:makehuman: lashes and brows matte (no strand sheen: grey stripes)
         kinds = np.concatenate([np.full(len(v_), kd_) for v_, kd_ in zip(K.v, K.kind)])

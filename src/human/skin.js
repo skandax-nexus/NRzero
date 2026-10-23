@@ -356,7 +356,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	#ifdef AZ_CARDS
 		// the gaps between cards read as depth (the inner hair in shade), with a duller sheen than the strands on top
 	#if AZ_TIER > 0
-		diffuseColor.rgb *= mix( 1.0, 0.64, azHair ); azSparkle *= mix( 1.0, 0.35, azHair );
+		diffuseColor.rgb *= mix( 1.0, 0.8, azHair ); azSparkle *= mix( 1.0, 0.35, azHair );      // proto:makehuman: 0.64 (dark holes between cards)
 	#else
 		diffuseColor.rgb *= mix( 1.0, 0.88, azHair ); azSparkle *= mix( 1.0, 0.7, azHair );     // low tier: fewer cards over it
 	#endif
