@@ -1406,7 +1406,7 @@ def paint(c, B, cov, res, path_out):
                 hcol = hcol * fy + shaved * (1 - fy)
         elif style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
             hcol = hcol * 0.75 + col * 0.25 * (0.6 + 0.4 * st[:, None])
-        if style in ("bun", "braid", "pony"):   # tied-back hair: a centre part from the hairline toward the crown
+        if style in ("bun", "braid", "pony") and not (look2.ON and look2.CUTS.get(c.get("hairCut") or "", {}).get("nopart")):   # tied-back hair: a centre part from the hairline toward the crown
             pl = g2(rel[:, 0] ** 2, 0.0018 ** 2) * ss(-0.02, 0.03, rel[:, 2] + 0.06) * ss(0.04, 0.07, rel[:, 1])
             hcol = hcol * (1 - 0.55 * pl[:, None]) + col * 0.55 * pl[:, None]
         if style in ("undercut", "fade") and scalp not in ("short", "fade"):   # shaved sides: the scalp shows through, fading toward the top
@@ -2242,7 +2242,11 @@ def hair_pieces(c, B, cov, layers):
         if cov.get("_hair_ref") is not None:
             ref.append(cov["_hair_ref"])
         ref = np.concatenate(ref)
-        if style == "long":
+        sh = look2.CUTS.get(c.get("hairCut") or "", {}).get("sheet") if look2.ON else None
+        if sh:          # a cut's own hanging inner mass (photo likeness, loose curls: the dark core the ringlets sit on)
+            out.append(hair_sheet(B, c, ref, 66, 294, L.eye[1] + 0.085, L.eye[1] - sh["drop"] * H / 1.75, clear=sh["clear"], flare=sh["flare"], rows=16,
+                                  tip=sh.get("tip", 0.012), seg=42, vol=vol))
+        elif style == "long":
             out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.085, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.016, narrow=36, rows=20, tip=0.07, seg=44, vol=vol))
         else:
             out.append(hair_sheet(B, c, ref, 70, 290, L.eye[1] + 0.085, L.eye[1] - 0.078, clear=0.003, flare=0.01, rows=16, tip=0.012, seg=42, vol=vol))

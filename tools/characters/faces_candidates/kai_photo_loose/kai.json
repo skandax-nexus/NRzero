@@ -1,0 +1,6 @@
+{
+ "notes": "kai_photo_loose: Kai from the owner's photo (kai_photo) with his curls worn loose at messy medium length (photo_loose): the owner's earlier pick of hair length, his own curl.",
+ "extends": "../kai_photo/kai.json",
+ "hair": "photo_loose",
+ "hairDrop": null
+}

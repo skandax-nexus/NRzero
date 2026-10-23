@@ -67,8 +67,11 @@ def main():
             j = dense[-1]
             v = float(row[max(0, j - 6):j + 1].mean())
             out[r, cols[j:]] = np.maximum(out[r, cols[j:]], v)
-    g = gaussian_filter(out, 0.7)
+    g = gaussian_filter(out, 1.1)
     g = np.clip((g - 0.12) / 0.78, 0, 1)
+    # the sparse patches inside the beard (beside the soul patch, under the lip corners) carry thin hair, not bare
+    # skin: filled to about half density from the surrounding beard
+    g = np.maximum(g, 0.62 * gaussian_filter(g, 4.0) * (gaussian_filter(g, 4.0) > 0.45))
     # length factor: long on the chin, the jaw and the soul patch, short on the cheeks, medium on the moustache
     X, Y = np.meshgrid(xs, ys)
     lip_y = M["features"]["landmarks"]["Sto"][1]

@@ -69,14 +69,18 @@ class Look:
         return np.where(out, 0.0, v)
 
     # ---- beard
-    def beard_density(self, pos, hw, ear_z, hair_y=None, sb_top=None):
+    def beard_density(self, pos, hw, ear_z, ear_lo=None, sb_top=None):
         """Beard density 0..1 at MH points pos: the frontal map (rows below the nose base), a sideburn band in front of
         the ear from the map's top up to the hairline, gated to the head (MakeHuman's head weights end under the jaw:
-        the neckline) and to the front of the ear. hw: head weight per point; ear_z: z (MH) of the ear's front edge."""
+        the neckline) and to the front of the ear (above the lobe; below it the beard runs back along the jaw to its angle). hw: head weight per point;
+        ear_z: z (MH) of the ear's front edge; ear_lo: y (MH) of the lowest point of the ear."""
         q = self.mm(pos)
         d = self._grid(self.beard, pos)
         z = np.asarray(pos)[:, 2]
         front = _ss(ear_z - 0.004, ear_z + 0.006, z)
+        if ear_lo is not None:     # under the ear lobe: back to the angle of the jaw
+            below = _ss(ear_lo + 0.004, ear_lo - 0.008, np.asarray(pos)[:, 1])
+            front = np.maximum(front, below * _ss(ear_z - 0.026, ear_z - 0.014, z))
         # sideburns: a band 0-24 mm ahead of the ear front, from the nose base (y = -38 mm, where the map starts) up to
         # the hairline / temple (sb_top mm), full at the back edge, thinning forward (a groomed, slightly tapered edge)
         top = -6.0 if sb_top is None else sb_top
@@ -120,6 +124,12 @@ def ear_front_z(B):
     return float(np.percentile(P[:, 2], 85)) if len(P) else float(B.L.eye[2] - 0.07)
 
 
+def ear_low_y(B):
+    """y (MH) of the bottom of the ear lobes."""
+    P = B.P[B.ear > 0.5]
+    return float(np.percentile(P[:, 1], 3)) if len(P) else float(B.L.eye[1] - 0.06)
+
+
 def hexlin(h):
     h = h.lstrip("#")
     c = np.array([int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)])
@@ -151,7 +161,7 @@ def paint_zones(c, B, LK, pos, col, isface, front, BH):
         dx, dy = (q[:, 0] - ex) * sg, q[:, 1] - ey
         # under-eye crescent: 4-15 mm below the eye centre, inner corner to past the outer corner, into the tear trough
         cres = g2(((dx + 1.0) / 13.0) ** 2 + ((dy + 9.0 + 0.04 * dx) / 4.2) ** 2, 1.0) * ss(-3.0, -5.5, dy)
-        col *= k(cres * face * float(c.get("underEye", 0.85)), [0.80, 0.76, 0.84])
+        col *= k(cres * face * float(c.get("underEye", 0.5)), [0.84, 0.80, 0.84])
         # upper lid: darker skin between the lash line and the crease
         (ux, uy), _ = L.lid["L" if sg > 0 else "R"]
         top = np.interp(dx / 1000 / LK.scale, ux, uy) * 1000 * LK.scale
@@ -193,17 +203,17 @@ def beard_paint(c, B, LK, pos, hw, lipm, isface, seed, BH):
     sparse patches it turns to a stubble shadow of fine dots, so the edge reads as hair thinning out (groomed: the map is
     already smooth and symmetric)."""
     ss, vnoise, hash01 = BH.ss, BH.vnoise, BH.hash01
-    dens = LK.beard_density(pos, hw, ear_front_z(B), sb_top=20.0)
+    dens = LK.beard_density(pos, hw, ear_front_z(B), ear_low_y(B), sb_top=20.0)
     dens = dens * (1 - ss(0.12, 0.45, lipm)) * isface
     bc = BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119")))
     hairs = np.clip((vnoise(pos * np.array([3.0, 0.5, 3.0]), 1900, seed + 2.9) - 0.3) * 2.0, 0, 1)
     dots = (hash01(pos, 2800, seed + 0.5) > 0.5).astype(float)
-    solid = ss(0.35, 0.8, dens)
-    a = solid * (0.86 + 0.1 * hairs) + (1 - solid) * np.clip(dens * 1.6, 0, 1) * (0.32 + 0.3 * dots + 0.12 * hairs)
+    solid = ss(0.45, 0.9, dens)
+    a = solid * (0.82 + 0.14 * hairs) + (1 - solid) * np.clip(dens * 1.3, 0, 1) * (0.22 + 0.3 * dots + 0.2 * hairs)
     # a faint shave shadow a little past the beard (the skin around a full beard is never bare-clean)
     halo = ss(0.0, 0.12, LK._grid(LK.beard, pos)) * ss(0.25, 0.7, hw) * isface * (1 - ss(0.12, 0.45, lipm))
     a = np.maximum(a, halo * 0.14 * (0.6 + 0.4 * dots))
-    rgb = bc[None, :] * (0.78 + 0.22 * hairs[:, None])
+    rgb = bc[None, :] * (0.72 + 0.4 * hairs[:, None])
     return np.clip(a, 0, 0.95), rgb, dens
 
 

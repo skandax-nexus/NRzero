@@ -1,5 +1,5 @@
 {
- "notes": "kai_photo (likeness:fit): Kai's head fitted to the owner's reference photo (MediaPipe landmarks and the face outline at the photo's own camera and pose, skin under the beard; tools/characters/likeness/fit.py). Shape only: skin, beard, brows, hair and moles come from the later likeness steps. The skin outline sits 3-6 mm inside his beard's (jaw 3-4 mm, chin 6 mm): the beard pass adds that volume. Painted brows sit 3.4 mm above his (frown undone): browLift about -0.003.",
+ "notes": "kai_photo (likeness:fit + likeness:look): Kai built from the owner's reference photo. Shape: the head fitted to the photo (MediaPipe landmarks and the face outline at the photo's own camera and pose, skin under the beard; likeness/fit.py). Look (likeness/look_data.py -> kai_look.npz): his measured skin albedo used as is, colour zones (the darker under-eye crescent and upper lids, nose, cheekbones), the two moles on his left cheek and the faint spots, his thick straight brows (measured profile, frown undone), the full beard and moustache as strand cards on a painted under-layer from the measured density map, fuller painted lips, dark brown eyes; hair A: his long curls pulled back and tied (photo_tied), a few grey strands. Hair B (the owner's earlier 'messy medium' pick, the same curls worn loose): ../kai_photo_loose/kai.json.",
  "replace_details": true,
  "macro": {
   "weight": 0.6,
@@ -102,5 +102,26 @@
   "nose/nose-width1-decr|incr": 0.009,
   "nose/nose-width2-decr|incr": -0.033,
   "nose/nose-width3-decr|incr": 0.701
- }
+ },
+ "likeness": "kai_look.npz",
+ "likenessScale": 1.007,
+ "skinExact": true,
+ "skin": "916750",
+ "lip": "935447",
+ "eyes": "32231b",
+ "browColor": "1c1612",
+ "browThick": 1.0,
+ "browLift": 0.0,
+ "stubble": 0.0,
+ "beard": 1.0,
+ "beardColor": "2e241c",
+ "hairColor": "2a2119",
+ "hair": "photo_tied",
+ "hairDrop": 0.17,
+ "greyStrands": 3,
+ "lipScale": [
+  1.12,
+  1.18
+ ],
+ "skinSmooth": 0.45
 }
