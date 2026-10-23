@@ -528,7 +528,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 FACES_DEFAULT = os.path.join(_HERE, "faces")
 FACES_DIR = os.environ.get("FACES_DIR") or FACES_DEFAULT
 FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLift", "browThick", "stubble", "beard", "beardColor", "blush",
-                  "freckles", "scars", "hair", "hairLen", "hairColor", "hairDrop", "locs", "locLen", "hairPart", "lashLen", "skinSmooth")
+                  "freckles", "scars", "hair", "hairLen", "hairColor", "hairDrop", "locs", "locLen", "hairPart", "lashLen", "skinSmooth",
+                  # photo likeness (docs/CHARACTER_LOOK.md "Faces: photo likeness"): the look data file (relative to the
+                  # face file), its mm scale, the measured skin hex used as is, the painted lip heights, grey strands
+                  "likeness", "likenessScale", "skinExact", "lipScale", "greyStrands", "hairVolume")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 
@@ -543,6 +546,13 @@ def face_override(c, faces_dir=None):
         return None
     with open(p) as f:
         o = json.load(f)
+    if o.get("extends"):          # a variant of another face file (its keys first, this file's on top)
+        bp = os.path.join(os.path.dirname(p), o["extends"])
+        with open(bp) as f:
+            base = json.load(f)
+        if base.get("likeness") and not os.path.isabs(base["likeness"]):
+            base["likeness"] = os.path.normpath(os.path.join(os.path.dirname(bp), base["likeness"]))
+        o = {**base, **{k: v for k, v in o.items() if k != "extends"}}
     unknown = set(o) - set(FACE_LOOK_KEYS) - {"details", "replace_details", "macro", "notes"}
     if unknown:
         raise KeyError(f"{p}: unknown face keys {sorted(unknown)}")
@@ -565,6 +575,8 @@ def face_override(c, faces_dir=None):
                 c.pop(k, None)
             else:
                 c[k] = o[k]
+    if c.get("likeness") and not os.path.isabs(c["likeness"]):
+        c["likeness"] = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(p)), c["likeness"]))
     return p
 
 
