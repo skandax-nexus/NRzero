@@ -1186,7 +1186,8 @@ def paint(c, B, cov, res, path_out):
     nose = np.array([0, L.eye[1] - 0.045, L.eye[2] + 0.03])
     tint(0.3 * g2(((pos - nose) ** 2 * np.array([1, 0.8, 0.5])).sum(1), 0.011) * front * isface, warm)
     tint(0.2 * earf, warm)
-    tint(0.04 * ss(0.02, 0.06, rel[:, 1]) * front * isface, [1.03, 1.02, 1.0])          # forehead a touch lighter
+    if LK is None:       # (photo likeness: his forehead is no lighter than his cheeks)
+        tint(0.04 * ss(0.02, 0.06, rel[:, 1]) * front * isface, [1.03, 1.02, 1.0])      # forehead a touch lighter
     skin_h = skin_r = None
     if look2.ON:      # v2: region colour by age and sex, hands, pores and creases (height), roughness
         col, skin_h, skin_r = look2.paint_skin(c, B, pos, part, col, isface, seed)
@@ -1211,7 +1212,7 @@ def paint(c, B, cov, res, path_out):
     lipm = np.clip(np.maximum(mu, ml) * lipfront * ss(1.05, 0.9, np.abs(t)), 0, 1)
     lipcol = skin * 0.3 + lip_c * 0.7
     over(lipm * 0.85, lipcol)
-    tint(lipm * mu * 0.1, [0.9, 0.88, 0.88])                                        # upper lip a touch darker
+    tint(lipm * mu * (0.1 if LK is None else 0.22), [0.9, 0.88, 0.9])              # upper lip a touch darker (photo: mauve-grey)
     tint(lipm * ml * 0.1 * g2(t ** 2 + ((-d - hl0 * 0.45) / 0.004) ** 2, 1.0), [1.12, 1.1, 1.1])   # lower lip highlight
     tint(0.4 * g2(d ** 2, 0.0005) * lipfront * ss(1.15, 0.85, np.abs(t)), [0.55, 0.45, 0.45])   # contact line
     tint(0.05 * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge
@@ -1247,7 +1248,7 @@ def paint(c, B, cov, res, path_out):
         lo_line = g2(((dy - ylo + 0.0005) / 0.0008) ** 2, 1.0) * ((dx > lx.min()) & (dx < lx.max())) * near
         tint(lo_line * 0.22, [0.7, 0.62, 0.6])
         inner = g2(((dx - ux.min() + 0.002) / 0.004) ** 2 + (dy / 0.004) ** 2, 1.0) * near
-        tint(inner * 0.18, [0.86, 0.72, 0.72])
+        tint(inner * (0.18 if LK is None else 0.07), [0.86, 0.72, 0.72])
     # ---- eyebrows: hair strokes placed from the eye centres ----
     bt = c.get("browThick", 0.5)
     nstr = 260 if res >= 2048 else 200
@@ -1282,7 +1283,8 @@ def paint(c, B, cov, res, path_out):
         # soft base tint under the strokes
         bx0, bx1 = float(T(0.0)[0]), float(T(1.0)[0])
         cbx, cby, cbw = T(np.clip((X - bx0) / (bx1 - bx0), 0, 1))
-        inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(bx0 - 0.002, bx0 + 0.002, X) * ss(bx1 + 0.002, bx1 - 0.001, X)
+        top_m = (0.0012, 0.0004) if LK is None else (0.0006, 0.0)       # photo likeness: registered to the card band (no band above it)
+        inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + top_m[0], cbw - top_m[1] - 0.0004, Y - cby) * ss(bx0 - 0.002, bx0 + 0.002, X) * ss(bx1 + 0.002, bx1 - 0.001, X)
         alpha = np.clip(np.maximum(alpha, 0.0) + ((0.17 if LK is None else 0.4) if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
         m = np.zeros(len(px))
         m[idx] = alpha
@@ -2244,7 +2246,7 @@ def hair_pieces(c, B, cov, layers):
         ref = np.concatenate(ref)
         sh = look2.CUTS.get(c.get("hairCut") or "", {}).get("sheet") if look2.ON else None
         if sh:          # a cut's own hanging inner mass (photo likeness, loose curls: the dark core the ringlets sit on)
-            out.append(hair_sheet(B, c, ref, 66, 294, L.eye[1] + 0.085, L.eye[1] - sh["drop"] * H / 1.75, clear=sh["clear"], flare=sh["flare"], rows=16,
+            out.append(hair_sheet(B, c, ref, sh.get("a0", 66), sh.get("a1", 294), L.eye[1] + 0.085, L.eye[1] - sh["drop"] * H / 1.75, clear=sh["clear"], flare=sh["flare"], rows=16,
                                   tip=sh.get("tip", 0.012), seg=42, vol=vol))
         elif style == "long":
             out.append(hair_sheet(B, c, ref, 84, 276, L.eye[1] + 0.085, L.eye[1] - 0.27 * H / 1.75, clear=0.003, flare=0.016, narrow=36, rows=20, tip=0.07, seg=44, vol=vol))

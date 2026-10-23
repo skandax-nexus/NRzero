@@ -24,12 +24,14 @@ import sys
 
 import numpy as np
 from PIL import Image
-from scipy.ndimage import binary_opening, gaussian_filter, label, zoom
+from scipy.ndimage import binary_closing, binary_fill_holes, gaussian_filter, label, zoom
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LK = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LIKENESS_DIR", "/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/faces/likeness")
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "faces_candidates", "kai_photo", "kai_look.npz")
 FROWN = (2.6, 1.4)           # mm the brows are lifted to undo the photo's frown (medial, lateral)
+FILL = 0.62                  # density floor inside the beard's closed outline (likeness:final)
+MOUSTACHE = 0.97             # moustache density, philtrum included (likeness:final)
 
 
 def main():
@@ -72,9 +74,29 @@ def main():
     # the sparse patches inside the beard (beside the soul patch, under the lip corners) carry thin hair, not bare
     # skin: filled to about half density from the surrounding beard
     g = np.maximum(g, 0.62 * gaussian_filter(g, 4.0) * (gaussian_filter(g, 4.0) > 0.45))
-    # length factor: long on the chin, the jaw and the soul patch, short on the cheeks, medium on the moustache
+    # likeness:final: a full short beard, not a goatee plus a chin strap. The lighter chin under the lower lip (skin
+    # glinting through the hair) was measured as low density; everything inside the beard's closed outline (lip line to
+    # the jaw band, mouth corner to jaw) gets a floor of FILL, so only the outer edge keeps the measured gradient (the
+    # upper cheek line, the shave halo). The lips themselves are masked at the build (paint and cards).
     X, Y = np.meshgrid(xs, ys)
-    lip_y = M["features"]["landmarks"]["Sto"][1]
+    F = M["features"]["landmarks"]
+    inside = binary_fill_holes(binary_closing(g > 0.4, structure=np.ones((7, 7)), iterations=1))
+    inside = gaussian_filter(inside.astype(np.float32), 1.2)
+    g = np.maximum(g, FILL * np.clip((inside - 0.25) / 0.6, 0, 1))
+    # the moustache, his densest, darkest feature: nose base to the vermilion, philtrum included, out past the mouth
+    # corners, and the "horseshoe" down from each corner into the jaw band
+    sn_y, ls_y, sto_y = F["Sn"][1], F["Ls"][1], F["Sto"][1]
+    chx = 0.5 * (abs(F["Ch_L"][0]) + abs(F["Ch_R"][0]))
+    ax_ = np.abs(X)
+    sm = lambda e0, e1, v: np.clip((v - e0) / (e1 - e0), 0, 1) ** 2 * (3 - 2 * np.clip((v - e0) / (e1 - e0), 0, 1))
+    mo = sm(sn_y + 1.0, sn_y - 2.5, Y) * sm(ls_y - 3.0, ls_y + 0.5, Y) * sm(chx + 7.0, chx + 2.0, ax_)
+    # the moustache's lower edge follows the lip line out to the corners and turns down there
+    drop = sm(chx - 6.0, chx - 1.0, ax_) * sm(chx + 11.0, chx + 6.0, ax_) * sm(ls_y + 0.5, ls_y - 3.0, Y) * sm(sto_y - 34.0, sto_y - 26.0, Y)
+    g = np.maximum(g, MOUSTACHE * mo)
+    g = np.maximum(g, 0.92 * drop)
+    g = gaussian_filter(g, 0.6)
+    # length factor: long on the chin, the jaw and the soul patch, short on the cheeks, medium on the moustache
+    lip_y = F["Sto"][1]
     chin = np.clip((lip_y - 6 - Y) / 30.0, 0, 1)
     ln = 1.0 + 0.85 * chin * (1 - 0.35 * np.clip((np.abs(X) - 30) / 40, 0, 1))
     ln = ln * (0.6 + 0.4 * np.clip(g / 0.6, 0, 1))

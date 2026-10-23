@@ -531,7 +531,10 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   "freckles", "scars", "hair", "hairLen", "hairColor", "hairDrop", "locs", "locLen", "hairPart", "lashLen", "skinSmooth",
                   # photo likeness (docs/CHARACTER_LOOK.md "Faces: photo likeness"): the look data file (relative to the
                   # face file), its mm scale, the measured skin hex used as is, the painted lip heights, grey strands
-                  "likeness", "likenessScale", "skinExact", "lipScale", "greyStrands", "hairVolume")
+                  "likeness", "likenessScale", "skinExact", "lipScale", "greyStrands", "hairVolume",
+                  # likeness:final: the painted under-eye / upper-lid shade strength, the faint spots' strength, the
+                  # T-zone's gloss factor (1 = the default oily T-zone) and a matte offset on the face's roughness
+                  "underEye", "lidShade", "faintSpots", "tzoneGloss", "skinMatte")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 

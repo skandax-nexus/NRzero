@@ -817,4 +817,68 @@ Licence of the generator (read in `/home/user/tools/mh/LICENSE.md` and `LICENSE.
 assets (base mesh, proxies, targets and modifiers, textures) are CC0 1.0 Universal; section D: "the MakeHuman project
 makes no claim whatsoever over output such as exports to files ... graphical data generated via scripting or plugins";
 only the MakeHuman source code is AGPL. Our pipeline reads the CC0 assets with our own scripts and ships only the
-generated meshes and textures, which a commercial game may ship. No scan, photo or model of a real person is used.
+generated meshes and textures, which a commercial game may ship. No scan, photo or model of a real person is used, with
+one exception the owner asked for: Kai's face is fitted to the owner's own reference photo ("Faces: photo likeness" below);
+the photo never enters the repo, only the measurements and look data derived from it ship.
+
+## Faces: photo likeness (Kai from the owner's photo)
+
+The owner sent a selfie and asked "Use this face for kai". The photo stays private: it lives outside the repo
+(`/home/user/tools/kai_ref/`, crops in the likeness work folder) and is never published; what ships is derived from it
+(the fitted MakeHuman detail values, the beard density and length maps, the brow profile, the mole positions, the
+measured colours), as the owner asked.
+
+Pipeline (`tools/characters/likeness/`, an offline venv with MediaPipe 0.10.21 at `/home/user/tools/likeness-venv`):
+- `measure.py` (likeness:measure): landmarks, camera and pose, a pose-corrected frontal view in "face mm" (x = his left,
+  y up, origin = the midpoint of the inner eye corners), proportions, colours (white-balanced on the T-shirt), beard,
+  brow, hair and skin masks, moles. `fit.py` (likeness:fit): the MakeHuman head fitted to the photo at its own camera ->
+  `faces_candidates/kai_photo/kai.json` (shape).
+- `look_data.py` (likeness:look): `measure.json` + `mask_beard.png` -> `faces_candidates/kai_photo/kai_look.npz`: the
+  beard density on a 1 mm grid (left / right averaged, speckles removed, sparse patches filled to about half density,
+  carried outward past the face outline for the side of the jaw the frontal view does not see), a hair length factor
+  (moustache 1, chin and jaw up to 1.85, cheeks 0.6), the brow profile (top, bottom, thickness per mm, the photo's frown
+  undone: medial end up 2.6 mm, lateral 1.4 mm), the moles and faint spots, the measured albedos.
+- `tools/characters/likeness_look.py` (numpy, read by the build): binds the data's frame to the sculpted mesh through
+  MediaPipe's inner-eye-corner points traced onto the base mesh (`likeness/mp_to_mh.json`), samples the maps, and paints:
+  the colour zones (a darker, slightly cool crescent under the deep-set eyes, darker upper lids, the nose bridge, a warmer
+  nose tip, the cheekbone band), the moles (the two on his left cheek at full contrast, the faint spots at 55 %), and the
+  beard's painted under-layer (nearly solid dark with a fine down-running hair texture where the beard is dense, a
+  stubble of fine dots where it thins, a faint shave shadow just past it). The beard map's 3D gates: the front of the ear
+  above the lobe (below it the beard runs back along the jaw to its angle), MakeHuman's head weights as the neckline, a
+  sideburn band 0-24 mm ahead of the ear up to the hairline.
+
+Face file keys (`faces/README.md`): `likeness` (the look data, relative to the face file), `likenessScale` (photo mm per
+build mm, the fit's 1.007), `skinExact` (the skin hex used as is, no `natural_skin` hue / chroma clamp), `lipScale`
+([upper, lower] painted lip heights), `greyStrands` (the photo's few grey hairs), and `extends` (a variant face file:
+another file's keys first, its own on top; `kai_photo_loose` extends `kai_photo`).
+
+Strand cards (`look2.py`):
+- beard (`_beard_cards`, when the entry has `likeness` and `beard` >= 0.5): about 1 400 fine cards rooted where the map
+  has beard (sampled area-weighted on the lower face and the under-jaw, kept with probability density^1.3, never on the
+  lips or within 1 mm of them), along the growth direction (the moustache down and out from the philtrum and never past
+  the lips' contact line, chin and jaw down and a little forward, the under-jaw back along the skin, sideburns down),
+  lying at their layer of the beard's volume (6-7 mm under the chin, 4-5 mm on the jaw sides, 2-3 mm on the moustache;
+  the fit found his skin outline 3-6 mm inside the beard's), a third of them wider clumps in the deep layers (the mass),
+  the rest fine hairs; matte (no strand sheen: on flat cards it read as bright chips), `@split` weights (they follow the
+  jaw like the skin under them). About 10 000 triangles on the HD build.
+- brows: the measured profile drives both the painted brow (620 strokes, a 0.4 base tint for his dense brows) and the
+  brow cards (680 per side).
+- curls (`_curl_cards`, cuts `photo_tied` and `photo_loose`): ringlets are helical strand ribbons around a centre line
+  that marches along the cut's flow inside the smooth envelope of `_messy_cards` (width along the axis, normal out from
+  it, two strand bundles half a turn apart, radius 9-15 mm, pitch 24-34 mm, a little tighter and thinner toward the end,
+  8 points per turn), so they read as loops from every side. `photo_tied` (A, the photo): a sleek layer of long strands
+  from the hairline over the crown into the tie at the top of the pony tube (no strand ever continues past the tie), the
+  nape pulled up into it, a few loose strands lifting off; a halo of ringlets springing out above and behind the ears
+  and at the back corners; three temple tendrils (the longest on his left temple); the tail: ringlets round the pony
+  tube; fine frizz loops over the halo; three grey strands looping across the front-top on his left. `photo_loose` (B,
+  the owner's earlier "messy medium length" pick, his own curls worn down): wavy fill on a dark inner mass (the cut's
+  hanging `sheet`, behind the ears only), ringlets over the whole scalp and the inner mass falling to the hem (chin at
+  the sides, below the nape at the back), the brows and eyes kept clear, frizz, the grey strands.
+- motion: the pony tube (A, `hairDrop` 0.17) and the inner mass (B, down to 13.5 cm below the eyes) hang below the head
+  joint, so `springs.js` builds its hair chain and `rig2.prepareCardSprings` hangs the nearby cards on it (checked in
+  the viewer: about 6 400 card vertices on the spring bones for A, 13 700 for B).
+
+Budgets: the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000); the card mesh is 39 500
+triangles for A and 44 200 for B (hair 22 600 / 27 600, beard 10 000, brows and lashes 6 600), well over the ~8 200 of
+the earlier hero cuts; the phone build draws its first 45 % (17 800 / 19 900).
+

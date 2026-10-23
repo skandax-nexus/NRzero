@@ -38,3 +38,8 @@ Check a set before it ships:
 
     FACES_DIR=... MH_DATA=... ../../../tools/venv/bin/python face_metric.py OUT     # distinctness + proportions
     ONLY=kai,mira FACES_DIR=... ./face_studio.sh NAME                               # build, pack, portraits
+- photo likeness (docs/CHARACTER_LOOK.md "Faces: photo likeness"): `likeness` (the look data `.npz` that
+  `likeness/look_data.py` writes, relative to the face file), `likenessScale`, `skinExact` (the skin hex as measured, no
+  natural-skin clamp), `lipScale` ([upper, lower] painted lip heights), `greyStrands` (a few grey hairs), `extends` (a
+  variant: another face file's keys first). Cuts `photo_tied` / `photo_loose`: curly ringlet cards (`look2._curl_cards`).
+
