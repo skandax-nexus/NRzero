@@ -1071,7 +1071,7 @@ export default {
       else { await game.say('kai', '...'); await convo(mira, [['mira', 'Not the hand. Not yet. Ask me what I want.'], ['kai', 'What do you want?'], ['mira', 'To be the one who decides what I am.']]); }
       await game.shot([0, 3.2, 9.6], [0, 1.2, -4], 2.0, { fov: 46 });
       audio.sfxPlay('anomaly'); game.shake = 0.04;
-      await game.say('mira', 'He\'s starting it again. Can you feel it? The Continuum wants one world. He wants one me.');
+      await game.say('mira', 'He\'s getting ready to run it again. Can you feel it? The Continuum wants one world. He wants one me.');
       await game.say('mira', 'Go, Kai. And this time don\'t come to save me. Come to ask.');
       await game.say('m20band', 'Correction to the record. Varen, Mira: reconstructed consciousness. Lives remembered: more than one.');
       await game.say('kai', 'More than one.');
