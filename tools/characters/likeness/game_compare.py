@@ -22,7 +22,7 @@ STAGE = os.environ.get("FACE_STAGE", "/tmp/claude-0/-home-user-NRzero/bd5ae5bd-a
 HALF_PX = 1850.0          # half side of the square photo crop (photo px) = the game camera's vertical fov
 
 
-def photo_camera():
+def photo_camera(game_eyes=None):
     """Camera of the photo in Kai's head frame (metres from the eye-helper midpoint, x his left, y up, z forward)."""
     x = np.load(os.path.join(LK, "fit", "x.npy"))
     m = dict(zip(fit.MACRO_KEYS, x[:4]))
@@ -34,6 +34,9 @@ def photo_camera():
     d, pose = x[4:4 + n], x[4 + n:]
     P = model.full(m, d)
     eyes = 0.5 * (P[fit.mh.group_vertices("helper-l-eye")].mean(0) + P[fit.mh.group_vertices("helper-r-eye")].mean(0))
+    if game_eyes is not None:
+        # face_studio aims from the eye bones (world, feet at y = 0), not the eye-helper midpoint: re-anchor on them
+        eyes = np.array(game_eyes) + [0, P[:, 1].min(), 0]
     _, c = model.heads(m, d)
     R = fit.rodrigues(pose[:3])
     t, s = pose[3:6], pose[6]
@@ -67,7 +70,13 @@ def photo_square(pc, size):
 def main(argv):
     name = next((a for a in argv if not a.startswith("--")), "kai_photo_fit")
     faces = dict(a[2:].split("=", 1) for a in argv if a.startswith("--") and "=" in a).get("faces", os.path.join(fit.CHAR, "faces_candidates", "kai_photo"))
-    pc = photo_camera()
+    meta = os.path.join(STAGE, name, "shots", "shots.json")
+    ge = None
+    if os.path.exists(meta):
+        mj = json.load(open(meta))
+        ge = (mj.get("kai") or mj.get("meta", {}).get("kai") or {}).get("eyes")
+    pc = photo_camera(ge)
+    pc["anchor"] = "game eye bones " + str(ge) if ge else "eye-helper midpoint"
     print(json.dumps(pc))
     env = dict(os.environ, ONLY="kai", FACES_DIR=os.path.abspath(faces), FS_PHOTO_CAM=",".join(map(str, pc["cam_from_eyes"])),
                FS_PHOTO_AIM=",".join(map(str, pc["aim_from_eyes"])), FS_PHOTO_FOV=str(pc["fov_deg"]), FS_PHOTO_ROLL=str(pc["roll_deg"]))

@@ -25,10 +25,18 @@ Residuals (mm on the face, from pixels / (f / depth)):
     thickness (8 mm under the chin, 5 mm on the jaw, 4 mm at the sideburn, measure.json notes), so the skin is fitted;
   - brows: the photo's slight frown (brows drawn down and together, measure.json notes) is undone (targets moved up
     1.5-3 mm, medial ends 1 mm apart) before projecting;
+  - depth: MediaPipe's relative depth of the lifted nose, lips, brows and cheek points along the camera ray (relative
+    to the inner eye corners, scale-free), weight 0.2: one view from above hardly separates a nose's depth from its
+    length, this keeps the profile honest;
   - frontal proportions (pose-free ratios of measure.json: eye spacing / eye width, nose / intercanthal, mouth / nose,
     lower / upper lip, canthal tilt) on the model's frontal landmarks, as soft terms;
-  - priors: details toward 0 (more weight on modifiers that change the whole head), macro toward a South Asian man of
-    a solid build, the pose toward measure.py's.
+  - priors: details toward 0 (more weight on modifiers that change the whole head, on depth-only terms and on what the
+    frown or the beard hides) with a soft wall past |0.7|, macro toward a South Asian man of a solid build, the pose
+    toward measure.py's, the size (scale) and the camera distance held to the iris measurement.
+Not fitted (look keys, not shape, in the game): the iris centres (he looks up into the lens), the painted brow height
+(build_humans paints brows at fixed offsets from the eye centres: reported as render_above_photo_mm -> browLift) and
+the lip outline height (painted from the contact line; the outline counts with a low weight).
+Check in the shipping pipeline: game_compare.py (builds Kai from the face file, face_studio's 'photo' view).
 Outputs (LIKENESS_DIR): fit_overlay.png (the fitted head's landmarks and silhouette over the photo), fit_compare.png
 (photo | clay render at the photo's pose | overlay, and the frontal photo against the fitted head's frontal render),
 fit.json (parameters, residuals per region per round); the face file (FACES_DIR candidate).
@@ -121,8 +129,11 @@ def prior_w(name):
         return 5.0
     if "age" in name:
         return 8.0
-    if name in ("eyebrows/eyebrows-trans-down|up", "chin/chin-cleft-decr|incr", "mouth/mouth-laugh-lines-in|out"):
-        return 5.0          # the frown (brows down, folds) and the chin under the beard: the photo cannot say
+    if name in ("eyebrows/eyebrows-trans-down|up", "chin/chin-cleft-decr|incr", "mouth/mouth-laugh-lines-in|out", "mouth/mouth-angles-down|up",
+                "nose/nose-scale-depth-decr|incr", "nose/nose-trans-backward|forward", "eyebrows/eyebrows-trans-backward|forward",
+                "forehead/forehead-trans-backward|forward", "mouth/mouth-trans-backward|forward", "chin/chin-prognathism-decr|incr"):
+        return 5.0          # the frown (brows down, folds, mouth corners), the chin under the beard, and depth-only terms
+                            # (one view from above hardly separates depth from height): the photo says little
     if name.startswith("neck/"):
         return 4.0
     return 2.5
@@ -176,7 +187,8 @@ class Model:
                     idx, d = t
                     m = self.loc[idx] >= 0
                     D[j, self.loc[idx[m]]] += d[m] * 0.1
-        self.eyes = [self.loc[np.array(mh.group_vertices(g))] for g in ("helper-l-eye", "helper-r-eye")]
+        self.eyes = [self.loc[np.array(raster.group_exact(g))] for g in ("helper-l-eye", "helper-r-eye")]
+        assert all((e >= 0).all() for e in self.eyes)
         self.height = 0.59
         self.prior = np.array([prior_w(nm) for nm, _ in self.params])
 
@@ -244,6 +256,7 @@ class Photo:
         self.Xh = z["Xh"] / 1000.0                       # photo head frame (metres, the scaled template's frame)
         self.eyes_mid = z["eyes_mid"] / 1000.0
         self.M = json.load(open(os.path.join(LK, "measure.json")))
+        self.s0 = self.M["camera"]["face_scale_vs_template"]
         self.Xc = self.Xh @ self.R.T + self.t
         self.ppm = self.K[0, 0] / self.Xc[:, 2] / 1000.0  # pixels per mm at each landmark
         self.face = (self.Xh - self.eyes_mid) * 1000.0    # face mm (x = subject's left, y up)
@@ -274,7 +287,9 @@ class Photo:
         self.target[lids] = self._reproj(X)
 
     def beard_mm(self, y):
-        return np.interp(y, [-124, -100, -70, -40, -28], [8.0, 6.5, 5.0, 4.0, 0.0])
+        # the low end of measure.json's estimate (6-12 mm under the chin, 4-8 mm on the jaw): the skin is never fitted
+        # smaller than he is; the beard pass adds the rest of the volume
+        return np.interp(y, [-124, -100, -70, -40, -28], [6.0, 5.0, 4.0, 3.0, 0.0])
 
     def _oval(self):
         """Outline normals (image, pointing out of the face) and the beard-corrected outline targets."""
@@ -386,6 +401,10 @@ def frontal_table(model, m, d, out_json):
 # ---------------------------------------------------------------------------------------------------------------
 # residuals
 # ---------------------------------------------------------------------------------------------------------------
+# depth (along the camera ray, relative to the inner eye corners) of MediaPipe's lifted points: a weak profile constraint
+DEPTH = [1, 4, 5, 195, 197, 6, 168, 98, 327, 0, 13, 17, 151, 9, 105, 334, 50, 280, 205, 425, 61, 291, 33, 263]
+W_DEPTH = 0.2
+
 RATIOS = ("eye_spacing_en_over_eye_width", "nose_width_over_intercanthal", "mouth_over_nose", "lower_over_upper_lip")
 
 
@@ -451,15 +470,20 @@ class Problem:
         ph = self.photo
         e = (uv - ph.target) / ph.ppm[:, None]                    # mm
         res = np.r_[(e[self.u_int] * self.w[self.u_int, None]).ravel(), (e[self.u_ov] * self.n_ov).sum(1) * self.w[self.u_ov]]
+        Zm = cam_points(X, c, pose)[:, 2]
+        # scale-free: the model's depths in its own size (/ scale) against the photo's in the measured size (/ face scale)
+        dz = ((Zm[DEPTH] - Zm[[133, 362]].mean()) / pose[6] - (ph.Xc[DEPTH, 2] - ph.Xc[[133, 362], 2].mean()) / ph.s0) * 1000.0
+        res = np.r_[res, dz * W_DEPTH]
         rr = ratios(X)
         rat = np.array([(rr[k] / self.r_photo[k] - 1) / 0.03 for k in RATIOS] + [(rr["canthal_tilt_deg"] - self.r_photo["canthal_tilt_deg"]) / 3.0]) * self.w_ratio * 0.25
         m, d, _ = self.unpack(x)
         pri_d = np.r_[self.model.prior * d, 12.0 * np.clip(np.abs(d) - 0.7, 0, None)]    # soft wall past |0.7|
         pri_m = np.array([(m[k] - MACRO_PRIOR[k][0]) / MACRO_PRIOR[k][1] for k in MACRO_KEYS]) * 0.6
         dp = pose - self.pose0
-        pri_p = np.r_[dp[:3] / np.radians(6), dp[3:6] / 0.03, (dp[6]) / 0.06] * 0.5
+        # the iris gives the size (+-5 %) and the camera distance: scale and depth are held to it, x / y move freely
+        pri_p = np.r_[dp[:3] / np.radians(6) * 0.5, dp[3:5] / 0.03 * 0.5, dp[5] / 0.015, dp[6] / 0.04]
         if parts:
-            return dict(e=e, ratios=rr, rat=rat, pri_d=pri_d, pri_m=pri_m, pri_p=pri_p)
+            return dict(e=e, dz=dz, ratios=rr, rat=rat, pri_d=pri_d, pri_m=pri_m, pri_p=pri_p)
         return np.r_[res, rat, pri_d, pri_m, pri_p]
 
     def bounds(self):
@@ -626,7 +650,10 @@ def write_face(model, m, d, path, report):
     face = {
         "notes": ("kai_photo (likeness:fit): Kai's head fitted to the owner's reference photo (MediaPipe landmarks and the "
                   "face outline at the photo's own camera and pose, skin under the beard; tools/characters/likeness/fit.py). "
-                  "Shape only: skin, beard, brows, hair and moles come from the later likeness steps."),
+                  "Shape only: skin, beard, brows, hair and moles come from the later likeness steps. The skin outline sits "
+                  "3-6 mm inside his beard's (jaw 3-4 mm, chin 6 mm): the beard pass adds that volume. Painted brows sit "
+                  f"{report['after_detector']['brows'].get('detector_render_above_photo_mm', 0):.1f} mm above his (frown undone): "
+                  "browLift about -0.003."),
         "replace_details": True,
         "macro": {"weight": round(m["weight"], 3), "muscle": round(m["muscle"], 3), "african": round(m["african"], 3),
                   "asian": round(m["asian"], 3), "caucasian": round(max(0.0, 1 - m["african"] - m["asian"]), 3)},
@@ -710,6 +737,9 @@ def main(argv):
                    macro={k: round(float(v), 3) for k, v in m.items()},
                    pose=dict(rvec_deg=np.degrees(pose[:3]).round(2).tolist(), t_m=pose[3:6].round(4).tolist(), scale=round(float(pose[6]), 4)),
                    ratios={k: [round(float(v), 3), round(float(prob.r_photo[k]), 3)] for k, v in parts["ratios"].items()},
+                   depth_vs_mediapipe_mm=dict(rms=round(float(np.sqrt((parts["dz"] ** 2).mean())), 2),
+                                              nose_tip=round(float(parts["dz"][0]), 2), alae=round(float(parts["dz"][7:9].mean()), 2),
+                                              lips=round(float(parts["dz"][9:12].mean()), 2), brows=round(float(parts["dz"][14:16].mean()), 2)),
                    before_detector=rep0, fit=rep_fit, after_detector=rep_det,
                    biggest_details=sorted(((nm, round(float(v), 3)) for (nm, _), v in zip(model.params, d)), key=lambda a: -abs(a[1]))[:25])
         log["rounds"].append(ent)

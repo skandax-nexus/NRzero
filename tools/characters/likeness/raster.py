@@ -65,6 +65,13 @@ def head_scene(P, neck_drop=0.035, jaw_cut=True):
 _LIPV = None
 
 
+def group_exact(name):
+    """Vertices of the faces in exactly this group (mh.group_vertices matches a prefix: 'helper-l-eye' also takes the
+    lash helpers 'helper-l-eyelashes-*')."""
+    _, _, F = mh.base()
+    return sorted({v for vs, _, g in F if g == name for v in vs})
+
+
 def repaint(S, P):
     """Anchor the painter on the head P (head frame, MH axes): the game paints lips and brows from the sculpted
     head's own landmarks (build_humans.paint: lips from the lip contact line, brows from the eye centres), so the
@@ -81,8 +88,11 @@ def repaint(S, P):
     bx = np.array([q[k == i, 0].mean() for i in range(11) if (k == i).any()])
     by = np.array([q[k == i, 1].mean() for i in range(11) if (k == i).any()])
     S.paint = dict(lip_x=bx, lip_y=by, lip_w=(q[:, 0].max() - q[:, 0].min()) / 2, lip_z=q[:, 2].max(), eyes={})
+    S.paint["iris"] = {}
     for g, k in (("helper-l-eye", 1), ("helper-r-eye", 2)):
+        # brows: from build_humans.Landmarks' eye centre (mh.group_vertices, lash helpers included, as the game does)
         S.paint["eyes"][k] = P[mh.group_vertices(g)].mean(0)
+        S.paint["iris"][k] = P[group_exact(g)].mean(0)       # the eyeball's own centre
 
 
 def _ss(a, b, x):
@@ -124,7 +134,7 @@ def paint_pixels(S, Q, grp):
         b *= skin * (Q[:, 2] > e[2] - 0.01)
         col = col * (1 - b[:, None] * 0.92) + BROW * b[:, None] * 0.92
     # eyes: sclera, iris, pupil by the radius from the helper's forward axis
-    for k, c in pt["eyes"].items():
+    for k, c in pt["iris"].items():
         ee = grp == k
         r = np.hypot(Q[:, 0] - c[0], Q[:, 1] - c[1])
         col[ee] = SCLERA
