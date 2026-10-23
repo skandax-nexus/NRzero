@@ -121,3 +121,11 @@ forearm radius profile used to find sleeve hems.
 - `face_studio.sh NAME` (ONLY=ids): builds only those ids into a staging folder outside the repo, packs them as the
   game ships them (`pack_cast2.mjs`) and renders front / three-quarter / profile portraits under a neutral studio
   light and a Rain City night light (`face_studio.mjs`), with contact sheets (`face_sheet.py`).
+- Hero pipeline (docs/CHARACTER_LOOK.md, "Faces: hero pipeline"): `pack_cast2.mjs` packs an HD build and a phone
+  build (`<id>_tlo`, a second index list) per principal with a head triangle target in each (vertex-locked head / body
+  simplification), bakes the face's normal map from a Loop-subdivided raw head onto each shipped head and a head
+  ambient occlusion into the occlusion map and albedo (`head_bake.mjs`; `TIERS=0`, `HEAD_BAKE=0` switch them off).
+  `look2.py` holds the cut library (`CUTS`: any face file's `hair`), the strand atlas, brow / lash cards, the iris and
+  sclera painter, the dental arch, the lip-contact weight fix and the natural skin albedo (`SKIN_CLASSIC=1`: the old
+  albedo). `face_studio.sh`: `--views=close,closethree` (dialogue close-ups), `EXPR=jaw=0.8` (a held expression),
+  `QUERY=casttier=phone` (runtime switches), `KEEP_RAW=1`.

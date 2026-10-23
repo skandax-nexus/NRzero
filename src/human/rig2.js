@@ -22,22 +22,31 @@ export const rig2 = { stats: { templates: 0, persons: 0, cards: 0 }, off: OFF, c
 
 // card distance limits (m) per tier: beyond them the hair volume alone reads the same
 const CARD_FAR = [9, 16, 26];
+// the soft fringe pass (two-pass hair) within these distances (m) per tier
+const SOFT_FAR = [4.5, 8, 14];
 
 // ------------------------------------------------------------------------------------------------------------------
 // hair card material (one program for every build: the colour lives in the vertex attribute azHCol)
 // ------------------------------------------------------------------------------------------------------------------
 const cardMats = new Map();
-function cardMaterial(src, tier) {
-  const k = (src.map ? src.map.uuid : 'x') + '|' + tier;
+// pass: 0 = one pass, coverage resolved by a stable 4x4 ordered dither (far people, ?look=nosofthair);
+//       1 = the opaque core of the strands (coverage >= AZC_CORE, writes depth);
+//       2 = the soft fringe around it (coverage below the core's threshold, alpha-blended over the core and whatever is
+//           behind, no depth write): smooth strand edges and tips without MSAA, no stipple, no sawtooth.
+const AZC_CORE = 0.62;
+function cardMaterial(src, tier, pass = 0) {
+  const k = (src.map ? src.map.uuid : 'x') + '|' + tier + '|' + pass;
   let m = cardMats.get(k);
   if (m) return m;
-  m = new THREE.MeshStandardMaterial({ map: src.map || null, color: 0xffffff, roughness: 0.55, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.5, envMapIntensity: 0.3 });
-  m.userData = { ...src.userData, slot: 'hair', azCards: true };
-  m.name = 'az_hair_cards';
-  m.customProgramCacheKey = () => 'azcards' + tier;
+  m = new THREE.MeshStandardMaterial({ map: src.map || null, color: 0xffffff, roughness: 0.55, metalness: 0, side: THREE.DoubleSide, alphaTest: pass === 2 ? 0 : 0.5, envMapIntensity: 0.3 });
+  if (pass === 2) { m.transparent = true; m.depthWrite = false; m.alphaTest = 0; }
+  m.userData = { ...src.userData, slot: 'hair', azCards: true, azPass: pass };
+  m.name = 'az_hair_cards' + (pass ? '_' + pass : '');
+  m.customProgramCacheKey = () => 'azcards' + tier + '_' + pass;
   m.onBeforeCompile = sh => {
     sh.defines = sh.defines || {};
     sh.defines.AZC_TIER = tier;
+    sh.defines.AZC_PASS = pass;
     sh.vertexShader = 'attribute vec3 azHCol;\nattribute vec3 azHTan;\nvarying vec3 vHCol;\nvarying vec3 vHTan;\n' + sh.vertexShader
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvHCol = pow( azHCol, vec3( 2.2 ) );')
       .replace('#include <skinnormal_vertex>', `#include <skinnormal_vertex>
@@ -46,26 +55,36 @@ function cardMaterial(src, tier) {
 	  azT = ( skinMatrix * vec4( azT, 0.0 ) ).xyz;
 	#endif
 	  vHTan = normalMatrix * azT; }`);
-    let F = 'varying vec3 vHCol;\nvarying vec3 vHTan;\nfloat azcShift = 0.0; float azcSpark = 1.0;\n' + sh.fragmentShader;
+    let F = 'varying vec3 vHCol;\nvarying vec3 vHTan;\nfloat azcShift = 0.0; float azcSpark = 1.0; float azcRoot = 1.0;\n' + sh.fragmentShader;
     // the strand texture: R brightness (sRGB-decoded by the sampler: back to a gentle curve), G a per-strand random,
-    // B depth across the card, A coverage. Coverage is kept through the mip chain (mips average it away) and resolved
-    // against a stable 4x4 ordered dither: soft tips and thin strands stipple instead of vanishing or aliasing
+    // B depth across the card, A coverage (kept through the mip chain: mips average thin strands away)
     F = F.replace('#include <map_fragment>', `
 	vec4 azT = texture2D( map, vMapUv );
 	float azLum = sqrt( azT.r );
-	diffuseColor.rgb = vHCol * ( 0.55 + 0.45 * azLum ) * ( 0.82 + 0.18 * azT.b );
-	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.35 + 1.1 * azT.g ) * azLum;
+	// root occlusion: the strands near the scalp sit under the others (uv v = 0 at the root)
+	azcRoot = mix( 0.55, 1.0, smoothstep( 0.0, 0.5, vMapUv.y ) );
+	diffuseColor.rgb = vHCol * ( 0.6 + 0.4 * azLum ) * ( 0.84 + 0.16 * azT.b ) * azcRoot;
+	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.35 + 1.1 * azT.g ) * azLum * azcRoot;
 	{ vec2 azSz = vec2( textureSize( map, 0 ) );
 	  vec2 azDx = dFdx( vMapUv * azSz ), azDy = dFdy( vMapUv * azSz );
 	  float azMip = max( 0.0, 0.5 * log2( max( dot( azDx, azDx ), dot( azDy, azDy ) ) ) );
-	  float azA = azT.a * ( 1.0 + 0.3 * azMip );
+	  float azA = saturate( azT.a * ( 1.0 + 0.22 * azMip ) );
+	#if AZC_PASS == 1
+	  if ( azA < ${AZC_CORE.toFixed(2)} ) discard;
+	  diffuseColor.a = 1.0;
+	#elif AZC_PASS == 2
+	  if ( azA >= ${AZC_CORE.toFixed(2)} || azA < 0.03 ) discard;
+	  diffuseColor.a = smoothstep( 0.03, ${AZC_CORE.toFixed(2)}, azA );
+	#else
 	  ivec2 azP = ivec2( gl_FragCoord.xy ) & 3;
 	  int azI = azP.x + azP.y * 4;
 	  float azB = float( ( azI == 0 ? 0 : azI == 1 ? 8 : azI == 2 ? 2 : azI == 3 ? 10 : azI == 4 ? 12 : azI == 5 ? 4 : azI == 6 ? 14 : azI == 7 ? 6 : azI == 8 ? 3 : azI == 9 ? 11 : azI == 10 ? 1 : azI == 11 ? 9 : azI == 12 ? 15 : azI == 13 ? 7 : azI == 14 ? 13 : 5 ) ) / 16.0;
-	  if ( azA < 0.2 + 0.6 * azB ) discard; }
-	diffuseColor.a = 1.0;`);
+	  if ( azA < 0.2 + 0.6 * azB ) discard;
+	  diffuseColor.a = 1.0;
+	#endif
+	}`);
     F = F.replace('#include <alphatest_fragment>', '');
-    F = F.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\treflectedLight.indirectSpecular *= 0.3 + 0.7 * azcSpark;');
+    F = F.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\treflectedLight.indirectSpecular *= ( 0.3 + 0.7 * azcSpark ) * azcRoot;\n\treflectedLight.indirectDiffuse *= 0.55 + 0.45 * azcRoot;');
     F = F.replace('#include <color_fragment>', '');
     // strand highlights (Kajiya-Kay): a white primary lobe toward the root and a tinted secondary toward the tip,
     // along the strand direction; diffuse wraps a little (light through the strands)
@@ -241,13 +260,31 @@ export function attach(h, t) {
     let cm = null, mm = null;
     h.root.traverse(o => { if (o.isSkinnedMesh && o.name === V.cardName) cm = o; if (o.isSkinnedMesh && V.main && o.name === V.main) mm = o; });
     if (cm) {
-      cm.material = cardMaterial([].concat(cm.material)[0], tier);
-      cm.castShadow = tier > 0; cm.frustumCulled = false;
-      cm.geometry.setDrawRange(0, tier === 0 && V.loCount ? V.loCount : Infinity);
+      const src = [].concat(cm.material)[0];
+      R.cardMat = { dither: cardMaterial(src, tier, 0), core: cardMaterial(src, tier, 1), soft: cardMaterial(src, tier, 2) };
+      cm.material = R.cardMat.dither;
+      // the phone build (cast3d.js castTier: gfx=low and phones) draws the low card set and casts no card shadow
+      const phoneBuild = t.root.userData.castTier === 'phone';
+      cm.castShadow = tier > 0 && !phoneBuild; cm.frustumCulled = false;
+      cm.geometry.setDrawRange(0, (tier === 0 || phoneBuild) && V.loCount ? V.loCount : Infinity);
       if (V.cardSprings && mm && mm.skeleton.bones.length > cm.skeleton.bones.length) {
         const n0 = cm.skeleton.bones.length, extra = mm.skeleton.bones.slice(n0);
         const inv = cm.skeleton.boneInverses.concat(mm.skeleton.boneInverses.slice(n0).map(m => m.clone().multiply(V.springFix)));
         cm.bind(new THREE.Skeleton(cm.skeleton.bones.concat(extra), inv), cm.bindMatrix);
+      }
+      // the soft fringe (after the spring re-bind: it shares the final skeleton): a second draw of the same cards (same geometry and skeleton), for people near the camera
+      if (!OFF.has('softhair')) {
+        const sm = new THREE.SkinnedMesh(cm.geometry, R.cardMat.soft);
+        sm.name = cm.name + '_soft'; sm.frustumCulled = false; sm.castShadow = false; sm.receiveShadow = cm.receiveShadow;
+        sm.position.copy(cm.position); sm.quaternion.copy(cm.quaternion); sm.scale.copy(cm.scale);
+        sm.bindMode = cm.bindMode; sm.bind(cm.skeleton, cm.bindMatrix);
+        sm.visible = false; sm.userData = { ...cm.userData, azSoft: true };
+        // transparent objects are depth-sorted by their bounding sphere: the cards' rest-pose sphere (a skinned
+        // mesh would otherwise skin every vertex once on the CPU to find it)
+        if (!cm.geometry.boundingSphere) cm.geometry.computeBoundingSphere();
+        sm.boundingSphere = cm.geometry.boundingSphere.clone();
+        cm.parent.add(sm);
+        R.soft = sm;
       }
       R.cards = cm;
       rig2.stats.cards++;
@@ -322,9 +359,19 @@ export function attach(h, t) {
     // cards: distance culling (the camera of the last rendered frame)
     if (R.cards) {
       const cam = rig2.camera;
-      let on = h.lod ? false : true;
-      if (on && cam) { h.root.getWorldPosition(_v); const far = CARD_FAR[tier] * (V.meta && V.meta.v ? 1 : 1); on = _v.distanceToSquared(cam.position) < far * far; }
+      let on = h.lod ? false : true, soft = false;
+      if (on && cam) {
+        h.root.getWorldPosition(_v);
+        const d2 = _v.distanceToSquared(cam.position), far = CARD_FAR[tier];
+        on = d2 < far * far;
+        soft = on && !!R.soft && d2 < SOFT_FAR[tier] * SOFT_FAR[tier];
+      }
       if (R.cards.visible !== on) R.cards.visible = on;
+      if (R.soft) {
+        if (R.soft.visible !== soft) R.soft.visible = soft;
+        const want = soft ? R.cardMat.core : R.cardMat.dither;
+        if (R.cards.material !== want) R.cards.material = want;
+      }
     }
   };
   h.rig2 = R;

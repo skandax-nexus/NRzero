@@ -43,7 +43,7 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
       // atlases inside, full-size atlases in HD packs for desktop tiers; ?look=classic (or no cast2.json): cast.glb
       const man = LOOK.classic ? null : await globalThis.fetch(base + 'cast2.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
       const parts = man && man.parts && man.parts.length ? man.parts.map(p => p.file) : null;
-      const hd = parts && man.hd && man.hd.length && wantHD() ? Promise.all(man.hd.map(h => get(h.file).catch(() => null))) : null;
+      const hd = parts && man.hd && man.hd.length && castTier() === 'hd' ? Promise.all(man.hd.map(h => get(h.file).catch(() => null))) : null;
       const castP = parts ? Promise.all(parts.map(get)).catch(e => { console.warn('cast2 unavailable, classic cast', e && e.message); cast.version = 1; return Promise.all([get('cast.glb')]); }) : Promise.all([get('cast.glb')]);
       cast.version = parts ? 2 : 1;
       const [cs, a, x, ix] = await Promise.all([castP, get('anims.glb'), extra, index]);
@@ -80,6 +80,7 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
           }
         });
         if (!skinned || !hips) return;
+        tierBuild(root);
         root.updateMatrixWorld(true);
         root.traverse(o => { if (o.isBone) top = Math.max(top, o.getWorldPosition(new THREE.Vector3()).y); });
         // stature: the standing body height the generator built (no hat, hood, raised prop or umbrella in it), so a
@@ -103,6 +104,29 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
     return cast.ready;
   })();
   return cast.loading;
+}
+// Hero pipeline (docs/CHARACTER_LOOK.md "Faces: hero pipeline"): principals carry an HD build (the atlas mesh) and a
+// phone build (`<id>_tlo`: a second index list over the same vertices, extras tier 'phone'). One is kept per template,
+// once, before any person is made: the HD build where the HD atlases load (its normal map is baked against it), the
+// phone build elsewhere; ?casttier=hd|phone forces it. Older runtimes see the phone build as a hidden LOD.
+export const castTier = () => {
+  const q = new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '').get('casttier');
+  return q === 'hd' || q === 'phone' ? q : wantHD() ? 'hd' : 'phone';
+};
+function tierBuild(root) {
+  const lo = [];
+  root.traverse(o => { if (o.isMesh && o.userData.tier === 'phone') lo.push(o); });
+  if (!lo.length) return;
+  const phone = castTier() === 'phone';
+  for (const o of lo) {
+    if (phone) {
+      let main = null;
+      root.traverse(m => { if (m !== o && m.isMesh && !m.userData.lod && m.geometry.attributes.position === o.geometry.attributes.position) main = m; });
+      if (main) main.geometry.setIndex(o.geometry.index);
+    }
+    if (o.parent) o.parent.remove(o);
+  }
+  root.userData.castTier = phone ? 'phone' : 'hd';
 }
 // HD packs on high, and on medium off phones; ?casthd=0 / 1 forces it
 function wantHD() {

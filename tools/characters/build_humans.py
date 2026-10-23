@@ -1112,6 +1112,8 @@ def paint(c, B, cov, res, path_out):
     front = ss(-0.035, -0.015, rel[:, 2])            # front of the face (0 at the ears)
     # ---------------- skin ----------------
     skin = hexc(c["skin"])
+    if look2.ON and os.environ.get("SKIN_CLASSIC") != "1":      # hero pipeline: a natural skin albedo (no orange cast)
+        skin = look2.natural_skin(skin)
     col = np.tile(skin, (len(px), 1))
     lum = 1 + 0.035 * (vnoise(pos, 22, seed) - 0.5) + 0.02 * (vnoise(pos, 90, seed + 3) - 0.5) + 0.012 * (vnoise(pos, 700, seed + 5) - 0.5)
     red = 0.02 * (vnoise(pos, 40, seed + 9) - 0.5)
@@ -1172,6 +1174,8 @@ def paint(c, B, cov, res, path_out):
     # ---- eyes: lash line, lid crease, inner corner ----
     brow_c = hexc(c.get("browColor", c.get("hairColor", "2e2119")))
     hair_c = hexc(c.get("hairColor", "2e2119"))
+    if look2.ON:      # hero pipeline: near-black hexes lifted to a deep brown-black (look2.hair_floor), like the cards
+        brow_c, hair_c = look2.hair_floor(brow_c, 0.12), look2.hair_floor(hair_c)
     lash_c = brow_c * 0.35 + np.array([0.02, 0.015, 0.012])
     for s, e, sg in (("L", L.eyeL, 1), ("R", L.eyeR, -1)):
         dx = (pos[:, 0] - e[0]) * sg
@@ -1221,11 +1225,11 @@ def paint(c, B, cov, res, path_out):
         tt = np.clip(((X[:, None] - rx[None]) * sx[None] + (Y[:, None] - ry[None]) * sy[None]) / L2[None], 0, 1)
         dd = np.hypot(X[:, None] - (rx[None] + tt * sx[None]), Y[:, None] - (ry[None] + tt * sy[None]))
         cvg = np.clip(1 - dd / (wd[None] * (1.15 - 0.55 * tt)), 0, 1)
-        alpha = 1 - np.prod(1 - 0.7 * cvg, axis=1)
+        alpha = 1 - np.prod(1 - (0.55 if look2.ON else 0.7) * cvg, axis=1)     # v2: brow hair cards lie on top
         # soft base tint under the strokes
         cbx, cby, cbw = T(np.clip((X + 0.0185) / 0.047, 0, 1))
         inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(-0.0205, -0.0165, X) * ss(0.0305, 0.0275, X)
-        alpha = np.clip(np.maximum(alpha, 0.0) + 0.34 * inb * (1 - alpha), 0, 0.9)
+        alpha = np.clip(np.maximum(alpha, 0.0) + (0.28 if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)
         m = np.zeros(len(px))
         m[idx] = alpha
         over(m, brow_c)
@@ -1288,20 +1292,35 @@ def paint(c, B, cov, res, path_out):
         # and samples these texels, so a fade inside it painted the shell's edge skin-pale (a light outline under the
         # bangs); the soft gradient lives outside the hairline (`fa` above)
         fade_in = ss(-0.006, 0.002, hcov) * (0.88 + 0.12 * st2)
+        if look2.ON and look2.CUTS.get(c.get("hairCut") or "", {}).get("comb") in ("part", "gather", "back"):
+            # hair combed away from the face thins toward the hairline over ~1 cm (no hard band across the forehead)
+            fade_in = ss(-0.004, 0.011, hcov) ** 1.3 * (0.8 + 0.2 * st2)
         st3 = hair_strands(c, rel, style, seed + 4.1, fine=2.2)
         k = 0.6 + 0.32 * st ** 1.2 + 0.16 * st3 - 0.06
         if hair_c.mean() > 0.42:     # grey / blond: the regular strand stripes read as a knitted (woolly hat) rib
             k = 0.8 + 0.1 * st ** 1.2 + 0.08 * st3 + 0.08 * (vnoise(rel * np.array([1.0, 3.0, 1.0]), 140, seed + 6.2) - 0.5) - 0.04
         roots = 1 - 0.1 * ss(0.012, 0.0, hcov)
-        hcol = hair_c[None, :] * (k * roots)[:, None] * (0.9 if look2.ON else 1.0)   # v2: the volume under the cards reads as depth
+        hcol = hair_c[None, :] * (k * roots)[:, None] * (0.78 if look2.ON else 1.0)   # v2: the volume under the cards reads as depth
         sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
         hcol = hcol * sheen[:, None]
-        if style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
+        scalp = look2.CUTS.get(c.get("hairCut") or "", {}).get("scalp") if look2.ON else None
+        if scalp in ("short", "fade"):      # hero pipeline: short cuts read as dense hair (the cards on top carry the
+            # texture); a faint stipple of scalp between the hairs; a fade runs down the sides to stubble on the skin
+            fine_d = hash01(rel, 2400, seed + 8.1)
+            dense = 0.9 + 0.1 * fine_d
+            hcol = hcol * 0.8 * dense[:, None] + col * 0.06       # the volume under the cards: in their shade
+            if scalp == "fade":
+                fy = ss(0.022, 0.058, rel[:, 1]) + ss(-0.02, 0.03, rel[:, 2]) * ss(0.0, 0.03, rel[:, 1]) * 0.6
+                fy = np.clip(fy, 0, 1)[:, None]
+                stub = (fine_d > 0.45).astype(float)[:, None] * 0.5 + 0.35
+                shaved = col * (1 - 0.62 * stub) + hair_c[None, :] * 0.62 * stub * 0.85     # a clipper-short stubble
+                hcol = hcol * fy + shaved * (1 - fy)
+        elif style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
             hcol = hcol * 0.75 + col * 0.25 * (0.6 + 0.4 * st[:, None])
         if style in ("bun", "braid", "pony"):   # tied-back hair: a centre part from the hairline toward the crown
             pl = g2(rel[:, 0] ** 2, 0.0018 ** 2) * ss(-0.02, 0.03, rel[:, 2] + 0.06) * ss(0.04, 0.07, rel[:, 1])
             hcol = hcol * (1 - 0.55 * pl[:, None]) + col * 0.55 * pl[:, None]
-        if style in ("undercut", "fade"):   # shaved sides: the scalp shows through, fading toward the top
+        if style in ("undercut", "fade") and scalp not in ("short", "fade"):   # shaved sides: the scalp shows through, fading toward the top
             sh_ = ss(0.075, 0.04, rel[:, 1])[:, None] * (0.55 if style == "undercut" else 0.45)
             hcol = hcol * (1 - sh_) + col * sh_
         fa_ = np.clip(fade_in, 0, 1)[:, None]
@@ -1459,14 +1478,19 @@ def paint_cells(c, img, mask, res, seed, cov=None):
     if not look2.ON:      # v2: no painted catch-light (the scene's lights make the real one)
         cl = g2((dxe + 0.17) ** 2 + (dye - 0.17) ** 2, 0.045)
         col = col + np.clip(cl * 1.6, 0, 0.95)[..., None] * np.array([1.0, 1.0, 1.0])
+    if look2.ON:      # hero pipeline: a detailed iris and a living sclera (look2.paint_eye)
+        col = look2.paint_eye(c, dxe, dye, r, th, seed, vnoise, hash01, ss, g2)
     col = np.where((r > 1.0)[..., None], np.array([0.6, 0.55, 0.52]), col)
     put(gx, gy, col)
     # ---- flat-ish cells ----
     hair_c = hexc(c.get("hairColor", "2e2119"))
+    if look2.ON:
+        hair_c = look2.hair_floor(hair_c)
     shoe = hexc(shoe_hex(c))
     cells = {"hair": hair_c, "shoe": shoe, "sole": shoe * 0.35 + 0.02, "colA": hexc(c.get("colorA", "444a55")), "colB": hexc(c.get("colorB", "2a2a30")),
              "acc": hexc(c.get("accentColor", "8a3a2a")), "trim": hexc(c.get("trimColor", "2a1d16")), "metal": hexc(c.get("metalColor", "b09060")),
-             "lash": hexc(c.get("browColor", c.get("hairColor", "2e2119"))) * 0.3 + 0.015, "skin": hexc(c["skin"]),
+             "lash": hexc(c.get("browColor", c.get("hairColor", "2e2119"))) * 0.3 + 0.015,
+             "skin": look2.natural_skin(hexc(c["skin"])) if look2.ON and os.environ.get("SKIN_CLASSIC") != "1" else hexc(c["skin"]),
              "glow": hexc(c.get("glowColor", "ffb050")), "shirt": hexc(c.get("shirtColor", "d8d0c4"))}
     over = costume.cell_colors(c, cov) if cov is not None and "_costume" in cov else {}
     for name, v in over.items():
@@ -2288,6 +2312,7 @@ def budget(c):
 
 
 def build(c, tex_dir):
+    c = look2.resolve_cut(c)       # hero pipeline: a cut from the library names its hair volume style and its cards
     costume_mode = "wear" in c
     AUX_MODE[0] = costume_mode
     B = Body(c)

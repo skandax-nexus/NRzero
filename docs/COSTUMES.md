@@ -112,11 +112,22 @@ Every gadget is visible on the body and tied to a real mechanic. Each one is a r
 
 ## Mobile budgets
 
-| | Triangles (body + clothes + gadgets) | Atlas | Draw calls |
-|---|---|---|---|
-| Kai | 16 000 (gadgets 2 500 or less) | 2048 | atlas plus at most one glow mesh group |
-| Named NPCs | 11 000 (role gadgets 800 or less) | 1024 | atlas plus glow |
-| Crowds and children | 9 000 or less (gadgets 300 or less); low LOD 6 000 | 1024 (512 for crowd LOD) | atlas only at low LOD (glow baked into the atlas emissive cell) |
+Every principal ships two builds over one vertex buffer (docs/CHARACTER_LOOK.md, "Faces: hero pipeline"): the HD build
+for gfx=high and for gfx=medium off phones (with the HD atlases), and the phone build for gfx=low and phones (with the
+phone atlases). The head (head and face bones: face, scalp, ears, eyes, mouth, hair volume) has its own triangle target
+in each build; the decimation goes to the body and clothes. The hero is the priority.
+
+| | HD build: total (head) | Phone build: total (head) | Atlas HD / phone | Hair cards (separate mesh) | Draw calls |
+|---|---|---|---|---|---|
+| Kai | 26 000 (head 11 500: the raw head, face box ~7 900) | 16 000 (head 6 200, face box ~3 600-3 900) | 2048 / 1024 | ~8 200 HD, ~3 700 phone | atlas, glow group, cards, soft-hair pass within 4.5 m (low) / 8 m (medium) / 14 m (high) |
+| Mira, the Witness, Sera, Rook | 17 000 (head 8 000) | 11 000 (head 4 600) | 1024 / 512 | ~4 500 / ~2 000 | the same |
+| Other named NPCs | 13 000 (head 5 600) | 11 000 (head 4 000) | 1024 / 512 | ~2 000-4 000 / 45 % of it | the same |
+| Crowds and children | 9 000 (head 2 600-3 400) and the 6 000 low LOD | the same | 1024 / 512 (512 for crowd LOD) | ~1 400-2 000 / 45 % | atlas only at low LOD (glow baked into the atlas emissive cell) |
+
+Gadgets stay inside the totals (Kai 2 500 or less, named NPCs 800 or less, crowds 300 or less). Hair cards are a
+separate mesh outside the totals: hidden beyond 9 m (low) / 16 m (medium) / 26 m (high); the phone build (and gfx=low)
+draws only their first 45 % (silhouette, fringe, hairline, brows, lashes) and casts no card shadow. `?casttier=hd|phone`
+forces a build.
 
 All emissive glow meshes of one colour share a single material per scene, so they batch together. Fine detail (taped seams, quilting, MOLLE webbing, patches, reflective bands, Helix glyphs, plate panel lines) is painted into the atlas colour and normal maps, not modelled.
 

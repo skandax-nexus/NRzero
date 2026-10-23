@@ -147,7 +147,44 @@ def expand_weights(o, W, B):
         sub = expand_weights_split(o, Wm, B, ["head"], split)
         out[split] = sub[split]
         return out
-    return expand_weights_split(o, W, B, ["hand_L", "hand_R"] + (["head"] if nm.startswith(HEADSPLIT) else []), None, out)
+    out = expand_weights_split(o, W, B, ["hand_L", "hand_R"] + (["head"] if nm.startswith(HEADSPLIT) else []), None, out)
+    if nm.startswith("skin") and os.environ.get("MOUTH_FIX") != "0":
+        _mouth_fix(o, out, B)
+    return out
+
+
+def _mouth_fix(o, out, B):
+    """The lips part cleanly when the jaw opens: MakeHuman's lip bones leave some jaw weight on vertices of the upper
+    lip's inner edge (a zigzag of skin hanging into the open mouth); above the lips' contact line it goes to the head,
+    and the lower lip's inner edge follows the jaw in full."""
+    names = all_bones()
+    j, h = names.index("jaw"), names.index("head")
+    L = B.L
+    xs, ys = L.lip_line
+    pts = BH.from_bl_np(BH.obj_world_verts(o))
+    near = (np.abs(pts[:, 0] - L.lip_cx) < L.lip_w * 1.25) & (np.abs(pts[:, 1] - L.mouth[1]) < 0.022) & (pts[:, 2] > L.lip_z - 0.04)
+    d = pts[:, 1] - np.interp(pts[:, 0], xs, ys)
+    # vertices on the contact line itself (upper and lower lip rows touch there) take the side of their neighbours
+    online = near & (np.abs(d) <= 0.0012) & (np.abs(pts[:, 0] - L.lip_cx) < L.lip_w * 1.05)
+    if online.any():
+        nb_sum = np.zeros(len(pts))
+        nb_cnt = np.zeros(len(pts))
+        ev = np.zeros(len(o.data.edges) * 2, dtype=np.int64)
+        o.data.edges.foreach_get("vertices", ev)
+        ev = ev.reshape(-1, 2)
+        for a_, b_ in ((0, 1), (1, 0)):
+            va, vb = ev[:, a_], ev[:, b_]
+            m_ = online[va] & ~online[vb]
+            np.add.at(nb_sum, va[m_], d[vb[m_]])
+            np.add.at(nb_cnt, va[m_], 1)
+        side = np.where(nb_cnt > 0, nb_sum / np.maximum(nb_cnt, 1), 0.0)
+        d = np.where(online & (nb_cnt > 0), np.sign(side) * 0.0013, d)
+    up = near & (d > 0.0002) & (out[:, j] > 0)
+    out[up, h] += out[up, j]
+    out[up, j] = 0.0
+    lo = near & (d < -0.0002) & (d > -0.012) & ((out[:, j] > 0.15) | online) & (np.abs(pts[:, 0] - L.lip_cx) < L.lip_w * 1.05)
+    out[lo, j] += out[lo, h]
+    out[lo, h] = 0.0
 
 
 def expand_weights_split(o, W, B, keys, only=None, out=None):
@@ -316,6 +353,64 @@ def eyeball(name, cen, rad, side):
 MOUTH_CELL = "lash"
 
 
+TOOTH_W = [0.0085, 0.0066, 0.0076, 0.0070, 0.0068, 0.0100, 0.0098]    # central incisor -> second molar (m, adult)
+TEETH_HALF = 0.036                                                     # half arch length painted in the mouth cell
+
+
+def _teeth_arch(P, upper, a0, a1, k):
+    """A smooth dental arch over a teeth helper's points (MH coordinates): returns (points, quads, uv (a, b))."""
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    xm = max(np.abs(x).max(), 0.012)
+    nb = 25
+    xs = np.linspace(-xm, xm, nb)
+    zf, yg, ye = [], [], []
+    for xc in xs:
+        m = np.abs(x - xc) < xm / nb * 1.6
+        if m.sum() < 2:
+            m = np.argsort(np.abs(x - xc))[:4]
+        zf.append(z[m].max())
+        yg.append(y[m].max() if upper else y[m].min())
+        ye.append(y[m].min() if upper else y[m].max())
+    sm = lambda v: np.convolve(np.pad(np.asarray(v), 2, mode="edge"), np.ones(5) / 5, mode="valid")
+    zf, yg, ye = sm(zf), sm(yg), sm(ye)
+    # crown height: incisors ~10 mm (upper) / 8.5 mm (lower) visible, less toward the molars
+    hmax = (0.0095 if upper else 0.0085) * k
+    sgn = -1 if upper else 1
+    t = np.abs(xs) / xm
+    hh = np.minimum(np.abs(yg - ye), hmax * (1 - 0.25 * t))
+    ye = yg + sgn * hh
+    # arc length for b (centre 0.5), the lingual side 3.5 mm in along the arch normal
+    pts = np.stack([xs, (yg + ye) / 2, zf], 1)
+    d = np.gradient(pts[:, [0, 2]], axis=0)
+    d /= np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-9)
+    nrm = np.stack([d[:, 1], -d[:, 0]], 1)          # outward (toward +z at the front)
+    if nrm[nb // 2, 1] < 0:
+        nrm = -nrm
+    seg = np.linalg.norm(np.diff(pts[:, [0, 2]], axis=0), axis=1)
+    arc = np.concatenate([[0], np.cumsum(seg)])
+    arc -= arc[nb // 2]
+    b = 0.5 + 0.45 * np.clip(arc / (TEETH_HALF * k), -1, 1)
+    th = 0.0035 * k
+    rows = []          # (y, inward offset, a)
+    rows.append((yg, 0.0, a0))
+    rows.append((yg + (ye - yg) * 0.55, 0.0003, a0 + (a1 - a0) * 0.55))
+    rows.append((ye, 0.0009, a1 * 0.97))
+    rows.append((ye, th * 0.6, a1))
+    rows.append((yg, th, a1))
+    V_, UV_ = [], []
+    for (yy, off, aa) in rows:
+        for i in range(nb):
+            V_.append([xs[i] - nrm[i, 0] * off, yy[i] if np.ndim(yy) else yy, zf[i] - nrm[i, 1] * off])
+            UV_.append([aa, b[i]])
+    V_, UV_ = np.array(V_), np.array(UV_)
+    quads = []
+    for r in range(len(rows) - 1):
+        for i in range(nb - 1):
+            q = [r * nb + i, r * nb + i + 1, (r + 1) * nb + i + 1, (r + 1) * nb + i]
+            quads.append(q[::-1] if upper else q)     # faces out (labial side toward +z)
+    return V_, quads, UV_
+
+
 def mouth_objects(B):
     """MakeHuman's upper / lower teeth and tongue helpers (sculpted with the body), uv'd into the mouth cell."""
     _, _, F = mh.base()
@@ -328,7 +423,8 @@ def mouth_objects(B):
         rm = {v: i for i, v in enumerate(used)}
         P = B.P[used].copy()
         # the teeth sit a little inside the lips (MakeHuman's helpers touch them): 1.5 mm back
-        P[:, 2] -= 0.0015
+        P[:, 2] -= 0.0018
+        P[:, 1] += (np.mean(P[:, 1]) - P[:, 1]) * 0.12      # a touch shorter: hidden behind closed lips
         y = P[:, 1]
         if "teeth" in g:
             # a = along the tooth (gum line -> biting edge), b = around the arch
@@ -342,6 +438,11 @@ def mouth_objects(B):
         uvv = BH.cell_uv(MOUTH_CELL, a, b, inset=0.04)
         fl = [[rm[v] for v in f[0]] for f in fs]
         nm = "teeth_up" if "upper" in g else "teeth_lo" if "lower" in g else "tongue"
+        if "teeth" in g and os.environ.get("TEETH_MH") != "1":
+            # hero pipeline: MakeHuman's teeth helpers are a coarse zigzag; an even dental arch follows them instead
+            # (a smooth band: labial face, biting edge, lingual face), the teeth painted on it (paint_mouth_cell)
+            P, fl, uvl = _teeth_arch(P, "upper" in g, a0, a1, B.H / 1.75)
+            uvv = BH.cell_uv(MOUTH_CELL, uvl[:, 0], uvl[:, 1], inset=0.04)
         o = BH.mesh_from(nm, BH.to_bl_np(P), fl, [uvv[j] for f in fl for j in f])
         BH.set_mask(o, mask)
         W = np.zeros((len(P), len(BH.BONE_NAMES)))
@@ -363,6 +464,40 @@ def eye_objects(B, c):
     return out
 
 
+def paint_eye(c, dxe, dye, r, th, seed, vnoise, hash01, ss, g2):
+    """The eye cell (sRGB 0..1): the disc radius r = polar angle / 90 degrees on the eyeball (the limbus at ~0.34).
+    Iris: radial fibres in two frequencies with wavy crypts (darker pits), a lighter, warmer collarette ring, a dark
+    pupillary ruff and a crisp dark limbal ring; the colour runs warmer toward the pupil. Sclera: warm white, pinker
+    and darker toward the corners with a few faint vessels, a soft shade under the upper lid."""
+    iris_c = BH.hexc(c.get("eyes", "5a4030"))
+    ir, pr = c.get("irisR", 0.34), c.get("pupilR", 0.12)
+    rr = np.clip((r - pr) / max(ir - pr, 1e-3), 0, 1.5)
+    sh = r.shape
+    p3 = np.stack([np.cos(th) * 3, np.sin(th) * 3, r * 5], -1).reshape(-1, 3)
+    wob = vnoise(p3, 1.1, seed).reshape(sh)
+    fib = 0.5 + 0.25 * np.sin(th * 60 + 3.0 * wob) + 0.15 * np.sin(th * 151 + 5 * vnoise(p3 * 1.9, 1.4, seed + 2).reshape(sh)) + 0.1 * np.sin(th * 307 + 2.0 * wob)
+    crypt = np.clip(vnoise(np.stack([np.cos(th) * 7, np.sin(th) * 7, rr * 4], -1).reshape(-1, 3), 1.0, seed + 5).reshape(sh) - 0.62, 0, 1) * 2.2
+    warm = np.array([0.62, 0.42, 0.16])           # amber near the pupil (stroma pigment)
+    inner = ss(0.55, 0.15, rr)[..., None]
+    base = iris_c[None, None, :] * (1 - 0.35 * inner) + warm[None, None, :] * 0.35 * inner * (0.4 + 0.6 * iris_c.mean() / 0.35)
+    irc = base * (0.62 + 0.62 * fib[..., None])
+    irc = irc * (1 + 0.28 * g2((rr - 0.32) ** 2, 0.006))[..., None]            # collarette
+    irc = irc * (1 - 0.45 * crypt * ss(0.25, 0.4, rr) * ss(0.95, 0.7, rr))[..., None]
+    irc = irc * (1 - 0.5 * ss(0.78, 1.0, rr))[..., None]                       # darker outer iris toward the limbus
+    irc = irc * (1 - 0.35 * ss(0.12, 0.0, rr))[..., None]                      # pupillary ruff
+    sclera = np.array([0.86, 0.82, 0.78]) * (1 - 0.22 * ss(0.5, 1.0, r))[..., None]
+    sclera = sclera * (1 - 0.1 * ss(0.45, 1.0, np.abs(dxe))[..., None] * np.array([0.0, 1.0, 0.8]))    # pinker corners
+    ves = (0.5 + 0.5 * np.sin(th * 23 + 6 * vnoise(p3 * 0.7, 2.0, seed + 9).reshape(sh))) ** 80 * ss(0.5, 0.95, r) * ss(0.3, 0.8, np.abs(dxe))
+    sclera = sclera * (1 - 0.07 * ves[..., None] * np.array([0.0, 1.0, 0.9]))
+    limb = np.exp(-((r - ir) / 0.025) ** 2)
+    col = np.where((r < ir)[..., None], irc, sclera)
+    col = col * (1 - 0.6 * limb[..., None])
+    pup = ss(pr + 0.012, pr - 0.006, r)[..., None]
+    col = col * (1 - pup) + np.array([0.015, 0.013, 0.012]) * pup
+    col = col * (1 - 0.22 * ss(0.3, 0.9, dye)[..., None] * (r < 1.0)[..., None])          # upper lid shade
+    return np.clip(col, 0, 1)
+
+
 def paint_mouth_cell(c, img, mask, grid, put):
     """The mouth cell: teeth (ivory, a translucent biting edge), gums and tongue (wet pink), the cavity (near black)."""
     gx, gy, a, b = grid(MOUTH_CELL)
@@ -370,15 +505,22 @@ def paint_mouth_cell(c, img, mask, grid, put):
     ss = BH.ss
     # stored as the cell's a (x) / b (y) like cell_uv: here a runs along the tooth, b across
     ta = a
-    tooth = np.array([0.80, 0.76, 0.68]) * (0.93 + 0.07 * rng_n)[..., None]
+    tooth = np.array([0.74, 0.70, 0.62]) * (0.93 + 0.07 * rng_n)[..., None]
     tooth = tooth * (1 - 0.18 * ss(0.22, 0.36, ta))[..., None] + np.array([0.02, 0.03, 0.05]) * ss(0.24, 0.34, ta)[..., None]
     gum = np.array([0.62, 0.30, 0.30]) * (0.9 + 0.12 * rng_n)[..., None]
     tongue = np.array([0.66, 0.36, 0.36]) * (0.85 + 0.2 * rng_n)[..., None]
     cav = np.array([0.07, 0.025, 0.025])
+    if os.environ.get("TEETH_MH") != "1":       # the gaps between the teeth along the arch (b: arc length, centre 0.5)
+        arcp = np.abs(b - 0.5) / 0.45 * TEETH_HALF
+        edges = np.cumsum(TOOTH_W)
+        gap = np.zeros_like(arcp)
+        for e_ in np.concatenate([[0.0], edges]):
+            gap = np.maximum(gap, np.exp(-((arcp - e_) / 0.00035) ** 2))
+        tooth = tooth * (1 - 0.55 * gap[..., None] * BH.ss(0.0, 0.06, ta)[..., None])
+        tooth = tooth * (1 - 0.25 * BH.ss(0.45, 1.0, np.abs(b - 0.5) / 0.45))[..., None]     # back teeth in shadow
     col = np.where((ta < 0.02)[..., None], gum, tooth)
     col = np.where((ta >= 0.36)[..., None], tongue * (1 - 0.45 * ss(0.5, 0.66, ta))[..., None], col)
     col = np.where((ta >= 0.7)[..., None], cav, col)
-    _ = b
     put(gx, gy, col)
 
 
@@ -388,64 +530,87 @@ def paint_mouth_cell(c, img, mask, grid, put):
 # (strands at the card's centre lie on top), A: coverage. Drawn 2x and box-filtered.
 # ---------------------------------------------------------------------------------------------------------------
 HT_W, HT_H, HT_COLS = 1024, 1024, 8
-# column kinds: 0-2 dense body, 3 clumped body, 4-5 sparse edge / flyaway, 6 wavy / curly, 7 short fine (lashes, brows, beard)
-HT_KIND = ["body", "body", "body", "clump", "sparse", "sparse", "curl", "fine"]
+HT_VERSION = 5
+# column kinds (same slots as v1, so a build's uvs keep their meaning): 0-2 clump cards (dense centre, sparse edges,
+# staggered tapered tips), 3 tight clump (strands gather to a point: tips of short textured cuts), 4-5 wisps (a few
+# loose strands: flyaways, edges), 6 wavy / curly, 7 fine short strokes (lashes, brows, beard)
+HT_KIND = ["clump", "clump", "clump", "tight", "wisp", "wisp", "curl", "fine"]
 
 
 def strand_texture(path):
+    """The strand atlas: RGBA, v = root (row 0) -> tip. R strand brightness, G per-strand random, B depth across the
+    card (centre on top), A coverage (antialiased: drawn at 2x and box-filtered). Strand density falls off toward the
+    card's long edges and tips end at staggered lengths, so a card has a soft, irregular outline instead of a rectangle;
+    transparent texels carry the column's mean colour (no dark fringes in the mips)."""
+    path = path.replace(".png", "_v%d.png" % HT_VERSION)
     if os.path.exists(path):
         return path
     from PIL import Image
     S = 2
     cw, hh = HT_W // HT_COLS * S, HT_H * S
     out = np.zeros((HT_H, HT_W, 4), np.float32)
-    rng = np.random.default_rng(20491)
-    y = (np.arange(hh) + 0.5) / hh                     # 0 root .. 1 tip
-    xs = np.arange(cw) + 0.5
+    rng = np.random.default_rng(20492)
+    y = (np.arange(hh) + 0.5) / hh
     for col, kind in enumerate(HT_KIND):
         A = np.zeros((hh, cw), np.float32)
         Rr = np.zeros((hh, cw), np.float32)
         G = np.zeros((hh, cw), np.float32)
-        n = {"body": 64, "clump": 70, "sparse": 16, "curl": 34, "fine": 40}[kind]
-        if kind == "clump":
-            cents = rng.uniform(0.2, 0.8, 3) * cw
+        n = {"clump": 150, "tight": 120, "wisp": 22, "curl": 90, "fine": 40}[kind]
+        sig = {"clump": 0.16, "tight": 0.13, "wisp": 0.2, "curl": 0.17, "fine": 0.26}[kind]
         for s in range(n):
-            x0 = rng.uniform(0.08, 0.92) * cw
-            if kind == "fine":     # short strokes: each strand from a random root to a random tip
-                t0, t1 = rng.uniform(0.0, 0.25), rng.uniform(0.55, 1.0)
+            x0 = float(np.clip(rng.normal(0.5, sig), 0.07, 0.93)) if kind != "fine" else float(rng.uniform(0.03, 0.97))
+            if kind == "fine":       # lashes, brow and beard hairs: rooted at the card's root edge, tapering to a fine tip
+                t0, t1 = rng.uniform(0.0, 0.06), rng.uniform(0.6, 1.0)
             else:
-                t0, t1 = 0.0, rng.uniform(0.45 if kind != "sparse" else 0.4, 1.0) ** 0.7
-            wid = rng.uniform(1.6, 3.0) * S * (0.75 if kind in ("fine", "sparse") else 1.0)
-            ph, fr = rng.uniform(0, 6.3), rng.uniform(1.0, 2.6)
-            amp = {"body": 3.0, "clump": 2.5, "sparse": 6.0, "curl": 14.0, "fine": 2.0}[kind] * S
+                t0 = rng.uniform(0.0, 0.04)
+                # staggered tips: the centre strands are the longest, edge strands end earlier
+                edge = abs(x0 - 0.5) * 2
+                t1 = float(np.clip(rng.uniform(0.55, 1.0) * (1 - 0.35 * edge ** 1.5), 0.25, 1.0))
+            wid = rng.uniform(1.1, 2.0) * S * (0.8 if kind in ("fine", "wisp") else 1.0)
+            ph, fr = rng.uniform(0, 6.3), rng.uniform(0.8, 2.2)
+            amp = {"clump": 2.5, "tight": 2.0, "wisp": 7.0, "curl": 12.0, "fine": 1.5}[kind] * S
             if kind == "curl":
-                fr = rng.uniform(3.0, 4.5)
-            xc = x0 + amp * np.sin(y * fr * 6.283 + ph) + (rng.normal(0, 4 * S) * y ** 2 if kind == "sparse" else 0)
-            if kind == "clump":   # strands converge toward their clump's centre near the tip
-                cc = cents[np.argmin(np.abs(cents - x0))]
-                xc = xc + (cc - xc) * (y ** 1.6) * 0.75
+                fr = rng.uniform(3.0, 4.6)
+            xc = x0 * cw + amp * np.sin(y * fr * 6.283 + ph)
+            if kind == "wisp":
+                xc = xc + rng.normal(0, 7 * S) * y ** 2
+            if kind in ("clump", "tight"):       # strands gather toward the card's centre line near the tip
+                pull = 0.4 if kind == "clump" else 0.62
+                xc = xc + (cw * 0.5 - xc) * (np.clip((y - t0) / max(t1 - t0, 1e-3), 0, 1) ** 1.8) * pull
             tt = np.clip((y - t0) / max(t1 - t0, 1e-3), 0, 1)
             inside = (y >= t0) & (y <= t1)
-            taper = np.where(inside, (1 - tt ** 3) * np.clip(tt * 12, 0, 1) if kind == "fine" else (1 - tt ** 4), 0.0)
-            w = wid * (0.35 + 0.65 * taper)
-            d = np.abs(xs[None, :] - xc[:, None])
-            cov = np.clip(1.0 - (d - w[:, None] * 0.5) / (0.9 * S), 0, 1) * (taper[:, None] > 0.02)
-            cov *= np.clip(taper[:, None] * 3.0, 0, 1)
-            br = rng.uniform(0.62, 1.0)
-            newA = A + cov * (1 - A)
-            Rr = np.where(cov > 0, (Rr * A + br * cov * (1 - A)) / np.maximum(newA, 1e-6), Rr)
-            G = np.where(cov > 0.5, rng.random(), G)
-            A = newA
-        Bd = np.clip(1 - 0.5 * np.abs(xs / cw - 0.5) * 2, 0, 1)[None, :] * np.ones((hh, 1))
+            taper = np.where(inside, (1 - tt) ** 1.4 * np.clip(tt * 25, 0, 1) if kind == "fine" else (1 - tt ** 2.2), 0.0)
+            w = wid * (0.3 + 0.7 * taper)
+            rows = np.nonzero(taper > 0.02)[0]
+            if not len(rows):
+                continue
+            lo_x = int(max(0, np.floor(xc[rows].min() - 3 * S - wid)))
+            hi_x = int(min(cw, np.ceil(xc[rows].max() + 3 * S + wid)))
+            xs = np.arange(lo_x, hi_x) + 0.5
+            d = np.abs(xs[None, :] - xc[rows, None])
+            cov = np.clip(1.0 - (d - w[rows, None] * 0.5) / (0.9 * S), 0, 1)
+            cov *= np.clip(taper[rows, None] * 3.0, 0, 1)
+            br = rng.uniform(0.55, 1.0)
+            a_ = A[rows, lo_x:hi_x]
+            newA = a_ + cov * (1 - a_)
+            Rr[rows, lo_x:hi_x] = np.where(cov > 0, (Rr[rows, lo_x:hi_x] * a_ + br * cov * (1 - a_)) / np.maximum(newA, 1e-6), Rr[rows, lo_x:hi_x])
+            G[rows, lo_x:hi_x] = np.where(cov > 0.5, rng.random(), G[rows, lo_x:hi_x])
+            A[rows, lo_x:hi_x] = newA
+        xs_all = (np.arange(cw) + 0.5) / cw
+        Bd = np.clip(1 - np.abs(xs_all - 0.5) * 2, 0, 1)[None, :] * np.ones((hh, 1))
         blk = np.stack([Rr, G, Bd, A], -1)
         blk = blk.reshape(HT_H, S, cw // S, S, 4).mean((1, 3))
         out[:, col * (HT_W // HT_COLS):(col + 1) * (HT_W // HT_COLS)] = blk
-    # premultiplied-style fill: colour of transparent texels = the column's mean strand colour (no dark mip fringes)
     a = out[..., 3:4]
-    mean = (out[..., :3] * a).sum((0, 1)) / max(a.sum(), 1e-6)
-    out[..., :3] = out[..., :3] * np.clip(a * 4, 0, 1) + mean * (1 - np.clip(a * 4, 0, 1))
+    for col in range(HT_COLS):
+        sl = slice(col * (HT_W // HT_COLS), (col + 1) * (HT_W // HT_COLS))
+        aa = a[:, sl]
+        mean = (out[:, sl, :2] * aa).sum((0, 1)) / max(aa.sum(), 1e-6)
+        k = np.clip(aa * 4, 0, 1)
+        out[:, sl, :2] = out[:, sl, :2] * k + mean * (1 - k)
     Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8), "RGBA").save(path)
     return path
+
 
 
 def hair_material(c, tex_path):
@@ -600,8 +765,18 @@ class Cards:
         return not self.v
 
 
+def hair_floor(rgb, lo=0.15):
+    """sRGB hair colour with its value raised to at least lo (hue kept): the cast's near-black hexes (0x14 = 0.08)
+    rendered as a flat black mass with no strand light; real black hair is a very dark brown with highlights."""
+    import colorsys
+    h, s_, v = colorsys.rgb_to_hsv(*[float(x) for x in rgb])
+    if v >= lo:
+        return np.asarray(rgb, float)
+    return np.array(colorsys.hsv_to_rgb(h, min(s_, 0.45), lo + (v - 0) * 0.3))
+
+
 def _hair_cols(c, rng):
-    hc = BH.lin(BH.hexc(c.get("hairColor", "2e2119")))
+    hc = BH.lin(hair_floor(BH.hexc(c.get("hairColor", "2e2119"))))
     grey = BH.hexc(c.get("hairColor", "2e2119")).mean() > 0.42
     return hc, grey
 
@@ -615,6 +790,293 @@ def _card_colour(hc, grey, rng):
         k = rng.uniform(0.78, 0.9)
         root, tip = root * k, tip * k
     return root, tip
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# the cut library (hero pipeline, docs/CHARACTER_LOOK.md "Faces: hero pipeline"): any cast entry or face file picks a
+# cut by name in "hair". A cut names the hair volume (shell) style it sits on (`base`, one of the legacy styles the
+# coverage fields, hairline, shell and hanging pieces know) and how its strand cards grow: lengths (m, for a 1.75 m
+# person) on the top, at the front, over the sides and at the nape, the comb (flow field), the volume lift at the
+# tips (m), wave, card width (m), the density over the sides (fades and undercuts are carried by the painted scalp),
+# the share of loose wisps, and the hairline fade of the painted scalp under short cuts.
+# ---------------------------------------------------------------------------------------------------------------
+CUTS = {
+    # textured crop: short, slightly forward, piecey texture on top
+    "crop":      dict(base="crop", stiff=1.0, top=0.026, front=0.024, side=0.010, nape=0.008, comb="fwd", lift=0.003, frontLift=0.004, wave=0.25, W=0.0060, side_dens=0.75, wisp=0.08, scalp="short"),
+    # skin fade: short textured top pushed forward and up, sides faded to the skin
+    "fade":      dict(base="fade", stiff=1.0, top=0.036, front=0.030, side=0.0045, nape=0.004, comb="up_fwd", lift=0.004, frontLift=0.008, wave=0.3, W=0.0062, side_dens=0.3, wisp=0.06, scalp="fade"),
+    # modern quiff: long front swept up and back, short sides
+    "quiff":     dict(base="undercut", stiff=0.9, top=0.050, front=0.075, side=0.006, nape=0.006, comb="quiff", lift=0.006, frontLift=0.020, wave=0.18, W=0.0075, side_dens=0.3, wisp=0.08, scalp="fade"),
+    # side-swept: a side part, the top swept across and a little forward, tapered sides
+    "sideswept": dict(base="short", stiff=0.6, top=0.055, front=0.062, side=0.016, nape=0.012, comb="side", lift=0.005, frontLift=0.008, wave=0.2, W=0.0095, side_dens=0.8, wisp=0.08, scalp="short"),
+    # swept-back: combed straight back from the hairline, a little lift at the front
+    "swept":     dict(base="swept", stiff=0.7, top=0.070, front=0.075, side=0.035, nape=0.040, comb="back", lift=0.004, frontLift=0.010, wave=0.15, W=0.010, side_dens=1.0, wisp=0.06, scalp="full"),
+    "slick":     dict(base="swept", stiff=0.9, top=0.070, front=0.075, side=0.035, nape=0.040, comb="back", lift=0.002, frontLift=0.004, wave=0.08, W=0.010, side_dens=1.0, wisp=0.03, scalp="full"),
+    # tousled medium: messy from the crown, forward over the brow and the ears, loose wisps
+    "tousled":   dict(base="short", stiff=0.35, top=0.065, front=0.060, side=0.040, nape=0.045, comb="tousle", lift=0.006, frontLift=0.006, wave=0.45, W=0.0100, side_dens=1.0, wisp=0.16, scalp="full"),
+    # short (legacy): an even short cut from the crown
+    "short":     dict(base="short", stiff=0.8, top=0.038, front=0.034, side=0.020, nape=0.016, comb="crown", lift=0.003, frontLift=0.004, wave=0.25, W=0.0075, side_dens=1.0, wisp=0.08, scalp="short"),
+    # undercut (legacy): long top swept to the side, shaved sides
+    "undercut":  dict(base="undercut", stiff=0.7, top=0.060, front=0.065, side=0.005, nape=0.005, comb="side", lift=0.005, frontLift=0.006, wave=0.2, W=0.0085, side_dens=0.25, wisp=0.08, scalp="fade"),
+    # Kai's classic messy waves (legacy)
+    "waves":     dict(base="waves", stiff=0.25, top=0.075, front=0.070, side=0.055, nape=0.050, comb="crown_fwd", lift=0.006, frontLift=0.006, wave=0.42, W=0.0095, side_dens=1.0, wisp=0.12, scalp="full"),
+    "pixie":     dict(base="pixie", stiff=0.4, top=0.050, front=0.055, side=0.030, nape=0.025, comb="side_fwd", lift=0.004, frontLift=0.005, wave=0.25, W=0.0085, side_dens=1.0, wisp=0.1, scalp="full"),
+    "bob":       dict(base="bob", top=0.10, front=0.09, side=0.10, nape=0.10, comb="part", lift=0.004, frontLift=0.004, wave=0.12, W=0.010, side_dens=1.0, wisp=0.08, scalp="full"),
+    "long":      dict(base="long", top=0.14, front=0.12, side=0.14, nape=0.14, comb="part", lift=0.005, frontLift=0.005, wave=0.15, W=0.011, side_dens=1.0, wisp=0.1, scalp="full"),
+    "pony":      dict(base="pony", top=0.08, front=0.07, side=0.08, nape=0.06, comb="gather", lift=0.0015, frontLift=0.002, wave=0.1, W=0.0085, side_dens=1.0, wisp=0.08, scalp="full"),
+    "bun":       dict(base="bun", top=0.07, front=0.06, side=0.07, nape=0.06, comb="gather", lift=0.0015, frontLift=0.002, wave=0.1, W=0.0085, side_dens=1.0, wisp=0.08, scalp="full"),
+    "braid":     dict(base="braid", top=0.08, front=0.07, side=0.08, nape=0.06, comb="gather", lift=0.0015, frontLift=0.002, wave=0.1, W=0.0080, side_dens=1.0, wisp=0.06, scalp="full"),
+    "curls":     dict(base="curls", top=0.024, front=0.022, side=0.018, nape=0.016, comb="curl", lift=0.004, frontLift=0.004, wave=1.3, W=0.0085, side_dens=1.0, wisp=0.05, scalp="short"),
+    "puffs":     dict(base="puffs", top=0.022, front=0.02, side=0.018, nape=0.016, comb="curl", lift=0.004, frontLift=0.004, wave=1.3, W=0.009, side_dens=1.0, wisp=0.05, scalp="short"),
+    "locs":      dict(base="locs", top=0.05, front=0.05, side=0.05, nape=0.05, comb="down", lift=0.002, frontLift=0.002, wave=0.1, W=0.008, side_dens=0.6, wisp=0.0, scalp="full"),
+}
+CUTS["braids"] = dict(CUTS["braid"])
+CUTS["buns"] = dict(CUTS["bun"])
+CUTS["textured_crop"] = dict(CUTS["crop"])
+CUTS["swept_back"] = dict(CUTS["swept"])
+CUTS["side_swept"] = dict(CUTS["sideswept"])
+
+
+def resolve_cut(c):
+    """A cast entry with a cut name in "hair": the hair volume style in "hair", the cut in "hairCut" (a copy)."""
+    cut = c.get("hairCut") or c.get("hair")
+    if not ON or cut not in CUTS:
+        return c
+    c = dict(c)
+    c["hairCut"] = cut
+    c["hair"] = CUTS[cut]["base"]
+    return c
+
+
+def _cut_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
+    """Strand cards of a cut over the hair volume. Returns the number of scalp cards."""
+    cut = c.get("hairCut") or cov.get("_style")
+    C = CUTS[cut]
+    L = B.L
+    eye = L.eye
+    k = B.H / 1.75
+    head_c = eye + np.array([0, 0.03, -0.075])
+    crown = head_c + np.array([0.0, 0.095, -0.05])
+    hP, hN, hT, hW = _obj_surface(hair_objs)
+    surf = _Surf(hP, hN)
+    budget = BH.budget(c)
+    target = 6000 if budget >= 16000 else 3200 if budget > 9000 else 1400
+    side = 1 if (sum(map(ord, c["id"])) % 2) else -1
+    if c.get("hairPart") in ("left", "right"):
+        side = 1 if c["hairPart"] == "left" else -1
+    part_x = 0.024 * side
+
+    def region(p):
+        rel = p - head_c
+        r = max(np.linalg.norm(rel), 1e-6)
+        up, fwd = rel[1] / r, rel[2] / r
+        top = BH.ss(0.2, 0.62, up)
+        front = BH.ss(0.05, 0.55, fwd) * BH.ss(-0.05, 0.4, up)
+        nape = BH.ss(0.15, -0.35, up) * BH.ss(0.05, -0.55, fwd)
+        return rel, up, fwd, top, front, nape
+
+    def length(p):
+        rel, up, fwd, top, front, nape = region(p)
+        ln = C["side"] + (C["top"] - C["side"]) * top
+        ln += (C["front"] - ln) * front
+        ln += (C["nape"] - ln) * nape
+        return ln * k
+
+    def lift(p):
+        rel, up, fwd, top, front, nape = region(p)
+        return (C["lift"] * top + (C["frontLift"] - C["lift"]) * front) * k
+
+    def dens(p):
+        rel, up, fwd, top, front, nape = region(p)
+        return C["side_dens"] + (1 - C["side_dens"]) * max(top, front * 0.8)
+
+    g = np.array([0.0, -1.0, 0.0])
+    comb = C["comb"]
+
+    def flow(p, n, jitter):
+        rel, up, fwd, top, front, nape = region(p)
+        if comb == "fwd":
+            d = _tan(p - crown, n) + np.array([0, 0, 0.9]) * top + g * 0.4 * (1 - top)
+        elif comb == "up_fwd":
+            d = np.array([0.15 * np.sign(rel[0]) * (1 - top), 0.2 * front, 1.0]) * top + (g * 0.8 + np.array([0, 0, -0.3])) * (1 - top)
+        elif comb == "quiff":
+            d = (np.array([0, 1.0, -0.35]) * front + np.array([0.0, -0.1, -1.0]) * top * (1 - front) + (g + np.array([0, 0, -0.6])) * (1 - max(top, front)))
+        elif comb == "side":
+            far = np.sign(rel[0] - part_x) != side      # the side the top is swept toward
+            if far:
+                d = np.array([-side * 1.0, -0.15, 0.35 * BH.ss(-0.02, 0.06, rel[2])]) * max(top, front) + (g + np.array([0, 0, -0.2])) * (1 - max(top, front))
+            else:
+                d = np.array([side * 0.7, -0.6, 0.0]) + g * 0.5
+        elif comb == "back":        # up off the forehead, then back over the top and down the back
+            d = np.array([0, 0.45, -1.0]) * front + np.array([0.25 * np.sign(rel[0]) * (1 - top), -0.25 - 0.5 * (1 - top), -1.0]) * (1 - front)
+        elif comb == "tousle":
+            d = _tan(p - crown, n) + np.array([0, -0.1, 0.7]) * top + g * 0.5 * (1 - top)
+        elif comb == "crown_fwd":
+            d = (p - crown) / max(np.linalg.norm(p - crown), 1e-9) + np.array([0, -0.02, 0.06 * (rel[2] > -0.04)]) + g * 0.25 * BH.ss(0.05, -0.02, rel[1])
+        elif comb == "side_fwd":
+            d = (p - crown) / max(np.linalg.norm(p - crown), 1e-9) + np.array([0.05 * side, -0.01, 0.04])
+        elif comb == "part":         # from the part line out to the sides and back (framing the face, not over it)
+            sx = np.sign(rel[0] - part_x * 0.9) or 1.0
+            d = (np.array([sx * 0.9, 0.3, -0.7]) * front
+                 + (np.array([sx * 0.8, -0.35, -0.25 + 0.4 * BH.ss(-0.02, 0.06, rel[2])]) + g * 1.2 * BH.ss(0.07, 0.0, rel[1])) * (1 - front))
+        elif comb == "gather":
+            gat = head_c + np.array([0.0, 0.05 if cut not in ("bun", "buns") else 0.085, -0.105])
+            d = (gat - p) / max(np.linalg.norm(gat - p), 1e-9)
+        elif comb in ("curl", "crown"):
+            d = (p - crown) / max(np.linalg.norm(p - crown), 1e-9) + g * 0.25 * BH.ss(0.05, -0.02, rel[1])
+        else:
+            d = g
+        t = _tan(np.asarray(d, float), n)
+        if np.linalg.norm(t) < 1e-6:
+            t = _tan(g + np.array([0, 0, -0.3]), n)
+        t = t / max(np.linalg.norm(t), 1e-9)
+        if jitter:
+            t = _rot(t, n, jitter)
+        return t
+
+    # roots: area-uniform over the hair volume, thinned where the cut is short (fades, undercuts)
+    _, _, area = _sample_tris(hP, hT, 0, rng)
+    probe, pti, _ = _sample_tris(hP, hT, 600, rng)
+    mean_len = float(np.mean([length(q) for q in probe])) if len(probe) else C["top"] * k
+    nseg_of = lambda ln: 2 if ln < 0.015 else 3 if ln < 0.045 else 4 if ln < 0.09 else 5
+    mean_seg = float(np.mean([nseg_of(length(q)) for q in probe])) if len(probe) else 3
+    n_cards = int(target / (2 * mean_seg))
+    cand, cti, _ = _sample_tris(hP, hT, n_cards * 3, rng)
+    keep = [i for i in range(len(cand)) if rng.random() < dens(cand[i]) and length(cand[i]) > 0.0075 * k]
+    keep = keep[:n_cards]
+    roots, ti = cand[keep], cti[keep]
+    # the hairline: extra fine cards rooted along the hair volume's front / side border (a soft, combed hairline
+    # instead of the volume's cut edge)
+    ecount = {}
+    for t_ in range(len(hT)):
+        for a_, b_ in ((0, 1), (1, 2), (2, 0)):
+            e_ = tuple(sorted((int(hT[t_, a_]), int(hT[t_, b_]))))
+            ecount[e_] = ecount.get(e_, 0) + 1
+    tri_of = {}
+    for t_ in range(len(hT)):
+        for a_, b_ in ((0, 1), (1, 2), (2, 0)):
+            tri_of.setdefault(tuple(sorted((int(hT[t_, a_]), int(hT[t_, b_])))), t_)
+    bedges = []
+    for e_, n_ in ecount.items():
+        if n_ != 1:
+            continue
+        m_ = (hP[e_[0]] + hP[e_[1]]) / 2
+        rel_ = m_ - head_c
+        if np.linalg.norm(rel_) < 0.14 and m_[1] > eye[1] - 0.03 and rel_[2] > -0.06:
+            bedges.append(e_)
+    nline = {6000: 170, 3200: 90, 1400: 40}[target] if bedges else 0
+    line_roots, line_ti = [], []
+    for _ in range(nline):
+        e_ = bedges[int(rng.integers(0, len(bedges)))]
+        t_ = tri_of[e_]
+        q_ = hP[e_[0]] + (hP[e_[1]] - hP[e_[0]]) * rng.random()
+        cen_ = hP[hT[t_]].mean(0)
+        q_ = q_ + (cen_ - q_) * rng.uniform(0.15, 0.6)
+        line_roots.append(q_)
+        line_ti.append(t_)
+    n_line = len(line_roots)
+    if n_line:
+        roots = np.concatenate([np.array(line_roots), roots])
+        ti = np.concatenate([np.array(line_ti, int), ti])
+    hy = head_c[1]
+    cards = []
+    for ci in range(len(roots)):
+        at_line = ci < n_line
+        p = roots[ci].copy()
+        si, _ = surf.near(p)
+        n = surf.N[si]
+        if cover is not None:      # under a cap / helmet / hood: hidden, and a card would poke through
+            qi, qd = cover.near(p)
+            if qd < 0.035 and (cover.P[qi] - p) @ n > -0.002:
+                continue
+        ln = length(p) * rng.uniform(0.75, 1.2)
+        if at_line:       # short combed hairs along the hairline: they lie in the comb's direction, never hang
+            ln = min(ln * rng.uniform(0.35, 0.7), 0.028 * k * rng.uniform(0.6, 1.0))
+        if ln < 0.008 * k:          # clipper-short (fade sides, nape): the painted scalp carries it, a card reads as a dash
+            continue
+        nseg = nseg_of(ln)
+        ds = ln / nseg
+        # short hair holds its shape, long hair hangs; styled cuts (quiff, slick, side-swept) hold it with product
+        stiff = max(float(np.clip((0.065 * k - ln) / (0.045 * k), 0, 1)), C.get("stiff", 0.0) * float(np.clip((0.16 * k - ln) / (0.08 * k), 0, 1)))
+        if at_line:
+            stiff = 1.0
+        wisp = rng.random() < (0.6 if at_line else C["wisp"])
+        jit = rng.normal(0, 0.35 if comb == "tousle" else 0.12)
+        d = flow(p, n, jit)
+        h0 = rng.uniform(0.0003, 0.0008) if at_line else rng.uniform(0.0006, 0.0018)
+        hl = lift(p) * rng.uniform(0.6, 1.3)
+        amp, lam = C["wave"], max(0.012, ln * 0.6) if comb != "curl" else 0.012
+        ph = rng.uniform(0, 6.283)
+        pts, nrm = [p + n * h0], [n]
+        off_edge = False
+        for kk in range(1, nseg + 1):
+            t = kk / nseg
+            ang = amp * math.sin(6.283 * (kk * ds) / lam + ph) * (0.4 + 0.6 * t)
+            dk = _rot(d, n, ang * (0.35 if comb != "curl" else 1.0))
+            q = pts[-1] + dk * ds
+            si, dist = surf.near(q)
+            s0, sn = surf.P[si], surf.N[si]
+            tang = q - s0 - sn * ((q - s0) @ sn)
+            h = h0 + hl * t ** 1.1 + (0.002 * t if wisp else 0.0)
+            if np.linalg.norm(tang) < 0.012 and not off_edge:
+                q = q - sn * ((q - s0) @ sn - h)
+                n = sn
+            else:                                    # past the volume's edge: long hair falls, short hair stands
+                off_edge = True
+                fall = 1 - stiff
+                dd = d * (1 - 0.5 * fall) + g * 0.9 * t * fall + n * 0.35 * stiff
+                if comb in ("part", "gather", "back", "side", "down") and q[2] > eye[2] - 0.03 and abs(q[0] - eye[0]) < 0.06:
+                    dd = dd + np.array([np.sign(q[0] - eye[0]) or 1.0, 0.0, -0.3]) * 0.9 * fall     # long hair falls beside the face
+                q = pts[-1] + dd / max(np.linalg.norm(dd), 1e-9) * ds
+            if q[2] > eye[2] - 0.035 and abs(q[0] - eye[0]) < 0.07 and q[1] < eye[1] + 0.017:     # never past the brows
+                q[1] = eye[1] + 0.017
+            ki, kd = coll.near(q)
+            kp, kn = coll.P[ki], coll.N[ki]
+            hh = (q - kp) @ kn
+            if hh < 0.0022:
+                q = q + kn * (0.0022 - hh)
+            if cover is not None:
+                qi, qd = cover.near(q)
+                if qd < 0.006:
+                    q = q + cover.N[qi] * (0.006 - qd)
+            pts.append(q)
+            nrm.append(n)
+            dn = q - pts[-2]
+            dn = dn / max(np.linalg.norm(dn), 1e-9)
+            d = _tan(0.65 * dn + 0.35 * flow(q, n, jit), n)
+            d = d / max(np.linalg.norm(d), 1e-9)
+        pts = np.array(pts)
+        nrm = np.array(nrm)
+        # shading normals: half the volume's normal, half the head's centre-out direction (a soft, rounded light, no
+        # card-by-card facets)
+        radial = pts - head_c
+        radial /= np.maximum(np.linalg.norm(radial, axis=1, keepdims=True), 1e-9)
+        nrm = nrm * 0.55 + radial * 0.45
+        nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-9)
+        w0 = C["W"] * rng.uniform(0.8, 1.25) * k * (0.6 if wisp else 1.15 if off_edge else 1.0) * (0.7 if at_line else 1.0)
+        width = w0 * (1 - 0.4 * np.linspace(0, 1, len(pts)) ** 1.2)
+        if off_edge and not wisp and comb != "curl":
+            column = int(rng.integers(0, 3))
+        elif wisp:
+            column = 4 + int(rng.integers(0, 2))
+        elif comb == "curl":
+            column = 6
+        elif ln < 0.03 * k:
+            column = 3 if rng.random() < 0.35 else int(rng.integers(0, 3))
+        else:
+            column = int(rng.integers(0, 3)) if rng.random() < 0.8 else 3
+        imp = (2.0 if (off_edge or wisp) else 1.0) + rng.random()
+        v = rng.normal(1.0, 0.06)
+        root = hc * 0.62 * v
+        tip = hc * rng.uniform(0.95, 1.08) * v
+        if grey and rng.random() < 0.18:
+            kq = rng.uniform(0.7, 0.88)
+            root, tip = root * kq, tip * kq
+        W = hW[hT[ti[ci], 0]]
+        cards.append((pts, nrm, width, column, root, tip, W, imp))
+    for cd in cards:
+        K.ribbon(*cd, kind=0)
+    return len(cards)
 
 
 def hair_cards(c, B, cov, parts, ex):
@@ -643,7 +1105,9 @@ def hair_cards(c, B, cov, parts, ex):
         qP, qN, _, _ = _obj_surface(covers)
         cover = _Surf(qP, qN)
     n_cards = 0
-    if hair_objs and style in STYLE:
+    if hair_objs and (c.get("hairCut") or style) in CUTS and os.environ.get("CARDS_V1") != "1":
+        n_cards = _cut_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey)
+    elif hair_objs and style in STYLE:
         S = STYLE[style]
         hP, hN, hT, hW = _obj_surface(hair_objs)
         surf = _Surf(hP, hN)
@@ -765,11 +1229,11 @@ def hair_cards(c, B, cov, parts, ex):
         n_cards = len(cards)
     # ---- lashes: strips on the lid margins from MakeHuman's lash helpers (root at the lid, tip outward)
     _, _, F = mh.base()
-    brow_c = BH.lin(BH.hexc(c.get("browColor", c.get("hairColor", "2e2119"))))
-    lash_c = brow_c * 0.25 + 0.004
+    brow_c = BH.lin(hair_floor(BH.hexc(c.get("browColor", c.get("hairColor", "2e2119"))), 0.12))
+    lash_c = brow_c * 0.35 + 0.002
     for s, e in (("l", L.eyeL), ("r", L.eyeR)):
         S_ = s.upper()
-        for grp, bone, scale, alpha in ((f"helper-{s}-eyelashes-2", "lid_" + S_, 1.0, 1.0), (f"helper-{s}-eyelashes-1", "lidlo_" + S_, 0.55, 0.7)):
+        for grp, bone, scale, alpha in ((f"helper-{s}-eyelashes-2", "lid_" + S_, 1.0, 1.0), (f"helper-{s}-eyelashes-1", "lidlo_" + S_, 0.42, 0.4)):
             vs = mh.group_vertices(grp)
             if not vs:
                 continue
@@ -798,20 +1262,28 @@ def hair_cards(c, B, cov, parts, ex):
             lens = np.linalg.norm(tipd, axis=1)
             tipd = tipd / np.maximum(lens[:, None], 1e-9)
             taper = np.sin(np.linspace(0.15, 1.0, k) * math.pi * 0.98) ** 0.6
-            Ltip = (0.0085 if bone.startswith("lid_") else 0.0045) * scale * taper * B.H / 1.75 / 1.0
-            # curl: the tip turns up (upper) / down (lower)
+            fem = c["macro"].get("gender", 0.5) < 0.5
+            Ltip = (0.0074 if bone.startswith("lid_") else 0.0034) * scale * taper * B.H / 1.75 * (1.15 if fem else 1.0) * float(c.get("lashLen", 1.0))
+            # three rows (root, middle, tip): the lashes leave the lid along it, then curl up (upper) / down (lower)
             up = np.array([0, 1.0 if bone.startswith("lid_") else -1.0, 0])
-            tip = rts + tipd * Ltip[:, None] * 0.75 + up * Ltip[:, None] * 0.45
+            midp = rts + tipd * Ltip[:, None] * 0.5 + up * Ltip[:, None] * 0.08
+            tip = rts + tipd * Ltip[:, None] * 0.85 + up * Ltip[:, None] * 0.32
             base = sum(len(x) for x in K.v)
             vs_, ns_, uv_, cs_, ts_ = [], [], [], [], []
+            rows3 = (rts - tipd * 0.0004, midp, tip)
             for i in range(k):
-                for j, p in enumerate((rts[i] - tipd[i] * 0.0004, tip[i])):
+                for j, P_ in enumerate(rows3):
+                    p = P_[i]
                     vs_.append(p)
                     ns_.append(out_n[i])
-                    uv_.append(((7 + 0.05 + 0.9 * i / (k - 1)) / HT_COLS, 1.0 - (0.02 + 0.96 * j)))
-                    cs_.append(lash_c * (0.8 + 0.4 * j) * alpha)
+                    uv_.append(((7 + 0.03 + 0.94 * i / (k - 1)) / HT_COLS, 1.0 - (0.02 + 0.96 * j / 2)))
+                    cs_.append(lash_c * (0.8 + 0.25 * j) * alpha)
                     ts_.append(tipd[i])
-            faces = [[base + 2 * i, base + 2 * i + 2, base + 2 * i + 3, base + 2 * i + 1] for i in range(k - 1)]
+            faces = []
+            for i in range(k - 1):
+                for j in range(2):
+                    a0 = base + 3 * i + j
+                    faces.append([a0, a0 + 3, a0 + 4, a0 + 1])
             K.v.append(np.array(vs_))
             K.n.append(np.array(ns_))
             K.uv += uv_
@@ -827,30 +1299,33 @@ def hair_cards(c, B, cov, parts, ex):
     bt = c.get("browThick", 0.5)
     male = c["macro"].get("gender", 0.5) >= 0.5
     skin = _Surf(body_skin, body_n)
+    def on_skin(q, lift=0.0):
+        si_, _ = skin.near(q)
+        n_ = skin.N[si_]
+        return q - n_ * ((q - skin.P[si_]) @ n_ - lift), n_
+    nb = {2: 140, 1: 70, 0: 26}[tier]
     for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
-        nb = 7 if tier > 0 else 5
+        # fine hair cards rooted over the brow's band, each along the growth direction of its part of the brow (inner
+        # hairs up, the body outward, the tail outward and down; the upper rows lie a little downward)
         for i in range(nb):
-            tk = (i + 0.5) / nb
+            tk = float(rng.random() ** 0.85)
+            nn_ = float(rng.random())
             bx = -0.0185 + 0.047 * tk
             by = np.interp(tk, [0, 0.35, 0.68, 1.0], [0.0150, 0.0182, 0.0198, 0.0150]) + c.get("browLift", 0.0)
             bw = np.interp(tk, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt)
-            ang = math.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [78, 52, 16, -14]))
-            p0 = e + np.array([bx * sg, by + bw * 0.25, 0.03])
-            # project onto the skin from the front
-            si, _ = skin.near(p0)
-            for _ in range(3):
-                p0 = skin.P[si] + skin.N[si] * 0.0009
-                si, _ = skin.near(p0)
-            n = skin.N[si]
+            ang = math.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [78, 52, 16, -14]) + rng.normal(0, 7) - 12 * (nn_ - 0.5))
+            p0, n = on_skin(e + np.array([bx * sg, by + nn_ * bw, 0.03]), 0.0004)
+            for _ in range(2):
+                p0, n = on_skin(p0, 0.0004)
             d = _tan(np.array([math.cos(ang) * sg, math.sin(ang), 0.0]), n)
             d /= max(np.linalg.norm(d), 1e-9)
-            ln = 0.0075 * (0.9 + 0.2 * rng.random())
-            pts = [p0 - d * ln * 0.45, p0, p0 + d * ln * 0.55]
-            pts = [skin.P[skin.near(q)[0]] + skin.N[skin.near(q)[0]] * 0.0009 for q in pts]
-            pts = np.array(pts)
+            ln = float(np.interp(tk, [0, 0.4, 1.0], [0.0050, 0.0064, 0.0046]) * rng.uniform(0.85, 1.2))
+            pts = np.array([on_skin(p0 + d * ln * f, 0.0004 + 0.0005 * f)[0] for f in (0.0, 0.5, 1.0)])
             nr = np.repeat(n[None], 3, 0)
-            col = brow_c * (0.9 + 0.2 * rng.random())
-            K.ribbon(pts, nr, np.full(3, max(bw * 1.6, 0.004)), 7, col * 0.85, col, np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5, fine="@split", kind=2)
+            col = brow_c * (0.85 + 0.3 * rng.random())
+            u0 = float(rng.uniform(0.04, 0.9))
+            K.ribbon(pts, nr, np.array([0.00045, 0.0004, 0.00028]) * (1.1 if male else 0.95), 7, col * 0.85, col * 1.05, np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5,
+                     fine="@split", u0=u0, u1=u0 + 0.035, kind=2)
     # ---- beard: short cards pointing down the jaw and chin over the painted beard
     brd = c.get("beard", 0.0)
     if brd >= 0.5:
@@ -940,6 +1415,25 @@ def _seg_dist(P, a, b):
     ab = b - a
     t = np.clip((P - a) @ ab / max(ab @ ab, 1e-12), 0, 1)
     return np.linalg.norm(P - (a + t[:, None] * ab), axis=1), t
+
+
+def natural_skin(rgb):
+    """Hero pipeline: the cast's skin hex -> a natural skin albedo (sRGB 0..1). Real skin sits in a narrow hue band
+    (about 14-27 degrees: blood red to melanin brown) at a moderate chroma that grows a little in deeper tones; the cast
+    hexes ran to orange and yellow (hue 30+, chroma 0.5) and read as an orange cast under the warm key and ACES. The
+    value (lightness) and therefore the heritage tone are kept; only hue and chroma are brought into the band."""
+    import colorsys
+    r, g, b = (float(x) for x in rgb)
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    hd = h * 360
+    if hd > 180:
+        hd -= 360
+    if hd > 24:
+        hd = 24 + (hd - 24) * 0.4
+    elif hd < 14:
+        hd = 14 - (14 - hd) * 0.5
+    s = min(s * 0.92, 0.30 + 0.26 * (1 - v))
+    return np.array(colorsys.hsv_to_rgb((hd % 360) / 360, s, v))
 
 
 def paint_skin(c, B, pos, part, col, isface, seed):
@@ -1064,7 +1558,7 @@ def inner_mouth(c, B, pos, part, col):
     depth = L.lip_z - pos[m, 2]
     inner = np.array([0.55, 0.26, 0.25])
     dark = np.array([0.05, 0.018, 0.018])
-    k = BH.ss(0.003, 0.022, depth)[:, None]
+    k = BH.ss(0.0015, 0.012, depth)[:, None]
     col[m] = col[m] * BH.ss(0.006, 0.0, depth)[:, None] * 0.5 + (inner * (1 - k) + dark * k) * (1 - BH.ss(0.006, 0.0, depth)[:, None] * 0.5)
     return col
 

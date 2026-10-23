@@ -20,7 +20,12 @@ candidate set instead (its solved heights go to `/other/folder/_heights.json`), 
 - `macro`: face-relevant macro terms only (`proportions muscle weight caucasian african asian`; the ancestry mix is
   renormalised). Sex, age and height stay the entry's (height is re-solved for `metres`).
 - look keys: `skin lip eyes irisR pupilR browColor browLift browThick stubble beard beardColor blush freckles scars
-  hair hairLen hairColor hairDrop locs locLen`; `null` unsets one.
+  hair hairLen hairColor hairDrop locs locLen hairPart lashLen`; `null` unsets one.
+- `hair` picks a cut from the library (`look2.CUTS`, docs/CHARACTER_LOOK.md "Faces: hero pipeline"): `crop`
+  (textured crop), `fade` (skin fade, textured top), `quiff` (modern quiff), `sideswept`, `swept` / `slick`
+  (swept-back), `tousled` (tousled medium), `short`, `undercut`, `waves`, `pixie`, `bob`, `long`, `pony`, `bun`,
+  `braid` / `braids`, `curls`, `puffs`, `locs`. `hairPart`: `left` / `right` (side-swept cuts and parts);
+  `lashLen`: lash length factor (1 = default; women get 1.15 on top).
 
 Check a set before it ships:
 

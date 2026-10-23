@@ -173,6 +173,9 @@ function patch(sh, U, tier, dbg, far = false) {
   sh.defines.AZ_HAIRK = on('hair') ? '0.88' : '0.0';
   if (on('eyes') && U.azEyeC.value.z > 0 && !far) sh.defines.AZ_EYES = 1;
   if (U.azV2) sh.defines.AZ_EYEBONE = 1;      // look v2 builds: real eye, lid and jaw bones (src/human/rig2.js)
+  // hero pipeline: people with strand cards (rig2.js) wear the hair volume as the dark layer under the cards: finer
+  // baby hairs at its edge, fainter streaks, a soft sheen (the cards carry the strand highlights)
+  if (U.azCards) { sh.defines.AZ_CARDS = 1; sh.defines.AZ_HAIRK = on('hair') ? '0.4' : '0.0'; }
   if (far) sh.defines.AZ_FAR = 1;
   if (on('skin')) sh.defines.AZ_SKIN = 1;
   if (on('pores') && T > 0) sh.defines.AZ_PORES = 1;
@@ -319,18 +322,29 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	#ifndef AZ_FAR
 		if ( AZ_HAIRK > 0.0 && azHair > 0.5 ) {
 			// clumps of strands (~4 mm): the normal rolls across each clump, so the highlight breaks into strands
+		#ifdef AZ_CARDS
+			float azSx = azTh * 110.0 + 0.35 * sin( azAl * 1.3 ), azId = floor( azSx ), azFr = fract( azSx );
+		#else
 			float azSx = azTh * 40.0 + 0.35 * sin( azAl * 1.3 ), azId = floor( azSx ), azFr = fract( azSx );
+		#endif
 			float azRn = fract( sin( azId * 12.9898 + 78.233 ) * 43758.5453 );
 			float azCk = 1.0 - smoothstep( 0.35, 0.9, fwidth( azSx ) );
 			azTilt = ( azFr - 0.5 ) * 1.1 * azCk;
 			diffuseColor.rgb *= 1.0 + ( azRn - 0.5 ) * 0.22 * azCk;
 			// frayed tips: near the shell's edge each clump ends at its own length and tapers to a point
 			float azBd = vAzFace.x * 0.03, azW = abs( azFr - 0.5 ) * 2.0;
+		#ifdef AZ_CARDS
+			if ( azBd < 0.007 * azRn * ( 0.2 + 0.8 * azW ) * azCk + 0.0015 * azW * azCk ) discard;
+		#else
 			if ( azBd < 0.014 * azRn * ( 0.2 + 0.8 * azW ) * azCk + 0.0025 * azW * azCk ) discard;
+		#endif
 		}
 	#endif
 	#endif
 		azShift = azV * 0.08 + azN * 0.12; azSparkle = 0.45 + 0.9 * smoothstep( -0.6, 0.8, azN + azV * 0.5 );
+	#ifdef AZ_CARDS
+		azN *= 0.45;
+	#endif
 		diffuseColor.rgb *= 1.0 + 0.16 * azN * azHair;
 		diffuseColor.rgb *= mix( 1.0, mix( 0.74, 1.14, vAzHairT.w ), azHair );
 	}`);
@@ -452,7 +466,7 @@ function lookMaterial(src, U, info, far = false) {
   const m = src.clone();
   m.userData = { ...src.userData, azSkin: true, azLook: true, azFar: far };
   const tierKey = () => { const t = TIER[tierName()] ?? 1; return t; };
-  m.customProgramCacheKey = () => 'azlook' + tierKey() + '|' + [...look.off].join('') + look.dbg + (U.azEyeC.value.z > 0 && !far ? 'e' : '') + (far ? 'f' : '') + (U.azV2 ? 'b' : '');
+  m.customProgramCacheKey = () => 'azlook' + tierKey() + '|' + [...look.off].join('') + look.dbg + (U.azEyeC.value.z > 0 && !far ? 'e' : '') + (far ? 'f' : '') + (U.azV2 ? 'b' : '') + (U.azCards ? 'c' : '');
   m.onBeforeCompile = sh => {
     const t = tierKey();
     if (t > 0 && (on('pores') || on('cloth'))) { detailMaps ??= makeDetailMaps(); U.azPoreMap = { value: detailMaps.pores }; U.azWeaveMap = { value: detailMaps.weave }; }
@@ -571,6 +585,7 @@ function applyLook(h, seed, atlas, main, info) {
     azCrown: { value: new THREE.Vector4(Fc.M[0], Fc.M[1] + 2.3 * Fc.u, Fc.M[2] - 1.5 * Fc.u, 0) },
   };
   if (h.rig2 && h.rig2.face) Object.defineProperty(U, 'azV2', { value: true, enumerable: false });
+  if (h.rig2 && h.rig2.cards) Object.defineProperty(U, 'azCards', { value: true, enumerable: false });
   if (age == null) ageWait.push(() => { const a = AGES[h.id]?.age; if (a != null) U.azLook.value.x = Math.max(0, Math.min(1, (a - 22) / 50)); });
   const mats = new Map(), swaps = [];
   const pick = (m, far) => { const k = far ? 'f' : 'n'; let e = mats.get(m); if (!e) mats.set(m, e = {}); return e[k] || (e[k] = lookMaterial(m, U, info, far)); };

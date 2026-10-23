@@ -17,7 +17,7 @@ set -e
 NAME=$1; shift || true
 [ -z "$NAME" ] && { sed -n 2,16p "$0"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/../.." && pwd)
+ROOT=${REPO_ROOT:-$(cd "$HERE/../.." && pwd)}
 FACE_STAGE=${FACE_STAGE:-/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/faces/stage}
 FACE_PORT=${FACE_PORT:-8793}
 MH_DATA=${MH_DATA:-/home/user/tools/mh/makehuman/data}
@@ -41,7 +41,7 @@ if [ $BUILD = 1 ]; then
   export GT_MODS=${GT_MODS:-$(dirname "$(dirname "$(ls -d ~/.npm/_npx/*/node_modules/@gltf-transform/core | head -1)")")}
   rm -rf "$D/pack"
   (cd "$HERE" && nice -n 5 node pack_cast2.mjs "$D/raw/cast.glb" "$D/pack" > "$D/pack.log" 2>&1) || { tail -20 "$D/pack.log"; exit 1; }
-  rm -f "$D/raw/cast.glb"          # the raw export is large; the pack is what the game loads
+  [ -n "$KEEP_RAW" ] || rm -f "$D/raw/cast.glb"          # the raw export is large; the pack is what the game loads
   BASE=$D/pack
 fi
 [ -z "$BASE" ] && BASE=$D/pack

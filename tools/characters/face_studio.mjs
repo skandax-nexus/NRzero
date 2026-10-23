@@ -25,9 +25,10 @@ const b = await chromium.launch({ channel: 'chromium', args: ['--use-gl=angle', 
 const p = await (await b.newContext({ viewport: { width: 320, height: 200 } })).newPage();
 p.on('pageerror', e => console.log('PAGEERROR', e.message));
 p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text().slice(0, 300)); });
-await p.goto('http://localhost:8765/tools/cast.html?ids=' + ids[0] + '&cols=1&base=' + encodeURIComponent(base));
+await p.goto((process.env.WEB || 'http://localhost:8765') + '/tools/cast.html?' + (process.env.QUERY ? process.env.QUERY + '&' : '') + 'ids=' + ids[0] + '&cols=1&base=' + encodeURIComponent(base));
 await p.waitForFunction('window.LAB_DONE === true', null, { timeout: 600000, polling: 500 });
-await p.evaluate(async (S) => {
+await p.evaluate(async (O) => {
+  const S = O.size;
   const THREE = await import('three');
   const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
   const C = await import('/src/human/cast3d.js');
@@ -100,18 +101,27 @@ await p.evaluate(async (S) => {
     },
     shot(view, light) {
       LIGHTS[light]();
-      const az = { front: 0, three: 0.61, profile: Math.PI / 2 }[view];
-      const tgt = this.eyes.clone().add(new THREE.Vector3(0, -0.015, 0));
-      const d = 0.72;
+      // close / closethree: an eye-to-mouth close-up (the dialogue close-up of a premium story game)
+      const az = { front: 0, three: 0.61, profile: Math.PI / 2, close: 0, closethree: 0.5 }[view];
+      const tgt = this.eyes.clone().add(new THREE.Vector3(0, /^close/.test(view) ? -0.03 : -0.015, 0));
+      const d = /^close/.test(view) ? 0.36 : 0.72;
       cam.position.set(tgt.x + Math.sin(az) * d, tgt.y + 0.01, tgt.z + Math.cos(az) * d); cam.lookAt(tgt);
       for (const k of ['key', 'fill', 'rim']) {      // lights are placed relative to the face (the person faces +z)
         const [x, y, z] = L[k].userData.rel; L[k].position.set(tgt.x + x, tgt.y + y, tgt.z + z); L[k].target.position.copy(tgt);
       }
       r.render(scene, cam);
+      // look v2 runtime parts that follow the camera (hair card distance tiers, the soft hair pass): settle, redraw
+      if (this.cur.rig2 && this.cur.rig2.update) {
+        // EXPR (e.g. jaw=0.6,smile=0.4): a held expression on the face bones, to check the teeth and mouth interior
+        if (O.expr && this.cur.rig2.face) for (const kv of O.expr.split(',')) { const [k, v] = kv.split('='); this.cur.rig2.face.want[k] = +v; }
+        this.cur.rig2.update(0);
+        if (O.expr && this.cur.rig2.face) { this.cur.rig2.face.apply(); this.cur.root.updateMatrixWorld(true); }
+        r.render(scene, cam);
+      }
       return r.domElement.toDataURL('image/png');
     },
   };
-}, size);
+}, { size, expr: process.env.EXPR || '' });
 const meta = {};
 for (const id of ids) {
   const t0 = Date.now();
