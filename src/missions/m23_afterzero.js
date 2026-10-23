@@ -241,7 +241,8 @@ export default {
         const [x, z] = ZC[p.zone]; p.ch.root.visible = st && Math.hypot(cam.x - x, cam.z - z) < 60;
       }
     };
-    let vT = 0; game.onUpdate(dt => { vT -= dt; if (vT <= 0) { vT = 0.5; refreshVis(); } });
+    // every 0.5 s, and at once when a cutscene ends (its wider zone radius must not linger into play)
+    let vT = 0, wasCine = false; game.onUpdate(dt => { vT -= dt; const c = !!game.cine; if (vT <= 0 || (wasCine && !c)) { vT = 0.5; refreshVis(); } wasCine = c; });
 
     // ---------- switching rules: never into something solid, never onto nothing ----------
     const solidAt = (id) => {

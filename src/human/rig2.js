@@ -65,6 +65,8 @@ function cardMaterial(src, tier, pass = 0) {
 	azcRoot = mix( 0.55, 1.0, smoothstep( 0.0, 0.5, vMapUv.y ) );
 	diffuseColor.rgb = vHCol * ( 0.6 + 0.4 * azLum ) * ( 0.84 + 0.16 * azT.b ) * azcRoot;
 	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.65 + 0.6 * azT.g ) * azLum * azcRoot;
+	// brows and lashes carry no strand tangent (look2.py, MATTE_FINE): matte fine hairs, no sheen stripes
+	azcSpark *= smoothstep( 0.02, 0.08, length( vHTan ) );
 	{ vec2 azSz = vec2( textureSize( map, 0 ) );
 	  vec2 azDx = dFdx( vMapUv * azSz ), azDy = dFdy( vMapUv * azSz );
 	  float azMip = max( 0.0, 0.5 * log2( max( dot( azDx, azDx ), dot( azDy, azDy ) ) ) );

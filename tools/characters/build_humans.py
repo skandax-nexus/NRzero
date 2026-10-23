@@ -452,6 +452,48 @@ def _profile(x, y, fn, n=9):
     return np.array(xs), np.array(ys)
 
 
+def _rim_chains(P, F, part, lv):
+    """The mouth opening (the border between the face and the inner-mouth parts of the base mesh) as a loop, split at
+    its two corners (extreme x) into the upper and the lower rim: MH vertex index lists (corners in both), or (None, None)
+    when the loop is not clean. The two rims run within a millimetre of each other, so only the topology tells them apart."""
+    lvs = set(lv)
+    ef, em = set(), set()
+    for fi, (vs, _, _) in enumerate(F):
+        k = part.get(fi)
+        if k not in ("face", "mouth"):
+            continue
+        for i in range(len(vs)):
+            a, b = vs[i], vs[(i + 1) % len(vs)]
+            if a in lvs and b in lvs:
+                (ef if k == "face" else em).add((min(a, b), max(a, b)))
+    edges = ef & em
+    nb = {v: [] for v in lvs}
+    for a, b in edges:
+        nb[a].append(b)
+        nb[b].append(a)
+    if not lv or any(len(x) != 2 for x in nb.values()):
+        return None, None
+    loop = [lv[0]]
+    prev = None
+    while True:
+        cur = loop[-1]
+        nxt = [u for u in nb[cur] if u != prev]
+        if not nxt or nxt[0] == loop[0]:
+            break
+        prev = cur
+        loop.append(nxt[0])
+    if len(loop) != len(lv):
+        return None, None
+    x = P[loop, 0]
+    i0, i1 = int(np.argmin(x)), int(np.argmax(x))
+    a, b = min(i0, i1), max(i0, i1)
+    c1 = loop[a:b + 1]
+    c2 = loop[b:] + loop[:a + 1]
+    if P[c1, 1].mean() >= P[c2, 1].mean():
+        return c1, c2
+    return c2, c1
+
+
 class Landmarks:
     def __init__(self, P):
         self.eyeL = P[mh.group_vertices("helper-l-eye")].mean(axis=0)
@@ -475,6 +517,7 @@ class Landmarks:
         for fi, k in lay["part"].items():
             (fv if k == "face" else mv if k == "mouth" else set()).update(F[fi][0])
         lv = sorted(fv & mv)
+        self.rim_up, self.rim_lo = _rim_chains(P, F, lay["part"], lv)
         q = P[lv]
         self.lip_cx = 0.0
         self.lip_w = (q[:, 0].max() - q[:, 0].min()) / 2
@@ -1225,7 +1268,7 @@ def paint(c, B, cov, res, path_out):
         tt = np.clip(((X[:, None] - rx[None]) * sx[None] + (Y[:, None] - ry[None]) * sy[None]) / L2[None], 0, 1)
         dd = np.hypot(X[:, None] - (rx[None] + tt * sx[None]), Y[:, None] - (ry[None] + tt * sy[None]))
         cvg = np.clip(1 - dd / (wd[None] * (1.15 - 0.55 * tt)), 0, 1)
-        alpha = 1 - np.prod(1 - (0.55 if look2.ON else 0.7) * cvg, axis=1)     # v2: brow hair cards lie on top
+        alpha = 1 - np.prod(1 - (0.38 if look2.ON else 0.7) * cvg, axis=1)     # v2: brow hair cards lie on top (proto:makehuman 0.55 -> 0.38)
         # soft base tint under the strokes
         cbx, cby, cbw = T(np.clip((X + 0.0185) / 0.047, 0, 1))
         inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(-0.0205, -0.0165, X) * ss(0.0305, 0.0275, X)
@@ -2385,7 +2428,12 @@ def build(c, tex_dir):
             if hexc(c.get("hairColor", "2e2119")).mean() > 0.42:            # light hair shows every ridge: softer clumps
                 clumps = clumps * 0.45
             relief = costume.hair_relief(style, rel, seed)
-            offset_layer(Lh, B, 0.0004 + (vol * (shape + 0.45 * clumps) + relief) * ss(0.0, 0.03, Lh.cov))
+            if look2.ON and look2.hero_cut(c) and os.environ.get("HERO_HAIR") != "0":
+                # proto:makehuman hero cuts: the shell is the inner share of the cut's sculpted volume (look2.hero_T)
+                Th = look2.hero_T(c, rel, 0.024 * (1 if c.get("hairPart", "left") == "left" else -1)) * H / 1.75
+                offset_layer(Lh, B, 0.0004 + (look2.HERO_SHELL * Th * (1 + 0.12 * clumps)) * ss(0.0, look2.hero_ramp(c), Lh.cov))
+            else:
+                offset_layer(Lh, B, 0.0004 + (vol * (shape + 0.45 * clumps) + relief) * ss(0.0, 0.03, Lh.cov))
             taubin(Lh, 2, pin=Lh.cov <= 0.0005)
             Lh.mask[:, 2] = 1
             layers["hair"] = Lh

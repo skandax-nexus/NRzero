@@ -102,10 +102,13 @@ await p.evaluate(async (O) => {
     shot(view, light) {
       LIGHTS[light]();
       // close / closethree: an eye-to-mouth close-up (the dialogue close-up of a premium story game)
-      const az = { front: 0, three: 0.61, profile: Math.PI / 2, close: 0, closethree: 0.5 }[view];
-      const tgt = this.eyes.clone().add(new THREE.Vector3(0, /^close/.test(view) ? -0.03 : -0.015, 0));
-      const d = /^close/.test(view) ? 0.36 : 0.72;
-      cam.position.set(tgt.x + Math.sin(az) * d, tgt.y + 0.01, tgt.z + Math.cos(az) * d); cam.lookAt(tgt);
+      // mouth: a macro of the mouth (teeth, lips); hair: the cut from above the brow (three-quarter, a little high)
+      const az = { front: 0, three: 0.61, profile: Math.PI / 2, close: 0, closethree: 0.5, mouth: 0.3, hair: 0.7, back: Math.PI * 0.8 }[view];
+      const dy = { mouth: -0.072, hair: 0.04, back: 0.02 }[view] ?? (/^close/.test(view) ? -0.03 : -0.015);
+      const tgt = this.eyes.clone().add(new THREE.Vector3(0, dy, 0));
+      const d = { mouth: 0.17, hair: 0.62, back: 0.72 }[view] ?? (/^close/.test(view) ? 0.36 : 0.72);
+      const up = { hair: 0.22 }[view] ?? 0.01;
+      cam.position.set(tgt.x + Math.sin(az) * d, tgt.y + up, tgt.z + Math.cos(az) * d); cam.lookAt(tgt);
       for (const k of ['key', 'fill', 'rim']) {      // lights are placed relative to the face (the person faces +z)
         const [x, y, z] = L[k].userData.rel; L[k].position.set(tgt.x + x, tgt.y + y, tgt.z + z); L[k].target.position.copy(tgt);
       }
