@@ -113,7 +113,7 @@ export function registerM22Cast() {
   registerCast('m22wband', { name: 'THE WITNESS\'S BAND', role: '1,046 notches', voice: true, vp: { sex: 'f', pitch: 0.98, rate: 1.0, langs: ['en-GB', 'en-US'] } });
   registerCast('m22echo', { name: 'THE WITNESS · ECHO', role: 'Residue · an earlier attempt', portraitOf: 'witness', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.86, langs: ['en-GB', 'en-US'] } });
   registerCast('m22keeper', { name: 'KEEPER', role: 'The valley · c. 1000 BCE', look: { ...KEEPERS[2], lod: false }, vp: { sex: 'm', pitch: 0.82, rate: 0.9, langs: ['en-GB', 'en-IE'] } });
-  registerCast('m22pa', { name: 'CENTRAL STATION PA', role: 'Rain City · 08:14 · 2049', voice: true, vp: { sex: 'm', pitch: 0.72, rate: 0.86, langs: ['en-GB', 'en-US'] } });
+  registerCast('m22pa', { name: 'CENTRAL STATION PA', role: 'Rain City · 08:14 · 2049', voice: true, vp: { sex: 'm', pitch: 0.45, rate: 0.78, langs: ['en-GB', 'en-US'] } });  // the same distorted 'voice' as M1's warning
   registerCast('m22nurse', { name: 'NIGHT NURSE · ECHO', role: 'Halden General · Ward 4', voice: true, vp: { sex: 'f', pitch: 1.04, rate: 0.98, langs: ['en-GB', 'en-US'] } });
 }
 
@@ -155,7 +155,7 @@ export function registerM22Themes() {
     if (b === 0) a.pad(ch, t, d * 16, 0.016, 420);
     if (b === 12) a.pad([ch[3] + 12], t, d * 4, 0.01, 900);
     if (b === 0 || b === 8) a.tick(t, 0.02, 1800);
-    if (bar % 2 === 1 && (b === 2 || b === 6 || b === 10)) a.piano([76, 71, 69][(b - 2) / 4], t, 0.018 + 0.006 * musicState.latched, 2.4);
+    if (bar % 2 === 1 && (b === 2 || b === 6 || b === 10)) a.piano([64, 71, 69][(b - 2) / 4], t, 0.018 + 0.006 * musicState.latched, 2.4);
     if (b === 14 && bar % 4 === 3) a.glass(88, t, 0.006);
   } });
   registerTheme('m22-evidence', { bpm: 66, step(a, s, t, d) {

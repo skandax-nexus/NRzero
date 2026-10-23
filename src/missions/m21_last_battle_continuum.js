@@ -947,7 +947,7 @@ export default {
       faceEach(kai, witness);
       await game.shot([3.2, 1.8, -86.0], [witness.root.position.x, 1.6, -90.4], 1.8, { fov: 40 });
       await convo(witness, [
-        ['witness', 'Enough. I have had this fight with you in nineteen worlds. I win it when I want to.'],
+        ['witness', 'Enough. I have had this fight with you in sixteen worlds. I win it when I want to.'],
         ['kai', 'You let the Continuum carry the ring here. You let Lasker blow the floor.'],
         ['witness', 'I needed the Lock\'s power and the Unwritten\'s noise. Nobody watches the Cradle while the floor is falling.'],
         ['kai', 'Mira says you\'ve been singing to her.'],

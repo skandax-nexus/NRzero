@@ -88,7 +88,7 @@ export const VISITORS26 = [
   { era: '2026', costume: 'c26_f3', sex: 1, female: true, age: 61, height: 1.62, skin: 0xcf9f82, hair: 0xb8b0a4, hairStyle: 'bun', topType: 'jacket', top: 0x2f4a3a, pantsType: 'trousers', pants: 0x3a3a38, shoes: 'shoes', boots: 0x2a1d14, lod: true },
 ];
 const KID_MIRA10 = { era: '2026', costume: 'kid_mira', sex: 1, female: true, age: 10, height: 1.36, build: 0.84, skin: 0xd9a585, hair: 0x120d0b, hairStyle: 'bob', eyes: 0x2f4a3a, topType: 'sweater', top: 0x6a2a3a, topKind: 'fabric', pantsType: 'trousers', pants: 0x1f2227, shoes: 'shoes', boots: 0x3a2a1a };
-const KID_KAI7 = { era: '2026', costume: 'kid_kai', sex: 0, age: 7, height: 1.2, build: 0.8, skin: 0xb98463, hair: 0x15100c, hairStyle: 'messy', eyes: 0x3d2a18, topType: 'jacket', hood: true, top: 0x2a4a6a, topKind: 'fabric', pantsType: 'trousers', pants: 0x2f3a4e, shoes: 'shoes', boots: 0x3a2a1a };
+const KID_KAI7 = { era: '2026', costume: 'kid_kai', sex: 0, age: 7, height: 1.22, build: 0.82, skin: 0xb98463, hair: 0x15100c, hairStyle: 'messy', eyes: 0x3d2a18, topType: 'jacket', hood: true, top: 0x2a4a6a, topKind: 'fabric', pantsType: 'trousers', pants: 0x2f3a4e, shoes: 'shoes', boots: 0x3a2a1a };
 export const CHILD_LOOK = { era: '2049', costume: 'c49_kid_f', sex: 1, female: true, age: 7, height: 1.12, build: 0.85, skin: 0xe0b394, hair: 0x3a2418, hairStyle: 'short', topType: 'jacket', top: 0xd8a020, topKind: 'fabric', pantsType: 'trousers', pants: 0x2a3a5a, shoes: 'boots', boots: 0xc02020 };
 
 export function registerM19Cast() {
