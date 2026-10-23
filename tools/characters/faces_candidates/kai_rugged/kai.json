@@ -42,9 +42,13 @@
   "mouth/mouth-cupidsbow-decr|incr": 0.3,
   "mouth/mouth-philtrum-volume-decr|incr": 0.2,
   "forehead/forehead-trans-backward|forward": 0.2,
-  "chin/chin-jaw-drop-decr|incr": -0.2
+  "chin/chin-jaw-drop-decr|incr": -0.2,
+  "eyes/l-eye-bag-decr|incr": -0.5,
+  "eyes/l-eye-bag-height-decr|incr": -0.3,
+  "eyes/r-eye-bag-decr|incr": -0.5,
+  "eyes/r-eye-bag-height-decr|incr": -0.3
  },
- "browThick": 1.1,
+ "browThick": 0.95,
  "stubble": 1.0,
  "beard": 0.42,
  "hair": "lead_tousle",

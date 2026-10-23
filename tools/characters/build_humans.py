@@ -1272,7 +1272,7 @@ def paint(c, B, cov, res, path_out):
         # soft base tint under the strokes
         cbx, cby, cbw = T(np.clip((X + 0.0185) / 0.047, 0, 1))
         inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(-0.0205, -0.0165, X) * ss(0.0305, 0.0275, X)
-        alpha = np.clip(np.maximum(alpha, 0.0) + (0.28 if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)
+        alpha = np.clip(np.maximum(alpha, 0.0) + (0.17 if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
         m = np.zeros(len(px))
         m[idx] = alpha
         over(m, brow_c)

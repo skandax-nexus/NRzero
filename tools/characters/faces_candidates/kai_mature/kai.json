@@ -46,9 +46,13 @@
   "nose/nose-width2-decr|incr": -0.2,
   "mouth/mouth-upperlip-volume-decr|incr": 0.3,
   "mouth/mouth-philtrum-volume-decr|incr": 0.2,
-  "mouth/mouth-scale-horiz-decr|incr": 0.08
+  "mouth/mouth-scale-horiz-decr|incr": 0.08,
+  "eyes/l-eye-bag-decr|incr": -0.5,
+  "eyes/l-eye-bag-height-decr|incr": -0.3,
+  "eyes/r-eye-bag-decr|incr": -0.5,
+  "eyes/r-eye-bag-height-decr|incr": -0.3
  },
- "browThick": 0.95,
+ "browThick": 0.8,
  "stubble": 0.6,
  "hair": "lead_shag",
  "replace_details": true,
