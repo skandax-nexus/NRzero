@@ -1293,7 +1293,7 @@ def paint(c, B, cov, res, path_out):
         if hair_c.mean() > 0.42:     # grey / blond: the regular strand stripes read as a knitted (woolly hat) rib
             k = 0.8 + 0.1 * st ** 1.2 + 0.08 * st3 + 0.08 * (vnoise(rel * np.array([1.0, 3.0, 1.0]), 140, seed + 6.2) - 0.5) - 0.04
         roots = 1 - 0.1 * ss(0.012, 0.0, hcov)
-        hcol = hair_c[None, :] * (k * roots)[:, None] * (0.85 if look2.ON else 1.0)   # v2: the volume under the cards reads as depth
+        hcol = hair_c[None, :] * (k * roots)[:, None] * (0.9 if look2.ON else 1.0)   # v2: the volume under the cards reads as depth
         sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
         hcol = hcol * sheen[:, None]
         if style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
@@ -1483,7 +1483,7 @@ def paint_cells(c, img, mask, res, seed, cov=None):
             continue
         p3 = np.stack([a, b, np.zeros_like(a)], -1).reshape(-1, 3)
         if name == "hair":
-            cc = cc * (0.85 if look2.ON else 1.0)
+            cc = cc * (0.9 if look2.ON else 1.0)
             k = 0.8 + 0.12 * np.sin(a * 60 + 2 * vnoise(p3, 3, seed).reshape(a.shape)) + 0.08 * np.sin(a * 151 + 1.3)
         elif name in ("shoe", "sole"):
             k = 0.9 + 0.12 * vnoise(p3, 9, seed).reshape(a.shape)

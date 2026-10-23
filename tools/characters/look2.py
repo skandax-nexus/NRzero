@@ -609,8 +609,8 @@ def _hair_cols(c, rng):
 def _card_colour(hc, grey, rng):
     """root and tip colour (linear) of one card: a little variation per card; grey hair mixes darker strands."""
     v = rng.normal(1.0, 0.05)
-    root = hc * 0.6 * v
-    tip = hc * (0.9 + 0.06 * rng.random()) * v
+    root = hc * 0.66 * v
+    tip = hc * (0.86 + 0.06 * rng.random()) * v
     if grey and rng.random() < 0.15:
         k = rng.uniform(0.78, 0.9)
         root, tip = root * k, tip * k
@@ -750,7 +750,7 @@ def hair_cards(c, B, cov, parts, ex):
             # shading normals: the volume's normal bent toward the head's centre-out direction (soft, rounded light)
             radial = pts - head_c
             radial /= np.maximum(np.linalg.norm(radial, axis=1, keepdims=True), 1e-9)
-            nrm = nrm * 0.65 + radial * 0.35
+            nrm = nrm * 0.9 + radial * 0.1
             nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-9)
             w0 = S["W"] * rng.uniform(0.8, 1.2) * B.H / 1.75
             width = w0 * (1 - 0.45 * np.linspace(0, 1, len(pts)) ** 1.2)
@@ -878,9 +878,16 @@ def hair_cards(c, B, cov, parts, ex):
     # ---- the object: faces ordered by importance (the low tier draws the first part of the index list)
     order = sorted(range(len(K.f)), key=lambda i: -K.f[i][1])
     verts = np.concatenate(K.v)
+    nall = np.concatenate(K.n)
     faces = []
     for i in order:
         faces += K.f[i][0]
+    # winding: every card faces out along its shading normal (three.js flips the normal of back faces)
+    for fi, f in enumerate(faces):
+        q = verts[f]
+        fn = np.cross(q[1] - q[0], q[2] - q[0])
+        if fn @ nall[f].sum(0) < 0:
+            faces[fi] = f[::-1]
     uv = np.array(K.uv)
     o = BH.mesh_from("gh_" + c["id"], BH.to_bl_np(verts), faces, [uv[j] for f in faces for j in f])
     # custom normals (the soft head-out normals), tint and strand tangent attributes
