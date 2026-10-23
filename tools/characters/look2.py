@@ -1175,8 +1175,9 @@ class Cards:
     def __init__(self):
         self.v, self.n, self.uv, self.col, self.tan, self.w, self.f, self.imp, self.fine, self.kind = [], [], [], [], [], [], [], [], [], []
 
-    def ribbon(self, pts, norms, width, column, col_root, col_tip, W, imp, fine=None, u0=0.06, u1=0.94, kind=0):
-        """A strip along pts (k, 3) with per-point normals; width (k,) metres; uv column of the strand texture."""
+    def ribbon(self, pts, norms, width, column, col_root, col_tip, W, imp, fine=None, u0=0.06, u1=0.94, kind=0, vt=None):
+        """A strip along pts (k, 3) with per-point normals; width (k,) metres; uv column of the strand texture; vt (k,):
+        the strand texture's v (0 root .. 1 tip) per point (default: even along the strip)."""
         k = len(pts)
         base = sum(len(x) for x in self.v)
         vs, ns, uvs, cs, ts = [], [], [], [], []
@@ -1188,10 +1189,11 @@ class Cards:
             b = np.cross(nn, d)
             b = b / max(np.linalg.norm(b), 1e-9)
             t = i / (k - 1)
+            tv = t if vt is None else float(vt[i])
             for side in (-1, 1):
                 vs.append(pts[i] + b * side * width[i] * 0.5)
                 ns.append(nn)
-                uvs.append((column * cw + cw * (u0 if side < 0 else u1), 1.0 - t))
+                uvs.append((column * cw + cw * (u0 if side < 0 else u1), 1.0 - tv))
                 cs.append(col_root * (1 - t) + col_tip * t)
                 ts.append(d)
         faces = []

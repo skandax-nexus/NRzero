@@ -42,6 +42,7 @@ import garments  # noqa: E402
 import gadgets  # noqa: E402  (hard-surface gadgets of `gear=[...]`, docs/COSTUMES.md)
 import importlib  # noqa: E402
 import look2  # noqa: E402  (look v2: face / finger rig, eyes, mouth, strand cards, skin bake; LOOK=1: classic)
+import likeness_look  # noqa: E402  (photo likeness: beard / brow / mole / colour-zone data of a face file's `likeness`)
 
 # CAST=<name> picks the cast module: cast_<name>.py (e.g. CAST=test -> cast_test.py, CAST=nrzero -> cast_nrzero.py);
 # default: AfterZero's cast_humans.py
@@ -1155,8 +1156,9 @@ def paint(c, B, cov, res, path_out):
     front = ss(-0.035, -0.015, rel[:, 2])            # front of the face (0 at the ears)
     # ---------------- skin ----------------
     skin = hexc(c["skin"])
-    if look2.ON and os.environ.get("SKIN_CLASSIC") != "1":      # hero pipeline: a natural skin albedo (no orange cast)
+    if look2.ON and os.environ.get("SKIN_CLASSIC") != "1" and not c.get("skinExact"):      # hero pipeline: a natural skin albedo (no orange cast)
         skin = look2.natural_skin(skin)
+    LK = likeness_look.load(c, B)          # photo likeness data (None for every other face)
     col = np.tile(skin, (len(px), 1))
     lum = 1 + 0.035 * (vnoise(pos, 22, seed) - 0.5) + 0.02 * (vnoise(pos, 90, seed + 3) - 0.5) + 0.012 * (vnoise(pos, 700, seed + 5) - 0.5)
     red = 0.02 * (vnoise(pos, 40, seed + 9) - 0.5)
@@ -1188,6 +1190,9 @@ def paint(c, B, cov, res, path_out):
     skin_h = skin_r = None
     if look2.ON:      # v2: region colour by age and sex, hands, pores and creases (height), roughness
         col, skin_h, skin_r = look2.paint_skin(c, B, pos, part, col, isface, seed)
+    if LK is not None:       # photo likeness: the measured colour zones and the moles
+        col = likeness_look.paint_zones(c, B, LK, pos, col, isface, front, sys.modules[__name__])
+        col, nmol = likeness_look.paint_moles(c, LK, pos, col, isface, sys.modules[__name__])
     # ---- lips ----
     lip_c = hexc(c.get("lip", "b06a62" if not male else "a8706a"))
     xs, ys = L.lip_line
@@ -1196,6 +1201,8 @@ def paint(c, B, cov, res, path_out):
     lipfront = ss(L.lip_z - 0.025, L.lip_z - 0.012, pos[:, 2]) * (np.abs(t) < 1.1) * isface
     sc = L.lip_w / 0.024
     hu0, hl0 = (0.0074 if male else 0.0082) * sc, (0.0092 if male else 0.0108) * sc
+    if c.get("lipScale"):      # photo likeness: the painted lip heights (upper, lower) scaled to the photo's
+        hu0, hl0 = hu0 * float(c["lipScale"][0]), hl0 * float(c["lipScale"][1])
     at = np.clip(np.abs(t), 0, 1)
     hu = hu0 * (1 - at ** 2.3) ** 0.55 * (1 - 0.16 * np.exp(-(t / 0.13) ** 2)) * (1 + 0.1 * np.exp(-((at - 0.3) / 0.15) ** 2))
     hl = hl0 * (1 - at ** 2.0) ** 0.7
@@ -1255,11 +1262,14 @@ def paint(c, B, cov, res, path_out):
         lift = c.get("browLift", 0.0)
         T = lambda t: (-0.0185 + 0.047 * t, np.interp(t, [0, 0.35, 0.68, 1.0], [0.0150, 0.0178, 0.0192, 0.0162] if look2.ON else [0.0150, 0.0182, 0.0198, 0.0150]) + lift,
                        np.interp(t, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt))
+        if LK is not None:       # photo likeness: the measured brow (its own medial / lateral ends, top and bottom edge)
+            T = likeness_look.brow_T(LK, e, sg, lift)
+            nstr = 620 if res >= 2048 else 440
         tk = rng.random(nstr) ** 0.85
         bx, by, bw = T(tk)
         n = rng.uniform(0.0, 1.0, nstr)
         rx, ry = bx, by + n * bw
-        ang = np.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [78, 52, 16, -14]) + rng.normal(0, 7, nstr) - 10 * (n - 0.5))
+        ang = np.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [78, 52, 16, -14] if LK is None else [70, 44, 12, -9]) + rng.normal(0, 7, nstr) - 10 * (n - 0.5))
         ln = np.interp(tk, [0, 0.4, 1.0], [0.0042, 0.0056, 0.0040]) * rng.uniform(0.8, 1.15, nstr)
         ex, ey = rx + np.cos(ang) * ln, ry + np.sin(ang) * ln
         wd = (0.00042 if res >= 2048 else 0.0005) * rng.uniform(0.8, 1.2, nstr)
@@ -1270,14 +1280,21 @@ def paint(c, B, cov, res, path_out):
         cvg = np.clip(1 - dd / (wd[None] * (1.15 - 0.55 * tt)), 0, 1)
         alpha = 1 - np.prod(1 - (0.38 if look2.ON else 0.7) * cvg, axis=1)     # v2: brow hair cards lie on top (proto:makehuman 0.55 -> 0.38)
         # soft base tint under the strokes
-        cbx, cby, cbw = T(np.clip((X + 0.0185) / 0.047, 0, 1))
-        inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(-0.0205, -0.0165, X) * ss(0.0305, 0.0275, X)
-        alpha = np.clip(np.maximum(alpha, 0.0) + (0.17 if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
+        bx0, bx1 = float(T(0.0)[0]), float(T(1.0)[0])
+        cbx, cby, cbw = T(np.clip((X - bx0) / (bx1 - bx0), 0, 1))
+        inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0012, cbw - 0.0004, Y - cby) * ss(bx0 - 0.002, bx0 + 0.002, X) * ss(bx1 + 0.002, bx1 - 0.001, X)
+        alpha = np.clip(np.maximum(alpha, 0.0) + ((0.17 if LK is None else 0.4) if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
         m = np.zeros(len(px))
         m[idx] = alpha
         over(m, brow_c)
     # ---- stubble ----
     stub = c.get("stubble", 0.0)
+    if LK is not None and c.get("beard", 0.0) >= 0.5:
+        # photo likeness: the measured beard (density map): a dark painted under-layer below the beard cards, a stubble
+        # shadow where it thins out (look2 grows the cards from the same map)
+        ab, brgb, _bd = likeness_look.beard_paint(c, B, LK, pos, fld(B.hw), lipm, isface, seed, sys.modules[__name__])
+        col = col * (1 - ab[:, None]) + brgb * ab[:, None]
+        stub = 0.0
     if stub:
         ax_ = np.abs(pos[:, 0])
         my = np.interp(0, xs, ys)
@@ -1562,7 +1579,7 @@ def paint_cells(c, img, mask, res, seed, cov=None):
     cells = {"hair": hair_c, "shoe": shoe, "sole": shoe * 0.35 + 0.02, "colA": hexc(c.get("colorA", "444a55")), "colB": hexc(c.get("colorB", "2a2a30")),
              "acc": hexc(c.get("accentColor", "8a3a2a")), "trim": hexc(c.get("trimColor", "2a1d16")), "metal": hexc(c.get("metalColor", "b09060")),
              "lash": hexc(c.get("browColor", c.get("hairColor", "2e2119"))) * 0.3 + 0.015,
-             "skin": look2.natural_skin(hexc(c["skin"])) if look2.ON and os.environ.get("SKIN_CLASSIC") != "1" else hexc(c["skin"]),
+             "skin": look2.natural_skin(hexc(c["skin"])) if look2.ON and os.environ.get("SKIN_CLASSIC") != "1" and not c.get("skinExact") else hexc(c["skin"]),
              "glow": hexc(c.get("glowColor", "ffb050")), "shirt": hexc(c.get("shirtColor", "d8d0c4"))}
     over = costume.cell_colors(c, cov) if cov is not None and "_costume" in cov else {}
     for name, v in over.items():

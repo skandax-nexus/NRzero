@@ -130,3 +130,97 @@ def srgb(c):
     c = np.clip(np.asarray(c, float), 0, 1)
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1 / 2.4) - 0.055)
 
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# painting (build_humans.paint): colour zones, moles, the beard's painted under-layer
+# ---------------------------------------------------------------------------------------------------------------
+def paint_zones(c, B, LK, pos, col, isface, front, BH):
+    """The measured colour zones on the painted skin (sRGB col, in place): the darker, cooler crescent under the deep-set
+    eyes and the darker upper lids, a little darker nose bridge and side of the nose, a warmer, redder nose tip, the
+    slightly darker cheekbone band; ratios from the photo's albedo samples (left / right averaged; about half of the
+    under-eye darkness in the photo is the shadow of the brow ridge, which the renderer adds itself)."""
+    ss, g2 = BH.ss, BH.g2
+    L = B.L
+    q = LK.mm(pos)
+    face = isface.astype(float) * front
+    k = lambda m, rgb: np.clip(m, 0, 1)[:, None] * (np.asarray(rgb)[None, :] - 1.0) + 1.0
+    for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
+        ex = (e[0] - LK.origin[0]) * 1000 * LK.scale
+        ey = (e[1] - LK.origin[1]) * 1000 * LK.scale
+        dx, dy = (q[:, 0] - ex) * sg, q[:, 1] - ey
+        # under-eye crescent: 4-15 mm below the eye centre, inner corner to past the outer corner, into the tear trough
+        cres = g2(((dx + 1.0) / 13.0) ** 2 + ((dy + 9.0 + 0.04 * dx) / 4.2) ** 2, 1.0) * ss(-3.0, -5.5, dy)
+        col *= k(cres * face * float(c.get("underEye", 0.85)), [0.80, 0.76, 0.84])
+        # upper lid: darker skin between the lash line and the crease
+        (ux, uy), _ = L.lid["L" if sg > 0 else "R"]
+        top = np.interp(dx / 1000 / LK.scale, ux, uy) * 1000 * LK.scale
+        lid = ss(-0.5, 0.8, dy - top) * ss(7.5, 4.0, dy - top) * ss(-16.0, -12.0, dx) * ss(17.0, 13.0, dx)
+        col *= k(lid * face * 0.8, [0.84, 0.80, 0.84])
+    # nose: the bridge and the side walls a little darker, the tip and the wings warmer
+    bridge = g2((q[:, 0] / 7.5) ** 2 + ((q[:, 1] + 6.0) / 9.0) ** 2, 1.0)
+    col *= k(bridge * face * 0.7, [0.86, 0.82, 0.80])
+    tip = g2((q[:, 0] / 11.0) ** 2 + ((q[:, 1] + 31.0) / 7.0) ** 2, 1.0)
+    col *= k(tip * face * 0.7, [1.04, 0.97, 0.92])
+    # cheekbone band (zygoma, under the outer eye) a touch darker and warmer
+    for sg in (1, -1):
+        cb = g2(((q[:, 0] * sg - 46.0) / 13.0) ** 2 + ((q[:, 1] + 22.0) / 9.0) ** 2, 1.0)
+        col *= k(cb * face * 0.6, [0.93, 0.90, 0.86])
+    return col
+
+
+def paint_moles(c, LK, pos, col, isface, BH):
+    """The moles and faint spots of the photo at their measured places (soft-edged, dark brown)."""
+    q = LK.mm(pos)
+    out = 0
+    for x, y, z, dia, con, kind in LK.moles:
+        d2 = (q[:, 0] - x) ** 2 + (q[:, 1] - y) ** 2
+        near = (d2 < (dia * 3) ** 2) & (np.abs(q[:, 2] - z) < 9.0) & isface
+        if not near.any():
+            continue
+        r = max(dia * 0.5, 0.45)
+        a = BH.ss(r * 1.25, r * 0.6, np.sqrt(d2)) * near
+        strength = (1.0 - con) * (1.25 if kind > 0.5 else float(c.get("faintSpots", 0.55)))
+        tone = np.array([0.62, 0.52, 0.48]) if kind > 0.5 else np.array([0.75, 0.66, 0.62])
+        col *= 1 - np.clip(a * strength, 0, 0.75)[:, None] * (1 - tone)[None, :]
+        out += 1
+    return col, out
+
+
+def beard_paint(c, B, LK, pos, hw, lipm, isface, seed, BH):
+    """The beard's painted under-layer: alpha and colour (sRGB) per texel. Under dense beard it is a dark, nearly solid
+    layer with a fine down-running hair texture (no skin shows between the cards); toward the cheek line and in the
+    sparse patches it turns to a stubble shadow of fine dots, so the edge reads as hair thinning out (groomed: the map is
+    already smooth and symmetric)."""
+    ss, vnoise, hash01 = BH.ss, BH.vnoise, BH.hash01
+    dens = LK.beard_density(pos, hw, ear_front_z(B), sb_top=20.0)
+    dens = dens * (1 - ss(0.12, 0.45, lipm)) * isface
+    bc = BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119")))
+    hairs = np.clip((vnoise(pos * np.array([3.0, 0.5, 3.0]), 1900, seed + 2.9) - 0.3) * 2.0, 0, 1)
+    dots = (hash01(pos, 2800, seed + 0.5) > 0.5).astype(float)
+    solid = ss(0.35, 0.8, dens)
+    a = solid * (0.86 + 0.1 * hairs) + (1 - solid) * np.clip(dens * 1.6, 0, 1) * (0.32 + 0.3 * dots + 0.12 * hairs)
+    # a faint shave shadow a little past the beard (the skin around a full beard is never bare-clean)
+    halo = ss(0.0, 0.12, LK._grid(LK.beard, pos)) * ss(0.25, 0.7, hw) * isface * (1 - ss(0.12, 0.45, lipm))
+    a = np.maximum(a, halo * 0.14 * (0.6 + 0.4 * dots))
+    rgb = bc[None, :] * (0.78 + 0.22 * hairs[:, None])
+    return np.clip(a, 0, 0.95), rgb, dens
+
+
+def brow_T(LK, e, sg, lift=0.0):
+    """build_humans.paint's brow curve T(t) (t: 0 medial -> 1 lateral) from the measured profile: (x from the eye
+    centre outward, the lower edge above the eye centre, the thickness), metres."""
+    b = LK.brow(0 if sg > 0 else 1)
+    ex = abs(e[0] - LK.origin[0]) * 1000 * LK.scale
+    ey = (e[1] - LK.origin[1]) * 1000 * LK.scale
+    xs = b[:, 0]
+    t0 = (xs - xs[0]) / (xs[-1] - xs[0])
+
+    def T(t):
+        t = np.asarray(t, float)
+        x = np.interp(t, t0, xs)
+        bot = np.interp(t, t0, b[:, 2])
+        th = np.interp(t, t0, b[:, 3])
+        s = 1.0 / 1000 / LK.scale
+        return (x - ex) * s, (bot - ey) * s + lift, np.maximum(th, 0.6) * s
+    return T
