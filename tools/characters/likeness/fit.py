@@ -70,10 +70,10 @@ def _conn():
 
 OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149,
         150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
-MIDLINE = [151, 9, 8, 168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 164, 0, 11, 12, 13, 14, 15, 16, 17, 18, 200, 199, 175]
+MIDLINE = [151, 9, 8, 168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 164, 0, 11, 12, 13, 14, 15, 16, 17]
 NOSE_X = [129, 358, 98, 327, 48, 278, 64, 294, 102, 331, 49, 279, 115, 344, 220, 440, 45, 275, 4, 5, 195, 197, 6, 1, 2, 94, 19]
 LIP_OUT_UP = [185, 40, 39, 37, 0, 267, 269, 270, 409]
-CHIN_IN = [18, 200, 199, 175, 171, 396, 208, 428, 32, 262, 140, 369, 170, 395, 211, 431, 169, 394, 135, 364, 138, 367, 83, 313, 201, 421, 194, 418]
+CHIN_IN = [18, 200, 199, 175, 152, 171, 396, 208, 428, 32, 262, 140, 369, 170, 395, 211, 431, 169, 394, 135, 364, 138, 367, 83, 313, 201, 421, 194, 418]
 
 
 def groups():
@@ -87,7 +87,7 @@ def groups():
     return G
 
 
-W_REGION = dict(eyes=1.0, brows=0.1, iris=0.6, lips=0.8, nose=1.0, midline=0.8, oval=1.0, chin_beard=0.15, other=0.22)
+W_REGION = dict(eyes=1.0, brows=0.1, iris=0.0, lips=0.8, nose=1.0, midline=0.8, oval=1.0, chin_beard=0.15, other=0.22)
 
 # ---------------------------------------------------------------------------------------------------------------
 # parameters
@@ -121,6 +121,8 @@ def prior_w(name):
         return 5.0
     if "age" in name:
         return 8.0
+    if name in ("eyebrows/eyebrows-trans-down|up", "chin/chin-cleft-decr|incr", "mouth/mouth-laugh-lines-in|out"):
+        return 5.0          # the frown (brows down, folds) and the chin under the beard: the photo cannot say
     if name.startswith("neck/"):
         return 4.0
     return 2.5
@@ -265,6 +267,11 @@ class Photo:
             X[:, 0] += dx / 1000
             self.target[idx] = self._reproj(X)
         self.brow_shift = "up 3.0 mm medially -> 1.5 mm laterally, medial ends 1 mm apart"
+        # the frown narrows the lids a little: the upper lid margins 0.6 mm up (neutral opening)
+        lids = [157, 158, 159, 160, 161, 384, 385, 386, 387, 388, 246, 466]
+        X = self.Xh[lids].copy()
+        X[:, 1] += 0.0006
+        self.target[lids] = self._reproj(X)
 
     def beard_mm(self, y):
         return np.interp(y, [-124, -100, -70, -40, -28], [8.0, 6.5, 5.0, 4.0, 0.0])
@@ -447,7 +454,7 @@ class Problem:
         rr = ratios(X)
         rat = np.array([(rr[k] / self.r_photo[k] - 1) / 0.03 for k in RATIOS] + [(rr["canthal_tilt_deg"] - self.r_photo["canthal_tilt_deg"]) / 3.0]) * self.w_ratio * 0.25
         m, d, _ = self.unpack(x)
-        pri_d = self.model.prior * d * 1.0
+        pri_d = np.r_[self.model.prior * d, 12.0 * np.clip(np.abs(d) - 0.7, 0, None)]    # soft wall past |0.7|
         pri_m = np.array([(m[k] - MACRO_PRIOR[k][0]) / MACRO_PRIOR[k][1] for k in MACRO_KEYS]) * 0.6
         dp = pose - self.pose0
         pri_p = np.r_[dp[:3] / np.radians(6), dp[3:6] / 0.03, (dp[6]) / 0.06] * 0.5
