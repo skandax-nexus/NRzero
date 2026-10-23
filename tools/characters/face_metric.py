@@ -39,6 +39,7 @@ THRESH = dict(
     min_vs_kai=40,   # target: anyone but the Witness and young Kai, against Kai, >= this
     witness_max=12,  # target: the Witness against Kai aged to 58 (same details on the Witness's body) <= this
     mira_band=(15, 45),   # target: Mira against Kai: a family likeness (brow line, eyes), clearly her own face
+    app_max=0.6,     # target: two different people of one group never share skin + hair colour + style (app below this)
 )
 # proportions of an attractive adult face, measured with this file's landmarks (FaceSpace.canon). Ranges come from
 # adult anthropometric norms translated to these landmarks (nasion, not glabella, so the midface reads short:
@@ -90,12 +91,14 @@ class FaceSpace:
         self.P0 = P
         body = np.array(mh.group_vertices("body"))
         tab = mh.modifier_table()
-        tset = lambda k: set(mh.target(tab[k][1])[0].tolist())
+        def tset(k):
+            return set(mh.target(tab[k][1])[0].tolist())
         ears = tset("ears/l-ear-scale-decr|incr") | tset("ears/r-ear-scale-decr|incr")
         neck = mh.joint(P, "neck")
         head = body[(P[body, 1] > neck[1] + 0.01) & ~np.isin(body, list(ears))]
         self.head = head
-        mirror = lambda i: int(head[np.argmin(np.linalg.norm(P[head] - P[i] * np.array([-1, 1, 1]), axis=1))])
+        def mirror(i):
+            return int(head[np.argmin(np.linalg.norm(P[head] - P[i] * np.array([-1, 1, 1]), axis=1))])
         L = dict(N=132, Prn=297, Sn=343, Ls=455, Sto=474, Li=495, Pg=733, Me=747, En_L=6856, Ex_L=6809, Al_R=337, Go_R=740)
         L["En_R"], L["Ex_R"], L["Al_L"], L["Go_L"] = mirror(L["En_L"]), mirror(L["Ex_L"]), mirror(L["Al_R"]), mirror(L["Go_R"])
         lips = np.array(sorted(tset("mouth/mouth-upperlip-volume-decr|incr") | tset("mouth/mouth-lowerlip-volume-decr|incr")))
@@ -136,7 +139,8 @@ class FaceSpace:
         Xc = X - (X * self.w[:, None]).sum(0)
         self.s0 = float(np.sqrt(((Xc ** 2).sum(1) * self.w).sum()))
         # regions: nearest seed
-        c = lambda *ks: np.mean([P[L[k]] for k in ks], axis=0)
+        def c(*ks):
+            return np.mean([P[L[k]] for k in ks], axis=0)
         seeds = [("eyes", c("En_L", "Ex_L")), ("eyes", c("En_R", "Ex_R")), ("brows", P[L["Br_L"]]), ("brows", P[L["Br_R"]]),
                  ("forehead", P[L["Ft"]]), ("forehead", (P[L["Ft"]] + N) / 2 + np.array([0, 0.01, 0])), ("nose", P[L["Prn"]]), ("nose", (P[L["Prn"]] + N) / 2),
                  ("mouth", c("Sto")), ("mouth", c("Ch_L")), ("mouth", c("Ch_R")), ("chin", P[L["Pg"]]), ("chin", P[L["Me"]]),
@@ -174,7 +178,8 @@ class FaceSpace:
 
     def features(self, P):
         L = {k: P[v] for k, v in self.L.items()}
-        d = lambda a, b: float(np.linalg.norm(L[a] - L[b]))
+        def d(a, b):
+            return float(np.linalg.norm(L[a] - L[b]))
         fh = d("N", "Me")
         zy = abs(L["Zy_L"][0] - L["Zy_R"][0])
         en = abs(L["En_L"][0] - L["En_R"][0])
@@ -215,7 +220,8 @@ def lab(h):
 
 def appearance(a, b):
     """0..1 shared look (skin, hair colour and style, eyes, facial hair, brows) and the parts that match."""
-    dE = lambda k, d=None: float(np.linalg.norm(lab(a.get(k, d)) - lab(b.get(k, d))))
+    def dE(k, d=None):
+        return float(np.linalg.norm(lab(a.get(k, d)) - lab(b.get(k, d))))
     parts = dict(skin=np.exp(-dE("skin") / 8.0), hair_colour=np.exp(-dE("hairColor", "2e2119") / 12.0),
                  hair_style=1.0 if a.get("hair") == b.get("hair") else 0.0, eyes=np.exp(-dE("eyes", "5a4030") / 12.0),
                  facial_hair=1.0 - min(1.0, abs(a.get("stubble", 0) - b.get("stubble", 0)) + abs(a.get("beard", 0) - b.get("beard", 0))),
@@ -309,7 +315,8 @@ def main(argv):
     global FEATS
     out = argv[0]
     os.makedirs(out, exist_ok=True)
-    flag = lambda n, d=None: next((a.split("=", 1)[1] for a in argv if a.startswith("--" + n + "=")), d)
+    def flag(n, d=None):
+        return next((a.split("=", 1)[1] for a in argv if a.startswith("--" + n + "=")), d)
     FS = FaceSpace()
     if "--landmarks" in argv:
         landmark_plot(FS, os.path.join(out, "landmarks.png"))
@@ -345,7 +352,8 @@ def main(argv):
         ref[g] = dict(geo=np.sort(geo), lm=np.sort(lm))
     allgeo = np.sort(np.concatenate([ref[g]["geo"] for g in ref]))
     alllm = np.sort(np.concatenate([ref[g]["lm"] for g in ref]))
-    pct = lambda arr, v: float(100.0 * np.searchsorted(arr, v) / len(arr))
+    def pct(arr, v):
+        return float(100.0 * np.searchsorted(arr, v) / len(arr))
     pop_det = []
     for q in pop[:60]:
         P0 = sculpt(q["macro"], {})
@@ -434,7 +442,8 @@ def main(argv):
         return ""
     for p in pairs:
         p["verdict"] = verdict(p)
-    crowd = lambda i: i.startswith(CROWD_PREFIX)
+    def crowd(i):
+        return i.startswith(CROWD_PREFIX)
     fails = []
     for p in pairs:
         if p["same_person"] or not p["same_group"]:
@@ -443,7 +452,22 @@ def main(argv):
         if "kai" in (p["a"], p["b"]):
             need = max(need, T["min_vs_kai"]) if "mira" not in (p["a"], p["b"]) else need
         if p["sim"] < need:
-            fails.append(dict(a=p["a"], b=p["b"], sim=p["sim"], need=need))
+            fails.append(dict(a=p["a"], b=p["b"], sim=p["sim"], need=need, rule="pair distance"))
+        if p["app"] >= T["app_max"]:
+            fails.append(dict(a=p["a"], b=p["b"], sim=p["app"], need=T["app_max"], rule="shared look (app) too high"))
+    for p in pairs:      # no "same face" / "look-alike" verdict between different people, across groups too
+        if not p["same_group"] and not p["same_person"] and p["verdict"]:
+            fails.append(dict(a=p["a"], b=p["b"], sim=p["sim"], need=T["alike"], rule="cross-group " + p["verdict"]))
+    for x in identity:   # the same person at another age stays recognisable
+        if x["sim"] > T["witness_max"]:
+            fails.append(dict(a=x["src"], b=x["dst"], sim=x["sim"], need=T["witness_max"], rule="same person must stay alike (<=)"))
+    km = next((p for p in pairs if {p["a"], p["b"]} == {"kai", "mira"}), None)
+    if km and not T["mira_band"][0] <= km["sim"] <= T["mira_band"][1]:
+        fails.append(dict(a="kai", b="mira", sim=km["sim"], need=T["mira_band"], rule="family band"))
+    for i in ids:        # attractive proportions: principals and named NPCs at most one miss, crowds two
+        nf, allow = len(info[i]["canon_fail"]), (2 if crowd(i) else 1)
+        if nf > allow:
+            fails.append(dict(a=i, b="-", sim=nf, need=allow, rule="CANON misses (<=)"))
     kai_rank = sorted([p for p in pairs if "kai" in (p["a"], p["b"])], key=lambda p: (p["sim"], p["geo_rel_p5"]))
     # clusters: connected components of the look-alike graph (same group, not the same person)
     adj = {i: set() for i in ids}
@@ -544,8 +568,8 @@ def report(res, ids, path, kai_rank):
     for c in res["clusters"]:
         L.append(f"- {len(c['ids'])}: {', '.join(c['ids'])} (mean sim {c['mean_sim']}, min {c['min_sim']})")
     L += ["", f"## Target failures ({len(res['fails'])})", ""]
-    for f in sorted(res["fails"], key=lambda f: f["sim"]):
-        L.append(f"- {f['a']} / {f['b']}: sim {f['sim']} < {f['need']}")
+    for f in sorted(res["fails"], key=lambda f: (f["rule"], str(f["sim"]))):
+        L.append(f"- {f['a']} / {f['b']}: {f['rule']}: {f['sim']} (target {f['need']})")
     L += ["", "## Attractive proportions (face_metric.CANON; adults; value [target])", ""]
     for i in ids:
         cf = res["characters"][i]["canon_fail"]

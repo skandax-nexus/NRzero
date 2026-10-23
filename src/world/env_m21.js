@@ -98,10 +98,10 @@ export function registerM21Cast() {
   registerCast('m21band', { name: 'CHRONOLITH BAND', role: 'Kai\'s wrist · binding', voice: true, vp: { sex: 'f', pitch: 1.18, rate: 1.06, langs: ['en-US', 'en-GB'] } });
   registerCast('m21lasker', { name: 'DOV LASKER', role: 'Radio · the Unwritten', portraitOf: 'lasker', voice: true, vp: { sex: 'm', pitch: 0.8, rate: 0.96, langs: ['en-GB', 'en-US'] } });
   registerCast('m21anja', { name: 'DR. ANJA VALE', role: 'Radio · Harrow Reach', portraitOf: 'anja', voice: true, vp: { sex: 'f', pitch: 1.0, rate: 0.95, langs: ['en-GB', 'en-US'] } });
-  registerCast('m21hale', { name: 'OFFICER HALE', role: 'Helix security · 2049', portraitOf: 'hale', voice: true, vp: { sex: 'm', pitch: 0.82, rate: 0.95, langs: ['en-GB', 'en-US'] } });
-  registerCast('m21brandt', { name: 'OFFICER BRANDT', role: 'Helix security · 2049', portraitOf: 'brandt', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 1.02, langs: ['en-GB', 'en-US'] } });
-  registerCast('m21sera', { name: 'SERA VOSS', role: 'Radio · the forward post', portraitOf: 'sera', voice: true, vp: { sex: 'f', pitch: 0.94, rate: 1.0, langs: ['en-GB', 'en-US'] } });
-  registerCast('m21mira', { name: 'MIRA VAREN', role: 'A pattern · inside the ring', portraitOf: 'mira', voice: true, vp: { sex: 'f', pitch: 1.1, rate: 0.94, langs: ['en-GB', 'en-US'] } });
+  registerCast('m21hale', { name: 'OFFICER HALE', role: 'Helix security · 2049', portraitOf: 'hale', voice: true, vp: { sex: 'm', pitch: 0.78, rate: 0.94, langs: ['en-US'] } });
+  registerCast('m21brandt', { name: 'OFFICER BRANDT', role: 'Helix security · 2049', portraitOf: 'brandt', voice: true, vp: { sex: 'm', pitch: 0.95, rate: 1.06, langs: ['en-GB', 'en-US'] } });
+  registerCast('m21sera', { name: 'SERA VOSS', role: 'Radio · the forward post', portraitOf: 'sera', voice: true, vp: { sex: 'f', pitch: 0.92, rate: 1.04, langs: ['en-AU', 'en-US', 'en-GB'] } });
+  registerCast('m21mira', { name: 'MIRA VAREN', role: 'A pattern · inside the ring', portraitOf: 'mira', voice: true, vp: { sex: 'f', pitch: 1.05, rate: 0.96, langs: ['en-GB', 'en-US'] } });
   registerCast('m21trooper', { name: 'CONTINUUM TROOPER', role: 'The Bastion · helmet sealed', voice: true, vp: { sex: 'm', pitch: 0.8, rate: 1.0, langs: ['en-GB', 'en-US'] } });
   registerCast('m21guard', { name: 'HELIX SECURITY', role: 'Night shift · 2049', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 1.0, langs: ['en-GB', 'en-US'] } });
 }

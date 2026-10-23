@@ -224,7 +224,7 @@ export default {
       await game.shot([-2, 3.5, 51], [0, 44, -60], 4.6, { fov: 56 });
       await game.say('m19band', 'No state. No year. Time index: eight fourteen and seven seconds. Holding.');
       await game.shot([3.2, 1.7, 44.5], [0, 1.6, 40], 2.4, { fov: 40 });
-      await game.say('kai', 'Meridian Avenue. The rain\'s stopped in mid-air.');
+      await game.say('kai', 'I walked into the ring at Test Hall C. I came out on Meridian Avenue. And the rain\'s stopped in mid-air.');
       await game.shot([-2.5, 1.2, 43], [4, 40, -30], 3.0, { fov: 58 });
       await game.say('kai', 'And there\'s a city in the sky. Upside down. That\'s the second spire. They never built the second spire.');
       if (F.unwrittenSecond || F.m18miraMessage) await game.say('kai', 'Between the ninth and the tenth, she said. A second nobody wrote.');
@@ -493,17 +493,17 @@ export default {
           ['m19child', met ? 'Mister, your wrist is glowing again.' : 'Mister, your wrist is glowing.'],
           ['kai', 'Are you lost?'],
           ['m19child', 'I\'m trying to get home. There\'s a song that opens the gate. A lady with a purple light used to hum it on the platform.'],
-          ['m19child', 'Three notes. They go down. I can\'t remember them.'],
+          ['m19child', 'Three notes. Up, then down a little. I can\'t remember them.'],
         ]);
         let ok = false, tries = 0;
         while (!ok && tries < 3) {
-          const c = await choose('kai', 'Three notes that go down. Hum them.', ['E · B · A', 'A · B · E', 'C · E · G'], 0);
+          const c = await choose('kai', 'Three notes. Up, then a step down. Hum them.', ['E · B · A', 'A · B · E', 'C · E · G'], 0);
           tries++;
           if (c === 0) {
             ok = true; audio.sfxPlay('motif');
             await game.say('kai', 'E. B. A.');
             await game.say('m19child', 'That\'s it! That\'s the one. That\'s the way home.');
-          } else await game.say('m19child', c === 1 ? 'No... that goes up.' : 'That\'s a happy one. Hers was sad.');
+          } else await game.say('m19child', c === 1 ? 'No... that\'s backwards.' : 'That\'s a happy one. Hers was sad.');
         }
         if (ok) {
           G.child = 'home'; F.m19child = 'home';

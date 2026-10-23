@@ -92,7 +92,7 @@ export function registerM20Cast() {
 // ---------------------------------------------------------------------------------------------------------------------
 export const musicState = { loom: 0, urgency: 0 };
 export function registerM20Themes() {
-  const motif = (a, b, t, d, base, vol) => { if (b === 0) a.piano(base, t, vol, 3); if (b === 4) a.piano(base - 5, t, vol * 0.9, 3); if (b === 8) a.piano(base - 7, t, vol, 4.4); };
+  const motif = (a, b, t, d, base, vol) => { if (b === 0) a.piano(base, t, vol, 3); if (b === 4) a.piano(base + 7, t, vol * 0.9, 3); if (b === 8) a.piano(base + 5, t, vol, 4.4); };  // E-B-A: up a fifth, down a step (the core 'motif')
   registerTheme('m20-threshold', { bpm: 64, step(a, s, t, d) {
     const bar = Math.floor(s / 16), b = s % 16, ch = [[40, 47, 52, 56], [45, 52, 57, 60], [36, 43, 48, 52], [38, 45, 50, 54]][bar % 4];
     if (b === 0) { a.pad(ch, t, d * 16, 0.014, 600); a.cello(ch[0] - 12, t, d * 16, 0.035); }

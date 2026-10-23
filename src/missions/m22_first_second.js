@@ -254,7 +254,8 @@ export default {
     let zT = 0;
     game.onUpdate(dt => {
       zT -= dt; if (zT > 0) return; zT = 0.25;
-      if (game.cine || T.switching || game._failing) return;
+      // not during the intro: until the opening places Kai in the hall, pl.pos is wherever M21 left him (the dais, z -86)
+      if (game.cine || T.switching || game._failing || S.phase === 'intro') return;
       const z = zoneAt(pl.pos); if (z !== S.zone) setZone(z);
     });
     // islands far away draw less: whole islands hide beyond 95 m; their people hide beyond 55 m
@@ -988,7 +989,7 @@ export default {
     await game.say('witness', 'It wants the reason. I\'ve given it a thousand. Rook. The Continuum. You. It has never opened.');
     await game.say('kai', 'Then you\'ve been giving it the wrong one.');
     await game.say('witness', 'Go on, then. Ask the places. I won\'t come. I\'ve seen them.');
-    if (miraAns === 'unsure' || miraAns === 'hand') await game.say('kai', 'She told me not to come to save her. To come to ask. So I\'m asking.');
+    if (miraAns || F.m20done) await game.say('kai', 'She told me not to come to save her. To come to ask. So I\'m asking.');
     S.main = false; cine(false); musicLock = null;
     S.phase = 'explore'; game.checkpoint(...P.start); refresh();
     ui.toast('WEST · THE VALLEY    EAST · HENSEL\'S LANE    SOUTH · WARD 4', 4200);

@@ -938,7 +938,7 @@ export default {
 
     // ---------- ending: the quote, the final experiment ----------
     async function ending() {
-      S.phase = 'end'; S.main = true; cine(true);
+      S.phase = 'end'; S.main = true; cine(true); objective('');
       lockMusic('m21-witness', 1.0);
       const wp = wEnemy.char.root.position.clone();
       C.removeEnemy(wEnemy); unstage(wEnemy.char); C.showHud(false); echo.unlock(false);
@@ -969,9 +969,10 @@ export default {
       audio.silence?.(2.0); await game.wait(1.6); audio.unsilence?.();
       F.m21quote = true;
       await game.say('witness', 'You might still. It is the only thing about you I envy.');
-      if (F.m20answer === 'hand') { await game.say('kai', 'She took my hand in there. She chose. You don\'t get to choose for her.'); await game.say('witness', 'Then come and tell her yourself.'); }
+      if (F.m20answer === 'hand') { await game.say('kai', 'I offered her my hand in there. She told me to ask what she wants. She wants to decide what she is. Not you. Not me.'); await game.say('witness', 'Then come and tell her yourself.'); }
       else if (F.m20answer === 'unsure') { await game.say('kai', 'I told her I didn\'t know yet if it was enough. You never even asked her.'); await game.say('witness', 'I asked her a thousand times. She always said yes. That is how I knew I was doing it wrong.'); }
-      else { await game.say('kai', 'She said it could be enough. Being who she is now.'); await game.say('witness', 'It was never enough for me. That is the difference between us, for one more minute.'); }
+      else if (F.m20answer === 'enough') { await game.say('kai', 'I told her who she is now is enough. She called me a liar. A kind one.'); await game.say('witness', 'It was never enough for me. That is the difference between us, for one more minute.'); }
+      else { await game.say('kai', 'She asked me if it would be enough, being who she is now. You never let her ask.'); await game.say('witness', 'It was never enough for me. That is the difference between us, for one more minute.'); }
       // he begins the final experiment
       lockMusic('m21-experiment', 1.2); musicState.ring = 0;
       await walkTo(witness, [[0, 0.3, -93]], 1.1);
@@ -987,7 +988,7 @@ export default {
       await tween(3.0, k => { W.ghostMat.opacity = k * 0.22; W.clock.material.opacity = k * 0.8; W.ring.scale.setScalar(1 + k * 0.12); W.cradle.rotation.z *= 0.9; musicState.ring = 0.6 + k * 0.4; });
       await game.say('m21band', 'Temporal signature: every place you have been. Central Station. The settlement. The observatory. Rain City.');
       await game.say('m21band', 'Converging on one second. Nineteenth of October, 2026. Eight-fourteen.');
-      await game.say('m21mira', 'Kai. He\'s opened it. I can see the hall where I died. I can see you, ten years old, holding on.');
+      await game.say('m21mira', 'Kai. He\'s opened it. I can see the hall where I died. I can see you, seven years old, holding on.');
       await game.shot([0, 3.0, -82.8], [0, 6.0, -91], 1.8, { fov: 44 });
       await game.say('witness', 'This is where it began. Follow me, if you want to see how.');
       await tween(1.6, k => { witness.root.position.z = -93 + k * 2.4; witness.root.position.y = 5.3 + k * 1.6; witness.speed = 0.6; });

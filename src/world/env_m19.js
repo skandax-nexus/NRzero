@@ -105,18 +105,19 @@ export function registerM19Cast() {
     name: 'MIRA VAREN', role: 'The Unwritten Second · more of her than anywhere',
     bio: 'Sixty-one percent in the Chronolith. Here, in the second nobody wrote, there is more of her, and she has had a long time to think.',
     look: { ...(CAST.mira?.look || {}), role: 'mira', era: '2049', costume: 'mira', sex: 1, female: true, age: 29 },
-    rimColor: 0x9a7bff, glow: 0x23183a, vp: { sex: 'f', pitch: 1.1, rate: 0.94, langs: ['en-GB', 'en-US'] },
+    rimColor: 0x9a7bff, glow: 0x23183a, vp: { sex: 'f', pitch: 1.05, rate: 0.96, langs: ['en-GB', 'en-US'] },  // Mira's voice (core/voice.js)
   });
   registerCast('m19kidmira', { name: 'MIRA, 10', role: 'Test Hall Zero · 19.10.2026 · 08:14:09', look: { ...KID_MIRA10 }, rimColor: 0x9a7bff, vp: { sex: 'f', pitch: 1.45, rate: 1.06, langs: ['en-GB', 'en-US'] } });
   registerCast('m19kidkai', { name: 'KAI, 7', role: 'The Varen kitchen · 2026', look: { ...KID_KAI7 }, rimColor: 0xffd8a0, vp: { sex: 'm', pitch: 1.55, rate: 1.12, langs: ['en-GB', 'en-US'] } });
   registerCast('m19child', { name: 'CHILD', role: 'Central Station · the ticket hall that is not there', look: { ...CHILD_LOOK }, vp: { sex: 'f', pitch: 1.5, rate: 1.05, langs: ['en-GB', 'en-US'] } });
   registerCast('m19band', { name: 'CHRONOLITH BAND', role: 'Kai\'s wrist · no state', voice: true, vp: { sex: 'f', pitch: 1.18, rate: 1.06, langs: ['en-US', 'en-GB'] } });
-  registerCast('m19lake', { name: 'MIRA', role: 'In the reflection', portraitOf: 'mira', voice: true, vp: { sex: 'f', pitch: 1.1, rate: 0.92, langs: ['en-GB', 'en-US'] } });
+  registerCast('m19lake', { name: 'MIRA', role: 'In the reflection', portraitOf: 'mira', voice: true, vp: { sex: 'f', pitch: 1.05, rate: 0.96, langs: ['en-GB', 'en-US'] } });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Music (bible: "The Unwritten Second: sparse glass tones, prepared piano, low drones, silence as rhythm, motif fragments;
-// 48 BPM or free time, no conventional beat"). Mira's three notes are E-B-A; here they arrive incomplete until the end.
+// 48 BPM or free time, no conventional beat"). Mira's three notes are E-B-A (64, 71, 69: up a fifth, down a step, as the core 'motif' stinger); here they
+// arrive incomplete until the end.
 // ---------------------------------------------------------------------------------------------------------------------
 export const musicState = { lap: 0, progress: 0, rooms: 0 };
 const hsh = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -127,7 +128,7 @@ export function registerM19Themes() {
     if (b === 0) { a.cello(26 + (bar % 3 === 2 ? -2 : 0), t, d * 15, 0.05); a.pad([50, 57, 64 + musicState.lap], t, d * 16, 0.008, 260); }
     if ([0, 5, 11].includes(b) && hsh(s) > 0.45) a.glass([86, 93, 91, 88, 95][(s + bar) % 5], t, 0.011);
     if (b === 8 && bar % 2 === 0) a.piano(62 + [0, 3, -2, 5][bar % 4], t, 0.05, 0.35);  // prepared: short, muted
-    if (bar % 6 === 3 && b === 4) a.piano(76, t, 0.04, 2.2);            // E ...
+    if (bar % 6 === 3 && b === 4) a.piano(64, t, 0.04, 2.2);            // E ...
     if (bar % 6 === 3 && b === 10) a.piano(71, t, 0.035, 2.2);          // ... B (and no A)
   } });
   registerTheme('m19-square', { bpm: 48, step(a, s, t, d) {           // the stopped second: a held tick that never lands
@@ -155,7 +156,7 @@ export function registerM19Themes() {
     const bar = Math.floor(s / 16), b = s % 16, p = musicState.progress;
     if (b === 0) { a.pad([45, 52, 57, 64], t, d * 16, 0.01 + p * 0.006, 380 + p * 600); a.cello(33, t, d * 16, 0.04); }
     if (b % 8 === 0) a.tick(t, 0.008, 2400);
-    if (bar % 2 === 0 && b === 2) a.piano(76, t, 0.045, 2.6);
+    if (bar % 2 === 0 && b === 2) a.piano(64, t, 0.045, 2.6);
     if (bar % 2 === 0 && b === 6) a.piano(71, t, 0.04, 2.6);
     if (bar % 2 === 0 && b === 10 && p > 0.66) a.piano(69, t, 0.04, 3.2);
     if (b === 13 && hsh(s) > 0.6) a.glass(88, t, 0.009);
@@ -169,7 +170,7 @@ export function registerM19Themes() {
   registerTheme('m19-mira', { bpm: 64, step(a, s, t, d) {             // Mira: felt piano and warm cello, E-B-A at last
     const bar = Math.floor(s / 16), b = s % 16, ch = [[52, 59, 64, 67], [48, 55, 60, 64], [45, 52, 57, 60], [47, 54, 59, 62]][bar % 4];
     if (b === 0) { a.pad(ch, t, d * 16, 0.012, 640); a.cello(ch[0] - 12, t, d * 16, 0.045); }
-    if (b === 0 && bar % 2 === 0) a.piano(76, t, 0.05, 3);
+    if (b === 0 && bar % 2 === 0) a.piano(64, t, 0.05, 3);
     if (b === 4 && bar % 2 === 0) a.piano(71, t, 0.045, 3);
     if (b === 8 && bar % 2 === 0) a.piano(69, t, 0.045, 4);
     if ([2, 6, 10, 14].includes(b) && bar % 2) a.piano(ch[(b >> 2) % 4] + 12, t, 0.028, 1.4);

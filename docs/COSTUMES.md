@@ -8,7 +8,7 @@ This is the design source for every character costume. The character generator (
 2. No out-of-era pieces. In 2026, 2049 and 2196 that means no top hats, Victorian coats or tailcoats, aprons, headscarves, bonnets, period dresses or corsets. In the ancient settlement it means no technology of any kind.
 3. The look is a premium game look. Proportions are realistic, silhouettes are clean, gadgets are readable, and emissive accents are subtle. Costumes must read well while the character walks, runs and moves their hands.
 4. Everything stays smooth on phones (see the budgets in "Mobile budgets").
-5. Faces are attractive and believable, with no extremes (see `cast_humans.py`: bodies lean toward MakeHuman's ideal proportions, and detail modifiers are softened).
+5. Faces are attractive and believable, with no extremes (see `cast_humans.py`: bodies lean toward MakeHuman's ideal proportions, and detail modifiers are softened); each character's own face is set in `tools/characters/faces/<id>.json` against the face briefs, distinctness thresholds and proportions of docs/CHARACTER_LOOK.md, "Faces").
 
 ## Era style guides
 

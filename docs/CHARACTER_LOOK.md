@@ -468,3 +468,310 @@ body belong to the motion step (docs/MOTION.md).
   - no sawtooth on any hairline at 0.6 m; the four principals match their reference hair silhouette;
   - low / medium frame time within +3 % on the m1, m3 and m4 views (draw calls ≤ +1 per principal in view).
 - Never edit `assets/models/anims.glb`, the missions, the trailer files or another workflow's files.
+
+
+---
+
+# Faces: audit, thresholds and briefs
+
+The owner's request (binding, their words): "Characters face still need more attractive and good looking style. Also
+other character look similar to hero face. So be precise while choosing character for NPCs and other characters.
+[Change] the hero face it looks ugly so need of changes in his face."
+
+What it means for every face step:
+1. Faces are attractive and good-looking in the style of a modern premium story game: appealing, well proportioned,
+   groomed and expressive; realistic, not stylised cartoons and not uncanny.
+2. Every character has their own face. No two different named characters share a face, no NPC or crowd member reuses
+   a principal's face.
+3. Kai's face is redesigned. The Witness is the new Kai aged (same bone structure, eyes, the wrist scar) and is the
+   only face allowed to resemble Kai; young Kai (`kid_kai`) is Kai as a child. Mira, Kai's sister, has a light family
+   resemblance (brow line) but clearly her own, attractive face.
+4. Casting is precise: each build fits who the person is (age, sex, heritage, build, role, era, personality; the
+   briefs below). Heritage mix, age, sex, height, cast ids, rigs, bone names (anims.glb keeps retargeting), triangle
+   budgets and the owner's-own-figure rule (MakeHuman + Blender generator, no faces, photos, scans or models from the
+   internet) stay as they are.
+
+`$FACES` below is `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/faces`.
+
+## Machinery (used by every face step)
+
+| what | where | how |
+|---|---|---|
+| per-character face overrides: details (final values, not softened), face macro terms (proportions, build, ancestry mix), skin, lips, eyes, brows, stubble, beard, hairstyle | `tools/characters/faces/<id>.json` (schema: `tools/characters/faces/README.md`), merged by `cast_nrzero.face_override()` | no file: the entry builds exactly as before (checked: the CAST list is byte-identical to the committed one with no overrides). `FACES_DIR=<folder>` builds a candidate set (its solved heights go to `<folder>/_heights.json`, the repo cache is not touched); `FACES_DIR=none` ignores every override |
+| studio portraits | `tools/characters/face_studio.sh NAME` (`face_studio.mjs`, `face_sheet.py`) | `ONLY=a,b [FACES_DIR=...] face_studio.sh NAME` builds only those ids into `$FACE_STAGE/NAME` (default `$FACES/stage`, outside the repo), packs them as the game ships them (`pack_cast2.mjs`: budgets with face importance, phone + HD atlases), serves the stage on port 8793 and renders front, three-quarter (35°) and profile head shots in the rest pose under a neutral studio light (soft white key with a face shadow, fill, rim, grey background) and one in-game light (Rain City night: sodium key from above right, cyan rim, wet blue ambient). Sheets: `shots/sheet_<id>.png`, `shots/overview.png`; `face_sheet.py grid / cluster / pairs` for comparisons. `--no-build --base=<dir>` portrays an existing cast folder (e.g. `assets/models`). `shots.json` keeps eye position, triangles and face-box triangles per id |
+| distinctness metric | `tools/characters/face_metric.py OUT` | see below; ~15 s for the 66 builds and a 400-face reference population; writes `faces.json`, `report.md`, `matrix_sim.csv`, `heatmap.png`; `--landmarks` plots the landmark set (`$FACES/metric_cur/landmarks.png`) |
+
+### The metric
+
+Every MakeHuman build shares one topology, so faces compare vertex for vertex, straight from the sculpt (`mh.sculpt`
+of the build's macro and details; the same vertices the generator builds from, before packing):
+- **geo**: the face region (brow to chin, cheek to cheek, ears excluded; 2 760 vertices) is centred and scaled to the
+  neutral face's size; the area-weighted RMS vertex distance in mm (and per region: eyes, brows, forehead, nose,
+  mouth, cheeks, jaw, chin);
+- **lm**: 22 landmark proportions (nasion, nose tip, subnasale, lips, stomion, pogonion, menton, eye corners, alae,
+  mouth corners, cheekbones, jaw angles, brows, head top: face index, jaw width, eye spacing and width, canthal tilt,
+  nose length / width / projection, mouth width, lip heights and fullness, lower face, chin height and projection,
+  brow height and ridge, forehead, cheekbone depth, mouth-corner tilt), each in standard deviations of the reference
+  population; distance = RMS of the differences;
+- **reference population**: 400 faces from MakeHuman's own space with a fixed seed (sex, age 19-70 and 15 % children,
+  build, a random ancestry mix, a head shape and each symmetric face-detail group at ±0.35 SD with 45 % probability).
+  A pair's **percentile** reads "as alike as the closest N % of random strangers of the same group" (men, women,
+  children). **sim** = the mean of the geo and lm percentiles (0 = as alike as the closest strangers, 50 = typical
+  strangers). Population same-group geo percentiles 5 / 10 / 25 / 50: men 2.68 / 2.96 / 3.47 / 4.18 mm, women
+  3.03 / 3.39 / 4.14 / 5.25 mm, children 3.64 / 3.98 / 4.76 / 5.96 mm;
+- **app**: shared look (skin ΔE, hair colour ΔE and style, eye colour, facial hair, brows; 0 = nothing shared, 1 =
+  identical);
+- **same person at another age**: the first build's ancestry and details on the second build's body (age, build),
+  compared with the second build: Kai → Witness, Kai → young Kai, Mira → young Mira, Oskar → Oskar at 55.
+- **attractive proportions** (`face_metric.CANON`, below).
+
+## Audit of the 66 builds (current generator, no overrides)
+
+Measured: `FACES_DIR=none face_metric.py $FACES/metric_cur` (`report.md`, `faces.json`, `heatmap.png`); portraits of
+every build from the current generator (look v2), packed as shipped: `$FACES/shots_cur/<id>_{front,three,profile}_{studio,game}.png`,
+per id `$FACES/shots_cur/sheet_<id>.png`, all fronts `$FACES/sheets/overview_front.png`, three-quarters
+`$FACES/sheets/overview_three.png`; the shipped classic `cast.glb` (what the game shows today) tells the same story:
+`$FACES/sheets/shipped_overview_front.png`, `$FACES/sheets/shipped_lookalikes.png` (`$FACES/stage/shipped/shots/`).
+
+**Result: one face per sex, age band and ancestry mix.** Of the 842 same-group pairs (excluding the same person at two
+ages), 589 read as the same face (sim < 10 with both geo and lm under the 20th percentile), 88 more are look-alikes
+(sim < 20), and 697 miss the pair target below (sim ≥ 25); the median same-group pair is at sim 0.9, i.e. closer than
+99 % of random strangers. The portraits confirm it: the same small almond eyes, straight thin mouth and soft nose on
+every face, with only skin, hair and props telling people apart.
+
+### Who resembles Kai (most alike first; geo / population P5, geo mm, macro-only mm)
+
+| other | geo / P5 | geo mm | macro-only mm | shared look |
+|---|---|---|---|---|
+| `c49_m6` street-food vendor | 0.37 | 1.01 | 0.83 | the same skin b98463, black hair, heavy stubble |
+| `continuum_1` trooper (helmeted) | 0.38 | 1.01 | 0.48 | hair colour, eyes |
+| `orren` | 0.47 | 1.26 | 1.10 | skin b88560 (ΔE 2.2 from Kai's) |
+| `helix_sci_m` | 0.49 | 1.32 | 1.21 | hair colour, eyes |
+| (`witness`, allowed) | 0.50 | 1.33 | 1.30 | eyes, brows |
+| `surv_m1` | 0.52 | 1.39 | 1.27 | eyes |
+| `c49_m3` | 0.53 | 1.41 | 1.25 | |
+| `c49_m4`, `neighbor`, `c26_m3`, `brandt`, `c26_m2`, `villager`, `anc_m3`, `iven`, `anc_m1`, `hale`, `anc_m2`, `c49_m1` | 0.60-0.81 | 1.6-2.2 | | |
+
+Of the 29 other adult men, 26 are closer to Kai than the closest 5 % of random men by geometry and 28 read as his face
+(sim < 10); only the 78-year-old Oskar (sim 15.9) escapes. Sheet: `$FACES/sheets/kai_lookalikes.png` (Kai, then the seven closest: front, three-quarter, profile).
+The Witness vs Kai aged to 58: geo 0.35 mm (his face is Kai's by construction, which is right, but today it inherits
+the face the owner rejects). Young Kai vs Kai at 7: 0.69 mm. Mira vs Kai: sim 24.9 (cross-sex), inside the family band.
+
+### Worst look-alike clusters (complete linkage: every pair under 0.6 × the population's P5)
+
+| cluster | mean geo | sheet |
+|---|---|---|
+| women: `c26_f3`, `c49_f3`, `caretaker`, `mara`, `surv_f2`, `technician` (European women 38-61) | 0.58 mm | `$FACES/sheets/cl_f_mara.png` |
+| women: **`mira`**, `c26_f2`, `c49_f6`, `helix_sec_2`, `c49_f4`, `anja` (Mira and `c26_f2` also share waves and hair colour: app 0.71) | 0.79 mm | `$FACES/sheets/cl_f_mira.png` |
+| men: **`witness`**, `c26_m3`, `c49_m3`, `c49_m6`, `orren` | 0.83 mm | `$FACES/sheets/cl_m_witness.png` |
+| men: `brandt`, `c49_m4`, `helix_sci_m`, `neighbor`, `surv_m1` | 0.89 mm | `$FACES/sheets/cl_m_brandt.png` |
+| men: `anc_m1`, `anc_m4`, `c26_m1`, `c49_m2`, `helix_sec_1` (+ `niko` = `anc_m3`, 1.01 mm) | 0.98 mm | `$FACES/sheets/cl_m_african.png` |
+| men: `c26_m2`, `hale`, `iven`, `oskar26`; and `rook`, `oskar`, `c49_m5` | 1.03 / 1.19 mm | `$FACES/sheets/cl_m_iven.png` |
+| women: `c26_f1`, `c49_f1`, `helix_sci_f`, `transit_worker` (+ `c49_f5`, `continuum_2`) | 1.14 mm | `$FACES/sheets/cl_f_asian.png` |
+| women: `tala`, `c49_f2`, `surv_f1`; `potter`, `anc_f2`, `anc_f4`; `anc_f1`, `anc_f3` (0.67 mm) | 0.85 / 0.97 mm | `$FACES/sheets/cl_f_african.png` |
+| children: `child`, `lotte`, `kid_mira`; `kid_kai`, `c49_kid_m`, `anc_kid_m`; `c49_kid_f`, `anc_kid_f` (0.85 mm) | 1.05 / 1.76 mm | `$FACES/sheets/cl_kids.png` |
+| men: `jun`, `c49_m1` (+ `surv_m2`) | 1.00 mm | `$FACES/sheets/cl_m_asian.png` |
+
+Similarity matrix: `$FACES/metric_cur/heatmap.png` (red = alike, blue = the same person at two ages, grey = different
+groups), numbers in `matrix_sim.csv`.
+
+### Why
+
+1. **The details are too weak to make a person.** A face's own detail modifiers move it on average 0.2-1.3 mm (RMS,
+   "detail energy") away from the macro face of its sex, age, build and ancestry; a random MakeHuman face carries
+   2.7 mm. The entries hold 1-9 detail modifiers (median 3), every value is softened (`× 0.8`, clamped to ±0.4, mean
+   |value| 0.23), and the same few are reused: `head-oval` in 34 of 66 entries, `cheek-bones` in 22, `head-round` in
+   18, `eye-bag` in 11. So for most pairs the details barely change the distance their macro faces already have
+   (Kai vs `c49_m6`: macro-only 0.83 mm, with details 1.01 mm).
+2. **Faces are the average of a handful of ancestry mixes.** 16 builds are pure European, 12 the settlement mix
+   (0.35 / 0.65 / 0), 8 pure African, 6 pure East Asian, 5 the "Latin" mix (0.6 / 0.15 / 0.25) and 4 the South Asian
+   mix; Kai's own mix (0.45 / 0.15 / 0.4) sits between the European, Latin, South Asian and mixed builds, so every
+   brown-haired man of a mixed heritage lands on Kai's face (`c49_m6`, `orren`, `c49_m3`, `helix_sci_m`, `continuum_1`).
+3. **Identical skin, eyes and hair.** Kai's skin b98463 is also `c49_m6`'s, `c49_f6`'s, `helix_sec_2`'s (and young
+   Kai's); 6b4029 is on 7 builds, 8c5a3a on 5, f1c6a8 on 5. Eye colour 2a1a10 is on 29 builds and Kai's 3a2a1c on 9.
+   Hair colour 141010 is on 25 builds; styles repeat (`short` 9, `swept` 7, `crop` 7), and from the front `pony`,
+   `bun`, `braid` and `crop` all read as the same dark cap with a fringe (portraits). Mira and `c26_f2` share the
+   `waves` style and the hair colour 1e1712. One iris paint, one lash ring and one brow stroke on every face finish
+   the effect.
+4. **Decimation of the face.** The packed builds keep 700-1 800 triangles in the face box (Kai 1 753, named NPCs about
+   1 100-1 400, crowds 600-1 500) of about 5 400 in MakeHuman's face, so small shape cues (lip border, nostril, eyelid
+   fold, chin) are averaged away; `helix_sec_1`, `sera`, `surv_f2`, `surv_m2`, `anc_m3` and `helix_sec_2` keep fewer than 750.
+   Decimation does not create the sameness (the sculpts already coincide) but it removes what little detail there was.
+5. **Not attractive by construction.** MakeHuman's macro faces miss the proportions of an attractive face (table
+   below): every adult but one has small, wide-set eyes (eye width 25-29 mm against about 30 mm, intercanthal / eye
+   width 1.16-1.51 against about 1.07), all 58 adults have a lower lip thinner than the upper, 42 a short upper lip / long
+   chin, 26 a retruded chin in profile. Softening the details kept these averages instead of correcting them.
+
+## Thresholds the face steps must meet
+
+Checked by `face_metric.py` (`THRESH`, `CANON`; the "Target failures" list in `report.md` must be empty; today it
+holds 808: 672 pair distances, 79 shared looks, 57 builds with more than the allowed `CANON` misses). The face
+triangle rule is read from the renderer's `shots.json`:
+
+| rule | threshold |
+|---|---|
+| different named characters / extras of the same group (men, women, children) | sim ≥ 25 (as far apart as typical strangers' lower quartile) |
+| crowd templates among themselves | sim ≥ 15 |
+| anyone (but the Witness and young Kai) against Kai | sim ≥ 40, and no "SAME FACE" or "look-alike" verdict across sexes either |
+| no pair of different people | verdict "SAME FACE" (sim < 10) or "look-alike" (sim < 20) |
+| the Witness against Kai aged to 58 (his details on the Witness's body) | sim ≤ 12, and the same eye colour, brow line and wrist scar |
+| young Kai against Kai at 7; young Mira against Mira at 10; Oskar at 55 against Oskar | sim ≤ 12 |
+| Mira against Kai | 15 ≤ sim ≤ 45 (family brow line, her own face) |
+| shared look between two different people of the same group | app < 0.6 (no identical skin + hair colour + style) |
+| every adult principal and named NPC | at most one `CANON` proportion out of range; crowds at most two |
+| face triangles after packing (face box in `shots.json`) | Kai ≥ 1 700, named NPCs ≥ 1 100, crowds ≥ 800, within the unchanged total budgets |
+
+A face also passes by eye: the portraits of a candidate set next to its cluster mates on one sheet
+(`face_sheet.py cluster`), front, three-quarter and profile, studio and night light.
+
+## What makes a MakeHuman face attractive here
+
+The face steps aim for real, appealing people (premium story-game realism), never for one "pretty" template: the
+distinctness rules above apply at the same time. Distinct features go where they do not cost appeal (nose shape and
+size, brow shape, face length and width, cheek fullness, jaw and chin form, lip shape, ears, hair, skin, age marks);
+the proportions that read as attractive (eyes, lip balance, thirds, chin in profile) are corrected on everyone.
+
+**Proportions** (`face_metric.CANON`, measured with the metric's landmarks; men / women, heritage overrides):
+
+| proportion | target | today (adults) | levers (+0.5 of the modifier, measured on Kai's macro) |
+|---|---|---|---|
+| eye spacing: intercanthal / eye width | 0.95-1.20 / 0.95-1.18 (East Asian 1.05-1.35) | 1.16-1.51, 57 of 58 out | `eyes/*-eye-trans-in|out` −0.3…−0.5 (−0.10…−0.17), `eyes/*-eye-scale-decr|incr` +0.2…+0.4 (−0.06…−0.13, +1.6 mm eye width), `eyes/*-eye-push1/push2-in|out` +0.3 (+1.1 mm eye width) |
+| lower / upper lip (stomion to each lip's fullest point) | 0.95-1.5 / 1.05-1.6 | 0.61-1.05, 58 out | `mouth/mouth-lowerlip-height-decr|incr` +0.4 (+0.17), `mouth/mouth-lowerlip-middle-down|up` +0.3 (+0.13), `mouth/mouth-upperlip-height-decr|incr` −0.2 (+0.12), `mouth-cupidsbow` +0.3 for a defined bow |
+| upper lip / lower face: (sn-sto) / (sto-me) | 0.42-0.53 / 0.42-0.55 | 0.36-0.55, 42 out | `chin/chin-height-decr|incr` −0.2…−0.4 (shorter chin), `mouth/mouth-trans-down|up` −0.2 |
+| chin in profile: pogonion behind the lower lip | −5…+0.5 mm / −6.5…−1 mm (African −9.5…−2) | −10.5…−2.3 mm, 26 out | `chin/chin-prominent-decr|incr` +0.3…+0.6 (+1.0…+2.0 mm), `chin/chin-prognathism-decr|incr` +0.2 |
+| jaw / cheek width | 0.84-0.95 / 0.76-0.87 | 0.76-0.96, 9 out | men: `chin/chin-width-decr|incr` +0.2…+0.4, `head-square` / `head-rectangular` 0.2-0.4, `chin-bones` +0.2; women: `chin-width` −0.2, `head-oval` / `head-invertedtriangular` 0.2-0.4 |
+| canthal tilt (outer corner up) | +1.5…+7° / +3…+9° (East Asian +4…+12.5°) | +2.7…+10.9°, in range | `eyes/*-eye-corner1-down|up` +0.2 (outer up), `eyes/*-eye-corner2-down|up` −0.2 |
+| mouth / nose width | 1.38-1.75 / 1.4-1.8 (African 1.25-1.6) | 1.28-1.70, in range with the heritage ranges | `mouth/mouth-scale-horiz-decr|incr` +0.2…+0.4 (+0.04…+0.07), `nose/nose-nostrils-width-decr|incr` −0.2 |
+| nose / intercanthal width | 0.8-1.06 / 0.76-1.0 (African 0.9-1.25) | in range for most | `nose/nose-scale-horiz-decr|incr`, `nose-nostrils-width`, `nose-width3` |
+| midface / lower face: (n-sn) / (sn-me) | 0.72-0.88 / 0.75-0.90 | in range for most | `nose/nose-scale-vert-decr|incr`, `chin-height` |
+
+Full table of what every face modifier moves (geo mm and each proportion, +0.5 on Kai's macro):
+`$FACES/modifier_sensitivity.txt`. Avoid `head/head-angle-in|out` (5 mm of change by tilting the whole face),
+`head-scale-*` (resizes rather than reshapes) and large `head-trans-*`.
+
+**Concrete guidance, men** (Kai, Brandt, Niko, Sera's male counterparts in the crowds): a defined, slightly squared
+jaw with the chin reaching the lower-lip line in profile; cheekbones high and visible (`cheek-bones` +0.3…+0.5,
+`cheek-volume` −0.2…−0.4 for lean faces); brows straight and set low over the eyes (`eyebrows-trans-down|up` −0.2,
+`eyebrows-angle` −0.1…−0.2), a slight brow ridge (try `eyebrows-trans-backward|forward` and `forehead-nubian`, judged
+in profile); deep-set eyes with a slight hood (try `eye-eyefold-down|up`), larger and closer than MakeHuman's average;
+a straight, defined nose (`nose-hump` 0…−0.2, `nose-point-width` −0.2); a firm mouth with the lower lip fuller than the
+upper. Grooming: designed stubble or a trimmed beard
+with a clean neck line and cheek line, clean brows, hair cut with intent (no helmet).
+
+**Women** (Mira, Sera, Anja, Tala, the crowd women): a soft but defined jaw narrower than the cheeks, a chin a little
+behind the lip line; high cheekbones with some fullness under them; larger eyes (`eye-scale` +0.3…+0.5) with a
+lifted outer corner, softly arched brows set higher (`eyebrows-angle` +0.2…+0.3, `eyebrows-trans` +0.1); a refined,
+narrower nose with a slightly lifted tip (`nose-point-up` +0.1…+0.2, `nose-scale-horiz` −0.1…−0.3 where the heritage
+allows); full lips with a defined cupid's bow and the lower lip fuller (`lowerlip-volume` +0.2…+0.4, `upperlip-volume`
++0.1…+0.2, `cupidsbow` +0.2…+0.4). Grooming: shaped brows, a light flush (`blush` 0.15-0.3), lip colour a little
+deeper than the skin, hair with a part and volume.
+
+**Older people**: age through skin and soft tissue (eye bags, laugh lines, `head-age`, thinner lips, lower brows)
+on a well-built skull; elders stay handsome and kind (Rook distinguished, Oskar kind, Mara soft and watchful).
+**Children**: round full cheeks, large eyes, small nose and chin; never an adult face scaled down, never a doll.
+
+**Skin, eyes, hair** (painted in the generator, part of the face): even skin with real colour variation (warmer
+cheeks, nose and ears, a slightly darker eye socket), no flat single tone; a unique skin hex per person (no two people
+of the same group within ΔE 6), the eye colour from the brief with an individual iris; brows by personality (thick and
+straight, arched, fine, bushy); a lip colour per person; each person's own hairstyle and colour from the brief, so
+that no two people of one group share style and colour; facial hair as grooming (shaped, not dotted squares).
+
+## Face briefs
+
+One line per build: age, heritage (the build's ancestry mix stays as cast), build, personality, and the impression the
+face must give in a close-up. "Not like ..." names the faces this one is closest to today (see the audit below).
+Every adult is groomed and appealing for their age and role, nobody is a cartoon, nobody is uncanny.
+
+### Principals
+| id | brief |
+|---|---|
+| `kai` | 32, mixed European / East Asian / West African (warm olive-tan), 1.83 m lean-athletic; a temporal engineer who believes every loss can be undone: controlled, intense, private. **Redesign (the owner finds today's face ugly):** a handsome leading man: straight heavy brows set low over deep-set dark eyes with a slight hood, a narrower eye spacing than today, high defined cheekbones and lean cheeks, a clean squared jaw and a chin that comes forward in profile, a straight strong nose with a defined bridge, a firm mouth with a fuller lower lip, heavy groomed stubble and thick messy black waves over the brow; tired but determined, someone you follow. Not like `c49_m6`, `continuum_1`, `orren`, `helix_sci_m`, `c49_m3`, `surv_m1`. |
+| `mira` | 29, European with a light East Asian trace (fair, warm flush), 1.69 m slim-athletic; a reconstructed person who refuses to be a rescue object: tender, uncertain, independent. The most memorable face in the game: large grey-blue eyes, softly arched brows (the family brow line she shares with Kai), high cheekbones, a slim oval face with a delicate jaw, a straight refined nose, full lips; luminous, alive, her own face. Not like `c26_f2` (same waves and hair colour today), `c49_f6`, `technician`, `c49_f3`, `anja`, `helix_sec_2`. |
+| `witness` | 58, Kai's heritage, 1.81 m lean and slightly stooped; Kai after years without sleep: precise, controlled, haunted. **The new Kai aged 25 years** (same brow, eyes, nose, jaw and wrist scar): hollower cheeks, deep forehead and eye lines, weathered skin, silver hair swept back to the collar, a short grey beard and moustache, the scar across the left brow; piercing, exhausted eyes. The only face allowed to resemble Kai. Not like `c49_m3`, `c26_m3`, `orren`, `c49_m6`. |
+| `sera` | 34, European / West African (tan, grimy), 1.72 m athletic and strong; a resistance leader, practical, direct, distrustful. Striking and tough: strong cheekbones, straight determined brows that sit low, grey-green eyes, a firm jaw, a wide mouth that rarely smiles, the fresh scar down the left side; beautiful without trying. Not like `mira`, `anja`, `c49_f4`, `anc_f*`. |
+| `rook` | 62, European (pale-warm, age spots), 1.78 m slim and upright; the Helix director, composed, guarded, never a simple villain. Distinguished and cold: a long narrow face, high forehead, a prominent straight nose, thin lips, deep-set pale blue-grey eyes with crow's feet, receding silver hair combed back. Not like `oskar`, `c49_m5`. |
+| `niko` | 19, settlement (West African), deep brown, 1.66 m slender; keeper of the settlement's memory, earnest and perceptive. An open, bright young face: youthful round-oval, broad nose, full lips, large dark eyes under soft brows, tight black curls, no facial hair. Not like `anc_m3`, `c49_m2`, `c26_m1`, `helix_sec_1`. |
+| `tala` | 41, West African (dark brown), 1.64 m strong; the water keeper, calm authority. A handsome, composed face: strong high cheekbones, a wide nose, full lips, smile lines, a low bun with a few grey strands; warmth held in reserve. Not like `c49_f2`, `surv_f1`, `potter`. |
+| `iven` | 45, European (fair, freckled, flushed), 1.76 m solid; a maintenance technician who fears being blamed: tired, decent, likeable. A wide friendly face, snub nose, light green eyes, reddish stubble, ginger-brown crop. Not like `hale`, `c26_m2`, `oskar26`. |
+| `jun` | 42, Korean (light warm), 1.74 m average; transit operator, kind but worried. A round warm face, monolid eyes with soft lids, a low flat nose bridge, a gentle mouth, clean-shaven, short straight black hair. Not like `c49_m1`, `surv_m2`. |
+| `hale` | 48, European (ruddy), 1.85 m big and broad; night-shift security, steady and by the book. A broad square jaw, thick neck, heavy brows, a slightly broken nose, grey-blue eyes, grey-brown buzz cut; solid, not brutish. Not like `iven`, `c26_m2`, `oskar26`. |
+| `brandt` | 37, European (pale), 1.80 m lean; Rook's problem-solver, cold and efficient. Handsome in a hard, chilly way: a long narrow face, high cheekbones, thin lips, cold blue eyes, sandy hair swept back, light stubble; never Kai's warmth. Not like `c49_m4`, `helix_sci_m`, `neighbor`, `surv_m1`. |
+| `child` | 8, European (light, freckled), 1.27 m small; the child in the station, frightened but brave. A real child: round full cheeks, big brown eyes, a small button nose, short brown bob; not a doll. Not like `lotte`, `kid_mira`. |
+| `anja` | 46, South Asian (brown), 1.70 m slim and wiry; a scientist of temporal memory, intelligent, burdened. Elegant and intelligent: a long oval face, fine laugh lines, large intelligent dark eyes, a refined aquiline nose, a dark braid with a grey streak. Not like `mira`, `c49_f4`, `c49_f6`, `helix_sec_2`. |
+| `mara` | 61, European (pale, weathered), 1.62 m slight; the 2196 archivist, watchful and soft. A soft, small, lined face with a small chin, kind watchful pale eyes behind repaired rectangular glasses, cropped silver hair. Not like `caretaker`, `c26_f3`, `surv_f2`, `c49_f3`. |
+| `orren` | 50, mixed European / African / East Asian (olive), 1.78 m calm and upright; guide of the Unwritten Second, serene. A calm, symmetric, long face with a broad smooth forehead, wide-set calm eyes, a broad straight nose, clean-shaven, close-cropped dark hair grey at the temples: it must not read as Kai or the Witness (today it is one of Kai's closest matches). |
+
+### Mission extras
+| id | brief |
+|---|---|
+| `caretaker` | 57, Northern European (fair, weathered), 1.66 m sturdy; Ingrid Holt, calm and competent. A broad weathered face, a square jaw, small light eyes behind thin rectangular glasses, short grey-brown pixie. Not like `mara`, `c26_f3`, `surv_f2`, `technician`. |
+| `oskar` | 78, European (pale), 1.70 m slight; the clockmaker, kind and patient. A lined, kind face, bushy white brows, a long nose, a white beard, white swept hair, glasses. Same person as `oskar26` (allowed). Not like `rook`, `c49_m5`. |
+| `oskar26` | 55, Oskar 23 years younger: the same nose, brows and eyes, brown hair going grey, stubble, glasses. Not like `iven`, `hale`, `c26_m2`. |
+| `lotte` | 8, European (fair, freckled), 1.27 m slight; the clockmaker's daughter, bright and curious. A narrow heart-shaped child's face, big blue eyes, a small pointed chin, dark-blonde ponytail. Not like `child`, `kid_mira`. |
+| `kid_kai` | 7, Kai's heritage, 1.22 m slight; Kai as a child (residue echo). The new Kai's eyes and brows in a child's face: dark deep-set eyes, straight brows, messy black hair. Allowed to resemble Kai and the Witness only. Not like `c49_kid_m`, `anc_kid_m`. |
+| `kid_mira` | 10, Mira's heritage, 1.36 m slim; Mira as a child. Mira's eyes and face shape at ten: large green-grey eyes, a slim oval face, a dark bob. Not like `child`, `lotte`. |
+| `neighbor` | 46, European / African (light brown), 1.76 m average; a wary neighbour in the clock quarter. An ordinary, pleasant face: a rounder face, a short wide nose, heavy-lidded brown eyes, short dark hair, stubble. Not like `rook`, `iven`, `brandt`, `kai`. |
+| `potter` | 46, settlement (warm dark brown), 1.60 m solid; Iru the potter, warm and humorous. A broad, warm face with full cheeks, deep laugh lines, a wide nose, a bun. Not like `tala`, `anc_f2`, `anc_f4`. |
+| `villager` | 52, settlement (deep brown), 1.70 m wiry; the lower-village speaker, weathered and wary. A lean, long face, hollow cheeks, short greying curls, a trimmed beard. Not like `anc_m2`, `orren`. |
+
+### Crowd 2049 civilians
+| id | brief |
+|---|---|
+| `c49_m1` | 24, East Asian (light), slim young professional; a sharp, neat, fashionable young face: narrow jaw, straight brows, black undercut, clean-shaven. Not like `jun`, `surv_m2`. |
+| `c49_m2` | 38, West African (deep), athletic commuter; a long handsome face, high forehead, short fade, trimmed beard. Not like `niko`, `c26_m1`, `helix_sec_1`, `anc_m*`. |
+| `c49_m3` | 55, South Asian (brown), stocky shop owner; a round, kindly, jowly face, a broad nose, a neat grey beard. Today one of Kai's closest matches: must move well away. |
+| `c49_m4` | 31, Nordic (fair), lean bike courier; a narrow, angular, wind-burned face, swept blond hair, light stubble. Not like `brandt`, `hale`, `iven`. |
+| `c49_m5` | 67, Mediterranean (olive), retired engineer; a long, lined, gentle face, a strong hooked nose, silver swept hair, glasses. Not like `rook`, `oskar`, `witness`. |
+| `c49_m6` | 45, Latin American (tan), heavy-set street-food vendor; a broad, round, cheerful face, full cheeks, a short wide nose, stubble. Today Kai's closest match (same skin, hair colour, stubble): must move furthest from Kai. |
+| `c49_f1` | 27, Korean (light), slim designer; a delicate, stylish face, a small chin, long straight black hair. Not like `c26_f1`, `helix_sci_f`, `transit_worker`. |
+| `c49_f2` | 34, East African (deep), athletic nurse; a long elegant face, high cheekbones, a narrow nose, braids in a high ponytail. Not like `tala`, `surv_f1`. |
+| `c49_f3` | 48, European (fair), soft office worker; a round, soft, friendly face, an auburn bob. Not like `mira`, `caretaker`, `c26_f3`. |
+| `c49_f4` | 22, South Asian / European (light brown), slim student; a lively young face, big eyes, a pixie crop with teal tips. Not like `mira`, `anja`. |
+| `c49_f5` | 62, Chinese (light), slim grandmother; a small, lined, smiling face, short grey hair, glasses. Not like `helix_sci_f`, `c49_f1`. |
+| `c49_f6` | 39, Latina (tan), strong emergency responder; a strong, warm face, a wide jaw, a full mouth, dark wavy low ponytail. Not like `mira` (same hair colour), `helix_sec_2`. |
+| `c49_kid_m` | 10, South Asian (brown), schoolboy; a thin, lively child's face, large ears, short black hair. Not like `kid_kai`, `anc_kid_m`. |
+| `c49_kid_f` | 6, Black (deep), little girl; a round baby-cheeked face, two curly puffs. Not like `anc_kid_f`. |
+
+### Crowd 2049 Helix and services
+| id | brief |
+|---|---|
+| `helix_sci_m` | 36, Middle Eastern (olive), Helix scientist; a long, thoughtful face, a strong nose, short dark hair, trimmed beard. Today a close Kai match: must move away (longer face, larger nose, rounder brows). |
+| `helix_sci_f` | 44, Japanese (light), Helix scientist; a calm oval face, fine features, a black bob with greys. Not like `c49_f1`, `transit_worker`. |
+| `helix_sec_1` | 32, Black (deep), muscular guard; a broad, square, heavy-jawed face, short crop, clean-shaven. Not like `niko`, `c49_m2`. |
+| `helix_sec_2` | 35, Latina (tan), athletic guard; a hard, high-cheekboned face, a narrow chin, a tight bun. Not like `mira`, `c49_f6`. |
+| `transit_worker` | 29, Filipino (warm), transit worker; a friendly round face, a flat wide nose, a low ponytail under a cap. Not like `c49_f1`, `helix_sci_f`. |
+| `technician` | 38, Slavic (fair), strong technician; a broad face, wide cheekbones, deep-set eyes, a red-brown braid. Not like `mira`, `caretaker`, `surv_f2`. |
+
+### Crowd 2026
+| id | brief |
+|---|---|
+| `c26_m1` | 29, Black British (deep), athletic young man; a handsome, youthful, clean face, a short fade. Not like `niko`, `c49_m2`. |
+| `c26_m2` | 47, European (fair), soft dad build; a soft, round, tired face, a receding short brown hairline, stubble. Not like `iven`, `hale`. |
+| `c26_m3` | 63, South Asian (brown), slim older man; a thin, lined, dignified face, grey hair, glasses. Not like `witness`, `c49_m3`. |
+| `c26_f1` | 24, East Asian (light), student; a youthful round face, long straight black hair. Not like `c49_f1`. |
+| `c26_f2` | 38, Latina (tan), professional; a confident face, strong brows, dark wavy shoulder-length hair. Today Mira's closest match (same waves and hair colour): change hair colour or part and the face. |
+| `c26_f3` | 55, European (fair), older woman; a long, refined face, a silver-blonde bob, glasses. Not like `caretaker`, `mara`. |
+
+### Crowd 2196
+| id | brief |
+|---|---|
+| `surv_m1` | 41, Middle Eastern (olive, grime), wiry scavenger; a gaunt, hard face, a hooked nose, a full beard. Not like `kai`, `witness`, `brandt`. |
+| `surv_f1` | 28, Black (deep), athletic scout; a lean, sharp, alert face, short locs tied back. Not like `tala`, `c49_f2`. |
+| `surv_m2` | 63, East Asian (light, weathered), thin elder mechanic; a lean, lined, wiry face, grey stubble. Not like `jun`, `c49_m1`. |
+| `surv_f2` | 45, Slavic (fair, weathered), sturdy medic; a square, practical, weathered face, a greying braid. Not like `caretaker`, `technician`, `mara`. |
+| `continuum_1` | 30, East Asian / European (light), athletic trooper behind a sealed helmet; the face underneath is still distinct: a long, hard, narrow face. Today almost Kai's face: must move away. |
+| `continuum_2` | 33, East Asian / European (light), athletic officer, visor up; a severe, symmetric, elegant face, a tight low bun. Not like `anja`, `c49_f4`. |
+
+### Crowd ancient settlement
+| id | brief |
+|---|---|
+| `anc_m1` | 32, settlement (brown), muscular farmer / builder; a broad, open, sun-lined face, a shaved head. Not like `anc_m4`, `c49_m2`. |
+| `anc_m2` | 64, settlement (brown), slight elder storyteller; a long, deeply lined, expressive face, grey curls and beard. Not like `villager`. |
+| `anc_m3` | 22, settlement (brown), lean sentry; a narrow, watchful young face, braided hair at the nape. Not like `niko`. |
+| `anc_m4` | 40, settlement (dark brown), stocky bronze smith; a heavy, broad, square face, a full beard. Not like `anc_m1`, `helix_sec_1`. |
+| `anc_f1` | 25, settlement (warm brown), slim water carrier; a fresh, oval, pretty face, a single long braid. Not like `anc_f3`, `sera`. |
+| `anc_f2` | 50, settlement (brown), soft weaver; a round, soft, cheerful face, a grey-streaked bun. Not like `potter`, `anc_f4`. |
+| `anc_f3` | 35, settlement (brown), herbalist / healer; a calm, long, serene face, two braids and a headband. Not like `anc_f1`. |
+| `anc_f4` | 68, settlement (deep brown), slight stooped elder; a small, very lined face, a white bun under a head wrap. Not like `anc_f2`, `potter`. |
+| `anc_kid_m` | 9, settlement (brown), slim boy; a lively, narrow child's face, short curls. Not like `kid_kai`, `c49_kid_m`. |
+| `anc_kid_f` | 7, settlement (warm brown), small girl; a round child's face, two braids. Not like `c49_kid_f`. |
