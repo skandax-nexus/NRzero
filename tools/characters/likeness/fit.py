@@ -505,7 +505,7 @@ def region_report(prob, x, q_render=None):
             else:
                 if g == "brows":       # the vertical offset (head up, mm): the game's brow height is a look key (browLift)
                     up = brow_up_dir(prob, idx)
-                    row[nm + "_up_mean_mm"] = round(float(-(e * up).sum(1).mean()), 2)
+                    row[nm + "_render_above_photo_mm"] = round(float((e * up).sum(1).mean()), 2)
                 row[nm + "_rms_mm"] = round(float(np.sqrt((e ** 2).sum(1).mean())), 2)
                 row[nm + "_max_mm"] = round(float(np.sqrt((e ** 2).sum(1)).max()), 2)
         out[g] = row
