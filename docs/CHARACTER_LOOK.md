@@ -775,3 +775,46 @@ Every adult is groomed and appealing for their age and role, nobody is a cartoon
 | `anc_f4` | 68, settlement (deep brown), slight stooped elder; a small, very lined face, a white bun under a head wrap. Not like `anc_f2`, `potter`. |
 | `anc_kid_m` | 9, settlement (brown), slim boy; a lively, narrow child's face, short curls. Not like `kid_kai`, `c49_kid_m`. |
 | `anc_kid_f` | 7, settlement (warm brown), small girl; a round child's face, two braids. Not like `c49_kid_f`. |
+
+## proto:makehuman: Kai on the MakeHuman route (hair, mouth, three styles)
+
+Candidate faces: `tools/characters/faces_candidates/kai_young|kai_rugged|kai_mature/kai.json` (build with
+`FACES_DIR=...`; the shipped cast is unchanged until one is copied to `tools/characters/faces/kai.json`). Shapes found
+with the clay loop (fast numpy previews of `mh.sculpt`): compact face, open eyes (eye-height1/3 up, set a little
+closer, slight up-tilt), refined narrow nose (flaring, point width, nostrils down), fuller lips with a cupid's bow, eye
+bags down; each style keeps its own jaw and brow. Skin albedo `a8806a` (the earlier `a47c52` was ~50 % saturated and
+read orange under sodium light). Hair colour `2e2018` (very dark brown: black-brown kept no strand light).
+
+Hair (`look2.py`, messy cuts `lead_messy` / `lead_shag` / `lead_tousle`, `_messy_cards`):
+- strand atlas v9 (`HT_VERSION = 9`): clump columns carry ~230 fine strands spread evenly (sub-clumps only bunch
+  them a little) that end over the whole last half: a feathered tip, never a converging point (v8's tips were spikes);
+- cards 10-10.5 mm wide with a gentle taper (`tipw` 0.74, fringe 0.9); root colour 0.74 of the tip (the shader's
+  root occlusion is now 0.72 instead of 0.55, so roots are not darkened twice);
+- strand tangents of scalp cards blend 60 % with their 1.2 cm neighbourhood mean (`HAIR_TSMOOTH`, 0 = off): the sheen
+  is one band across the cut instead of glossy shards card by card;
+- messy: an uneven diagonal fringe (a smooth noise field plus per piece random; short on the whorl side), fringe
+  pieces gather (`conv` up on the fringe) and stand a little off the forehead, a shorter hem at the ears with ends
+  flicking out, a fuller crown (`hero_T`);
+- `rig2.js`: Kajiya-Kay lobes 0.2 / 0.42 (were 0.16 / 0.34), exponents 64 / 22; `skin.js`: the shell under the cards
+  0.8 (was 0.64: dark holes between cards).
+
+Mouth (`look2.py` `_teeth_crowns`, `_gum_band`, `mouth_objects`, `_mouth_rims`):
+- the upper arch 5 mm further forward (`TEETH_FWD`, sagittal sections showed the incisors 5 mm behind the inner lip, so
+  no camera a little above the mouth saw them), the lower arch 2.0 mm behind it (overjet), a flatter, wider arch
+  (21 / 17 000 instead of 25 / 25 000: a 1 cm black corridor beside the side teeth), crowns touch (no gum showing
+  between teeth), the upper incisal edge 3.6 mm under the lips' contact line;
+- the tongue rests 3.5 mm lower and 2.5 mm back (`TONGUE_LOW=0` restores MakeHuman's);
+- closed lips overlap 0.1 mm (`RIM_OVERLAP`; the 0.3 mm gap showed a white line of teeth).
+
+Skin paint (`build_humans.py`): light stubble is a soft even shadow with a faint grain (0.4 mm specks aliased to sand);
+the short groomed beard (beard < 0.5) has a density gradient (full on chin, jaw, moustache), a noise-broken cheek
+line, a faded neckline, darker cooler hair and a fine directional texture; the painted tint under the brow hairs 0.17
+(was 0.28: a painted block).
+
+Debugging: `TEETH_DEBUG=1` prints the incisal edges against the lip rim at build time.
+
+Licence of the generator (read in `/home/user/tools/mh/LICENSE.md` and `LICENSE.ASSETS.md`): MakeHuman's bundled
+assets (base mesh, proxies, targets and modifiers, textures) are CC0 1.0 Universal; section D: "the MakeHuman project
+makes no claim whatsoever over output such as exports to files ... graphical data generated via scripting or plugins";
+only the MakeHuman source code is AGPL. Our pipeline reads the CC0 assets with our own scripts and ships only the
+generated meshes and textures, which a commercial game may ship. No scan, photo or model of a real person is used.

@@ -1307,10 +1307,18 @@ def paint(c, B, cov, res, path_out):
                 regb = (ss(0.0, 0.006, top_b - pos[:, 1]) * ss(-0.1, -0.055, rel[:, 2]) * ss(my - 0.128, my - 0.1, pos[:, 1]) * isface
                         * (earf < 0.5) * ss(0.088, 0.066, ax_) * (1 - ss(0.2, 0.6, lipm)))
                 regb *= 1 - 0.5 * g2(t ** 2 + ((d + 0.0) / 0.006) ** 2, 1.0) * (np.abs(t) < 1.05)
-                dens = np.clip(brd * 2.0, 0, 1) * regb
-                speck = (hash01(pos, 4200, seed + 9.3) < 0.55 * dens).astype(float)
-                # proto:makehuman: dense and even with a fine directional grain (hard specks read as sand at atlas resolution)
-                ab = np.clip(dens * (0.5 + 0.1 * speck + 0.14 * (strands - 0.5) + 0.05 * (fine - 0.5)), 0, 0.66)
+                # proto:makehuman: a groomed short beard has a density gradient (full on the chin, the jaw and the
+                # moustache, thinning up the cheeks), a soft cheek line broken by the hair (not a straight painted edge),
+                # a faded neckline, and a visible fine-hair texture (flat tone read as a painted mask)
+                edge_n = 0.004 * (vnoise(pos, 260, seed + 4.1) - 0.5)
+                regb = (ss(-0.004, 0.012, top_b + edge_n - pos[:, 1]) * ss(-0.1, -0.055, rel[:, 2]) * ss(my - 0.13, my - 0.092, pos[:, 1]) * isface
+                        * (earf < 0.5) * ss(0.09, 0.064, ax_) * (1 - ss(0.2, 0.6, lipm)))
+                regb *= 1 - 0.5 * g2(t ** 2 + ((d + 0.0) / 0.006) ** 2, 1.0) * (np.abs(t) < 1.05)
+                chinjaw = np.clip(ss(my - 0.012, my - 0.05, pos[:, 1]) + g2(((pos[:, 0] - 0.0) / 0.03) ** 2 + ((pos[:, 1] - my - 0.012) / 0.01) ** 2, 1.0), 0, 1)
+                dens = np.clip(brd * 2.0, 0, 1) * regb * (0.62 + 0.38 * chinjaw)
+                hairs = np.clip((vnoise(pos * np.array([3.0, 0.7, 3.0]), 1700, seed + 2.9) - 0.35) * 2.2, 0, 1)
+                ab = np.clip(dens * (0.5 + 0.28 * hairs + 0.1 * (fine - 0.5)), 0, 0.8)
+                bc_ = bc_ * 0.62
             else:
                 ab = np.clip(brd * reg * edge * (0.62 + 0.3 * strands + 0.12 * (fine - 0.5)), 0, 0.93)
             over(ab, bc_ * 0.95)

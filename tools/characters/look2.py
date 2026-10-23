@@ -615,7 +615,8 @@ CROWNS_LO = [(5.3, 9.0, 6.0), (5.9, 9.3, 6.3), (6.9, 10.6, 7.6), (7.0, 8.3, 7.8)
 
 def _arch_curve(z0, k, n=400, xmax=0.034):
     xs = np.linspace(0, xmax * k, n)
-    zs = z0 - 25.0 / k * xs ** 2 - 25000.0 / k ** 3 * xs ** 4
+    # proto:makehuman: a flatter, wider arch (25 / 25 000 left a 1 cm dark corridor between the side teeth and the cheeks)
+    zs = z0 - 21.0 / k * xs ** 2 - 17000.0 / k ** 3 * xs ** 4
     seg = np.hypot(np.diff(xs), np.diff(zs))
     arc = np.concatenate([[0], np.cumsum(seg)])
     return xs, zs, arc
@@ -630,14 +631,14 @@ def _teeth_crowns(P, upper, k, yc, a0, a1):
     if upper:
         # proto:makehuman: 2 mm further forward (9 mm behind the lips' front, the upper lip hid the incisors from any
         # camera a little above the mouth: the open mouth showed no upper teeth)
-        z0 = z_front + float(os.environ.get("TEETH_FWD", "0.002")) * k
+        z0 = z_front + float(os.environ.get("TEETH_FWD", "0.005")) * k
         UP_Z0[:] = [z0]
     else:
-        z0 = UP_Z0[0] - 0.0024 * k if UP_Z0 else z_front - 0.0022 * k
+        z0 = UP_Z0[0] - 0.0020 * k if UP_Z0 else z_front - 0.0022 * k
     xs, zs, arc = _arch_curve(z0, k)
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0              # crowns grow up (upper: toward the gum) from the edge
-    edge0 = yc - 0.0030 * k if upper else yc - 0.0007 * k
+    edge0 = yc - 0.0036 * k if upper else yc - 0.0007 * k
     V_, F_, UV_ = [], [], []
     for side in (1.0, -1.0):
         s0 = 0.0
@@ -740,11 +741,11 @@ def _gum_band(P, upper, k, yc, a_gum):
     """The gums over the crowns (labial side): a scalloped strip along the arch, its border dipping between the teeth
     (papillae), rolling back toward the lip's inner surface. Returns (points, quads, uv)."""
     z_front = P[:, 2].max()
-    z0 = UP_Z0[0] if (upper and UP_Z0) else (UP_Z0[0] - 0.0024 * k if UP_Z0 else z_front - 0.0022 * k)
+    z0 = UP_Z0[0] if (upper and UP_Z0) else (UP_Z0[0] - 0.0020 * k if UP_Z0 else z_front - 0.0022 * k)
     xs, zs, arc = _arch_curve(z0, k)
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0
-    edge0 = yc - 0.0030 * k if upper else yc - 0.0007 * k
+    edge0 = yc - 0.0036 * k if upper else yc - 0.0007 * k
     bounds = np.concatenate([[0.0], np.cumsum([(w + 0.04) * 0.001 * k for w, _, _ in crowns])])
     smax = bounds[-1]
     ns = 34
@@ -803,6 +804,11 @@ def mouth_objects(B):
         P[:, 2] -= 0.0018
         if "teeth" not in g or os.environ.get("TEETH_MH") == "1" or os.environ.get("TEETH_GUM") == "1":
             P[:, 1] += (np.mean(P[:, 1]) - P[:, 1]) * 0.12      # a touch shorter: hidden behind closed lips
+        if g == "helper-tongue" and os.environ.get("TONGUE_LOW") != "0":
+            # proto:makehuman: the tongue rests low in the floor of the mouth, behind the lower teeth (MakeHuman's helper
+            # reaches up to the upper incisors: the open mouth showed a wall of tongue at the height of the upper teeth)
+            P[:, 1] -= 0.0035 * B.H / 1.75
+            P[:, 2] -= 0.0025 * B.H / 1.75
         y = P[:, 1]
         if "teeth" in g:
             # a = along the tooth (gum line -> biting edge), b = around the arch
