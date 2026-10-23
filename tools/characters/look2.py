@@ -301,7 +301,7 @@ def _mouth_rims(o, out, B, pts, j, h, rings=5):
                 p = pts[vi]
                 q = other[np.argmin(np.abs(other[:, 0] - p[0]) + 3 * np.abs(other[:, 2] - p[2]))]
                 mid = (p[1] + q[1]) / 2
-                ty = mid + sg * 0.00015
+                ty = mid - sg * float(os.environ.get("RIM_OVERLAP", "0.0001"))     # proto:makehuman: overlap 0.1 mm (+0.15 mm each left a 0.3 mm gap: a white line of teeth between closed lips)
                 if sg * (p[1] - ty) > 0:
                     dyw = ty - p[1]
                     co[vi] += Minv @ np.array([0.0, 0.0, dyw])      # Blender z = MH y
@@ -628,14 +628,16 @@ def _teeth_crowns(P, upper, k, yc, a0, a1):
     occlusal plane rises a little toward the molars. Returns (points, faces, uv (a, b)) with a = gum -> biting edge."""
     z_front = P[:, 2].max()
     if upper:
-        z0 = z_front
+        # proto:makehuman: 2 mm further forward (9 mm behind the lips' front, the upper lip hid the incisors from any
+        # camera a little above the mouth: the open mouth showed no upper teeth)
+        z0 = z_front + float(os.environ.get("TEETH_FWD", "0.002")) * k
         UP_Z0[:] = [z0]
     else:
         z0 = UP_Z0[0] - 0.0024 * k if UP_Z0 else z_front - 0.0022 * k
     xs, zs, arc = _arch_curve(z0, k)
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0              # crowns grow up (upper: toward the gum) from the edge
-    edge0 = yc - 0.0026 * k if upper else yc - 0.0007 * k
+    edge0 = yc - 0.0030 * k if upper else yc - 0.0007 * k
     V_, F_, UV_ = [], [], []
     for side in (1.0, -1.0):
         s0 = 0.0
@@ -742,7 +744,7 @@ def _gum_band(P, upper, k, yc, a_gum):
     xs, zs, arc = _arch_curve(z0, k)
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0
-    edge0 = yc - 0.0026 * k if upper else yc - 0.0007 * k
+    edge0 = yc - 0.0030 * k if upper else yc - 0.0007 * k
     bounds = np.concatenate([[0.0], np.cumsum([(w + 0.04) * 0.001 * k for w, _, _ in crowns])])
     smax = bounds[-1]
     ns = 34
@@ -820,6 +822,15 @@ def mouth_objects(B):
             yc = float(np.interp(0.0, *B.L.lip_line))
             Pg = P.copy()
             P, fl, uvl = _teeth_crowns(Pg, "upper" in g, B.H / 1.75, yc, a0, a1)
+            if os.environ.get("TEETH_DEBUG"):
+                ru = getattr(B.L, "rim_up", None)
+                ctr = np.abs(P[:, 0]) < 0.004
+                msg = f"  teeth {g}: yc {yc:.4f} edge y {P[ctr, 1].min():.4f}..{P[ctr, 1].max():.4f} front z {P[ctr, 2].max():.4f}"
+                if ru:
+                    R_ = B.P[list(ru)]
+                    rc = R_[np.abs(R_[:, 0]) < 0.006]
+                    msg += f" | upper rim (mid) y {rc[:, 1].min():.4f}..{rc[:, 1].max():.4f} z {rc[:, 2].max():.4f}; lip_z {B.L.lip_z:.4f} mouth y {B.L.mouth[1]:.4f}"
+                print(msg, flush=True)
             uvv = BH.cell_uv(MOUTH_CELL, uvl[:, 0], uvl[:, 1], inset=0.04)
             gv, gf, guv = _gum_band(Pg, "upper" in g, B.H / 1.75, yc, 0.008)
             guvv = BH.cell_uv(MOUTH_CELL, guv[:, 0], guv[:, 1], inset=0.04)
