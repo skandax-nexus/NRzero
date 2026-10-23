@@ -41,12 +41,12 @@ export const P = {
 };
 // collectible temporal shards: [x, y, z, era]
 export const SHARDS = [
-  [-17.4, 0.5, 30.5, '2196'],    // in the burnt tram at the forward post
+  [-14.6, 0.5, 30.5, '2196'],    // beside the burnt tram at the forward post
   [18.6, 0.6, 18.4, '2049'],     // under the guard booth's step
   [-16.8, 0.5, -8.6, '2196'],    // behind the supply pods in the yard
   [12.4, 0.5, -37.6, '2196'],    // in the sealed alcove of the Register (the archivist's key)
-  [-20.2, 0.5, -48.6, '2049'],   // the atrium's south-west planter
-  [19.2, 0.6, -90.4, '2026'],    // the site, behind the stacked formwork on the dais slab
+  [-20.2, 0.9, -48.6, '2049'],   // on the atrium's south-west planter
+  [19.0, 0.5, -49.0, '2026'],    // the site, under the scaffold tower in the south-east corner
 ];
 export const COVER = [[-8, 6, 2.4, 1.4, 1.5], [8, 5, 2.0, 2.0, 1.5], [-4, -4, 1.6, 1.6, 1.3], [5, -6, 2.4, 1.2, 1.4], [-14, -6, 2.0, 2.0, 1.5], [14, -2, 1.6, 2.6, 1.4], [-15.6, -9.6, 1.4, 1.4, 1.5]];
 export const ARENA_COVER = [[-8, -54, 2.2, 1.0, 1.25], [8, -56, 2.2, 1.0, 1.25], [-12, -64, 1.0, 2.4, 1.25], [12, -62, 1.0, 2.4, 1.25], [0, -60, 2.6, 1.0, 1.25], [-5, -70, 2.0, 1.0, 1.2], [5, -68, 2.0, 1.0, 1.2]];
@@ -259,7 +259,7 @@ export function buildBastion(game, scene, T) {
     floor96: pm('concrete', { color: 0x5e5c58, slabs: 1, stains: 1 }), contFloor: pm('ceramicTile', { color: 0xd8dade, grout: 0x8a9098, count: 1, gloss: 0.8, variation: 0.05 }),
     moss: pm('moss', { color: 0x4a5a2a }), rust: pm('rust', { color: 0x5a3018, paint: 0x3d4a52, amount: 0.85 }), ruin: pm('concrete', { color: 0x7a766e, formwork: 1, stains: 1 }),
     paving: pm('ceramicTile', { color: 0x4a4e54, grout: 0x2a2c30, count: 1, gloss: 0.6, variation: 0.1 }), lobby: pm('ceramicTile', { color: 0xc8ccd0, grout: 0x8a8e94, count: 1, gloss: 0.85, variation: 0.06 }),
-    helixWall: pm('paintedMetalPanel', { color: 0x3a4048, cols: 4, rows: 2, wear: 0.02, grime: 0.05, gloss: 0.5 }), steel: pm('brushedMetal', { color: 0x9a9ea0, roughness: 0.35 }),
+    helixWall: pm('paintedMetalPanel', { color: 0x3a4048, cols: 4, rows: 2, wear: 0.02, grime: 0.05, gloss: 0.5 }), lobbyWall: pm('paintedMetalPanel', { color: 0xb4bac2, cols: 3, rows: 2, wear: 0.01, grime: 0.04, gloss: 0.7 }), steel: pm('brushedMetal', { color: 0x9a9ea0, roughness: 0.35 }),
     concrete26: pm('concrete', { color: 0x9a968e, formwork: 1, stains: 0 }), dirt: pm('dirt', {}), wood: pm('wood', { color: 0x8a6a44 }),
     sand: pm('paintedMetalPanel', { color: 0x6a5a40, cols: 1, rows: 1, wear: 0.6, grime: 0.6, gloss: 0.1 }), tarp: pm('paintedMetalPanel', { color: 0x5a3a28, cols: 1, rows: 1, wear: 0.5, grime: 0.5, gloss: 0.1 }),
     yellow: pm('paintedMetalPanel', { color: 0xd8b020, cols: 1, rows: 2, wear: 0.3, grime: 0.3, gloss: 0.4 }), planter: pm('concrete', { color: 0x5a5c60, slabs: 0, stains: 0 }),
@@ -273,6 +273,14 @@ export function buildBastion(game, scene, T) {
   box(-60, -1, -70, 60, 0, 62); box(-60, -1, -120, 60, 0, -82); box(-7.5, -1, -76, 7.5, 0, -70); box(-60, -1, -76, -22, 0, -70); box(22, -1, -76, 60, 0, -70); box(-60, -1, -82, -22, 0, -76); box(22, -1, -82, 60, 0, -76);
   for (const [x0, z0, x1, z1] of [[-21, 62, 21, 63], [-22, -97, 22, -96]]) box(x0, 0, z0, x1, 10, z1);
   box(-21, 0, 12, -20, 10, 62); box(20, 0, 12, 21, 10, 62);          // the avenue's edges (ruins / Helix plaza walls)
+  for (const sx of [-1, 1]) {
+    solid(M.pearl, sx * 20 - 0.5, 0, -15, sx * 20 + 0.5, 7, 10, '2196'); bat('2196').box(gold, sx * 20 - 0.52, 6.9, -15, sx * 20 + 0.52, 7.0, 10);    // the yard's side walls
+    solid(M.helixWall, sx * 20 - 0.4, 0, -15, sx * 20 + 0.4, 3.2, 12.5, '2049');                                                        // Helix forecourt walls
+    box(sx * 20 - 0.5, 0, -15, sx * 20 + 0.5, 10, 12.5, '2026');
+    for (let z = 14; z < 62; z += 3.2) bat('2196').geo(M.ruin, new THREE.DodecahedronGeometry(0.7 + R() * 0.9, 0), [sx * (20.4 + R() * 0.8), 0.3, z + R() * 2], [R(), R(), R()]);
+    bat('2049').box(M.steel, sx * 20.4 - 0.05, 0, 13, sx * 20.4 + 0.05, 1.1, 62); bat('2049').box(M.steel, sx * 20.4 - 0.08, 1.05, 13, sx * 20.4 + 0.08, 1.12, 62);
+    for (let z = 14; z < 62; z += 2) bat('2049').box(M.steel, sx * 20.4 - 0.04, 0, z - 0.04, sx * 20.4 + 0.04, 1.1, z + 0.04);
+  }
   ground(M.floor96, -60, -14, 60, 62, 0.01, '2196'); ground(M.paving, -60, -14, 60, 62, 0.01, '2049');
   ground(M.contFloor, -14, -15, 14, -40, 0.02, '2196'); ground(M.lobby, -14, -15, 14, -40, 0.02, '2049');
   ground(M.contFloor, -22, -46, 22, -70, 0.02, '2196'); ground(M.contFloor, -7.5, -70, 7.5, -76, 0.02, '2196'); ground(M.lobby, -22, -46, 22, -76, 0.02, '2049'); ground(M.concrete26, -22, -46, 22, -76, 0.02, '2026');
@@ -303,9 +311,23 @@ export function buildBastion(game, scene, T) {
   }
   const emb = plane(TEX.emblem(), 4.2, 4.2, 0, 9.2, 12.08, 0, 0.6, '2196'); emb.material.alphaTest = 0.2;
   // the Bastion's mass rising behind the wall (exterior shell of the Register and the Proving Floor) and its spire
-  solid(M.pearl, -16, 9, -14, 16, 26, -40.6); solid(M.pearl, -24, 22, -44, 24, 24, -98, '2196');
-  bat('2196').box(M.pearl, -15, 26, -16, 15, 28, -38); bat('2196').cyl(M.pearl, 0, 44, -70, 4.0, 40, 24, [0, 0, 0], 7.5);
-  for (let k = 0; k < 4; k++) bat('2196').geo(gold, new THREE.TorusGeometry(6.4 - k * 0.8, 0.16, 6, 40), [0, 30 + k * 8, -70], [PI / 2, 0, 0]);
+  solid(M.pearl, -16, 9, -14, 16, 26, -40.6, '2196'); solid(M.helixWall, -16, 9, -14, 16, 30, -40.6, '2049');
+  for (let y = 10.2; y < 29; y += 1.6) bat('2049').box(white, -15.6, y, -13.97, 15.6, y + 0.5, -13.93);
+  for (let y = 10.2; y < 29; y += 1.6) for (const s of [-1, 1]) bat('2049').box(white, s * 16 - 0.03 * s, y, -40, s * 16 + 0.03 * s, y + 0.5, -14.6);
+  for (const [x0, z0, x1, z1] of [[-24, -44, -16, -98], [16, -44, 24, -98], [-16, -44, 16, -52], [-16, -90, 16, -98]]) bat('2196').box(M.pearl, x0, 22, z0, x1, 24, z1);   // the arena's roof ring, open to the storm
+  bat('2196').box(M.pearl, -15, 26, -16, 15, 28, -38); bat('2196').cyl(M.pearl, 0, 48, -27, 4.0, 40, 24, [0, 0, 0], 7.5);
+  for (let k = 0; k < 4; k++) bat('2196').geo(gold, new THREE.TorusGeometry(6.4 - k * 0.8, 0.16, 6, 40), [0, 34 + k * 8, -27], [PI / 2, 0, 0]);
+  // the Bastion's skin: gold bands and dark slit windows on the south face, buttresses on the wall, the spire's crown
+  for (const y of [12.2, 17.4, 22.6]) bat('2196').box(gold, -16, y, -13.96, 16, y + 0.12, -13.9);
+  for (let x = -14.5; x <= 14.5; x += 2.9) for (const y of [13.2, 18.4, 23.4]) bat('2196').box(M.graphite, x - 0.35, y, -13.98, x + 0.35, y + 3.4, -13.92);
+  for (let x = -18; x <= 18; x += 6) if (Math.abs(x) > 4) { bat('2196').box(M.pearlDark, x - 0.5, 0, 12, x + 0.5, 7.4, 12.5); bat('2196').box(M.pearlDark, x - 0.5, 0, 9.5, x + 0.5, 7.4, 10); }
+  bat('2196').box(M.pearlDark, -20.3, 7, 9.7, 20.3, 7.5, 12.3);
+  for (const s of [-1, 1]) for (let z = -48; z >= -94; z -= 7.6) bat('2196').box(M.pearlDark, s * 22.6 - 0.4, 0, z - 0.6, s * 22.6 + 0.4, 23, z + 0.6);
+  for (const s of [-1, 1]) for (let z = -50; z >= -92; z -= 7.6) for (const y of [8, 14]) bat('2196').box(M.graphite, s * 22.62 - 0.03, y, z - 0.25 - 2.6, s * 22.62 + 0.03, y + 4, z + 0.25 - 2.6);
+  bat('2196').geo(gold, new THREE.TorusGeometry(4.3, 0.22, 8, 40), [0, 68.4, -27], [PI / 2, 0, 0]); bat('2196').cyl(M.pearl, 0, 72, -27, 0.3, 8, 10, [0, 0, 0], 2.2);
+  { const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8), glowMat(0xffd27a, 3.0)); beacon.position.set(0, 76.6, -27); beacon.userData.noBatch = true; add(beacon, '2196'); }
+  // the old Helix tower the Bastion grew on: a ruined concrete core rising behind the spire
+  try { const core = RZ.cityBlock([{ width: 18, depth: 14, height: 46, position: [-30, 0, -78], seed: 2141, wall: 'concrete', ruin: 0.85, collapse: true, moss: 0.4, faces: ['windows', 'windows', 'windows', 'windows'], groundBlank: true }, { width: 16, depth: 16, height: 34, position: [32, 0, -66], seed: 2142, wall: 'concrete', ruin: 0.7, moss: 0.35, faces: ['windows', 'windows', 'windows', 'windows'], groundBlank: true }], { era: '2196', lit: 0.0, daylight: 0.45, detail: low ? 'low' : undefined }); core.mesh.castShadow = false; add(core.mesh, '2196'); } catch (err) { console.warn('m21 core', err); }
   // the facade of the Bastion (z -14) with its door
   for (const e of ['2196', '2049']) { solid(e === '2196' ? M.pearl : M.helixWall, -20, 0, -15, -2.2, 9, -14, e); solid(e === '2196' ? M.pearl : M.helixWall, 2.2, 0, -15, 20, 9, -14, e); bat(e).box(e === '2196' ? M.pearl : M.helixWall, -2.2, 6.2, -15, 2.2, 9, -14); }
   W.door = new THREE.Mesh(new THREE.BoxGeometry(4.4, 6.2, 0.4), M.graphite); W.door.position.set(0, 3.1, -14.5); W.door.userData.noBatch = true; add(W.door, '2196');
@@ -340,7 +362,7 @@ export function buildBastion(game, scene, T) {
 
   // ================= 2196 / 2049: the Register (the Hall of Fixed Points / the Helix lobby) =================
   for (const e of ['2196', '2049']) {
-    const m = e === '2196' ? M.pearl : M.helixWall;
+    const m = e === '2196' ? M.pearl : M.lobbyWall;
     solid(m, -14.6, 0, -40, -14, 9, -15, e); solid(m, 14, 0, -40, 14.6, 9, -15, e);
     solid(m, -14.6, 0, -41, -2.2, 9, -40, e); solid(m, 2.2, 0, -41, 14.6, 9, -40, e); bat(e).box(m, -2.2, 6, -41, 2.2, 9, -40);
     bat(e).box(m, -14.6, 9, -41, 14.6, 9.4, -14);
@@ -381,12 +403,12 @@ export function buildBastion(game, scene, T) {
   W.sockets = []; for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.3), cyan.clone()); s.position.set(P.panel49[0] - 0.02, 1.2, P.panel49[2] - 1.0 + i * 0.4); s.userData.noBatch = true; add(s, '2049'); W.sockets.push(s); }
   plane(signTex('m21sockets', [['LOBBY FLOOR SERVICES', 26, '#0a2a3a'], ['L-1  L-2  L-3  L-4  L-5  L-6', 22, '#2a4a5a']], { bg: '#e8f4f8', h: 128, grain: false }), 1.0, 0.25, P.panel49[0] - 0.03, 1.48, P.panel49[2], -PI / 2, 0.4, '2049');
   for (const z of [-17, -21, -25, -29, -33, -37]) for (const x of [-9, 0, 9]) bat('2049').box(white, x - 1.6, 8.9, z - 0.2, x + 1.6, 8.96, z + 0.2);
-  for (const z of [-19, -27, -35]) for (const x of [-9, 9]) src(x, 7.5, z, 0xeaf4ff, 2.2, 12, '2049');
+  for (const z of [-19, -27, -35]) for (const x of [-9, 9]) src(x, 7.5, z, 0xeaf4ff, 4.0, 14, '2049');
   for (const z of [-20, -32]) for (const x of [-6, 6]) src(x, 4, z, 0xffd8a0, 2.4, 10, '2196');
 
   // ================= the Proving Floor / the Grand Atrium / the site =================
   for (const e of E3) {
-    const m = e === '2196' ? M.pearl : e === '2049' ? M.helixWall : M.concrete26, h = e === '2026' ? 12 : 22;
+    const m = e === '2196' ? M.pearl : e === '2049' ? M.lobbyWall : M.concrete26, h = e === '2026' ? 12 : 22;
     solid(m, -22.6, 0, -97, -22, h, -46, e); solid(m, 22, 0, -97, 22.6, h, -46, e);
     solid(m, -22.6, 0, -46.6, -3.6, h, -46, e); solid(m, 3.6, 0, -46.6, 22.6, h, -46, e); bat(e).box(m, -3.6, 6.4, -46.6, 3.6, h, -46);
     solid(m, -22.6, 0, -97, 22.6, h, -96, e);
@@ -406,6 +428,16 @@ export function buildBastion(game, scene, T) {
   for (const [x, z, w, d, h] of ARENA_COVER) { solid(M.pearlDark, x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2, '2196'); bat('2196').box(gold, x - w / 2 - 0.01, h - 0.16, z - d / 2 - 0.01, x + w / 2 + 0.01, h - 0.1, z + d / 2 + 0.01); }
   for (const [x, z] of [[-8, -60], [8, -64], [-14, -56], [14, -58]]) { solid(M.planter, x - 1.3, 0, z - 0.6, x + 1.3, 0.55, z + 0.6, '2049'); bat('2049').geo(M.moss, new THREE.SphereGeometry(0.8, 10, 6), [x, 0.6, z], [0, 0, 0], [1.4, 0.5, 0.6]); }
   solid(M.planter, -21, 0, -50, -19.2, 0.6, -47, '2049');
+  // the Proving Floor's inlay (2196): gold rings and spokes around the centre; the Helix medallion (2049)
+  for (const r of [7, 13.5]) bat('2196').geo(gold, new THREE.RingGeometry(r - 0.07, r + 0.07, 64), [0, 0.035, -61], [-PI / 2, 0, 0]);
+  for (let k = 0; k < 12; k++) { const a = k * PI / 6; bat('2196').geo(gold, new THREE.PlaneGeometry(0.1, 6.5), [Math.sin(a) * 10.25, 0.034, -61 + Math.cos(a) * 10.25], [-PI / 2, 0, a]); }
+  bat('2049').geo(cyan, new THREE.RingGeometry(5.6, 5.8, 64), [0, 0.035, -61], [-PI / 2, 0, 0]); bat('2049').geo(M.steel, new THREE.CircleGeometry(5.6, 48), [0, 0.03, -61], [-PI / 2, 0, 0]);
+  for (const [x, z] of [[-4, -50], [4, -50], [-17, -66], [17, -70]]) { solid(M.steel, x - 1.0, 0, z - 0.3, x + 1.0, 0.45, z + 0.3, '2049'); }
+  // the chasm edge: a gold safety strip (2196), hazard barriers (2026, open at the set-out)
+  bat('2196').box(gold, -22, 0.03, -76.1, 22, 0.05, -75.9); bat('2196').box(gold, -22, 0.03, -82.1, 22, 0.05, -81.9);
+  for (const [x0, x1] of [[-22, -2.6], [2.6, 22]]) { bat('2026').box(M.yellow, x0, 0.9, -75.7, x1, 1.0, -75.6); for (let x = x0; x <= x1; x += 2.4) bat('2026').box(M.graphite, x - 0.04, 0, -75.7, x + 0.04, 1.0, -75.6); box(x0, 0, -75.75, x1, 1.0, -75.55, '2026'); }
+  solid(M.yellow, 10.4, 0, -51.4, 13.6, 2.6, -48.6, '2026'); bat('2026').box(M.graphite, 11, 1.2, -48.58, 12.6, 2.0, -48.54);   // the site cabin
+  for (let i = 0; i < 6; i++) bat('2026').cyl(M.rust, -16 + (i % 3) * 0.2, 0.12 + Math.floor(i / 3) * 0.2, -82.6 + (i % 3) * 0.0, 0.08, 5, 6, [PI / 2, 0, PI / 2]);
   // the 2196 gallery tiers on the side walls, gold lines, the open roof and the storm
   for (const s of [-1, 1]) for (let k = 0; k < 3; k++) bat('2196').box(M.pearlDark, s * 22 - s * (1.2 + k * 0.6), 6 + k * 4, -94, s * 22, 6.4 + k * 4, -48);
   for (let z = -50; z >= -92; z -= 6) for (const s of [-1, 1]) bat('2196').box(gold, s * 21.96 - 0.02, 1, z - 0.04, s * 21.96 + 0.02, 18, z + 0.04);
@@ -428,6 +460,9 @@ export function buildBastion(game, scene, T) {
     bat(e).box(m, -22, y - 0.5, -82, 22, y, -76);
     bat(e).box(m, -22, y, -76.2, 22, 0, -76); bat(e).box(m, -22, y, -82, 22, 0, -81.8);
   }
+  bat('2196').geo(glowMat(0xff6a28, 0.45), new THREE.PlaneGeometry(40, 3), [0, -11.7, -79], [-PI / 2, 0, 0]);   // the charges still burning far below
+  for (let x = -18; x <= 18; x += 6) bat('2049').box(white, x - 1.6, -5.95, -79.2, x + 1.6, -5.9, -78.8);
+  src(0, -6, -79, 0xffa050, 3.5, 16, '2196');
   for (let i = 0; i < 14; i++) bat('2196').geo(M.ruin, new THREE.DodecahedronGeometry(0.6 + R() * 1.2, 0), [(R() - 0.5) * 40, -11.4, -79 + (R() - 0.5) * 4], [R(), R(), R()]);
   for (const [x0, x1] of [[-22, -2.2], [2.2, 22]]) for (const z of [-76.1, -81.9]) { bat('2049').geo(glass, new THREE.BoxGeometry(x1 - x0, 1.1, 0.04), [(x0 + x1) / 2, 0.55, z]); bat('2049').box(M.steel, x0, 1.08, z - 0.04, x1, 1.14, z + 0.04); }
   for (const z of [-76.1, -81.9]) box(-22, 0, z - 0.06, 22, 1.1, z + 0.06, '2049');    // the balustrades (the skybridge doors are shut)
@@ -448,10 +483,10 @@ export function buildBastion(game, scene, T) {
     for (const s of [-1, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 3.4, 4), M.steel); c.position.set(0, 2.3, s * 2.4); c.rotation.x = s * 0.5; W.beam26.add(c); } }
   W.beam26.position.set(8, 4.0, -79);
   W.hook = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 4), M.steel); W.hook.userData.noBatch = true; add(W.hook, '2026');
-  W.beam96 = new THREE.Group(); add(W.beam96, '2196'); W.beam96.visible = false;
+  W.beam96 = new THREE.Group(); add(W.beam96); W.beam96.visible = false;   // shown by the mission once TB-7 is set (2196 only)
   { const web = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 6.6), M.rust); web.position.y = -0.36; const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.07, 6.6), M.rust); f1.position.y = -0.04; const f2 = f1.clone(); f2.position.y = -0.66; W.beam96.add(web, f1, f2); }
-  W.beam96.position.set(0, 0, -79); W.beam96.userData.states = ['2196'];
-  W.beamBox = box(-0.42, -0.4, -82.2, 0.42, -0.04, -75.8, '2196'); W.beamBox.enabled = false;
+  W.beam96.position.set(0, 0.07, -79);
+  W.beamBox = box(-0.42, -0.4, -82.2, 0.42, 0.03, -75.8, '2196'); W.beamBox.enabled = false;
   W.beam49Box = null;
   // set-out paint on the 2026 slab, the crane (mast in the south-west, jib over the chasm), its control panel, the site board
   plane(signTex('m21setout', [['◀  TB-7  ▶', 40, '#ff4a2a']], { bg: 'rgba(0,0,0,0)', h: 128, w: 512, grain: false }), 2.4, 0.6, P.setout[0], 0.03, P.setout[2], 0, 0.6, '2026').rotation.x = -PI / 2;
@@ -475,7 +510,7 @@ export function buildBastion(game, scene, T) {
   W.halo = new THREE.Group(); W.halo.position.set(...P.ring); add(W.halo, '2049');
   { const h1 = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.18, 10, 64), M.steel); W.halo.add(h1); const h2 = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.06, 8, 48), cyan); h2.rotation.y = 0.5; W.halo.add(h2);
     for (const s of [-1, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 15, 4), M.steel); c.position.set(s * 3.2, 7.5, 0); W.halo.add(c); } }
-  W.gaugeScreen = plane(TEX.gauge(0), 1.4, 0.7, 0, 2.2, -82.3, 0, 0.6, '2196'); bat('2196').box(M.graphite, -0.8, 0, -82.6, 0.8, 1.8, -82.2);
+  W.gaugeScreen = plane(TEX.gauge(0), 1.4, 0.7, 3.4, 2.2, -82.3, 0, 0.6, '2196'); bat('2196').box(M.graphite, 2.6, 0, -82.6, 4.2, 1.8, -82.2); box(2.6, 0, -82.6, 4.2, 1.8, -82.2, '2196');
   for (const s of [-1, 1]) { bat('2196').box(M.graphite, s * 10 - 1.4, 0, -96.05, s * 10 + 1.4, 4, -95.9); bat('2196').box(gold, s * 10 - 1.45, 4, -96.05, s * 10 + 1.45, 4.1, -95.88); }
   // the 2049 ballast trays at the Halo's floor anchors (west and east walls)
   W.trays = {};
@@ -518,9 +553,10 @@ export function buildBastion(game, scene, T) {
   } catch (err) { console.warn('m21 city', err); }
   try {
     const k96 = streetKit({ era: '2196', seed: 21 });
-    k96.wreck([-10, 0, 22], 0.4).wreck([11, 0, 27], -0.3).add('rubble', [-6, 0, 16], 0).add('rubble', [7, 0, 30], 1).add('rubble', [15, 0, 19], 2);
+    k96.car([-10, 0, 22], 0.4).car([11, 0, 27], -0.3).add('rubble', [-6, 0, 16], 0).add('rubble', [7, 0, 30], 1).add('rubble', [15, 0, 19], 2);
     k96.overgrowth({ area: [-19, 13, 19, 46] }, { density: low ? 0.5 : 0.9, cracks: 0.8 });
     add(k96.build(), '2196');
+    box(-11.4, 0, 19.8, -8.6, 1.3, 24.2, '2196'); box(9.6, 0, 24.8, 12.4, 1.3, 29.2, '2196');   // the wrecks
     const k49 = streetKit({ era: '2049', seed: 22 });
     k49.add('bench', [-6, 0, 32], 0).add('bench', [6, 0, 32], 0).add('bollard', [-3, 0, 14], 0).add('bollard', [3, 0, 14], 0).add('bin', [-12, 0, 24], 0).car([16, 0, 24], PI / 2).add('kiosk', [-16, 0, 16], PI / 2);
     k49.puddles([[-4, 20, 2.2], [6, 26, 1.6], [2, 6, 2.0], [-8, -4, 1.4]]);

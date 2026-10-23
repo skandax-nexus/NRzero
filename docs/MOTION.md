@@ -572,9 +572,35 @@ Clips, contact sheets and data are in
 
   The camera's cost is mostly the three.js raycast against `camBlockers`, which both builds share. The new sphere casts
   against the boxes allocate nothing. Low and medium are not measurably slower.
+- **Second audit re-run** (after the locomotion step landed its blend space): every physics number (jump, gravity,
+  acceleration, stops, step-up, climbs, gaps, edge brake, void respawn, lift, carry, ramp, NPC bump, people trap,
+  camera at a wall, tunnelling, coyote time) is identical to the first re-run, with and without `?phys=classic`.
+  Only the gait metrics changed, and those belong to "Locomotion & secondary motion".
+- **Playthroughs** (`tools/drive.mjs`, `gfx=low`, `dtcap=0.25`, the missions with jumps, gaps, lifts, chases and
+  timers). Every run reached the mission's end state, with 0 page errors, 0 timed-out waits and no unplanned fails
+  or falls. The m12 field fail is one the test triggers on purpose.
+
+  | Mission | What it exercises | Desktop 960x540 | Mobile 844x390 |
+  |---|---|---|---|
+  | m3 | cargo lift to the catwalk | | ✓ |
+  | m7 | stair climbs, the 5 m Echo Step terrace, turning rings | ✓ | ✓ |
+  | m9 | three 9-minute loops, the tower lift | ✓ | |
+  | m10 | stealth, fights, the Echo Step gantry gap | ✓ | ✓ |
+  | m12 | shutter run, the atrium gap, the stair descent across states | ✓ | |
+  | m13 | barricade gap, bridge, stabilizer steps | ✓ | |
+  | m16 | the museum, the 4.2 m/s front | ✓ | |
+  | m18 | parts 1 and 2 (lifts, crane, hoist); parts 3 to 6 (surges on car roofs, lorry, the collapse run, waves, the ladder in gusts) | ✓ | ✓ (parts 3 to 6) |
+
+  The m18 run from the start hit the driver's one-hour limit in part 6 on a loaded machine. Parts 3 to 6 then passed
+  from `?m18part=3` on both screens. No surge swept Kai (`swept: 0`).
+- **Seen in the sheets, not caused by physics:** decorative meshes that are neither collision boxes nor
+  `camBlockers` (the m7 armillary and Wandering Ring arcs, the Chronolith ring) can pass in front of the lens when Kai
+  stands inside them. The classic camera does the same. A mission can register such a mesh with `game.blocker(mesh)`.
 - Data: `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/phys3/`. This holds
   `new`, `classic` (audit data and `metrics.json`), `r1` and `r2` (rendered sheets: NPC bump, camera at a wall, the
-  3 m drop and the 0.40 m risers), `cost.jsonl`, and `play/` (playthroughs).
+  3 m drop and the 0.40 m risers), `cost.jsonl`, and `play/` (playthroughs m7, m10, m16 and m18 on desktop). The
+  second re-run and the remaining playthroughs, each with a `*_sheet.jpg` contact sheet, are in `../phys4/`
+  (`new`, `classic` and `play/`).
 
 ## Locomotion & secondary motion
 

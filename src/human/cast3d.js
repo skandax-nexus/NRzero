@@ -6,7 +6,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { lookPerson } from './skin.js';    // the look shading and facial life (docs/CHARACTER_LOOK.md); ?look=classic: off
+import { lookPerson, look as LOOK } from './skin.js';    // the look shading and facial life (docs/CHARACTER_LOOK.md); ?look=classic: off
+import { prepareTemplate as prepareV2, prepareCardSprings, attach as attachV2 } from './rig2.js';   // look v2 builds: hair cards, face and finger bones
+import { getQuality } from '../world/realism.js';
 import { MOTION, Motion, analyseTemplate, gaitProfile } from './locomotion.js';   // walking style (docs/MOTION.md); ?motion=classic: off
 import { prepareTemplate as prepareSprings, attachSprings } from './springs.js';   // coat tails and hair (docs/MOTION.md)
 
@@ -37,7 +39,15 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
       // the cast index (sex, age, height per build) for each person's gait; both are optional
       const extra = MOTION.classic ? null : get('anims_extra.glb').catch(() => null);
       const index = MOTION.classic ? null : globalThis.fetch(base + 'cast_index.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
-      const [c, a, x, ix] = await Promise.all([get('cast.glb'), get('anims.glb'), extra, index]);
+      // look v2 (docs/CHARACTER_LOOK.md, "Cast rebuild"): the rebuilt cast in part files listed by cast2.json, phone-size
+      // atlases inside, full-size atlases in HD packs for desktop tiers; ?look=classic (or no cast2.json): cast.glb
+      const man = LOOK.classic ? null : await globalThis.fetch(base + 'cast2.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
+      const parts = man && man.parts && man.parts.length ? man.parts.map(p => p.file) : null;
+      const hd = parts && man.hd && man.hd.length && wantHD() ? Promise.all(man.hd.map(h => get(h.file).catch(() => null))) : null;
+      const castP = parts ? Promise.all(parts.map(get)).catch(e => { console.warn('cast2 unavailable, classic cast', e && e.message); cast.version = 1; return Promise.all([get('cast.glb')]); }) : Promise.all([get('cast.glb')]);
+      cast.version = parts ? 2 : 1;
+      const [cs, a, x, ix] = await Promise.all([castP, get('anims.glb'), extra, index]);
+      const c = { scene: { children: cs.flatMap(g => g.scene.children) } };
       let meta = {};
       a.scene.traverse(o => { if (o.userData && o.userData.az_clips) try { meta = JSON.parse(o.userData.az_clips); } catch { /* older file */ } });
       const clips = a.animations.slice();
@@ -83,10 +93,42 @@ export function loadCast(base = new globalThis.URL('../../assets/models/', impor
         cast.ids.push(root.name);
       });
       cast.ready = cast.ids.length > 0;
+      // full-size atlases (desktop tiers): the images are swapped into the templates' textures in place (clones and
+      // the look's material copies share those Texture objects); waits a little so the first frames are sharp
+      if (hd) {
+        cast.hdReady = hd.then(applyHD).catch(e => console.warn('cast2 hd:', e && e.message));
+        await Promise.race([cast.hdReady, new Promise(ok => setTimeout(ok, +(new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '').get('hdwait') || 8000)))]);
+      }
     } catch (e) { console.warn('3D cast unavailable; using procedural humans.', e && e.message); }
     return cast.ready;
   })();
   return cast.loading;
+}
+// HD packs on high, and on medium off phones; ?casthd=0 / 1 forces it
+function wantHD() {
+  const q = new globalThis.URLSearchParams(globalThis.location ? globalThis.location.search : '').get('casthd');
+  if (q != null) return q !== '0';
+  let tier = 'medium'; try { tier = getQuality(); } catch { /* realism not set up */ }
+  const nav = globalThis.navigator, ua = nav ? nav.userAgent || '' : '';
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (nav && nav.maxTouchPoints > 0 && globalThis.screen && Math.min(globalThis.screen.width, globalThis.screen.height) <= 1100);
+  return tier === 'high' || (tier === 'medium' && !mobile);
+}
+async function applyHD(list) {
+  let n = 0;
+  const byName = new Map();
+  for (const id in T) T[id].root.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && m.name) byName.set(m.name, m); });
+  for (const g of list) {
+    if (!g) continue;
+    const mats = await g.parser.getDependencies('material');
+    for (const m of mats) {
+      const dst = byName.get(m.name); if (!dst) continue;
+      for (const k of ['map', 'normalMap', 'emissiveMap', 'roughnessMap', 'metalnessMap', 'aoMap']) {
+        if (m[k] && dst[k] && m[k].image) { dst[k].image = m[k].image; dst[k].needsUpdate = true; n++; }
+      }
+    }
+  }
+  cast.hd = n;
+  return n;
 }
 export const hasTemplate = id => !!T[id];
 export const templateHeight = id => (T[id] ? T[id].height : 1.75);
@@ -254,6 +296,7 @@ export function makePerson(id, opts = {}) {
     clipsFor(t);
     if (t.motionInfo && !MOTION.off.has('spring')) try { prepareSprings(t); } catch (e) { console.warn('springs: none for', t.root.name, e && e.message); }
   }
+  try { if (prepareV2(t)) prepareCardSprings(t); } catch (e) { console.warn('look v2: template skipped', t.root.name, e && e.message); }
   const root = SkeletonUtils.clone(t.root);
   root.position.set(0, 0, 0); root.rotation.set(0, 0, 0);
   const seed = opts.seed ?? Math.floor(Math.random() * 1e6);
@@ -350,6 +393,8 @@ export function makePerson(id, opts = {}) {
     if (t.springRig) try { h.motion.springs = attachSprings(h, t.springRig); } catch (e) { console.warn('springs: not attached for', h.id, e && e.message); }
   }
   h.update = dt => (h.motion ? h.motion.update(dt) : mixer.update(dt));
+  // look v2: hair cards, finger poses and the face bones (skin.js drives the face) after the body motion
+  try { if (attachV2(h, t)) { const up0 = h.update; h.update = dt => { up0(dt); h.rig2.update(dt); }; } } catch (e) { console.warn('look v2: person skipped', h.id, e && e.message); }
   h.play('idle', 0);
   try { lookPerson(h, seed); } catch (e) { console.warn('look: skipped for', h.id, e && e.message); }
   return h;

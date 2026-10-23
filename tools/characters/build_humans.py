@@ -41,11 +41,13 @@ import costume  # noqa: E402  (the `wear=[...]` costume pipeline: garments.py ca
 import garments  # noqa: E402
 import gadgets  # noqa: E402  (hard-surface gadgets of `gear=[...]`, docs/COSTUMES.md)
 import importlib  # noqa: E402
+import look2  # noqa: E402  (look v2: face / finger rig, eyes, mouth, strand cards, skin bake; LOOK=1: classic)
 
 # CAST=<name> picks the cast module: cast_<name>.py (e.g. CAST=test -> cast_test.py, CAST=nrzero -> cast_nrzero.py);
 # default: AfterZero's cast_humans.py
 CAST = importlib.import_module("cast_" + os.environ["CAST"] if os.environ.get("CAST") else "cast_humans").CAST
 costume.bind(sys.modules[__name__])
+look2.bind(sys.modules[__name__])
 gadgets.bind(sys.modules[__name__])
 
 V = Vector
@@ -981,10 +983,17 @@ def nearest_weights(pts_bl, ref_bl, ref_W, k=4):
     return out
 
 
+CUR_B = [None]     # the body being built (look v2 splits head / hand weights onto the face and finger bones)
+
+
 def apply_weights(o, arm):
     W = np.asarray(WSTORE.pop(o.name))
+    names = BONE_NAMES
+    if look2.ON and CUR_B[0] is not None:
+        W = look2.expand_weights(o, W, CUR_B[0])
+        names = look2.all_bones()
     o.vertex_groups.clear()
-    for j, bn in enumerate(BONE_NAMES):
+    for j, bn in enumerate(names):
         col = W[:, j]
         nz = np.nonzero(col > 0.004)[0]
         if not len(nz):
@@ -1131,6 +1140,9 @@ def paint(c, B, cov, res, path_out):
     tint(0.3 * g2(((pos - nose) ** 2 * np.array([1, 0.8, 0.5])).sum(1), 0.011) * front * isface, warm)
     tint(0.2 * earf, warm)
     tint(0.04 * ss(0.02, 0.06, rel[:, 1]) * front * isface, [1.03, 1.02, 1.0])          # forehead a touch lighter
+    skin_h = skin_r = None
+    if look2.ON:      # v2: region colour by age and sex, hands, pores and creases (height), roughness
+        col, skin_h, skin_r = look2.paint_skin(c, B, pos, part, col, isface, seed)
     # ---- lips ----
     lip_c = hexc(c.get("lip", "b06a62" if not male else "a8706a"))
     xs, ys = L.lip_line
@@ -1153,7 +1165,10 @@ def paint(c, B, cov, res, path_out):
     tint(0.05 * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge
     for sg in (1, -1):
         cn = np.array([sg * L.lip_w, np.interp(sg * L.lip_w, xs, ys), L.lip_z - 0.008])
-        tint(0.18 * g2(((pos - cn) ** 2).sum(1), 0.0035) * isface, [0.75, 0.68, 0.66])   # mouth corners
+        if look2.ON:      # scaled to the mouth (a child's corners read as dirt at the adult size) and softer
+            tint(0.08 * g2(((pos - cn) ** 2).sum(1), 0.0035 * min(1.0, L.lip_w / 0.024)) * isface, [0.84, 0.76, 0.74])
+        else:
+            tint(0.18 * g2(((pos - cn) ** 2).sum(1), 0.0035) * isface, [0.75, 0.68, 0.66])   # mouth corners
     # ---- eyes: lash line, lid crease, inner corner ----
     brow_c = hexc(c.get("browColor", c.get("hairColor", "2e2119")))
     hair_c = hexc(c.get("hairColor", "2e2119"))
@@ -1278,7 +1293,7 @@ def paint(c, B, cov, res, path_out):
         if hair_c.mean() > 0.42:     # grey / blond: the regular strand stripes read as a knitted (woolly hat) rib
             k = 0.8 + 0.1 * st ** 1.2 + 0.08 * st3 + 0.08 * (vnoise(rel * np.array([1.0, 3.0, 1.0]), 140, seed + 6.2) - 0.5) - 0.04
         roots = 1 - 0.1 * ss(0.012, 0.0, hcov)
-        hcol = hair_c[None, :] * (k * roots)[:, None]
+        hcol = hair_c[None, :] * (k * roots)[:, None] * (0.85 if look2.ON else 1.0)   # v2: the volume under the cards reads as depth
         sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
         hcol = hcol * sheen[:, None]
         if style in ("crop", "fade"):       # very short hair: mostly the scalp showing through
@@ -1291,6 +1306,8 @@ def paint(c, B, cov, res, path_out):
             hcol = hcol * (1 - sh_) + col * sh_
         fa_ = np.clip(fade_in, 0, 1)[:, None]
         col[under] = (hcol * fa_ + col * (1 - fa_))[under]
+    if look2.ON:
+        col = look2.inner_mouth(c, B, pos, part, col)
     # ---------------- garments (outermost layer wins) ----------------
     costume_mode = "_costume" in cov
     taken = np.zeros(len(px), bool)
@@ -1335,6 +1352,8 @@ def paint(c, B, cov, res, path_out):
         himg = np.zeros((res, res))
         gimg = np.zeros((res, res, 3))
         spx = np.full((res, res), 0.004)
+        if skin_h is not None:
+            hgt = hgt + np.where(taken, 0.0, skin_h)
         himg[py, px] = hgt
         gimg[py, px] = glw
         spx[py, px] = texel_size(B, res)[fid]
@@ -1362,6 +1381,13 @@ def paint(c, B, cov, res, path_out):
             nimg = nimg.reshape(res // nd, nd, res // nd, nd, 3).mean((1, 3))
             nimg = (nimg - 0.5) / np.maximum(np.linalg.norm(nimg - 0.5, axis=-1, keepdims=True) * 2, 1e-6) * 0.5 + 0.5
         Image.fromarray((np.clip(nimg, 0, 1) * 255).astype(np.uint8)).save(out["normal"], quality=c.get("normalQ", 90))
+        if skin_r is not None:     # v2: roughness (G) and cavity occlusion (R), half resolution
+            rimg = np.full((res, res), 0.82)
+            rr = np.where(taken, 0.82, look2.lip_rough(skin_r, lipm))
+            if hcov is not None:
+                rr = np.where(~taken & (hcov >= 0), 0.5, rr)
+            rimg[py, px] = rr
+            out["rough"] = look2.rough_ao_map(hh, mask, spx, rimg, res, path_out.replace(".jpg", "_r.jpg"))
         if gimg.max() > 0.01:
             lit0 = gimg.max(-1) > 0.004
             gimg, gm = dilate(gimg, lit0, 3)
@@ -1430,8 +1456,9 @@ def paint_cells(c, img, mask, res, seed, cov=None):
     col = col * (1 - limb[..., None])
     col = np.where((r < pr)[..., None], np.array([0.02, 0.018, 0.016]), col)
     col = col * (1 - 0.25 * ss(0.3, 0.9, dye)[..., None] * (r < 1.0)[..., None])        # upper lid shadow
-    cl = g2((dxe + 0.17) ** 2 + (dye - 0.17) ** 2, 0.045)
-    col = col + np.clip(cl * 1.6, 0, 0.95)[..., None] * np.array([1.0, 1.0, 1.0])
+    if not look2.ON:      # v2: no painted catch-light (the scene's lights make the real one)
+        cl = g2((dxe + 0.17) ** 2 + (dye - 0.17) ** 2, 0.045)
+        col = col + np.clip(cl * 1.6, 0, 0.95)[..., None] * np.array([1.0, 1.0, 1.0])
     col = np.where((r > 1.0)[..., None], np.array([0.6, 0.55, 0.52]), col)
     put(gx, gy, col)
     # ---- flat-ish cells ----
@@ -1446,6 +1473,9 @@ def paint_cells(c, img, mask, res, seed, cov=None):
         if isinstance(v, str):
             cells[name] = hexc(v)
     for name, cc in cells.items():
+        if look2.ON and name == look2.MOUTH_CELL:
+            look2.paint_mouth_cell(c, img, mask, grid, put)
+            continue
         gx, gy, a, b = grid(name)
         if isinstance(over.get(name), tuple):
             kind, feet = over[name]
@@ -1453,6 +1483,7 @@ def paint_cells(c, img, mask, res, seed, cov=None):
             continue
         p3 = np.stack([a, b, np.zeros_like(a)], -1).reshape(-1, 3)
         if name == "hair":
+            cc = cc * (0.85 if look2.ON else 1.0)
             k = 0.8 + 0.12 * np.sin(a * 60 + 2 * vnoise(p3, 3, seed).reshape(a.shape)) + 0.08 * np.sin(a * 151 + 1.3)
         elif name in ("shoe", "sole"):
             k = 0.9 + 0.12 * vnoise(p3, 9, seed).reshape(a.shape)
@@ -2366,7 +2397,7 @@ def build(c, tex_dir):
                     Lx.mask[:, 1] = 0.0
                 layers[key] = Lx
     parts = [layer_object(Lr, B) for Lr in layers.values()]
-    parts += eye_objects(B, c)
+    parts += look2.eye_objects(B, c) if look2.ON else eye_objects(B, c)
     gk = None
     if costume_mode:
         ex = costume.extras(c, B, cov, layers)
@@ -2385,10 +2416,19 @@ def build(c, tex_dir):
         costume.aux_pack()
         costume.aux_remap(parts + cloth + gx)
         tex = paint(c, B, cov, res, tex_path)
+    # ---- look v2: strand cards over the hair volume, lashes, brows, beard (one extra mesh, gh_<id>) ----
+    gh = look2.hair_cards(c, B, cov, parts, ex) if look2.ON else None
     # ---- rig + weights + one material ----
     arm = BC.build_armature(c["id"], B.J)
-    for o in parts + cloth + gx:
+    CUR_B[0] = B
+    if look2.ON:
+        look2.add_bones(arm, B, B._eyes)
+    for o in parts + cloth + gx + ([gh] if gh else []):
         apply_weights(o, arm)
+    if gh:
+        gh.data.materials.clear()
+        gh.data.materials.append(look2.hair_material(c, look2.strand_texture(os.path.join(tex_dir, "az_strands.png"))))
+        arm["hair_cards"] = gh.name
     mat = atlas_material(c, tex)
     for o in (gk["props"] if gk else []):
         o.data.materials.clear()
@@ -2721,6 +2761,14 @@ def atlas_material(c, tex):
         nmap = nt.nodes.new("ShaderNodeNormalMap")
         nt.links.new(nm.outputs["Color"], nmap.inputs["Color"])
         nt.links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
+    if tex.get("rough"):        # look v2: glTF metallicRoughness (G roughness; R carries the cavity occlusion)
+        rm = nt.nodes.new("ShaderNodeTexImage")
+        rm.image = bpy.data.images.load(tex["rough"])
+        rm.image.colorspace_settings.name = "Non-Color"
+        sep = nt.nodes.new("ShaderNodeSeparateColor")
+        nt.links.new(rm.outputs["Color"], sep.inputs["Color"])
+        nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+        nt.links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
     if tex.get("emissive"):
         em = nt.nodes.new("ShaderNodeTexImage")
         em.image = bpy.data.images.load(tex["emissive"])

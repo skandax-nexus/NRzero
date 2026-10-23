@@ -172,6 +172,7 @@ function patch(sh, U, tier, dbg, far = false) {
   sh.defines.AZ_WRAP = on('light') ? '0.3' : '0.5';
   sh.defines.AZ_HAIRK = on('hair') ? '0.88' : '0.0';
   if (on('eyes') && U.azEyeC.value.z > 0 && !far) sh.defines.AZ_EYES = 1;
+  if (U.azV2) sh.defines.AZ_EYEBONE = 1;      // look v2 builds: real eye, lid and jaw bones (src/human/rig2.js)
   if (far) sh.defines.AZ_FAR = 1;
   if (on('skin')) sh.defines.AZ_SKIN = 1;
   if (on('pores') && T > 0) sh.defines.AZ_PORES = 1;
@@ -241,6 +242,9 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 		// the iris disc read at the gaze-shifted place (the shell is a sphere: the shift reads as the eye turning)
 		azEyeK = 1.0;
 		azS = azE - azEye.xy;
+	#ifdef AZ_EYEBONE
+		azS = azE;
+	#endif
 	#if AZ_TIER > 1
 		// iris depth: the iris sits behind the cornea, so it shifts against the view direction
 		{ vec3 azVw = normalize( ( vec4( normalize( vViewPosition ), 0.0 ) * viewMatrix ).xyz );
@@ -255,6 +259,9 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 		// upper lid line (closes with azEye.z, drops when looking down), lid shadow, lash line, tear meniscus
 		float azLy = mix( azLid.x + 0.07, azLid.y - 0.03, azEye.z ) - azEye.w - 0.4 * azE.x * azE.x * ( 1.0 - azEye.z );
 		azLidK = smoothstep( -0.012, 0.012, azE.y - azLy );
+	#ifdef AZ_EYEBONE
+		azLy = 0.55; azLidK = 0.0;      // the real lid covers the eyeball; a soft shade under it stays
+	#endif
 		float azShade = 1.0 - 0.55 * ( 1.0 - smoothstep( 0.0, 0.17, azLy - azE.y ) );
 		azShade *= 1.0 - 0.3 * smoothstep( 0.35, 0.75, abs( azE.x ) );
 		sampledDiffuseColor.rgb *= azShade;
@@ -331,6 +338,9 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
   F = F.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 	{ float azRs = mix( 0.56, 0.38, vAzFace.x );
 	  azRs = mix( azRs, 0.3, vAzFace2.x ); azRs = mix( azRs, 0.28, vAzFace2.w ); azRs += azLook.x * 0.06;
+	#ifdef USE_ROUGHNESSMAP
+	  azRs = mix( azRs, texelRoughness.g, 0.75 );      // look v2 builds bake skin roughness (T-zone, lips, nails, pores)
+	#endif
 	#ifndef AZ_SKIN
 	  azRs = 0.5;
 	#endif
@@ -442,7 +452,7 @@ function lookMaterial(src, U, info, far = false) {
   const m = src.clone();
   m.userData = { ...src.userData, azSkin: true, azLook: true, azFar: far };
   const tierKey = () => { const t = TIER[tierName()] ?? 1; return t; };
-  m.customProgramCacheKey = () => 'azlook' + tierKey() + '|' + [...look.off].join('') + look.dbg + (U.azEyeC.value.z > 0 && !far ? 'e' : '') + (far ? 'f' : '');
+  m.customProgramCacheKey = () => 'azlook' + tierKey() + '|' + [...look.off].join('') + look.dbg + (U.azEyeC.value.z > 0 && !far ? 'e' : '') + (far ? 'f' : '') + (U.azV2 ? 'b' : '');
   m.onBeforeCompile = sh => {
     const t = tierKey();
     if (t > 0 && (on('pores') || on('cloth'))) { detailMaps ??= makeDetailMaps(); U.azPoreMap = { value: detailMaps.pores }; U.azWeaveMap = { value: detailMaps.weave }; }
@@ -560,6 +570,7 @@ function applyLook(h, seed, atlas, main, info) {
     azMouth: { value: new THREE.Vector4(...(Fc.mouth || [0, 0, 0]), 0) },
     azCrown: { value: new THREE.Vector4(Fc.M[0], Fc.M[1] + 2.3 * Fc.u, Fc.M[2] - 1.5 * Fc.u, 0) },
   };
+  if (h.rig2 && h.rig2.face) Object.defineProperty(U, 'azV2', { value: true, enumerable: false });
   if (age == null) ageWait.push(() => { const a = AGES[h.id]?.age; if (a != null) U.azLook.value.x = Math.max(0, Math.min(1, (a - 22) / 50)); });
   const mats = new Map(), swaps = [];
   const pick = (m, far) => { const k = far ? 'f' : 'n'; let e = mats.get(m); if (!e) mats.set(m, e = {}); return e[k] || (e[k] = lookMaterial(m, U, info, far)); };
@@ -614,8 +625,19 @@ function applyLook(h, seed, atlas, main, info) {
     S.brow += (S.browTo - S.brow) * Math.min(1, dt * 6);
     // speech: the mouth opens and closes in syllables (90-220 ms) while the character talks (ui.js onWord keeps
     // character.talk up); a consonant now and then closes it
-    if (talking) { if ((S.sylT -= dt) <= 0) { S.sylT = 0.09 + R() * 0.13; S.jawTo = R() < 0.22 ? 0 : 0.35 + R() * 0.65; } } else S.jawTo = 0;
+    if (talking) { if ((S.sylT -= dt) <= 0) { S.sylT = 0.09 + R() * 0.13; S.jawTo = R() < 0.22 ? 0 : 0.35 + R() * 0.65; S.wideTo = R() * 1.5 - 0.5; } } else { S.jawTo = 0; S.wideTo = 0; }
     S.jaw += (S.jawTo - S.jaw) * Math.min(1, dt * 16);
+    S.wide = (S.wide || 0) + ((S.wideTo || 0) - (S.wide || 0)) * Math.min(1, dt * 12);
+    // look v2 builds: the same facial life on real bones (eyes, lids, brows, jaw, mouth corners; src/human/rig2.js)
+    const F = h.rig2 && h.rig2.face;
+    if (F) {
+      const w = F.want, live = on('face') && S.on;
+      F.driven = true;
+      w.blink = live ? blinkCurve(S.blinkT) : 0;
+      w.yaw = live && !S.far ? S.gaze.x * Math.PI / 2 : 0; w.pitch = live && !S.far ? S.gaze.y * Math.PI / 2 : 0;
+      w.brow = live ? S.brow : 0; w.jaw = live ? S.jaw : 0; w.wide = live ? S.wide * S.jaw : 0;
+      F.apply();
+    }
   };
   const up = h.update;
   h.update = dt => { up(dt); tick(dt); };
@@ -625,9 +647,10 @@ function applyLook(h, seed, atlas, main, info) {
     const f = renderer.info.render.frame;
     if (S.frame === f) return; S.frame = f;
     const ev = U.azEye.value;
-    ev.z = on('face') ? blinkCurve(S.blinkT) : 0;
-    U.azExpr.value.x = on('face') ? S.brow : 0;
-    U.azMouth.value.w = on('face') && Fc.mouth ? S.jaw : 0;
+    const bonesDrive = !!(h.rig2 && h.rig2.face);     // v2: blinks, brows and speech move real bones, not the shading
+    ev.z = on('face') && !bonesDrive ? blinkCurve(S.blinkT) : 0;
+    U.azExpr.value.x = on('face') && !bonesDrive ? S.brow : 0;
+    U.azMouth.value.w = on('face') && Fc.mouth && !bonesDrive ? S.jaw : 0;
     if (!E || headBone < 0 || !on('face')) { ev.x = ev.y = ev.w = 0; return; }
     // rest (mesh) space -> world for the head: matrixWorld * bindMatrixInverse * head * boneInverse * bindMatrix
     const sk = main.skeleton, bone = sk.bones[headBone];

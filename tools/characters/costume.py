@@ -2701,6 +2701,8 @@ def paint_body(c, B, cov, pos, fld, part, col, taken, seed):
         X = texel_ctx(B, pos[idx], f=fe, arm=arm_f[idx] * (not head), leg=leg_f[idx] * (not head), ny=ny[idx],
                       torso=np.zeros(len(idx)) if head else tor_f)
         cc, hh, gl = G.paint(g, X, seed + (hash(key) % 7) * 0.13)
+        if not head and BH.look2.ON:      # look v2: fold relief at the elbows, knees, waist, armpits, cuffs and hems
+            hh = hh + BH.look2.cloth_folds(B, pos[idx], g, arm_f[idx], leg_f[idx], key, seed)
         BAND_COL[key] = np.median(cc[fe > 0.01], 0) if (fe > 0.01).sum() > 50 else np.median(cc, 0)
         col[idx] = cc
         hgt[idx] = hh

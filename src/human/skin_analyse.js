@@ -32,7 +32,10 @@ export function analyseData(D) {
   const n = D.n, PA = D.PA, NA = D.NA, UV = D.UV, MK = D.MK, SKI = D.SKI, SKW = D.SKW, IDX = D.IDX;
   const bones = D.bones || [];
   const bi = name => bones.indexOf(name);
-  const wOf = (i, b) => { if (b < 0 || !SKI) return 0; let w = 0; for (let k = 0; k < 4; k++) if (SKI[i * 4 + k] === b) w += SKW[i * 4 + k]; return w; };
+  // look v2 builds (docs/CHARACTER_LOOK.md, "Cast rebuild") carry face and finger bones: their weights count for the
+  // head / the hand they hang from, so the analysis reads them like the classic 21-bone rig
+  const famOf = bones.map((nm, j) => { const m = /^(?:jaw|eye|lid|lidlo|brow|mouth)(?:_[LR])?$/.test(nm) ? 'head' : (/^(?:thumb|index|middle|ring|pinky)\d_([LR])$/.exec(nm) || [])[1]; return m === 'head' ? bones.indexOf('head') : m ? bones.indexOf('hand_' + m) : j; });
+  const wOf = (i, b) => { if (b < 0 || !SKI) return 0; let w = 0; for (let k = 0; k < 4; k++) if ((famOf[SKI[i * 4 + k]] ?? SKI[i * 4 + k]) === b) w += SKW[i * 4 + k]; return w; };
   const uv = UV ? { getX: i => UV[i * 2], getY: i => UV[i * 2 + 1] } : null;
   const HEAD = bi('head'), HL = bi('hand_L'), HR = bi('hand_R');
   const P = i => [PA[i * 3], PA[i * 3 + 1], PA[i * 3 + 2]], Nn = i => [NA[i * 3], NA[i * 3 + 1], NA[i * 3 + 2]];
