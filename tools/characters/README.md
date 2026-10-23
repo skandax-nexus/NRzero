@@ -109,3 +109,15 @@ glTF output the runtime uses (`src/human/cast3d.js` → `person.gadgets`, `setGa
 The build log prints each gadget's triangle cost. Viewer close-ups: `tools/cast.html?base=...&ids=kai&cols=1&focus=head&d=0.5`
 (`focus=<bone>` aims at a bone, `fy` lifts the aim, `glow=<level>` lights every gadget). `GADGET_DEBUG=1` prints the
 forearm radius profile used to find sleeve hems.
+
+## Faces (docs/CHARACTER_LOOK.md, "Faces")
+
+- `faces/<id>.json`: per-character face overrides merged by `cast_nrzero.py` (details, face macro terms, skin, lips,
+  eyes, brows, stubble, hairstyle); `FACES_DIR=<folder>` builds a candidate set, `FACES_DIR=none` ignores them. Schema:
+  `faces/README.md`.
+- `face_metric.py OUT`: face distinctness from the sculpted meshes (aligned, area-weighted face-vertex distance and
+  22 landmark proportions against a fixed-seed MakeHuman reference population), appearance overlap, the same person at
+  two ages, clusters, the thresholds every face step must meet and the attractive-proportion checks (`CANON`).
+- `face_studio.sh NAME` (ONLY=ids): builds only those ids into a staging folder outside the repo, packs them as the
+  game ships them (`pack_cast2.mjs`) and renders front / three-quarter / profile portraits under a neutral studio
+  light and a Rain City night light (`face_studio.mjs`), with contact sheets (`face_sheet.py`).

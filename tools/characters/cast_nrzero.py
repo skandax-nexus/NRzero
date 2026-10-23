@@ -10,8 +10,8 @@ ancient / unwritten: garments and gadgets are checked against it), `group` and `
 
 Bodies: `macro` (MakeHuman gender / muscle / weight / ancestry mix), `years` (age in years -> MakeHuman age) and
 `metres` (standing height; the MakeHuman height parameter is solved for it once and cached in
-cast_nrzero_heights.json). Faces come from softened detail modifiers (see the end of the file), so every face is
-distinct and pleasant without extremes. Painted face extras: stubble, beard, freckles, scars (build_humans.paint).
+cast_nrzero_heights.json). Faces come from softened detail modifiers (see the end of the file), overridden per
+character by faces/<id>.json (FACES_DIR; docs/CHARACTER_LOOK.md "Faces"). Painted face extras: stubble, beard, freckles, scars (build_humans.paint).
 Budgets: Kai 16 000 triangles (2048 atlas); named NPCs 11 000 (one glow group mesh); crowds and children 9 000
 (gadget glow baked into the atlas emissive, no extra draw call) plus a 6 000-triangle low LOD. The build exports full
 density; compress_cast.sh (simplify_cast.mjs, meshoptimizer) lands every character on its budget.
@@ -512,15 +512,82 @@ for _c in CAST:
     if not _c.get("gear"):
         _c.pop("gear", None)
 
-_HCACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cast_nrzero_heights.json")
+# ---------------------------------------------------------------------------------------------------------------
+# per-character face overrides (docs/CHARACTER_LOOK.md, "Faces"): tools/characters/faces/<id>.json, or the folder
+# FACES_DIR names (a candidate set outside the repo; FACES_DIR=none ignores every override). No file: the entry above
+# is built exactly as before. A file holds any of
+#   "details":  {modifier: value}  final MakeHuman detail values (not softened), merged over the softened ones above;
+#   "replace_details": true        drop the entry's own details first (the face is then only the file's);
+#   "macro":    {proportions, muscle, weight, caucasian, african, asian}  face-relevant macro terms (the ancestry mix
+#               is renormalised; sex, age and height stay the entry's: height is re-solved for `metres`);
+#   look keys:  skin, lip, eyes, irisR, pupilR, browColor, browLift, browThick, stubble, beard, beardColor, blush,
+#               freckles, scars, hair, hairLen, hairColor, hairDrop, locs, locLen (unset one with null);
+#   "notes":    free text (ignored).
+# ---------------------------------------------------------------------------------------------------------------
+_HERE = os.path.dirname(os.path.abspath(__file__))
+FACES_DEFAULT = os.path.join(_HERE, "faces")
+FACES_DIR = os.environ.get("FACES_DIR") or FACES_DEFAULT
+FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLift", "browThick", "stubble", "beard", "beardColor", "blush",
+                  "freckles", "scars", "hair", "hairLen", "hairColor", "hairDrop", "locs", "locLen")
+FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
+FACES_APPLIED = {}
+
+
+def face_override(c, faces_dir=None):
+    """Merge faces_dir/<id>.json into the (already finished) cast entry c; returns the file path or None."""
+    d = faces_dir or FACES_DIR
+    if not d or d.lower() == "none":
+        return None
+    p = os.path.join(d, c["id"] + ".json")
+    if not os.path.isfile(p):
+        return None
+    with open(p) as f:
+        o = json.load(f)
+    unknown = set(o) - set(FACE_LOOK_KEYS) - {"details", "replace_details", "macro", "notes"}
+    if unknown:
+        raise KeyError(f"{p}: unknown face keys {sorted(unknown)}")
+    det = {} if o.get("replace_details") else dict(c.get("details", {}))
+    det.update(o.get("details", {}))
+    c["details"] = {k: v for k, v in det.items() if v}
+    m = o.get("macro", {})
+    bad = set(m) - set(FACE_MACRO_KEYS)
+    if bad:
+        raise KeyError(f"{p}: macro keys {sorted(bad)} are not face terms (sex, age and height stay the entry's)")
+    if m:
+        mac = c["macro"]
+        mac.update({k: float(v) for k, v in m.items()})
+        t = mac["caucasian"] + mac["african"] + mac["asian"]
+        for k in ("caucasian", "african", "asian"):
+            mac[k] = mac[k] / t
+    for k in FACE_LOOK_KEYS:
+        if k in o:
+            if o[k] is None:
+                c.pop(k, None)
+            else:
+                c[k] = o[k]
+    return p
+
+
+for _c in CAST:
+    _p = face_override(_c)
+    if _p:
+        FACES_APPLIED[_c["id"]] = _p
+
+_HCACHE = os.path.join(_HERE, "cast_nrzero_heights.json")
+if os.path.abspath(FACES_DIR) != FACES_DEFAULT and FACES_DIR.lower() != "none":
+    _HCACHE_SEED, _HCACHE = _HCACHE, os.path.join(FACES_DIR, "_heights.json")    # candidate sets keep their own cache
+else:
+    _HCACHE_SEED = None
 
 
 def _solve_heights(cast):
     """MakeHuman `height` for each character's target standing height (bisection on the sculpted body, cached)."""
-    try:
-        cache = json.load(open(_HCACHE))
-    except (OSError, ValueError):
-        cache = {}
+    cache = {}
+    for f in (_HCACHE_SEED, _HCACHE):
+        try:
+            cache.update(json.load(open(f)) if f else {})
+        except (OSError, ValueError):
+            pass
     only = os.environ.get("ONLY")
     dirty = False
     for c in cast:

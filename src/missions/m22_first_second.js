@@ -116,9 +116,9 @@ export default {
       kai.lookTarget = null; if (other) other.lookTarget = null;
     };
     const walkTo = (ch, path, speed = 1.4) => new Promise(res => {
-      let i = 0;
+      let i = 0; const tok = ch._walk = (ch._walk || 0) + 1;
       const off = game.onUpdate(dt => {
-        const p = ch.root.position, t = path[i]; if (!t) { off(); res(); return; }
+        const p = ch.root.position, t = path[i]; if (!t || ch._walk !== tok) { ch.speed = 0; off(); res(); return; }
         const dx = t[0] - p.x, dz = t[2] - p.z, d = Math.hypot(dx, dz);
         if (d < 0.08) { i++; if (i >= path.length) { ch.speed = 0; off(); res(); } return; }
         const s = Math.min(d, speed * dt); p.x += dx / d * s; p.z += dz / d * s; p.y += (t[1] - p.y) * Math.min(1, dt * 5);
@@ -264,7 +264,7 @@ export default {
       const cam = game.cine ? game.engine.camera.position : pl.pos;
       for (const [k, [x, z]] of Object.entries(ISL)) {
         const d = Math.hypot(cam.x - x, cam.z - z), I = W.islands[k];
-        if (I?.root && !S.merging) I.root.visible = d < 95;
+        if (I?.root && !S.merging) I.root.visible = d < 80;
         for (const ch of people[k]) { if (ch.hiddenByStory) { ch.root.visible = false; continue; } const sOk = !ch.root.userData.states || ch.root.userData.states.includes(T.current); ch.root.visible = (k === 'hub' ? d < 42 : d < 55) && sOk; }
       }
     };
@@ -508,7 +508,7 @@ export default {
     shop.at(19.5, () => { hensel.pose = null; hensel.lookTarget = null; });
     shop.at(20.0, () => {}, { learn: ['skip', '0:20 · the ninth clock on the wall never lights: the house skips it'], when: () => shopIn(pl.pos) });
     shop.at(23.0, () => { if (shopIn(pl.pos)) { hensel.lookTarget = kai.head; } });
-    shop.onWrap(() => { hensel.root.position.set(...C.hensel); hensel.root.rotation.y = -PI / 2; hensel.pose = null; hensel.lookTarget = null; });
+    shop.onWrap(() => { hensel._walk = (hensel._walk || 0) + 1; hensel.root.position.set(...C.hensel); hensel.root.rotation.y = -PI / 2; hensel.pose = null; hensel.lookTarget = null; });
     // the clock wall: each face lights for 2.5 s in turn, the ninth (index 8) stays dark
     game.onUpdate(() => { if (S.zone !== 'clock') return; const i = Math.floor(shop.t / 2.5) % 12; W.clockWall.forEach((f, k) => { f.material.emissiveIntensity = k === i && k !== 8 ? 1.1 : 0.12; }); });
     const ninthNow = () => shop.t >= 20 && shop.t < 22.5;
@@ -545,7 +545,7 @@ export default {
       game.checkpoint(...C.restarts[2]);
     }) });
     act({ pos: [C.hensel[0] - 1.0, 1.0, C.hensel[2]], radius: 2.2, prompt: 'Talk to the clockmaker', enabled: () => !G.hensel && S.zone === 'clock' && shop.t > 20 && shop.t < 29, onUse: () => side(async () => {
-      G.hensel = true; S.main = true; cine(true); hensel.lookTarget = kai.head;
+      G.hensel = true; S.main = true; cine(true); hensel._walk = (hensel._walk || 0) + 1; hensel.speed = 0; hensel.lookTarget = kai.head;
       await convo(hensel, [['oskar26', 'You again. You said you\'d come back looking younger.'], ['kai', 'You can see me.'], ['oskar26', 'In this house a minute goes round and round. I\'ve had a long time to notice who stands in it.'], ['kai', 'Did you believe the letter?'], ['oskar26', 'I believed the face. I\'m sorry. I sent them up the hill.']]);
       ev('Oskar Hensel, 2026', 'In the loop of 07:52 Hensel sees Kai: "You said you\'d come back looking younger." He believed the face, not the letter.', 'The Old Quarter · optional');
       S.main = false; cine(false);
@@ -825,29 +825,35 @@ export default {
     hint(() => S.phase === 'chamber' && !G.irisA && pl.pos.y > -1, 40, () => ui.subtitle('kai', 'Under the ring. The stair.', 2200));
 
     async function finale() {
-      S.busy = true; S.main = true; cine(true); lockMusic('m22-reveal', 2.0);
+      S.busy = true; S.main = true; cine(true); lockMusic('m22-reveal', 2.0); objective('');
       await game.say('kai', 'The letter put us in the hall. So you took the core away, and it was kept whole for Helix. So you went in yourself and pulled me back. So you called her home, and she came to the song.');
       await game.say('kai', 'Every attempt answered the last one. And every one is a reason it happened.');
       audio.sfxPlay('boom'); game.shake = 0.06;
-      await tween(2.6, k => { W.irisBlades.forEach(b => { const a = b.userData.a, r = 0.6 + k * 1.8; b.position.set(Math.cos(a) * r, Math.sin(a) * r, 0); b.rotation.z = a + PI / 2 + k * 0.6; }); });
-      W.irisBox.enabled = false;
-      witness.root.position.set(-1.7, -4.7, P.core[2] + 2.6); witness.root.rotation.y = PI * 0.85; pl.place(1.7, -4.7, P.core[2] + 2.6, PI * 1.15);
-      await game.shot([0, -2.6, -29.8], [0, -3.4, P.core[2]], 2.6, { fov: 50 });
-      await game.shot([4.6, -2.8, P.core[2] + 4.2], [0, -3.4, P.core[2]], 2.0, { fov: 46 });
+      await tween(2.6, k => { W.irisBlades.forEach(b => { const a = b.userData.a, r = 0.6 + k * 1.8; b.position.set(Math.cos(a) * r, Math.sin(a) * r, 0); b.rotation.z = a + PI / 2 + k * 0.6; }); W.collars.forEach((c, i) => { c.scale.setScalar(1 + k * (1.2 + i * 0.3)); c.material.emissiveIntensity = 1.6 * (1 - k); }); });
+      W.irisBox.enabled = false; W.collars.forEach(c => { c.visible = false; });
+      const cz = P.core[2];
+      witness._walk = (witness._walk || 0) + 1; witness.speed = 0; witness.root.position.set(-1.6, -4.8, cz + 2.4); witness.root.rotation.y = PI * 0.82; pl.place(1.6, -4.8, cz + 2.6, PI * 1.18);
+      await game.shot([0, -2.4, -30.6], [0, -3.4, cz], 0.01, { fov: 54 });
+      await game.shot([0, -2.9, cz + 6.2], [0, -3.4, cz], 3.0, { fov: 50 });
       await game.say('m22band', 'The final chamber. Causal chain: closed. First cause: none.');
-      await convo(witness, [
-        ['witness', 'There was never a first time.'],
-        ['kai', 'Only a first second. And you kept it from starting a thousand times, by making it.'],
-        ['kai', 'You were trying to stop me from becoming you.'],
-        ['witness', 'I was trying to find a version of me that didn\'t have to.'],
-      ]);
+      const two = () => game.shot([4.4, -3.0, cz + 5.2], [0, -3.4, cz + 2.4], 1.0, { fov: 44 });
+      const onW = () => game.shot([1.8, -3.15, cz + 4.2], [-1.6, -3.25, cz + 2.4], 0.9, { fov: 34 });
+      const onK = () => game.shot([-1.9, -3.15, cz + 4.4], [1.6, -3.2, cz + 2.6], 0.9, { fov: 34 });
+      witness.lookTarget = kai.head; kai.lookTarget = witness.head;
+      await two();
+      await onW(); await game.say('witness', 'There was never a first time.');
+      await onK(); await game.say('kai', 'Only a first second. And you kept it from starting a thousand times, by making it.');
+      await onK(); await game.say('kai', 'You were trying to stop me from becoming you.');
+      await onW(); await game.say('witness', 'I was trying to find a version of me that didn\'t have to.');
+      await two();
       F.m22quote = true;
       audio.silence?.(1.6); await game.wait(1.2); audio.unsilence?.();
       await game.say('kai', 'There isn\'t one. Not while one of us is still trying to stop it.');
       const c = await choose('kai', 'The core. The second waits to start.', ['"Together. Put your hand on it with mine."', '"Stand back. I\'ll do it."'], 0);
       G.together = c === 0;
-      await game.shot([2.6, -3.0, P.core[2] + 2.8], [0, -3.2, P.core[2]], 1.4, { fov: 38 });
-      if (G.together) { await game.say('kai', 'Together. You\'ve done every one of these alone.'); await game.say('witness', 'Every one of them.'); witness.root.position.set(-0.9, -4.7, P.core[2] + 1.3); }
+      witness.lookTarget = null; kai.lookTarget = null;
+      await game.shot([2.8, -3.0, cz + 3.4], [0, -3.2, cz], 1.4, { fov: 40 });
+      if (G.together) { await game.say('kai', 'Together. You\'ve done every one of these alone.'); await game.say('witness', 'Every one of them.'); witness.root.position.set(-0.9, -4.8, cz + 1.3); }
       else { await game.say('kai', 'Stand back. This one\'s mine.'); await game.say('witness', 'That is exactly what I said. Every time.'); }
       W.core.material.emissiveIntensity = 4.4; audio.sfxPlay('anomaly'); game.shake = 0.1;
       await game.say('m22band', 'Oh eight fourteen and nine seconds.');
@@ -864,7 +870,7 @@ export default {
       await game.shot([0, 14, 22], [0, 2, -8], 0.01, { fov: 56 });
       await game.shot([0, 18, 30], [0, 0, -10], 5.0, { fov: 58 });
       S.merging = true;
-      tween(5.5, k => { for (const I of Object.values(W.islands)) { const r = I.root; const p0 = r.userData.p0 || (r.userData.p0 = r.position.clone()); r.position.set(p0.x * (1 - k * 0.35), p0.y + Math.sin(k * PI) * 2, p0.z * (1 - k * 0.35)); r.visible = true; } });
+      tween(5.5, k => { for (const [name, I] of Object.entries(W.islands)) { const c = ISL[name] || [0, 0]; I.root.position.set(-c[0] * k * 0.3, Math.sin(k * PI) * 2.5, -c[1] * k * 0.3); I.root.visible = true; } });
       await game.say('kai', 'The valley. Hensel\'s lane. Halden. They\'re coming in.');
       await game.say('witness', 'Everything I touched. It all comes back to where it started.');
       await game.say('kai', 'Then that\'s where she is.');
@@ -965,8 +971,17 @@ export default {
       ['kai', 'You started the experiment.'],
       ['witness', 'I started it again. That is what it does. It starts again, and I stand here, and I stop it.'],
     ]);
-    await game.shot([0, 7, 6], [-30, 4, 0], 2.0, { fov: 54 });
+    // the places arrive: each rises out of the haze and settles where its seam opens
+    const OFFS = { village: [-30, -46, 0], clock: [30, -46, 0], ward: [0, -46, 30], station: [0, -46, -30] };
+    for (const [k, o] of Object.entries(OFFS)) W.islands[k].root.position.set(...o);
+    S.merging = true; for (const k of Object.keys(OFFS)) W.islands[k].root.visible = true;
+    const arrive = tween(6.5, (e) => { for (const [k, o] of Object.entries(OFFS)) W.islands[k].root.position.set(o[0] * (1 - e), o[1] * (1 - e), o[2] * (1 - e)); });
+    audio.sfxPlay('anomaly'); game.shake = 0.03;
+    await game.shot([0, 7, 6], [-30, 4, 0], 2.4, { fov: 54 });
     await game.say('kai', 'The walls are gone. There\'s a valley out there. A street. A ward.');
+    await game.shot([2, 8, 4], [30, 2, 8], 2.2, { fov: 56 });
+    await arrive; S.merging = false;
+    for (const k of Object.keys(OFFS)) W.islands[k].root.position.set(0, 0, 0);
     await game.say('witness', 'Every place I ever tried to stop this. They follow me in.');
     await game.shot([3.4, 2.0, -6.4], [0, 0.4, -14.4], 1.6, { fov: 44 });
     await game.say('m22band', 'Below the ring: a sealed chamber. Lock type: causal. Links required: four.');

@@ -560,7 +560,7 @@ function buildVillage(game, K, M, W, low, T) {
   const hAt = (x) => (x < -61 ? -4 : 0);
   try {
     add(RZ.forest({ species: 'broadleaf', placements: [{ x: -66, z: 3, scale: 0.8 }, { x: -74, z: -4, scale: 1.0 }, { x: -52, z: 13.5, scale: 0.7 }, { x: -57, z: -13, scale: 0.8 }, { x: -45.5, z: -13, scale: 0.7 }], heightAt: (x) => hAt(x), impostors: false, variants: 2, seed: 2221 }), C4);
-    add(RZ.forest({ species: 'shrub', placements: [{ x: -58, z: 6 }, { x: -45.6, z: 12 }, { x: -73, z: 13 }, { x: -64, z: -7 }, { x: -52.5, z: 3.5 }, { x: -46, z: -8 }], heightAt: (x) => hAt(x), impostors: false, variants: 2, seed: 2222 }), st('bce', 'ce400'));
+    add(RZ.forest({ species: 'shrub', placements: [{ x: -58, z: 6 }, { x: -45.6, z: 12 }, { x: -73, z: 13 }, { x: -64, z: -7 }, { x: -46, z: -8 }], heightAt: (x) => hAt(x), impostors: false, variants: 2, seed: 2222 }), st('bce', 'ce400'));
     add(RZ.forest({ species: 'dead', placements: [{ x: -68, z: 4 }, { x: -75, z: -6 }, { x: -70, z: -12 }, { x: -77, z: 10 }], heightAt: () => -4, impostors: false, variants: 2, seed: 2223 }), W9);
   } catch (err) { console.warn('m22 trees', err); }
   try { const rk = RZ.rocks({ placements: [{ x: -59, z: -14.6, scale: 1.2 }, { x: -44.8, z: 14.6, scale: 1.0 }, { x: -79.2, z: -14.8, scale: 1.4 }, { x: -79.4, z: 14.2, scale: 1.2 }, { x: -44.6, z: -15, scale: 0.9 }], heightAt: (x) => hAt(x), seed: 2224 }); add(rk.mesh || rk); } catch (err) { console.warn('m22 rocks', err); }
