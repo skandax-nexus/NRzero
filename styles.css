@@ -310,3 +310,6 @@ html.touch #journal{inset:calc(3vh + var(--st)) calc(3vw + var(--sr)) calc(3vh +
 .rot-title{font:600 15px var(--title);letter-spacing:.32em;color:var(--ink)}
 .rot-sub{font:italic 18px var(--serif);color:var(--dim)}
 .controls .tk{display:inline-block;font:700 12px var(--ui);letter-spacing:.18em;color:var(--cyan);border:1px solid var(--line);padding:4px 8px;border-radius:4px;white-space:nowrap}
+/* cinematics: the letterbox bars must not cover the era badge or the objective (release check, 2026-10-23) */
+#era,#objective{transition:transform .8s ease}
+body:has(#letterbox.on) #era,body:has(#letterbox.on) #objective{transform:translateY(11vh)}

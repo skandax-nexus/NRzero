@@ -356,7 +356,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	#ifdef AZ_CARDS
 		// the gaps between cards read as depth (the inner hair in shade), with a duller sheen than the strands on top
 	#if AZ_TIER > 0
-		diffuseColor.rgb *= mix( 1.0, 0.72, azHair ); azSparkle *= mix( 1.0, 0.45, azHair );
+		diffuseColor.rgb *= mix( 1.0, 0.64, azHair ); azSparkle *= mix( 1.0, 0.35, azHair );
 	#else
 		diffuseColor.rgb *= mix( 1.0, 0.88, azHair ); azSparkle *= mix( 1.0, 0.7, azHair );     // low tier: fewer cards over it
 	#endif
@@ -374,7 +374,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	#endif
 	  float azRg = azEyeK > 0.5 ? mix( 0.035, 0.02, azTear ) : 0.07;
 	#if defined( AZ_CARDS ) && AZ_TIER > 0
-	  float azHairR = 0.6;      // the volume under strand cards: a duller under-layer (the cards carry the sheen)
+	  float azHairR = 0.8;      // the volume under strand cards: a matte under-layer (the cards carry the sheen; 0.6 read as a glossy cap between them)
 	#elif defined( AZ_CARDS )
 	  float azHairR = 0.72;     // low tier: no strand streaks on the volume, so no smooth glossy cap either
 	#else

@@ -1263,6 +1263,18 @@ CUTS["lead_crop"] = dict(base="short", hero="crop", stiff=1.0, top=0.034, front=
                          wave=0.25, W=0.0058, side_dens=1.0, wisp=0.05, scalp="fade")
 CUTS["lead_part"] = dict(base="short", hero="part", stiff=0.9, top=0.075, front=0.080, side=0.016, nape=0.014, comb="back", lift=0.0, frontLift=0.0,
                          wave=0.14, W=0.0080, side_dens=1.0, wisp=0.04, scalp="short")
+# messy medium (the owner's pick for Kai: "Messy medium length: tousled, ear-length hair with natural texture: relaxed
+# and boyish"): ear-length, tousled from a crown whorl, a soft uneven fringe to the brows, the sides over the tops of
+# the ears; two close alternatives: a shaggier middle-parted cut (curtain fringe, flicked ends) and a slightly shorter
+# tousled cut with a side fringe. Lengths (m, 1.75 m person) by root region; `_messy_cards` grows them as clumped
+# strands inside a smooth envelope around the head (ears and collar included, so the hair drapes over them).
+CUTS["lead_messy"] = dict(base="short", hero="messy", stiff=0.4, top=0.110, front=0.086, side=0.080, nape=0.060, comb="tousle", lift=0.0, frontLift=0.0,
+                          wave=0.35, W=0.0088, side_dens=1.0, wisp=0.06, scalp="full", tousle=0.55, floor=(0.02, 0.07), hem=(-0.034, -0.084), flick=0.2)
+CUTS["lead_shag"] = dict(base="short", hero="shag", stiff=0.35, top=0.118, front=0.100, side=0.090, nape=0.070, comb="part", lift=0.0, frontLift=0.0,
+                         wave=0.4, W=0.0085, side_dens=1.0, wisp=0.08, scalp="full", tousle=0.45, floor=(0.012, 0.040), hem=(-0.048, -0.092), flick=0.5)
+CUTS["lead_tousle"] = dict(base="short", hero="tousle", stiff=0.5, top=0.090, front=0.085, side=0.058, nape=0.045, comb="side", lift=0.0, frontLift=0.0,
+                           wave=0.3, W=0.0082, side_dens=1.0, wisp=0.05, scalp="full", tousle=0.45, floor=(0.018, 0.05), hem=(-0.02, -0.074), flick=0.15)
+MESSY = ("messy", "shag", "tousle")
 HERO_SHELL = 0.5        # the shell carries this share of the volume; the cards build the rest
 
 
@@ -1279,6 +1291,14 @@ def hero_T(c, rel, part_x=0.024):
     rn = r / np.maximum(np.linalg.norm(r, axis=1, keepdims=True), 1e-9)
     up, fwd, sx = rn[:, 1], rn[:, 2], rn[:, 0]
     top = BH.ss(0.05, 0.6, up)
+    if kind in MESSY:           # messy medium: a full, soft, rounded volume (thicker on the crown and the top front)
+        front = BH.ss(-0.2, 0.6, fwd) * BH.ss(0.0, 0.5, up)
+        Ttop = {"messy": 0.023, "shag": 0.021, "tousle": 0.019}[kind] + 0.004 * front
+        Tside = {"messy": 0.008, "shag": 0.010, "tousle": 0.0065}[kind] * BH.ss(-0.75, -0.1, up) + 0.002
+        if kind == "shag":      # the middle part: a shallow dip along the top front
+            Ttop = Ttop * (1 - 0.35 * np.exp(-(rel[:, 0] / 0.006) ** 2) * BH.ss(0.25, 0.6, up) * BH.ss(-0.4, 0.2, fwd))
+        T = Tside + (Ttop - Tside) * BH.ss(0.2, 0.88, up) ** 1.7          # rounded: the volume sits on the top
+        return T * (0.85 + 0.15 * BH.ss(-0.9, -0.3, -np.abs(fwd + 0.85)))
     if kind == "quiff":         # textured modern quiff: volume at the front lifted up and back, short tapered sides
         front = BH.ss(-0.25, 0.65, fwd) * BH.ss(0.15, 0.55, up)
         Ttop = 0.012 + 0.020 * front
@@ -1301,7 +1321,7 @@ def hero_T(c, rel, part_x=0.024):
 
 def hero_ramp(c):
     """Distance (m) inside the hairline over which the volume grows to full thickness."""
-    return {"quiff": 0.010, "crop": 0.012, "part": 0.014}.get(hero_cut(c), 0.03)
+    return {"quiff": 0.010, "crop": 0.012, "part": 0.014, "messy": 0.014, "shag": 0.014, "tousle": 0.013}.get(hero_cut(c), 0.03)
 
 
 def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
@@ -1311,6 +1331,8 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
     cut = c.get("hairCut")
     C = CUTS[cut]
     kind = C["hero"]
+    if kind in MESSY:
+        return _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey)
     L = B.L
     eye = L.eye
     k = B.H / 1.75
@@ -1490,6 +1512,401 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
     for cd in cards:
         K.ribbon(*cd, kind=0)
     print(f"  hero cut {cut}: {len(cards)} cards ({nline} hairline), volume {Tv.min():.4f}-{Tv.max():.4f} m", flush=True)
+    return len(cards)
+
+
+class _SphGrid:
+    """A field over the directions around a centre (azimuth x elevation bins, azimuth 0 = forward (+z), wraps),
+    bilinear lookup. Used for the hair envelope: the outermost radius of the head, ears, collar and gadgets in every
+    direction (a smooth shrink-wrap with no gap behind the ears), the scalp coverage and the hair thickness."""
+    def __init__(self, c0, naz=120, nel=60):
+        self.c0, self.naz, self.nel = np.asarray(c0, float), naz, nel
+
+    def coords(self, D):
+        D = np.atleast_2d(D)
+        r = np.linalg.norm(D, axis=1)
+        az = np.arctan2(D[:, 0], D[:, 2])
+        el = np.arcsin(np.clip(D[:, 1] / np.maximum(r, 1e-9), -1, 1))
+        return (az + np.pi) / (2 * np.pi) * self.naz - 0.5, (el + np.pi / 2) / np.pi * self.nel - 0.5, r
+
+    def centres(self):
+        ea, ee = np.meshgrid((np.arange(self.naz) + 0.5) / self.naz * 2 * np.pi - np.pi, (np.arange(self.nel) + 0.5) / self.nel * np.pi - np.pi / 2)
+        return np.stack([np.cos(ee) * np.sin(ea), np.sin(ee), np.cos(ee) * np.cos(ea)], -1)       # (nel, naz, 3)
+
+    def bin_max(self, P):
+        fa, fe, r = self.coords(np.asarray(P) - self.c0)
+        ia = np.round(fa).astype(int) % self.naz
+        ie = np.clip(np.round(fe).astype(int), 0, self.nel - 1)
+        G = np.full((self.nel, self.naz), -1.0)
+        np.maximum.at(G, (ie, ia), r)
+        return G
+
+    def ang_max(self, P, deg):
+        """per bin: the largest radius of the points within deg of the bin's centre direction (-1: none); uniform
+        everywhere (bins shrink toward the poles, a plain per-bin max leaves holes there)"""
+        R = np.asarray(P) - self.c0
+        r = np.linalg.norm(R, axis=1)
+        U = R / np.maximum(r[:, None], 1e-9)
+        Cc = self.centres().reshape(-1, 3)
+        out = np.full(len(Cc), -1.0)
+        cth = math.cos(math.radians(deg))
+        for i in range(0, len(Cc), 256):
+            dots = Cc[i:i + 256] @ U.T
+            out[i:i + 256] = np.where(dots > cth, r[None, :], -1.0).max(1)
+        return out.reshape(self.nel, self.naz)
+
+    @staticmethod
+    def _nb(G):
+        Gp = np.pad(G, ((1, 1), (0, 0)), mode="edge")
+        return [np.roll(Gp, s, 1)[1 + a:1 + a + G.shape[0]] for a in (-1, 0, 1) for s in (-1, 0, 1)]
+
+    def dilate(self, G, n=1):
+        for _ in range(n):
+            G = np.max(np.stack(self._nb(G)), 0)
+        return G
+
+    def fill(self, G):
+        for _ in range(200):
+            bad = G < 0
+            if not bad.any():
+                break
+            nb = np.stack(self._nb(G))
+            ok = nb >= 0
+            s = np.where(ok, nb, 0).sum(0)
+            n = ok.sum(0)
+            G = np.where(bad & (n > 0), s / np.maximum(n, 1), G)
+        return np.where(G < 0, 0.0, G)
+
+    def blur(self, G, n=1):
+        k = np.array([1, 4, 6, 4, 1], float) / 16
+        for _ in range(n):
+            G = sum(k[i] * np.roll(G, i - 2, 1) for i in range(5))
+            Gp = np.pad(G, ((2, 2), (0, 0)), mode="edge")
+            G = sum(k[i] * Gp[i:i + G.shape[0]] for i in range(5))
+        # the pole rows: one value (every azimuth there is the same point)
+        el = (np.arange(self.nel) + 0.5) / self.nel * 180 - 90
+        w = BH.ss(76, 88, np.abs(el))[:, None]
+        return G * (1 - w) + G.mean(1, keepdims=True) * w
+
+    def sample(self, G, D):
+        fa, fe, _ = self.coords(D)
+        a0 = np.floor(fa).astype(int)
+        e0 = np.floor(fe).astype(int)
+        ta, te = fa - a0, fe - e0
+        a0m, a1 = a0 % self.naz, (a0 + 1) % self.naz
+        e0c, e1c = np.clip(e0, 0, self.nel - 1), np.clip(e0 + 1, 0, self.nel - 1)
+        return (G[e0c, a0m] * (1 - ta) * (1 - te) + G[e0c, a1] * ta * (1 - te) + G[e1c, a0m] * (1 - ta) * te + G[e1c, a1] * ta * te)
+
+
+def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
+    """Messy medium-length cuts (lead_messy / lead_shag / lead_tousle): clumped strand cards grown inside a smooth hair
+    envelope. The envelope is the outermost radius of the head (ears, collar and gadgets included, blurred) in every
+    direction around the head centre, plus the cut's thickness over the scalp (hero_T) and a thin hanging layer past
+    the hairline (fringe, over the ears, the nape). Guide strands march along the cut's flow field (crown whorl, tousled
+    by a smooth noise field, gravity below the crown); each guide carries a clump of child cards on deeper and higher
+    layers that follow its steps and converge a little toward its tips (pieces, no spikes); a few thin loose strands and
+    flicked ends break the silhouette. The fringe ends on an uneven line above the brows; nothing grows forward over
+    the eyes or cheeks."""
+    C = CUTS[c["hairCut"]]
+    kind = C["hero"]
+    L = B.L
+    eye = L.eye
+    k = B.H / 1.75
+    head_c = eye + np.array([0, 0.03, -0.075])
+    seed = (sum(map(ord, c["id"])) % 97) * 0.37 + {"messy": 0.0, "shag": 3.1, "tousle": 6.7}[kind]
+    hP, hN, hT, hW = _obj_surface(hair_objs)
+    shell = _Surf(hP, hN)
+    G = _SphGrid(head_c)
+    # ---- envelope: skin, ears, garments and gadgets near the head
+    E = coll.P
+    m = (np.linalg.norm(E - head_c, axis=1) < 0.19 * k) & (E[:, 1] > eye[1] - 0.17 * k)
+    Em = E[m]
+    if len(Em) > 40000:
+        Em = Em[rng.choice(len(Em), 40000, replace=False)]
+    Renv = G.blur(G.fill(G.ang_max(Em, 4.5)), 2)
+    # scalp coverage (the shell) and the shell's own outer radius, from a dense sampling of the shell's surface (its
+    # vertices are ~1 cm apart)
+    shS, _, _ = _sample_tris(hP, hT, 40000, np.random.default_rng(5))
+    Rsh0 = G.ang_max(np.concatenate([shS, hP]), 2.2)
+    cov = G.blur((Rsh0 > 0).astype(float), 2)
+    Rsh = np.where(Rsh0 > 0, Rsh0, 0.0)
+    # thickness: the cut's volume over the scalp, a thin hanging layer past the hairline; a little lumpy
+    U = G.centres().reshape(-1, 3)
+    Pe = head_c + U * Renv.reshape(-1)[:, None]
+    Ts = hero_T(c, Pe - eye) * k
+    Tf = (0.0045 + 0.0015 * BH.ss(0.3, -0.3, U[:, 2])) * k
+    lump = 0.82 + 0.36 * BH.vnoise(Pe, 45, seed)
+    T = ((Tf + (Ts - Tf) * cov.reshape(-1)) * lump).reshape(Renv.shape)
+
+    def lo(q, f):
+        """radius of layer f (0 = skin, 1 = the cut's outer surface) in the direction of q (rel. head_c)"""
+        re = G.sample(Renv, q)[0]
+        r = re + f * G.sample(T, q)[0]
+        rs = G.sample(Rsh, q)[0]
+        if rs > 0:
+            r = max(r, rs + (0.0012 + 0.004 * f) * k)
+        return r
+
+    Y = np.array([0.0, 1.0, 0.0])
+
+    def tg(v, u):
+        t = v - u * (v @ u)
+        n = np.linalg.norm(t)
+        return t / n if n > 1e-9 else t
+
+    whorl = np.array([0.025, 1.0, -0.3 if kind != "shag" else -0.45])
+    whorl /= np.linalg.norm(whorl)
+    side = 1.0 if c.get("hairPart", "left") == "left" else -1.0
+    part_x = 0.03 * side * k
+
+    def flow(q):
+        """unit tangent of the comb at q (rel. head_c)"""
+        u = q / np.linalg.norm(q)
+        p = q + head_c - eye                                   # rel. eye
+        away = tg(u - whorl, u)
+        # around the whorl the strands spiral out (no stubs pointing every way at the crown)
+        cw = BH.ss(0.35, 0.05, float(np.linalg.norm(u - whorl)))
+        away = away + np.cross(whorl, u) * 2.0 * cw
+        away = tg(away, u)
+        down = tg(-Y, u)
+        gw = 0.12 + 0.9 * BH.ss(0.55, -0.05, u[1])
+        fringe = BH.ss(0.35, 0.7, u[2]) * BH.ss(0.75, 0.35, u[1])     # the front, below the top
+        topf = BH.ss(-0.4, 0.15, u[2]) * BH.ss(0.35, 0.75, u[1])      # the top front half
+        sidew = BH.ss(0.45, 0.85, abs(u[0])) * BH.ss(0.7, 0.3, u[1])
+        away = away + tg(np.array([0.0, -0.3, -0.45]), u) * sidew       # over the ears: down and a little back
+        if kind == "messy":            # the fringe falls a little toward the side away from the whorl
+            d = away + gw * down + tg(np.array([-side * 0.4, 0.0, 0.0]), u) * fringe
+        elif kind == "shag":       # middle part: the top falls away from the part to both sides; a curtain fringe
+            s_ = np.sign(p[0]) if abs(p[0]) > 0.002 else (1.0 if rng.random() < 0.5 else -1.0)
+            d = (away + gw * down) * (1 - topf) + tg(np.array([s_ * 1.0, -0.2, 0.45]), u) * topf * 1.4
+            d = d * (1 - fringe) + tg(np.array([s_ * 0.75, -1.0, 0.15]), u) * fringe * 1.4
+        else:                      # tousle: the top swept forward and across, a side fringe falling diagonally
+            far = (p[0] - part_x) * side < 0
+            if far:
+                d = (away + gw * down) * (1 - topf) + tg(np.array([-side * 0.75, -0.1, 0.7]), u) * topf * 1.4
+                d = d * (1 - fringe) + tg(np.array([-side * 0.8, -0.85, 0.15]), u) * fringe * 1.4
+            else:
+                d = (away + gw * down) * (1 - topf) + tg(np.array([side * 0.45, -0.55, -0.25]), u) * topf * 1.2
+        d = tg(d, u)
+        return d / max(np.linalg.norm(d), 1e-9)
+
+    def tousle(q):
+        """the tousle angle of a piece rooted at q: a smooth field (neighbouring pieces agree), calmer on the fringe;
+        one angle per piece, kept along it (a piece turns smoothly, never folds)"""
+        u = q / np.linalg.norm(q)
+        p = q + head_c - eye
+        fringe = BH.ss(0.35, 0.7, u[2]) * BH.ss(0.75, 0.35, u[1])
+        amp = C.get("tousle", 0.5) * (1 - 0.4 * fringe)
+        return float(amp * (2 * BH.vnoise(p[None], 45 / k, seed)[0] - 1) * 1.8)
+
+    def floor_of(p, base):
+        """height (rel. eye) where a fringe strand at p (rel. eye) ends"""
+        if kind == "shag":         # parted: high in the middle, down to the outer brows at the sides
+            return base + 0.016 - 0.024 * BH.ss(0.008, 0.045, abs(p[0]))
+        if kind == "tousle":       # swept to one side: longer on the side it falls to
+            return base - 0.014 * BH.ss(0.0, 0.05, -side * p[0]) + 0.006 * BH.ss(0.0, 0.04, side * p[0])
+        return base
+
+    def stopped(q, flo, hem=None):
+        p = q + head_c - eye
+        if hem is not None:
+            uq = q / np.linalg.norm(q)
+            if p[1] < (hem[0] + (hem[1] - hem[0]) * BH.ss(-0.4, -0.88, uq[2])) * k:
+                return True                                    # ear-length: the hem over the ears and at the nape
+        if p[2] > -0.032 * k and abs(p[0]) < 0.078 * k and p[1] < floor_of(p, flo) * k:
+            return True                                        # the fringe line: never over the brows / eyes
+        if p[2] > -0.046 * k and p[1] < 0.012 * k:
+            return True                                        # nothing forward over the cheeks / eye corners
+        return p[1] < -0.11 * k
+
+    def length(u):
+        top = BH.ss(0.1, 0.6, u[1])
+        front = BH.ss(-0.2, 0.6, u[2]) * BH.ss(0.1, 0.5, u[1])
+        nape = BH.ss(0.0, -0.5, u[2]) * BH.ss(0.3, -0.2, u[1])
+        ln = C["side"] + (C["top"] - C["side"]) * top
+        ln += (C["front"] - ln) * front
+        ln += (C["nape"] - ln) * nape * (1 - top)
+        return ln * k
+
+    MAXTURN = math.radians(20)
+
+    def march(root, f, ln, nseg, jit, lift, flo, guide=None, conv=0.0, hem=None, npre=2):
+        """one strand: points (rel. head_c) and tangents; guide = (points, directions, angle) to follow; jit: the
+        strand's own extra angle on top of its piece's tousle angle"""
+        ds = ln / nseg
+        q = root / np.linalg.norm(root) * lo(root, f)
+        u = q / np.linalg.norm(q)
+        ang = (tousle(q) if guide is None else guide[2]) + jit
+        fl = lambda x, ux: _rot(flow(x), ux, ang)
+        d = fl(q, u) if guide is None else tg(guide[1][min(npre, len(guide[1]) - 1)], u)
+        ph = rng.uniform(0, 6.283)
+        lam = max(0.03, ln * 0.7)
+        # the card starts a little upstream of its root (its faded-in start lies over the hair it grows out of: the
+        # crown, where every strand leaves the whorl, is covered)
+        pre = []
+        qb = q.copy()
+        for _ in range(npre if u[1] > 0.15 else 0):
+            ub = qb / np.linalg.norm(qb)
+            qb = qb - fl(qb, ub) * ds * 0.55
+            if G.sample(cov, qb)[0] < 0.6:
+                break
+            qb = qb / np.linalg.norm(qb) * lo(qb, f)
+            pre.insert(0, qb.copy())
+        pts, dirs = pre + [q.copy()], [d.copy()] * len(pre) + [d.copy()]
+        for s in range(1, nseg + 1):
+            t = s / nseg
+            qn = q + d * ds
+            if guide is not None:      # pieces: the strands of a clump gather toward the guide near the tips
+                gi = min(s + len(pre), len(guide[0]) - 1)
+                pull = guide[0][gi] - qn
+                un = qn / np.linalg.norm(qn)
+                qn = qn + (pull - un * (pull @ un)) * conv * t ** 2
+            un = qn / np.linalg.norm(qn)
+            qn = un * (lo(qn, f) + lift * t ** 2)
+            if stopped(qn, flo, hem):
+                break
+            pts.append(qn.copy())
+            dn = qn - q
+            dn = dn / max(np.linalg.norm(dn), 1e-9)
+            if guide is not None and s + len(pre) < len(guide[1]):
+                want = 0.75 * tg(guide[1][s + len(pre)], un) + 0.25 * fl(qn, un)
+            else:
+                want = fl(qn, un)
+            dp = tg(dn, un)
+            d = tg(0.62 * dn + 0.38 * want, un)
+            d = _rot(d / max(np.linalg.norm(d), 1e-9), un, C["wave"] * 0.3 * math.sin(6.283 * s * ds / lam + ph))
+            ca = float(np.clip(d @ dp, -1, 1))
+            if ca < math.cos(MAXTURN):              # a strand bends, never kinks: at most MAXTURN per step
+                pr = d - dp * ca
+                pr /= max(np.linalg.norm(pr), 1e-9)
+                d = dp * math.cos(MAXTURN) + pr * math.sin(MAXTURN)
+            dirs.append(d.copy())
+            q = qn
+        return np.array(pts), np.array(dirs)
+
+    # layers: (fraction of the thickness, share, width factor, colour factor, importance)
+    layers = [(0.50, 0.20, 1.30, 0.74, 0.5), (0.68, 0.26, 1.15, 0.85, 1.0), (0.84, 0.30, 1.0, 0.95, 1.8), (0.97, 0.19, 0.85, 1.02, 2.3)]
+    budget = BH.budget(c)
+    target = 25000 if budget >= 16000 else 6400 if budget > 9000 else 2600
+    nseg_of = lambda ln: int(np.clip(round(ln / (0.0085 * k)), 4, 14))
+    # guides: roots spread over the scalp (area-weighted on the shell), a little denser toward the front
+    cand, cti, _ = _sample_tris(hP, hT, 6000, rng)
+    rel_c = cand - head_c
+    un_c = rel_c / np.linalg.norm(rel_c, axis=1, keepdims=True)
+    keep = rng.random(len(cand)) < 0.55 + 0.45 * BH.ss(-0.6, 0.6, un_c[:, 2])
+    cand, cti = cand[keep], cti[keep]
+    per = 6                                  # cards per clump (the guide's own card + children)
+    n_guides = min(len(cand) // 3, 900)      # an evenly spread pool, used in order until the budget is spent
+    # spread the guides evenly (farthest-point style on a random pool)
+    pool = cand[: min(len(cand), n_guides * 4)]
+    gi_ = [0]
+    dmin = np.linalg.norm(pool - pool[0], axis=1)
+    up_p = (pool - head_c) / np.linalg.norm(pool - head_c, axis=1, keepdims=True)
+    wgt = 1.0 + 0.9 * BH.ss(0.1, 0.75, up_p[:, 1]) + 0.3 * BH.ss(0.2, 0.7, up_p[:, 2])
+    for _ in range(n_guides - 1):
+        j = int(np.argmax(dmin * wgt))
+        gi_.append(j)
+        dmin = np.minimum(dmin, np.linalg.norm(pool - pool[j], axis=1))
+    groots = pool[gi_] - head_c
+    cards = []
+
+    def card(pts, f, wf, cf, imp, column, Wv, tipw=0.62):
+        if len(pts) < 3:
+            return
+        P = pts + head_c
+        nrm = pts / np.linalg.norm(pts, axis=1, keepdims=True)
+        w0 = C["W"] * wf * rng.uniform(0.8, 1.2) * k
+        width = w0 * (1 - (1 - tipw) * np.linspace(0, 1, len(P)) ** 1.2)
+        v = rng.normal(1.0, 0.035)
+        root = hc * 0.66 * cf * v
+        tip = hc * rng.uniform(0.98, 1.08) * cf * v
+        if grey and rng.random() < 0.18:
+            kq = rng.uniform(0.7, 0.88)
+            root, tip = root * kq, tip * kq
+        cards.append((P, nrm, width, column, root, tip, Wv, imp + rng.random()))
+
+    nflick = 0
+    ntri = 0
+    nused = 0
+    for g in groots:
+        if ntri >= target * 0.86:
+            break
+        nused += 1
+        n0 = len(cards)
+        u = g / np.linalg.norm(g)
+        fr_g = float(BH.ss(0.3, 0.6, u[2]) * BH.ss(0.85, 0.5, u[1]))      # a fringe piece: soft, feathered, many fine cards
+        temple = float(BH.ss(0.55, 0.8, abs(u[0])) * BH.ss(-0.2, 0.3, u[2]))  # over the temples: fine, never a flap
+        si, _ = shell.near(g + head_c)
+        Wv = hW[si]
+        ln = length(u) * rng.uniform(0.82, 1.12)
+        nseg = nseg_of(ln)
+        flo = rng.uniform(*C["floor"])
+        hem = (C["hem"][0] + rng.normal(0, 0.006), C["hem"][1] + rng.normal(0, 0.011))
+        flick = rng.random() < C.get("flick", 0.2)
+        lift_g = rng.uniform(0.0015, 0.004) * k if flick else 0.0
+        if kind == "shag" and u[1] < 0.45:     # shaggy: the ends over the ears and the nape flip out
+            lift_g = max(lift_g, rng.uniform(0.003, 0.007) * k)
+        ga = tousle(g) + rng.normal(0, 0.12)
+        fg = rng.uniform(0.8, 0.95)            # every card on its own depth: crossing cards never share a surface
+        gp, gd = march(g, fg, ln, nseg, ga - tousle(g), lift_g, flo, hem=hem)
+        if len(gp) < 3:
+            continue
+        if lift_g > 0:
+            nflick += 1
+        soft = max(fr_g, temple)
+        card(gp, fg, 1.05 - 0.3 * soft, 0.97, 2.2, int(rng.integers(0, 3)), Wv, tipw=0.62 + 0.25 * soft)
+        conv = rng.uniform(0.04, 0.18) * (1 - 0.7 * fr_g)
+        for _ in range(per - 1 + int(round(2 * soft))):
+            # a child root a few mm from the guide's (on the scalp), its own layer
+            off = rng.normal(0, 0.0065 * k, 3)
+            r0 = g + off - u * (off @ u)
+            if G.sample(cov, r0)[0] < 0.5:
+                continue
+            uu = rng.random()
+            acc = 0.0
+            for lay in layers:
+                acc += lay[1]
+                if uu <= acc:
+                    break
+            f, _, wf, cf, imp = lay
+            f = f + rng.uniform(-0.075, 0.075)
+            cl = ln * rng.uniform(0.82, 1.04) * (0.9 if f < 0.6 else 1.0)
+            pp, _ = march(r0, f, cl, max(3, int(round(nseg * cl / ln))), 0.0, lift_g * BH.ss(0.75, 0.97, f) * rng.uniform(0.5, 1.1),
+                          flo + rng.normal(0, 0.005), guide=(gp, gd, ga), conv=conv, hem=(hem[0] + rng.normal(0, 0.003), hem[1] + rng.normal(0, 0.004)))
+            col_ = (4 + int(rng.integers(0, 2))) if rng.random() < 0.35 * soft else int(rng.integers(0, 4))
+            card(pp, f, wf * (1 - 0.35 * soft), cf, imp, col_, Wv, tipw=0.62 + 0.25 * soft)
+        ntri += sum(2 * (len(cd[0]) - 1) for cd in cards[n0:])
+    # loose strands: thin wisps above the outer layer (they break the silhouette a little; never long, never stiff)
+    nwisp = int(len(cards) * C.get("wisp", 0.06))
+    wroots = cand[rng.choice(len(cand), size=min(nwisp, len(cand)), replace=False)] - head_c
+    for g in wroots:
+        u = g / np.linalg.norm(g)
+        si, _ = shell.near(g + head_c)
+        ln = length(u) * rng.uniform(0.6, 1.0)
+        pp, _ = march(g, rng.uniform(0.97, 1.05), ln, nseg_of(ln), rng.normal(0, 0.25), rng.uniform(0.0015, 0.004) * k, rng.uniform(*C["floor"]), hem=C["hem"])
+        card(pp, 1.0, 0.24, 1.04, 1.4, 4 + int(rng.integers(0, 2)), hW[si], tipw=0.7)
+    # the hairline: short fine cards along the shell's border where it is seen (front, temples, above the ears)
+    ecount = {}
+    for t_ in range(len(hT)):
+        for a_, b_ in ((0, 1), (1, 2), (2, 0)):
+            e_ = tuple(sorted((int(hT[t_, a_]), int(hT[t_, b_]))))
+            ecount[e_] = ecount.get(e_, 0) + 1
+    bedges = [e_ for e_, n_ in ecount.items() if n_ == 1 and (hP[e_[0]] - head_c)[2] > -0.06 and hP[e_[0]][1] > eye[1] - 0.02]
+    nline = {2: 260, 1: 90, 0: 30}[tier] if bedges else 0
+    for _ in range(nline):
+        e_ = bedges[int(rng.integers(0, len(bedges)))]
+        p = hP[e_[0]] + (hP[e_[1]] - hP[e_[0]]) * rng.random() - head_c
+        ln = rng.uniform(0.012, 0.024) * k
+        pp, _ = march(p, rng.uniform(0.3, 0.6), ln, 4, rng.normal(0, 0.15), 0.0, 0.03, hem=C["hem"])
+        card(pp, 0.4, 0.4, 0.82, 1.2, 4 + int(rng.integers(0, 2)), np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], tipw=0.5)
+    for cd in cards:
+        K.ribbon(*cd, kind=0)
+    if os.environ.get("HAIR_DUMP"):          # debug: the card centre lines, the shell, the skin of the head
+        np.savez(os.environ["HAIR_DUMP"], pts=np.concatenate([cd[0] for cd in cards]), cid=np.concatenate([np.full(len(cd[0]), i) for i, cd in enumerate(cards)]),
+                 shell=hP, eye=eye, head_c=head_c, Renv=Renv, T=T, cov=cov, Rsh=Rsh)
+    tris = sum(2 * (len(cd[0]) - 1) for cd in cards)
+    print(f"  messy cut {c['hairCut']}: {len(cards)} cards ({nused} clumps, {nflick} flicked, {nwisp} wisps, {nline} hairline), {tris} tris, "
+          f"thickness {T.min():.4f}-{T.max():.4f} m", flush=True)
     return len(cards)
 
 
