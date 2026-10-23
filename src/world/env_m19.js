@@ -505,7 +505,7 @@ export function buildRooms(game, scene, low) {
     plasterW: RZ.pbrMaterial('plaster', { mapping: 'world', params: { color: 0xd8ccb4 } }), wood: RZ.pbrMaterial('wood', { mapping: 'world' }),
     stone: RZ.pbrMaterial('cutStone', { mapping: 'world', params: { color: 0x8a8680 } }), panel: RZ.pbrMaterial('paintedMetalPanel', { mapping: 'world', params: { color: 0xe4e6e8 } }),
     tile: RZ.pbrMaterial('ceramicTile', { mapping: 'world', params: { color: 0xc8ccd0 } }), tileW: RZ.pbrMaterial('ceramicTile', { mapping: 'world', params: { color: 0xe8e2d0 } }),
-    plasterG: RZ.pbrMaterial('plaster', { mapping: 'world', params: { color: 0x6a6460 } }), plasterK: RZ.pbrMaterial('plaster', { mapping: 'world', params: { color: 0xece4d0 } }),
+    plasterG: RZ.pbrMaterial('plaster', { mapping: 'world', params: { color: 0x6a6460 } }), plasterK: new THREE.MeshStandardMaterial({ color: 0xe4d9c2, roughness: 0.88 })  /* a lived-in 2026 family kitchen: clean emulsion, no peeling plaster */,
     brass: new THREE.MeshStandardMaterial({ color: 0xc8a050, metalness: 1, roughness: 0.32 }), dark: new THREE.MeshStandardMaterial({ color: 0x2a221a, roughness: 0.7 }),
     doorWood: new THREE.MeshStandardMaterial({ color: 0x4a3424, roughness: 0.55 }), doorWhite: new THREE.MeshStandardMaterial({ color: 0xe8eaec, roughness: 0.4 }),
     doorGreen: new THREE.MeshStandardMaterial({ color: 0x2f4a3a, roughness: 0.5 }), frame: new THREE.MeshStandardMaterial({ color: 0x1e1a16, roughness: 0.5 }),
