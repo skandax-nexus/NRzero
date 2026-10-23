@@ -24,14 +24,25 @@ class Scene:
     pass
 
 
-def head_scene(P, neck_drop=0.035):
-    """Triangles of the head (body faces above the neck joint minus neck_drop, both eye helpers) and vertex colours."""
+def head_scene(P, neck_drop=0.035, jaw_cut=True):
+    """Triangles of the head (body faces above the neck joint minus neck_drop, both eye helpers) and the painter.
+
+    jaw_cut drops the neck under the jaw (below the line chin -> jaw angle -> back of the head, 3 mm under it): the
+    face's outline then stands against the background as the jaw does against the shirt in the photo, so the detector
+    traces the jaw and not the neck."""
     V0, _, F = mh.base()
     neck = mh.joint(P, "neck")
+    L = _landmarks()
+    me, go = P[L["Me"]], 0.5 * (P[L["Go_L"]] + P[L["Go_R"]])
+    def is_neck(q):
+        yl = np.interp(q[2], [go[2] - 0.08, go[2], me[2]], [go[1] + 0.01, go[1], me[1]])
+        return q[1] < yl - 0.003
     tris, grp = [], []
     for vs, _, g in F:
         if g == "body":
             if min(P[v, 1] for v in vs) < neck[1] - neck_drop:
+                continue
+            if jaw_cut and all(is_neck(P[v]) for v in vs):
                 continue
             kind = 0
         elif g in ("helper-l-eye", "helper-r-eye"):
@@ -45,54 +56,80 @@ def head_scene(P, neck_drop=0.035):
     S.tris = np.array(tris, np.int64)
     S.grp = np.array(grp)
     S.verts = np.unique(S.tris)
-    S.col = _colours(P, S)
+    S.brow_thick = 1.0
+    S.brow_lift = 0.0
+    repaint(S, P)
     return S
 
 
-def _colours(P, S):
-    """Per-vertex albedo (skin) plus what the per-pixel painter needs: the neutral layout positions (S.ref)."""
+_LIPV = None
+
+
+def repaint(S, P):
+    """Anchor the painter on the head P (head frame, MH axes): the game paints lips and brows from the sculpted
+    head's own landmarks (build_humans.paint: lips from the lip contact line, brows from the eye centres), so the
+    painted features follow the shape exactly as they will in the build."""
+    global _LIPV
+    if _LIPV is None:
+        import json, os
+        _LIPV = np.array(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "mh_lip_line.json")))["verts"])
     S.ref = P.copy()
-    L = _landmarks()
-    S.paint = dict(sto=P[L["Sto"]].copy(), chx=abs(P[L["Ch_L"], 0]), eyes={})
-    for s in (1, -1):
-        en, ex = P[L["En_L" if s > 0 else "En_R"]], P[L["Ex_L" if s > 0 else "Ex_R"]]
-        S.paint[s] = (en.copy(), ex.copy())
+    q = P[_LIPV]
+    # the contact line as build_humans._profile does it: mean height in 11 bins across the mouth
+    e = np.linspace(q[:, 0].min(), q[:, 0].max(), 12)
+    k = np.clip(np.digitize(q[:, 0], e) - 1, 0, 10)
+    bx = np.array([q[k == i, 0].mean() for i in range(11) if (k == i).any()])
+    by = np.array([q[k == i, 1].mean() for i in range(11) if (k == i).any()])
+    S.paint = dict(lip_x=bx, lip_y=by, lip_w=(q[:, 0].max() - q[:, 0].min()) / 2, lip_z=q[:, 2].max(), eyes={})
     for g, k in (("helper-l-eye", 1), ("helper-r-eye", 2)):
-        vs = np.array(mh.group_vertices(g))
-        S.paint["eyes"][k] = P[vs].mean(0)
-    return np.tile(SKIN, (len(P), 1))
+        S.paint["eyes"][k] = P[mh.group_vertices(g)].mean(0)
+
+
+def _ss(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
 
 
 def paint_pixels(S, Q, grp):
-    """Albedo per pixel from Q (the neutral-layout position of each pixel) and its group (0 skin, 1 / 2 eyes)."""
+    """Albedo per pixel from Q (the head-frame position of each pixel) and its group (0 skin, 1 / 2 eyes)."""
     col = np.tile(SKIN, (len(Q), 1))
     pt = S.paint
-    skin = grp == 0
-    # lips: an ellipse-ish vermilion around the stomion, upper 11 mm, lower 12 mm, out to the mouth corners
-    d = Q - pt["sto"]
-    ell = (d[:, 0] / pt["chx"]) ** 2 + (d[:, 1] / np.where(d[:, 1] > 0, 0.0105, 0.0115)) ** 2
-    w = np.clip((1.0 - ell) / 0.25, 0, 1) * (Q[:, 2] > pt["sto"][2] - 0.012) * skin
-    col = col * (1 - w[:, None]) + LIP * w[:, None]
-    # brows: a band over each eye, 17-25 mm above the corners' mid height, thick medially, thinner laterally
-    for s in (1, -1):
-        en, ex = pt[s]
-        ey = (en[1] + ex[1]) / 2
-        x0, x1 = abs(en[0]) - 0.006, abs(ex[0]) + 0.008
-        x = Q[:, 0] * s
-        f = np.clip((x - x0) / (x1 - x0), 0, 1)
-        yc = ey + 0.0195 + 0.004 * np.sin(np.pi * f) + 0.002 * f
-        half = 0.0036 - 0.0013 * f
-        dy = np.abs(Q[:, 1] - yc)
-        b = np.clip((half + 0.0008 - dy) / 0.0016, 0, 1) * np.clip((x - x0) / 0.003, 0, 1) * np.clip((x1 - x) / 0.003, 0, 1)
-        b *= skin * (Q[:, 2] > ex[2] - 0.01)
-        col = col * (1 - b[:, None]) + BROW * b[:, None]
+    skin = (grp == 0).astype(float)
+    # lips: build_humans.paint's male lip shape (upper 7.4 mm, lower 9.2 mm x mouth width / 48 mm) from the contact line
+    lw = max(pt["lip_w"], 0.018)
+    t = Q[:, 0] / lw
+    d = Q[:, 1] - np.interp(Q[:, 0], pt["lip_x"], pt["lip_y"])
+    front = _ss(pt["lip_z"] - 0.025, pt["lip_z"] - 0.012, Q[:, 2]) * (np.abs(t) < 1.1) * skin
+    sc = pt["lip_w"] / 0.024
+    hu0, hl0 = 0.0074 * sc, 0.0092 * sc
+    at = np.clip(np.abs(t), 0, 1)
+    hu = hu0 * (1 - at ** 2.3) ** 0.55 * (1 - 0.16 * np.exp(-(t / 0.13) ** 2)) * (1 + 0.1 * np.exp(-((at - 0.3) / 0.15) ** 2))
+    hl = hl0 * (1 - at ** 2.0) ** 0.7
+    mu = _ss(hu + 0.0007, hu - 0.0004, d) * _ss(-0.0012, 0.0, d)
+    ml = _ss(hl + 0.0008, hl - 0.0005, -d) * _ss(-0.0012, 0.0, -d)
+    lipm = np.clip(np.maximum(mu, ml) * front * _ss(1.05, 0.9, np.abs(t)), 0, 1)
+    col = col * (1 - lipm[:, None] * 0.85) + LIP * lipm[:, None] * 0.85
+    line = 0.55 * np.exp(-d ** 2 / 0.0005 ** 2) * front * _ss(1.15, 0.85, np.abs(t))
+    col *= (1 - line[:, None] * 0.6)
+    # brows: build_humans.paint's stroke band (look v2 curve) from each eye centre
+    bt, lift = S.brow_thick, S.brow_lift
+    for k, sg in ((1, 1), (2, -1)):
+        e = pt["eyes"][k]
+        X = (Q[:, 0] - e[0]) * sg
+        Y = Q[:, 1] - e[1]
+        tt = np.clip((X + 0.0185) / 0.047, 0, 1)
+        lo = np.interp(tt, [0, 0.35, 0.68, 1.0], [0.0150, 0.0178, 0.0192, 0.0162]) + lift
+        w = np.interp(tt, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (0.8 + 0.4 * bt)
+        b = _ss(-0.0006, 0.0006, Y - lo) * _ss(w + 0.0006, w - 0.0004, Y - lo) * _ss(-0.0205, -0.0175, X) * _ss(0.0305, 0.0280, X)
+        b *= skin * (Q[:, 2] > e[2] - 0.01)
+        col = col * (1 - b[:, None] * 0.92) + BROW * b[:, None] * 0.92
     # eyes: sclera, iris, pupil by the radius from the helper's forward axis
     for k, c in pt["eyes"].items():
-        e = grp == k
+        ee = grp == k
         r = np.hypot(Q[:, 0] - c[0], Q[:, 1] - c[1])
-        col[e] = SCLERA
-        col[e & (r < 0.0062)] = IRIS
-        col[e & (r < 0.0026)] = PUPIL
+        col[ee] = SCLERA
+        col[ee & (r < 0.0062)] = IRIS
+        col[ee & (r < 0.0026)] = PUPIL
     return col
 
 
@@ -158,24 +195,30 @@ def rasterise(uv, z, tris, W, H):
     return tid, bar, zb
 
 
-def render(P, S, K, R, t, W, H, light_dir=(0.25, 0.55, 1.0), ambient=0.38, wire=False):
-    """Shaded image (H,W,3 floats 0..1, sRGB-ish) and buffers."""
+def render(P, S, K, R, t, W, H, light=(-0.35, -0.6), ambient=0.3, Q=None):
+    """Shaded image (H,W,3 floats 0..1) and buffers. P: positions transformed by R, t into the camera; Q: the head-frame
+    positions the painter reads (default: S.ref). The key light sits on the camera side, `light` = its direction offset
+    (image x, y; y < 0 = from above), a soft wrap, so the jaw gets its shadow underneath as in an overhead room light."""
     uv, z = project(P, K, R, t)
     tid, bar, zb = rasterise(uv, z, S.tris, W, H)
-    n = vertex_normals(P, S.tris)
+    Pc = P @ R.T + t
+    n = vertex_normals(Pc, S.tris)
     img = np.tile(BG, (H, W, 1))
     m = tid >= 0
     tv = S.tris[tid[m]]
     bw = bar[m]
     nn = (n[tv] * bw[:, :, None]).sum(1)
     nn /= np.maximum(np.linalg.norm(nn, axis=1, keepdims=True), 1e-12)
-    Q = (S.ref[tv] * bw[:, :, None]).sum(1)
-    cc = paint_pixels(S, Q, S.grp[tid[m]])
-    # light in head axes (x left of the subject, y up, z out of the face): a soft key from the front, a bit above
-    l = np.array(light_dir, float)
+    pp = (Pc[tv] * bw[:, :, None]).sum(1)
+    v = -pp / np.linalg.norm(pp, axis=1, keepdims=True)            # to the camera
+    nn *= np.sign((nn * v).sum(1))[:, None]                        # face the viewer (winding-agnostic)
+    l = np.array([light[0], light[1], -1.0])                        # surface -> light: the camera side, above
     l /= np.linalg.norm(l)
-    dif = np.clip(nn @ l * 0.5 + 0.5, 0, 1) ** 1.6       # wrapped (soft) key
+    dif = np.clip(nn @ l * 0.6 + 0.4, 0, 1) ** 1.5
     shade = ambient + (1 - ambient) * dif
+    QQ = S.ref if Q is None else Q
+    Qp = (QQ[tv] * bw[:, :, None]).sum(1)
+    cc = paint_pixels(S, Qp, S.grp[tid[m]])
     img[m] = np.clip(cc * shade[:, None], 0, 1)
     return img, dict(tri=tid, bary=bar, depth=zb, uv=uv, z=z)
 

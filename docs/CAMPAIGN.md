@@ -109,8 +109,26 @@ plays; choices change content and never block the campaign.
 - Fixed in this pass: story flags were not saved at all (`game.flags` lived only in memory, so Continue or a chapter
   start lost every earlier choice); the leftover "VERSION 17 · To Be Continued" card after the finale; the title
   footer still read "Prologue & Act I vertical slice".
-- Every tools/tests/mNN.json was run once in sequence on desktop (960×540, `gfx=low`); results are in the release
-  report of this pass.
+- Every tools/tests/mNN.json was run once on desktop (960×540, `gfx=low`, `dtcap=0.25`, CPU SwiftShader); M23 ran
+  with an extra final check that the game returns to the title with the chapter list open. All 23 completed with
+  their final flags set and no page errors:
+
+  | M | min | final check | M | min | final check |
+  |---|---|---|---|---|---|
+  | 1 | 5 | done (one wait timed out, see Known issues) | 13 | 16 | choice free, 5 shards, ceasefire |
+  | 2 | 3 | done | 14 | 16 | beacon repaired, garden restored |
+  | 3 | 3 | done | 15 | 27 | choice free, dual archive |
+  | 4 | 3 | done | 16 | 19 | photo, 1,046 iterations |
+  | 5 | 13 | done | 17 | 13 | Mira pattern 61, 6 shards |
+  | 6 | 12 | done | 18 | 34 | Jun saved, stabilizer 100 |
+  | 7 | 12 | done | 19 | 16 | answer 'ask', record kept |
+  | 8 | 9 | done | 20 | 37 | answer 'unsure', 12 fragments |
+  | 9 | 9 | done | 21 | 14 | ally Hale, 6 shards |
+  | 10 | 7 | done | 22 | 15 | together, cause found |
+  | 11 | 6 | done, file 4-07 | 23 | 15 | ending C, credits, title + 23 playable chapters |
+  | 12 | 15 | done, Witness scar | | | |
+
+  (Wall-clock minutes of the automated drive at 1-10 fps, Missions 12-23 two at a time; not playtime.)
 - `eslint` on `src/`: 0 errors (4 unused-variable warnings in src/human, owned by the character pipeline).
 
 ## Known issues
@@ -122,6 +140,9 @@ Campaign
   of the character rebuild still in progress; the game falls back to `cast.glb`).
 - `tools/tests/m1.json` waits for six evidence items although Mission 1 awards five (it times out on that step and
   continues); `m4.json` can race the pedestal prompt at very low frame rates.
+- The release run was desktop only; the `--mobile` runs documented in docs/missions/mNN.md were not repeated in
+  this pass. In the M1 run, the camera shot after the warning (test shot f7, player teleported by the test) is
+  half covered by a close pink surface; check it in a normal playthrough.
 
 Presentation (from the QA backlog, scratchpad qa_backlog.md)
 - Letterbox bars cover the top line of the objective HUD in cinematics; on phones the Echo Step button overlaps the

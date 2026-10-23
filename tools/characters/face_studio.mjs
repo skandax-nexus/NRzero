@@ -4,6 +4,9 @@
 // Every person stands in the rest pose (head level, eyes forward, no idle sway or blink), so the same view of two
 // builds is directly comparable. The camera aims between the eye bones (head bone fallback).
 //   views:  front (0 deg), three (three-quarter, 35 deg to the person's left), profile (90 deg)
+//           photo: a reference photo's camera (likeness/fit.py): FS_PHOTO_CAM="x,y,z" camera position from the eye
+//           midpoint (metres, the person's frame: x his left, y up, z forward), FS_PHOTO_AIM="x,y,z" the point it
+//           looks at (same frame), FS_PHOTO_FOV vertical field of view (deg), FS_PHOTO_ROLL (deg, + = clockwise)
 //   lights: studio (neutral: soft white key with a face shadow, fill, rim, grey background)
 //           game   (Rain City night: sodium street-lamp key from above right, cyan rim from behind left, wet blue ambient)
 // Writes OUTDIR/<id>_<view>_<light>.png and OUTDIR/shots.json (camera, eye positions, triangle counts per id).
@@ -101,6 +104,21 @@ await p.evaluate(async (O) => {
     },
     shot(view, light) {
       LIGHTS[light]();
+      if (view === 'photo') {
+        const v3 = s => new THREE.Vector3(...(s || '0,0,0').split(',').map(Number));
+        const pc = this.eyes.clone().add(v3(O.photoCam)), aim = this.eyes.clone().add(v3(O.photoAim));
+        cam.fov = O.photoFov || 45; cam.updateProjectionMatrix();
+        cam.up.set(0, 1, 0); cam.position.copy(pc); cam.lookAt(aim);
+        if (O.photoRoll) cam.rotateZ(-O.photoRoll * Math.PI / 180);
+        for (const k of ['key', 'fill', 'rim']) {
+          const [x, y, z] = L[k].userData.rel; L[k].position.set(aim.x + x, aim.y + y, aim.z + z); L[k].target.position.copy(aim);
+        }
+        r.render(scene, cam);
+        if (this.cur.rig2 && this.cur.rig2.update) { this.cur.rig2.update(0); r.render(scene, cam); }
+        const url = r.domElement.toDataURL('image/png');
+        cam.fov = 24; cam.updateProjectionMatrix(); cam.up.set(0, 1, 0);
+        return url;
+      }
       // close / closethree: an eye-to-mouth close-up (the dialogue close-up of a premium story game)
       // mouth: a macro of the mouth (teeth, lips); hair: the cut from above the brow (three-quarter, a little high)
       const az = { front: 0, three: 0.61, profile: Math.PI / 2, close: 0, closethree: 0.5, mouth: 0.3, hair: 0.7, back: Math.PI * 0.8 }[view];
@@ -124,7 +142,8 @@ await p.evaluate(async (O) => {
       return r.domElement.toDataURL('image/png');
     },
   };
-}, { size, expr: process.env.EXPR || '' });
+}, { size, expr: process.env.EXPR || '', photoCam: process.env.FS_PHOTO_CAM || '', photoAim: process.env.FS_PHOTO_AIM || '',
+  photoFov: +(process.env.FS_PHOTO_FOV || 0), photoRoll: +(process.env.FS_PHOTO_ROLL || 0) });
 const meta = {};
 for (const id of ids) {
   const t0 = Date.now();
