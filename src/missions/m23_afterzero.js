@@ -310,7 +310,7 @@ export default {
     }
     const PAGES = [
       ['ATTEMPT 0001 · RAIN CITY', 'First time I came back I stood on this street and could not remember which side the station was on. It was always the west. I had forgotten my own city in a week.'],
-      ['ATTEMPT 0212 · THE VALLEY', 'The keepers asked me why I wept at their fire. I told them I had come before the first fire. They wrote it down. Seventeen of me told them the same thing.'],
+      ['ATTEMPT 0212 · THE VALLEY', 'The keepers asked me why I wept at their fire. I told them I had come before the first fire. They wrote it down and cut a mark in the stone. Every one of me told them the same thing.'],
       ['ATTEMPT 0730 · 2196', 'Sera\'s grandmother gave me water. She said I looked like the statue. I said I was the statue. She laughed. I did not explain.'],
       ['ATTEMPT 1046 · HELIX', 'If he reads this: I was never trying to save her. I was trying not to be the one who lost her. Those are different. It took me one thousand and forty-six tries to see it.'],
     ];
@@ -322,7 +322,7 @@ export default {
         G.pages.add(n); m.visible = false; W.sv = W.sv.filter(v => v.o !== m);
         ev('The Witness\'s page · ' + PAGES[n][0], PAGES[n][1], 'Witness · last pages');
         await story(async () => {
-          await closeUp([x, y + 0.4, z], [['kai', ['"I had forgotten my own city in a week." He wrote it like a confession.', '"Seventeen of me told them the same thing." Niko\'s seventeen.', '"I said I was the statue." Of course he did.', '"I was trying not to be the one who lost her." ...Neither was I.'][n]]]);
+          await closeUp([x, y + 0.4, z], [['kai', ['"I had forgotten my own city in a week." He wrote it like a confession.', '"Every one of me told them the same thing." A mark for each. Niko\'s stars-count.', '"I said I was the statue." Of course he did.', '"I was trying not to be the one who lost her." ...Neither was I.'][n]]]);
         });
         audio.sfxPlay('pickup'); ui.toast(`THE WITNESS'S LAST PAGES ${G.pages.size}/4`, 2200);
       }) });
@@ -528,7 +528,7 @@ export default {
         await game.say('niko', 'That is what the others said.');
         await convo(niko, [
           ['kai', 'How many others?'],
-          ['niko', 'Seventeen came before you, wearing your face. You are the eighteenth. You are the first who asked us something instead of telling us.'],
+          ['niko', 'Sixteen came before you, wearing your face. The stars-count knew you were the seventeenth. You are the first who asked us something instead of telling us.'],
           ['tala', 'We kept every one of them. The marks are on the stone. Our grandchildren\'s grandchildren will repaint them.'],
           ['kai', 'Can I carry that? What you remember.'],
           ['niko', 'Carry it. Then decide if it is worth keeping. A story you are made to keep is just a wall.'],
@@ -536,7 +536,7 @@ export default {
         await game.say('m23band', 'Thread: the keepers\' memory.');
         addThread('keepers'); musicLock = null;
       });
-      ev('The seventeen marks', 'The keepers counted seventeen men with Kai\'s face before him. Niko: "You are the first who asked us something instead of telling us."', 'The settlement');
+      ev('The seventeen marks', 'The keepers cut seventeen marks for the men with Kai\'s face; sixteen came before him, and he is the seventeenth. Niko: "You are the first who asked us something instead of telling us."', 'The settlement');
     }) });
     act({ pos: [-27.6, 1.0, -10.4], radius: 2.0, prompt: 'Talk to the keeper', onUse: () => side(async () => {
       G.talks.add('keeper');
@@ -587,7 +587,7 @@ export default {
         await game.shot([52, 9, 4], [58.5, 12.5, -9], 2.0, { fov: 44 });
         await game.say('sera', 'There. The light stays on.');
         await convo(sera, [
-          ['sera', seraTrust < 0 ? 'You chose the lock once. Here you chose the light. People change. Even statues.' : 'You freed a city that didn\'t want freeing once. This one wanted it.'],
+          ['sera', seraTrust < 0 ? 'You left people in their loops once and said you\'d come back. You came back. People change. Even statues.' : F.m15choice === 'free' ? 'You freed a city that didn\'t want freeing once. This one wanted it.' : F.m15choice === 'stabilize' ? 'You kept Harrow Reach in its one safe day. This roof wanted tomorrow, and you gave it.' : 'Three times out of Block D4, and now this. People change. Even statues.'],
           ['kai', 'I need something from here. A thread. Something 2196 is holding on to.'],
           ['sera', 'Take tomorrow. It\'s the only thing we ever had too much of. Bring it back if you can. Let it go if you have to.'],
           ['sera', ally === 'sera' || ally === 'lantern' ? 'And I\'ll keep the light on for you. Like at the Bastion.' : 'I\'ll keep the light on. Whatever you decide.'],
@@ -778,7 +778,7 @@ export default {
         ]);
         const i = await choose('mira', 'So. What did you come here to do, Kai?', ['Ask you what you want.', 'Fix this. Properly, this time.', 'I don\'t know any more.'], 0);
         G.miraOpen = ['ask', 'fix', 'unsure'][i];
-        if (i === 0) await convo(mira, [['kai', 'Ask you what you want.'], ['mira', miraAns === 'ask' ? 'You remembered. Somewhere between the Threshold and here, you actually remembered.' : 'That\'s the first time anyone has asked me that in this ring.']]);
+        if (i === 0) await convo(mira, [['kai', 'Ask you what you want.'], ['mira', F.m20done || miraAns === 'ask' ? 'You remembered. I told you to come to ask, and you actually did.' : 'That\'s the first time anyone has asked me that in this ring.']]);
         if (i === 1) await convo(mira, [['kai', 'Fix this. Properly, this time.'], ['mira', 'Every one of you said that. The machine has been fixed a thousand times. It\'s the wanting that\'s broken.']]);
         if (i === 2) await convo(mira, [['kai', 'I don\'t know any more.'], ['mira', 'Good. That\'s the most honest a Varen has been in this room.']]);
         // the bible quote

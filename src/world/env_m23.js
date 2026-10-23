@@ -67,7 +67,7 @@ export function registerM23Cast() {
   registerCast('m23kaivo', { name: 'KAI VAREN', role: 'A voice in no second', portraitOf: 'kai', voice: true, vp: { sex: 'm', pitch: 0.9, rate: 0.92, langs: ['en-GB', 'en-US'] } });
   registerCast('m23whisper', { name: '', role: '', voice: true, vp: { sex: 'm', pitch: 0.85, rate: 0.8, langs: ['en-GB', 'en-US'] } });
   registerCast('m23settler', { name: 'KEEPER', role: 'The settlement · c. 1000 BCE',
-    look: { role: 'm23settler', era: 'ancient', costume: 'anc_m2', sex: 0, age: 60, height: 1.68, skin: 0x7d4f33, hair: 0x9a9088, hairStyle: 'short', top: 0xcdb48a, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', sash: 0x9b3b24, pants: 0x7a6248, boots: 0x4a3220, wrinkles: 0.6 },
+    look: { role: 'm23settler', era: 'ancient', costume: 'anc_m2', sex: 0, age: 64, height: 1.68, skin: 0x7d4f33, hair: 0x9a9088, hairStyle: 'curly', beard: 0x9a9088, top: 0x8a3a3a, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', sash: 0xb4884e, pants: 0x7a6248, boots: 0x4a3220, wrinkles: 0.6 },
     vp: { sex: 'm', pitch: 0.82, rate: 0.9, langs: ['en-GB', 'en-IE'] } });
   registerCast('m23scav', { name: 'LANTERN HALL', role: 'Survivor · 2196',
     look: { role: 'm23scav', era: '2196', costume: 'surv_m2', sex: 0, age: 55, height: 1.74, skin: 0xa77a5d, hair: 0x6a6460, hairStyle: 'buzz', top: 0x5a5444, topKind: 'fabric', topType: 'jacket', pantsType: 'cargo', pants: 0x3a3a30, boots: 0x2a2018, stubble: 0.6, wrinkles: 0.5 },
@@ -87,8 +87,8 @@ export const COMMUTERS = [
   { era: '2049', costume: 'c49_kid_f', female: true, age: 8, height: 1.28, child: true, skin: 0xd9a585, hair: 0x2a1c14, hairStyle: 'bob', top: 0x4a1f24, pants: 0x1d2a44 },
 ];
 export const SETTLERS = [
-  { era: 'ancient', costume: 'anc_f1', female: true, age: 30, height: 1.62, skin: 0x7d4f33, hair: 0x15100b, hairStyle: 'bun', top: 0x3f6a6a, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', sash: 0xd0a24a },
-  { era: 'ancient', costume: 'anc_m1', female: false, age: 34, height: 1.7, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'short', top: 0xcdb48a, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', sash: 0x9b3b24 },
+  { era: 'ancient', costume: 'anc_f1', female: true, age: 30, height: 1.62, skin: 0x8a5b3c, hair: 0x15100b, hairStyle: 'long', top: 0xb4884e, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', sash: 0x3f6a6a },
+  { era: 'ancient', costume: 'anc_m1', female: false, age: 32, height: 1.74, skin: 0x6b4029, hair: 0x0e0a08, hairStyle: 'buzz', top: 0xd9c9a0, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals', sash: 0x4a3220, pants: 0x7a6248 },
   { era: 'ancient', costume: 'anc_f2', female: true, age: 45, height: 1.6, skin: 0x6b4029, hair: 0x2a1c14, hairStyle: 'long', top: 0x9b3b24, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals' },
   { era: 'ancient', costume: 'anc_kid_m', female: false, age: 9, height: 1.3, child: true, skin: 0x8c5a3a, hair: 0x0e0a08, hairStyle: 'curly', top: 0xd9c9a0, topKind: 'fabric', topType: 'tunic', pantsType: 'wraps', shoes: 'sandals' },
 ];

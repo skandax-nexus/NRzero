@@ -128,4 +128,7 @@ forearm radius profile used to find sleeve hems.
   `look2.py` holds the cut library (`CUTS`: any face file's `hair`), the strand atlas, brow / lash cards, the iris and
   sclera painter, the dental arch, the lip-contact weight fix and the natural skin albedo (`SKIN_CLASSIC=1`: the old
   albedo). `face_studio.sh`: `--views=close,closethree` (dialogue close-ups), `EXPR=jaw=0.8` (a held expression),
-  `QUERY=casttier=phone` (runtime switches), `KEEP_RAW=1`.
+  `QUERY=casttier=phone` (runtime switches), `KEEP_RAW=1`. Escape hatches of the mouth, lash and hair changes (each
+  restores the earlier behaviour): `MOUTH_SLIT=0` (keep MakeHuman's lip strip), `MOUTH_FIX_V1=1` (the hard lip weight
+  split), `TEETH_GUM=1` (crowns anchored at the gum line), `TEETH_MH=1` (MakeHuman's teeth helpers), `LASH_CARD=1`
+  (one lash card per lid); the strand atlas is versioned (`HT_VERSION`: a new version writes a new file).

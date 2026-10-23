@@ -466,9 +466,9 @@ def _teeth_arch(P, upper, a0, a1, k):
     else:
         # anchored at the biting edge (MakeHuman's helpers meet at the lips' contact line; their gum line sits ~18 mm
         # up, so a gum-anchored crown ended 7-10 mm above the lips and the open mouth showed no teeth): the upper
-        # incisal edge 2.2 mm lower, the lower 1 mm lower (the upper teeth show under the upper lip when the jaw opens,
+        # incisal edge 3.2 mm lower, the lower 2 mm lower (the upper teeth show under the upper lip when the jaw opens,
         # an overbite of ~1.2 mm, the lower arch sits behind), the crown height up from there
-        ye = ye + (-0.0022 if upper else -0.0010) * k
+        ye = ye + (-0.0032 if upper else -0.0020) * k
         yg = ye - sgn * hh
     # arc length for b (centre 0.5), the lingual side 3.5 mm in along the arch normal
     pts = np.stack([xs, (yg + ye) / 2, zf], 1)
@@ -1180,7 +1180,9 @@ def _cut_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
             column = 3 if rng.random() < 0.35 else int(rng.integers(0, 3))
         else:
             column = int(rng.integers(0, 3)) if rng.random() < 0.8 else 3
-        imp = (2.0 if (off_edge or wisp) else 1.0) + rng.random()
+        # the low tier draws the most important 45 %: spread over the whole head with a slight bias to the silhouette and
+        # the hairline (v6 gave every edge card priority, so the low tier showed a bare glossy cap with a fringe of spikes)
+        imp = 1.0 + rng.random() + (0.15 if (off_edge or wisp) else 0.0) + (0.25 if at_line else 0.0)
         v = rng.normal(1.0, 0.06)
         root = hc * 0.62 * v
         tip = hc * rng.uniform(0.95, 1.08) * v
