@@ -540,7 +540,7 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   # the moustache's hang over the upper lip, the warm thin beard, a matte nose tip, softer moles and the
                   # run-time skin scatter tint
                   "browShape", "irisWarm", "irisGain", "underEyeDesat", "lipEdge", "lipLines", "lipGloss", "lipParted",
-                  "upperLipDark", "beardPaint", "moHang", "beardWarm", "noseMatte", "moleSoft", "skinScatter")
+                  "upperLipDark", "beardPaint", "moHang", "beardWarm", "noseMatte", "moleSoft", "skinScatter", "beardDark", "foreheadShade", "hairline", "lipRough")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 

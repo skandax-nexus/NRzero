@@ -47,3 +47,9 @@ Check a set before it ships:
 - Kai (docs/CHARACTER_LOOK.md "Kai's face (from the owner's photo)"): `kai.json` + `kai_look.npz` here are hair A
   (tied, as in the photo); `cp ../faces_candidates/kai_photo_B/* .` switches to hair B (loose, messy medium length).
 
+- Fix round 1 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 1"): `browShape` ({flat, rise, tail, tailThin, head,
+  thick}: the measured brow reshaped for the painted brow and the brow cards alike), `irisWarm` / `irisGain`,
+  `underEyeDesat`, `lipEdge` / `lipLines` / `lipGloss` / `lipParted` / `upperLipDark`, `beardPaint` / `beardDark` /
+  `beardWarm` / `moHang` (the painted beard mat and the moustache over the upper lip), `noseMatte`, `foreheadShade`,
+  `moleSoft`, `hairline` ({centre, temple} m: a rounded front hairline), and two run-time values written into the
+  build's look metadata for `src/human/skin.js`: `skinScatter` (the skin's scatter tint, 1 = default) and `lipRough`.

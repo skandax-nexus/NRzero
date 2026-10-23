@@ -169,7 +169,7 @@ def paint_zones(c, B, LK, pos, col, isface, front, BH):
         de = cres * face * float(c.get("underEyeDesat", 0.0))
         if de.max() > 0:
             lum = (col * np.array([0.3, 0.59, 0.11])).sum(1, keepdims=True)
-            mauve = lum * np.array([1.28, 0.95, 0.84])
+            mauve = lum * np.array([1.2, 0.97, 0.9])
             col += np.clip(de, 0, 1)[:, None] * (mauve - col)
         # upper lid: darker skin between the lash line and the crease
         (ux, uy), _ = L.lid["L" if sg > 0 else "R"]
@@ -180,11 +180,11 @@ def paint_zones(c, B, LK, pos, col, isface, front, BH):
     bridge = g2((q[:, 0] / 7.5) ** 2 + ((q[:, 1] + 6.0) / 9.0) ** 2, 1.0)
     col *= k(bridge * face * 0.7, [0.86, 0.82, 0.80])
     tip = g2((q[:, 0] / 11.0) ** 2 + ((q[:, 1] + 31.0) / 7.0) ** 2, 1.0)
-    col *= k(tip * face * 0.7, [0.98, 0.93, 0.9])
+    col *= k(tip * face * 0.9, [0.88, 0.84, 0.83])      # (fix round 1: darker, less red: the tip read as a hot spot)
     # likeness:final: the forehead no lighter than the cheeks (measured: the sides and temples darker than the centre;
     # the renderer's key light from above adds its own lift)
     fh = ss(14.0, 26.0, q[:, 1]) * face
-    col *= k(fh * (0.55 + 0.45 * ss(14.0, 40.0, np.abs(q[:, 0]))), [0.9, 0.88, 0.87])
+    col *= k(fh * (0.55 + 0.45 * ss(14.0, 40.0, np.abs(q[:, 0]))) * float(c.get("foreheadShade", 1.0)), [0.9, 0.88, 0.87])
     # cheekbone band (zygoma, under the outer eye) a touch darker and warmer
     for sg in (1, -1):
         cb = g2(((q[:, 0] * sg - 46.0) / 13.0) ** 2 + ((q[:, 1] + 22.0) / 9.0) ** 2, 1.0)
@@ -246,7 +246,7 @@ def beard_paint(c, B, LK, pos, hw, lipm, isface, seed, BH, lipgeo=None):
     # a faint shave shadow a little past the beard (the skin around a full beard is never bare-clean)
     halo = ss(0.0, 0.12, LK._grid(LK.beard, pos)) * ss(0.25, 0.7, hw) * isface * (1 - ss(0.12, 0.45, lipm))
     a = np.maximum(a, halo * 0.12 * (0.6 + 0.4 * fine))
-    rgb = bc[None, :] * (0.78 + 0.32 * hairs[:, None] + 0.12 * fine[:, None]) * (1 - 0.3 * ss(0.8, 1.0, dens))[:, None]     # the dense band darker
+    rgb = bc[None, :] * (0.78 + 0.32 * hairs[:, None] + 0.12 * fine[:, None]) * (1 - float(c.get("beardDark", 0.3)) * ss(0.8, 1.0, dens))[:, None]     # the dense band darker
     if c.get("beardWarm"):     # fix round 1: where the beard thins (under the lower lip) its hair reads a warmer, lighter brown
         wb = BH.hexc(c["beardWarm"])
         mid = ss(0.78, 0.5, dens) * ss(0.1, 0.35, dens) * (1 - over)

@@ -365,7 +365,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
   // ---- roughness by region (skin, lips, nails, hair, cornea, tear line)
   F = F.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
 	{ float azRs = mix( 0.56, 0.38, vAzFace.x );
-	  azRs = mix( azRs, 0.3, vAzFace2.x ); azRs = mix( azRs, 0.28, vAzFace2.w ); azRs += azLook.x * 0.06;
+	  azRs = mix( azRs, azLook.z > 0.0 ? azLook.z : 0.3, vAzFace2.x ); azRs = mix( azRs, 0.28, vAzFace2.w ); azRs += azLook.x * 0.06;
 	#ifdef USE_ROUGHNESSMAP
 	  azRs = mix( azRs, texelRoughness.g, 0.75 );      // look v2 builds bake skin roughness (T-zone, lips, nails, pores)
 	#endif
@@ -585,11 +585,14 @@ function request(mesh, id) {
 // tools and tests: resolves when every template analysis has finished
 look.idle = () => (jobs.size ? new Promise(ok => look.waitIdle.push(ok)) : Promise.resolve());
 
-function skinScatter(h) {
+// per-build look metadata (the armature's `look` JSON): skinScatter (1 = the cast default), lipRough (0 = the default 0.3)
+function buildLook(h) {
   let m = null;
   h.root.traverse(o => { if (!m && o.userData && o.userData.look) m = o.userData.look; });
-  try { const v = m ? JSON.parse(m).skinScatter : undefined; return typeof v === 'number' ? Math.max(0, Math.min(1, v)) : 1; } catch { return 1; }
+  try { return m ? JSON.parse(m) : {}; } catch { return {}; }
 }
+function skinScatter(h) { const v = buildLook(h).skinScatter; return typeof v === 'number' ? Math.max(0, Math.min(1, v)) : 1; }
+function lipRough(h) { const v = buildLook(h).lipRough; return typeof v === 'number' ? Math.max(0.05, Math.min(1, v)) : 0; }
 function applyLook(h, seed, atlas, main, info) {
   if (h.face) return h;
   const E = info.eyes, Fc = info.face;
@@ -599,8 +602,9 @@ function applyLook(h, seed, atlas, main, info) {
     azEyeC: { value: E ? new THREE.Vector4(E.cu, E.cv, E.R, E.cs) : new THREE.Vector4(0, 0, 0, 0) },
     azLid: { value: new THREE.Vector4(E ? E.U : 0.12, E ? E.Lo : -0.22, 0, 0) },
     // y: the skin scatter tint (the red of the wrapped terminator and of the ambient; 1 = the cast default, a build's
-    // look metadata `skinScatter` lowers it: Kai's dark warm skin read orange under the sodium key)
-    azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, skinScatter(h), 0, 0) },
+    // look metadata `skinScatter` lowers it: Kai's dark warm skin read orange under the sodium key); z: the lips'
+    // roughness (0: the default 0.3; a build's `lipRough`: Kai's matte, textured lips)
+    azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, skinScatter(h), lipRough(h), 0) },
     azHairTint: { value: new THREE.Vector3(...Fc.hair) },
     azLidSkin: { value: new THREE.Vector3(...(E && E.lidC ? E.lidC : [0.4, 0.25, 0.2])) },
     azLashC: { value: new THREE.Vector3(...(E && E.lashC ? E.lashC : [0.03, 0.02, 0.02])) },

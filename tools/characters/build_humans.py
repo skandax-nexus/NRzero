@@ -606,8 +606,11 @@ HEM = {"coat": -0.0, "jacket": 0.0, "uniform": 0.0, "sweater": 0.005, "shirt": 0
 COLLAR_H = {"coat": 0.032, "uniform": 0.026, "robe": 0.012, "sweater": 0.014, "jacket": 0.012, "vest": 0.008, "shirt": 0.012, "dress": 0.006}
 
 
-def hairline(rel, style, male, old):
-    """Height (above the eye centre) of the hairline at each vertex's azimuth (0 = front, 180 = back)."""
+def hairline(rel, style, male, old, shape=None):
+    """Height (above the eye centre) of the hairline at each vertex's azimuth (0 = front, 180 = back). shape: a face
+    file's `hairline` (fix round 1): {"centre": m (the middle of the front hairline, + higher), "temple": m (how far the
+    temples are set back up the head)}: the front becomes one rounded arch from the centre to recessed temples, then
+    curves down to the sideburn (no straight front edge with square temple corners)."""
     th = np.degrees(np.abs(np.arctan2(rel[:, 0], rel[:, 2] + 0.085)))
     hf = 0.062 if male else 0.057
     if old and male:
@@ -627,6 +630,12 @@ def hairline(rel, style, male, old):
             "locs": -0.086, "undercut": -0.058, "fade": -0.055, "pixie": -0.078}.get(style, -0.08)
     ks = [0, 28, 48, 66, 78, 88, 100, 114, 132, 152, 180]
     hs = [hf, hf - 0.003, temple, 0.026, sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
+    if shape:
+        cen, tem = float(shape.get("centre", 0.0)), float(shape.get("temple", 0.0))
+        ks = [0, 12, 24, 36, 46, 56, 66, 78, 88, 100, 114, 132, 152, 180]
+        hs = [hf + cen, hf + cen + 0.001, hf + cen + 0.0035, hf + 0.6 * tem, hf + tem, hf + 0.6 * tem - 0.012, 0.026, sb, 0.024, 0.036, 0.016,
+              nape * 0.55, nape, nape]
+        return np.interp(th, ks, hs)
     if style == "waves":            # a few tapered fringe clumps over the brow and two over the ears (no sawtooth)
         ths = np.degrees(np.arctan2(rel[:, 0], rel[:, 2] + 0.085))
         clumps = np.zeros(len(ths))
@@ -697,9 +706,9 @@ def fields(c, B):
         style = "none" if style not in ("bun",) else "bun_hidden"
     hwt = np.clip((head - 0.2) / 0.3, 0, 1)      # smooth blend: no ragged edge where head / neck weights meet
     if style not in ("none", "bun_hidden"):
-        cov["hair"] = hwt * (rel[:, 1] - hairline(rel, style, male, old)) - (1 - hwt) * 0.05
+        cov["hair"] = hwt * (rel[:, 1] - hairline(rel, style, male, old, c.get("hairline"))) - (1 - hwt) * 0.05
     elif style == "bun_hidden" or hat in ("hood",):
-        cov["_hairpaint"] = hwt * (rel[:, 1] - hairline(rel, c.get("hair", "short"), male, old)) - (1 - hwt) * 0.05
+        cov["_hairpaint"] = hwt * (rel[:, 1] - hairline(rel, c.get("hair", "short"), male, old, c.get("hairline"))) - (1 - hwt) * 0.05
     for key in ("hair", "_hairpaint"):     # never hair on the ears
         if key in cov:
             cov[key] = cov[key] - B.ear * 0.05
@@ -2558,10 +2567,12 @@ def build(c, tex_dir):
     CUR_B[0] = B
     if look2.ON:
         look2.add_bones(arm, B, B._eyes)
-        if c.get("skinScatter") is not None:      # fix round 1: the run-time skin scatter tint of this build (skin.js azLook.y)
-            _m = json.loads(arm["look"])
-            _m["skinScatter"] = float(c["skinScatter"])
-            arm["look"] = json.dumps(_m)
+        # fix round 1: run-time skin values of this build (skin.js azLook): the scatter tint and the lips' roughness
+        _m = json.loads(arm["look"])
+        for _k in ("skinScatter", "lipRough"):
+            if c.get(_k) is not None:
+                _m[_k] = float(c[_k])
+        arm["look"] = json.dumps(_m)
     for o in parts + cloth + gx + ([gh] if gh else []):
         apply_weights(o, arm)
     if look2.ON and budget(c) >= 16000 and os.environ.get("HEAD_SUBDIV", "1") != "0":

@@ -880,9 +880,10 @@ Strand cards (`look2.py`):
   joint, so `springs.js` builds its hair chain and `rig2.prepareCardSprings` hangs the nearby cards on it (checked in
   the viewer: about 6 400 card vertices on the spring bones for A, 13 700 for B).
 
-Budgets: the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000); the card mesh is 41 900
-triangles for A and 46 100 for B (hair 24 500 / 28 700, beard 10 800, brows and lashes 6 600), well over the ~8 200 of
-the earlier hero cuts; the phone build draws its first 45 % (18 900 / 20 800).
+Budgets: the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000). Since fix round 1 (below) the
+card mesh is 28 500 triangles for A and 31 800 for B (hair 17 800 / 21 100, beard 6 800, brows and lashes 3 900; it was
+41 900 / 46 100), drawn once (one draw call, no shadow pass); the phone build and gfx=low draw at most 10 000 of them
+(`look2.LO_CARD_TRIS`; it was 45 %: 18 900 / 20 800).
 
 ## Kai's face (from the owner's photo)
 
@@ -951,6 +952,54 @@ hair springs are checked in the viewer) and the budgets (body HD 34 000 / phone 
     ONLY=kai FACES_DIR=$PWD/faces_candidates/kai_photo_B ./face_studio.sh kai_b       # preview B without installing
 
 The shipped `assets/models/cast*.glb` change only when the cast is rebuilt and packed.
+
+**Fix round 1** (the review of likeness:final; sheets `likeness/kai_photo_A.png`, `kai_photo_B.png`, metrics
+`likeness/review/r1_a6_metrics.json`, `r1_b6_metrics.json`, outside the repo):
+- The AR monocle is parked (`cast_nrzero.py`: `ar_monocle` `parked=True`, `idle` 0; `gadgets.py`): its lens folds back
+  along the temple arm and lies flat on the side of the head, so no portrait, dialogue close-up or likeness render frames
+  his eye. Its HUD edge still lights there in Residue Vision.
+- Brows: `browShape` (`likeness_look.brow_shape`, used by the painted brow and the brow cards alike, so there is no
+  double brow): the arch flattened into a straight line (`flat` 0.85, `rise` 0.8), the tail tapering and falling 1.4 mm
+  (`tailThin` 0.42), a feathered head (`head` 0.7), thickness 1.15. `browLift` -0.0066. The painted top edge is feathered
+  over about 1.6 mm along a broken line. Brow cards have one segment and lie down toward the tail. Brow lower edge to lid
+  is now 1.07-1.09 (was 1.19-1.28), brow top to lid 1.03-1.04 (was 1.13-1.17).
+- Eyes: lids opened (`eye-height1/2/3` -0.12 / 0.78 / 0.56; opening 0.98-1.02, was 0.88-0.94). The iris is darker
+  (`irisWarm` 0.35, `irisGain` 0.9). The brow shelf is a little forward (0.12) for the deep-set look. The under-eye crescent
+  is pulled toward a mauve-grey of its own lightness (`underEyeDesat` 0.75, `underEye` 0.08): 134/94/77 against the
+  photo's 141/105/90 (was 150/92/68).
+- Beard: `look_data.py` makes the zone under the lower lip lighter (`UNDERLIP` 0.5, a darker soul-patch strip 0.72) and
+  the moustache's down-turned ends 5 mm longer. The painted mat is denser (`beardPaint` 0.72) and warmer where it thins
+  (`beardWarm` 4e3c2e). The moustache hangs over the top of the upper vermilion in the paint and the cards (`moHang`
+  0.12 of the upper lip at the centre). The cards are now fine single hairs inside the mat, plus thin wisps of a few
+  strands along its edges (the map's gradient, the under-jaw, the moustache's lower edge, the chin rim): 1 700 cards with
+  2 segments and a slight wave, lying flat. The moustache grows only downward. The multi-strand windows rendered as
+  solid blocks and the wide clumps as confetti, so neither is used.
+- Lips: mauve-brown `7a5550`, `upperLipDark` 0.28, the border blurred over 1.2 mm (`lipEdge`), vertical lip lines
+  (`lipLines` 0.5), a darker contact line (`lipParted` 0.5), `lipScale` [1.1, 1.05], matte (`lipGloss` 0.25 baked;
+  `lipRough` 0.52 at run time, where `skin.js` forced every lip to roughness 0.3). Lower lip 127/87/69 against 133/95/81.
+- Skin: `88614b` (6 % darker), `foreheadShade` 2.0, `tzoneGloss` 0.2, a matte, darker nose tip (`noseMatte` 0.35), a
+  broader bridge (`nose-width1/2` 0.12 / 0.07). In game the skin's scatter tint (the red of the wrapped terminator and of
+  the ambient) is halved for this build (`skinScatter` 0.5, read by `skin.js` from the build's look metadata), so his
+  skin stays brown under the sodium key instead of turning orange.
+- Shape: chin height 0.9 (mouth-chin 0.97-1.03, was 0.88), cheek volume 0.68, `head-fat` -0.33, `head-round` 0.42,
+  `head-square` 0.1. Cheek width is 1.03-1.04 and jaw 1.00-1.01.
+- Moles: softer edges (`moleSoft` 0.5 mm), a warmer dark brown.
+- Hair A: the hairline is a rounded arch (`hairline`: centre 3 mm lower, temples 7 mm further back). The sleek top uses
+  narrower cards lying lower in the layer (`sleekW` 0.62), all combed back to the tie. The sheen is lower (0.35). The side
+  curls are ringlets at strand-clump width (`ringW` 0.14) plus a halo of about 140 fine, smooth frizz curls (thin single
+  strands, 4-8 mm loops, 11 points per turn) instead of polygonal wire rings. The grey strands curl like the rest.
+- Hair B: ringlets at 3 mm clump width (`ringW` 0.12) and fill cards at 60 % width. The front curls part back and to the
+  sides, and nothing hangs over the forehead below 5.8 cm above the eyes (`frontFloor`), so his hairline shows.
+- Run time (`rig2.js`): the cards are one blended draw, with strand cores opaque, the fringe alpha-blended, depth written
+  and both faces drawn in a single pass (`forceSinglePass`). The template's triangles are sorted inside-out once, so the
+  outer strands blend over the inner ones. This replaces the opaque core + transparent DoubleSide fringe pair (three
+  draws of the card mesh). The cards cast no shadow (the hair volume casts the hair's shadow, so no hard strand slashes
+  fall on the face). Measured with Kai shown / hidden in m1 Rain City night: high, dialogue close-up, +5 calls (183 /
+  178, was +8) and +96 500 triangles (was +235 600). Low `--mobile`, chase view, +4 calls (112 / 108, was +6), +29 000
+  triangles (was +88 700), frame 364 / 344 ms (+5.8 %, was +18 %) and scene pass +2.2 %. That is one call over the
+  classic build on each tier.
+- Teeth: the back teeth are painted into the mouth's shade. Still open: with the jaw wide open, the macro seen from the
+  side shows the far side's lower premolars as a stack of bright crowns (geometry, `_teeth_crowns` / `_gum_band`).
 
 **What this means for the faces that follow** (the faces phase rebuilds them from this face):
 - **The Witness** (`witness`, the older Kai, 58) must now be built from this face: the same structure (his head shape
