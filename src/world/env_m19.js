@@ -109,7 +109,7 @@ export function registerM19Cast() {
   });
   registerCast('m19kidmira', { name: 'MIRA, 10', role: 'Test Hall Zero · 19.10.2026 · 08:14:09', look: { ...KID_MIRA10 }, rimColor: 0x9a7bff, vp: { sex: 'f', pitch: 1.45, rate: 1.06, langs: ['en-GB', 'en-US'] } });
   registerCast('m19kidkai', { name: 'KAI, 7', role: 'The Varen kitchen · 2026', look: { ...KID_KAI7 }, rimColor: 0xffd8a0, vp: { sex: 'm', pitch: 1.55, rate: 1.12, langs: ['en-GB', 'en-US'] } });
-  registerCast('m19child', { name: 'CHILD', role: 'Central Station · the ticket hall that is not there', look: { ...CHILD_LOOK }, vp: { sex: 'f', pitch: 1.5, rate: 1.05, langs: ['en-GB', 'en-US'] } });
+  registerCast('m19child', { name: 'CHILD', role: 'Central Station · the ticket hall that is not there', look: { ...CHILD_LOOK }, vp: { sex: 'f', pitch: 1.55, rate: 1.06, langs: ['en-US', 'en-GB'] } });  // the M1 child's voice (core/voice.js 'child')
   registerCast('m19band', { name: 'CHRONOLITH BAND', role: 'Kai\'s wrist · no state', voice: true, vp: { sex: 'f', pitch: 1.18, rate: 1.06, langs: ['en-US', 'en-GB'] } });
   registerCast('m19lake', { name: 'MIRA', role: 'In the reflection', portraitOf: 'mira', voice: true, vp: { sex: 'f', pitch: 1.05, rate: 0.96, langs: ['en-GB', 'en-US'] } });
 }

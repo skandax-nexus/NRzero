@@ -96,8 +96,8 @@ export function registerM21Cast() {
   registerCast('m21ally', { name: 'UNWRITTEN FIGHTER', role: 'The Bastion breach', look: { ...ALLY_LOOKS[0], lod: false }, vp: { sex: 'm', pitch: 0.92, rate: 1.04, langs: ['en-GB', 'en-US'] } });
   registerCast('m21adair', { name: 'PREFECT IMA ADAIR', role: 'The Continuum · every speaker in the Bastion', portraitOf: 'prefect', voice: true, vp: { sex: 'f', pitch: 0.96, rate: 0.93, langs: ['en-GB', 'en-US'] } });
   registerCast('m21band', { name: 'CHRONOLITH BAND', role: 'Kai\'s wrist · binding', voice: true, vp: { sex: 'f', pitch: 1.18, rate: 1.06, langs: ['en-US', 'en-GB'] } });
-  registerCast('m21lasker', { name: 'DOV LASKER', role: 'Radio · the Unwritten', portraitOf: 'lasker', voice: true, vp: { sex: 'm', pitch: 0.8, rate: 0.96, langs: ['en-GB', 'en-US'] } });
-  registerCast('m21anja', { name: 'DR. ANJA VALE', role: 'Radio · Harrow Reach', portraitOf: 'anja', voice: true, vp: { sex: 'f', pitch: 1.0, rate: 0.95, langs: ['en-GB', 'en-US'] } });
+  registerCast('m21lasker', { name: 'DOV LASKER', role: 'Radio · the Unwritten', portraitOf: 'lasker', voice: true, vp: { sex: 'm', pitch: 0.78, rate: 0.95, langs: ['en-GB', 'en-IE', 'en-US'] } });
+  registerCast('m21anja', { name: 'DR. ANJA VALE', role: 'Radio · Harrow Reach', portraitOf: 'anja', voice: true, vp: { sex: 'f', pitch: 1.0, rate: 0.98, langs: ['en-IN', 'en-GB', 'en-US'] } });
   registerCast('m21hale', { name: 'OFFICER HALE', role: 'Helix security · 2049', portraitOf: 'hale', voice: true, vp: { sex: 'm', pitch: 0.78, rate: 0.94, langs: ['en-US'] } });
   registerCast('m21brandt', { name: 'OFFICER BRANDT', role: 'Helix security · 2049', portraitOf: 'brandt', voice: true, vp: { sex: 'm', pitch: 0.95, rate: 1.06, langs: ['en-GB', 'en-US'] } });
   registerCast('m21sera', { name: 'SERA VOSS', role: 'Radio · the forward post', portraitOf: 'sera', voice: true, vp: { sex: 'f', pitch: 0.92, rate: 1.04, langs: ['en-AU', 'en-US', 'en-GB'] } });

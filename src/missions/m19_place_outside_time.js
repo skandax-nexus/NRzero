@@ -507,7 +507,7 @@ export default {
         }
         if (ok) {
           G.child = 'home'; F.m19child = 'home';
-          ev('The Child in the Station', 'In the ticket hall that is not there, the child from Central Station asked for "the song that goes down". Mira\'s three notes, E-B-A, opened her gate.', 'PEOPLE');
+          ev('The Child in the Station', 'In the ticket hall that is not there, the child from Central Station asked for the sad song the lady with the purple light hummed on the platform. Mira\'s three notes, E-B-A, opened her gate.', 'PEOPLE');
           cine(true); await game.shot([ROOM_X(5) + 2.0, 1.4, 3.6], [ROOM_X(5) - 1.0, 1.0, 1.6], 1.4, { fov: 44 });
           await walkTo(child, [[ROOM_X(5) - 0.8, 0, 1.6], [ROOM_X(5) - 0.8, 0, 3.2]], 1.1);
           await tween(1.0, k => { child.root.position.y = -k * 0.02; }); child.root.visible = false;
