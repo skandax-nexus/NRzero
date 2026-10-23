@@ -853,14 +853,16 @@ build mm, the fit's 1.007), `skinExact` (the skin hex used as is, no `natural_sk
 another file's keys first, its own on top; `kai_photo_loose` extends `kai_photo`).
 
 Strand cards (`look2.py`):
-- beard (`_beard_cards`, when the entry has `likeness` and `beard` >= 0.5): about 1 400 fine cards rooted where the map
-  has beard (sampled area-weighted on the lower face and the under-jaw, kept with probability density^1.3, never on the
-  lips or within 1 mm of them), along the growth direction (the moustache down and out from the philtrum and never past
-  the lips' contact line, chin and jaw down and a little forward, the under-jaw back along the skin, sideburns down),
-  lying at their layer of the beard's volume (6-7 mm under the chin, 4-5 mm on the jaw sides, 2-3 mm on the moustache;
-  the fit found his skin outline 3-6 mm inside the beard's), a third of them wider clumps in the deep layers (the mass),
-  the rest fine hairs; matte (no strand sheen: on flat cards it read as bright chips), `@split` weights (they follow the
-  jaw like the skin under them). About 10 000 triangles on the HD build.
+- beard (`_beard_cards`, when the entry has `likeness` and `beard` >= 0.5): 1 800 fine tapered cards on the HD build
+  (760 / 300 on the lower tiers), rooted where the map has beard (sampled area-weighted on the lower face and the
+  under-jaw, kept with probability density^1.3, the moustache picked 3.5x and the jaw angle 1.6x as often, never on the
+  lips or within 1 mm of them), along the growth direction (the moustache down and out from the philtrum, its tips just
+  overlapping the upper vermilion; chin and jaw down, barely forward; the under-jaw back along the skin, sideburns down),
+  8-15 mm long (the chin's lower edge 40 % longer: the beard hangs below the chin), lying close to the skin (2 mm on the
+  moustache, 3-4.5 mm on the chin, up to 7 mm at the jaw angle, which widens the beard's silhouette there); each card a
+  few strands of the fine column tapering to a point (likeness:final removed the wide clump cards: they read as black
+  confetti); the dense jaw band and moustache 30 % darker; matte (no strand sheen), `@split` weights. About 10 800
+  triangles on the HD build.
 - brows: the measured profile drives both the painted brow (620 strokes, a 0.4 base tint for his dense brows) and the
   brow cards (680 per side).
 - curls (`_curl_cards`, cuts `photo_tied` and `photo_loose`): ringlets are helical strand ribbons around a centre line
@@ -878,7 +880,92 @@ Strand cards (`look2.py`):
   joint, so `springs.js` builds its hair chain and `rig2.prepareCardSprings` hangs the nearby cards on it (checked in
   the viewer: about 6 400 card vertices on the spring bones for A, 13 700 for B).
 
-Budgets: the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000); the card mesh is 39 500
-triangles for A and 44 200 for B (hair 22 600 / 27 600, beard 10 000, brows and lashes 6 600), well over the ~8 200 of
-the earlier hero cuts; the phone build draws its first 45 % (17 800 / 19 900).
+Budgets: the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000); the card mesh is 41 900
+triangles for A and 46 100 for B (hair 24 500 / 28 700, beard 10 800, brows and lashes 6 600), well over the ~8 200 of
+the earlier hero cuts; the phone build draws its first 45 % (18 900 / 20 800).
 
+## Kai's face (from the owner's photo)
+
+The owner sent a selfie and wrote "Use this face for kai". Kai is now built from it. The face file installed as
+`tools/characters/faces/kai.json` (with its look data `faces/kai_look.npz`) is that face. The pipeline that made it is
+"Faces: photo likeness" above.
+
+**Privacy.** The photo is the owner's personal image. It is not in the repo and is never published: it stays in
+`/home/user/tools/kai_ref/`, and its crops and comparison sheets stay in the likeness work folder outside the repo. What
+ships is derived from it, as the owner asked: the fitted MakeHuman detail values, the beard density and length maps, the
+brow profile, the mole positions and the measured colours (`kai_look.npz`, 23 KB). No other face, scan, model or texture
+from outside was used.
+
+**What was measured** (`likeness/measure.py`, MediaPipe Face Mesh offline in `/home/user/tools/likeness-venv`):
+- the 478 landmarks, the photo's camera (focal length, distance) and his head pose (taken from slightly above, head
+  tipped forward), and a pose-corrected frontal view in "face mm" (origin between the inner eye corners);
+- proportions (eye spacing, cheek and jaw width, nose length and wing width, mouth width, lip heights, chin);
+- colours, white-balanced on his T-shirt: skin by region (forehead, cheeks, cheekbones, under the eyes, nose, glabella),
+  lips, irises, sclera, brows, beard, hair and its grey strands;
+- masks of the beard, brows, hair and clear skin; the brow profile (top, bottom and thickness per mm); the two moles on
+  his left cheek and six faint spots.
+
+**How it was fitted:**
+- Shape (`likeness/fit.py`): the MakeHuman head was fitted to the landmarks and the face outline at the photo's own
+  camera and pose, with the skin outline kept 3-6 mm inside the beard's. Then likeness:final corrected it against the
+  photo's landmark ratios (normalised by the iris distance; photo vs the build rendered from the photo's camera):
+  - brows 5 mm lower and the brow-ridge shelf removed (`eyebrows-trans-forward` 0.27 -> 0.05);
+  - fuller, wider lips (lower lip no longer thinned) and the mouth 4 mm higher;
+  - a shorter, rounder, less projecting nose with a broader tip.
+- Look: the face file keeps his skin exactly as measured (`skinExact`) and paints the measured zones and the moles.
+  Since likeness:final the zones are a soft, mild under-eye shade, a forehead no lighter than the cheeks, a matte
+  T-zone (`tzoneGloss` 0.35) and mauve-brown lips. His thick, straight brows follow the measured profile, with the photo's
+  frown undone. The brow cards are now rooted by a frontal projection like the painted brow, so the brow is no longer
+  doubled.
+- Beard: a full short beard and moustache.
+  - `look_data.py` fills everything inside the beard's closed outline to a density of at least 0.62. The lighter chin
+    under the lip was hair with skin showing through, not bare skin, so it is no longer a goatee plus a chin strap.
+  - The moustache, philtrum included, gets 0.97, and the "horseshoe" from the mouth corners into the jaw band 0.92.
+  - The painted under-layer carries the coverage as a hair texture, and fine tapered cards add the edge and the texture.
+
+Final ratios (photo = 1.00; the build seen from the photo's camera; A / B):
+- eye spacing, cheek width, jaw width, nose length, nose wings and mouth width: within 0.99-1.04;
+- brow to upper lid: 1.12-1.17 (was 1.35-1.38; a neutral, unfrowning brow sits a little higher than his frown);
+- lower lip: 1.15 / 0.97;
+- chin under the lip: 0.89 / 0.84 (the photo's beard hangs a little lower);
+- forehead / cheek lightness in studio light: 1.13 (photo 0.97; was 1.27).
+
+He keeps his height (1.83 m), his age (32), his costume, rig and bone names (`anims.glb` retargets unchanged; the
+hair springs are checked in the viewer) and the budgets (body HD 34 000 / phone 16 000; the card mesh is 41 900 / 46 100).
+
+**The two hair versions.** Both are his own curls (long, dark, curly, a few grey strands):
+- A, the default (`faces/kai.json` = `faces_candidates/kai_photo/kai.json`, cut `photo_tied`): as in the photo.
+  - The curls are pulled back and tied: a sleek, softly waved top with flyaways, a hairline softened by fine wisps
+    rooted on the forehead skin, curls springing out above and behind the ears, and a tail of ringlets.
+  - The sheen is scaled down (`sheen` 0.55 in the cut), so the top reads as hair, not as a glossy helmet.
+- B, the alternative (`faces_candidates/kai_photo_B/`, cut `photo_loose`): the owner's earlier "messy medium length"
+  pick, his curls worn loose to the jaw. They are short, irregular, frizzy loops (radius and pitch vary, wobbly, broken
+  along the fall), not long regular corkscrews.
+- `faces_candidates/kai_photo_loose/` is B as a two-line variant of A (`extends`), for working on A and B together.
+
+**How to switch** (one copy, then rebuild the cast as usual):
+
+    cd tools/characters
+    cp faces_candidates/kai_photo_B/kai.json faces_candidates/kai_photo_B/kai_look.npz faces/     # B: loose curls
+    cp faces_candidates/kai_photo/kai.json faces_candidates/kai_photo/kai_look.npz faces/         # A: tied (default)
+    ONLY=kai FACES_DIR=$PWD/faces_candidates/kai_photo_B ./face_studio.sh kai_b       # preview B without installing
+
+The shipped `assets/models/cast*.glb` change only when the cast is rebuilt and packed.
+
+**What this means for the faces that follow** (the faces phase rebuilds them from this face):
+- **The Witness** (`witness`, the older Kai, 58) must now be built from this face: the same structure (his head shape
+  from `faces/kai.json`, the fuller face and jaw, the deep-set dark brown eyes, the broad nose tip and wide wings, the
+  full lips, the thick, straight, low brows), aged:
+  - a greying beard and moustache of the same shape (the same `kai_look.npz` beard map, salt and pepper, greyest on
+    the chin);
+  - greying curls (more grey strands, the same curl);
+  - lined skin: forehead lines, crow's feet, deeper nasolabial folds, a little sag at the jaw and under the eyes;
+  - the same two moles on his left cheek, the wrist scar, and the cracked monocle.
+  Today's Witness entry in `cast_nrzero.py` (its own head-square / cheek details) predates the photo. Its face file
+  should take Kai's details and look keys (`extends`) and add the age on top, so that it passes "the Witness against
+  Kai aged to 58: sim ≤ 12" (thresholds above). Young Kai (`kid_kai`) follows the same rule (this face at 7).
+- **Mira** (`mira`, Kai's sister, 29) needs her own attractive face with the same South Asian family features: warm
+  medium-brown skin close to his (`916750`, a little lighter or warmer is fine), dark brown eyes, dark brows with his
+  straight line (finer and groomed), dark wavy-to-curly hair, and a family nose and lip fullness, feminised. Her current
+  entry (`caucasian` 0.9, grey-blue eyes) no longer reads as his sister. She must stay inside the family band ("Mira
+  against Kai: 15 ≤ sim ≤ 45") and must not resemble him beyond it. Young Mira (`kid_mira`) follows her.

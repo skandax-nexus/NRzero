@@ -173,7 +173,11 @@ def paint_zones(c, B, LK, pos, col, isface, front, BH):
     bridge = g2((q[:, 0] / 7.5) ** 2 + ((q[:, 1] + 6.0) / 9.0) ** 2, 1.0)
     col *= k(bridge * face * 0.7, [0.86, 0.82, 0.80])
     tip = g2((q[:, 0] / 11.0) ** 2 + ((q[:, 1] + 31.0) / 7.0) ** 2, 1.0)
-    col *= k(tip * face * 0.7, [1.04, 0.97, 0.92])
+    col *= k(tip * face * 0.7, [0.98, 0.93, 0.9])
+    # likeness:final: the forehead no lighter than the cheeks (measured: the sides and temples darker than the centre;
+    # the renderer's key light from above adds its own lift)
+    fh = ss(14.0, 26.0, q[:, 1]) * face
+    col *= k(fh * (0.55 + 0.45 * ss(14.0, 40.0, np.abs(q[:, 0]))), [0.9, 0.88, 0.87])
     # cheekbone band (zygoma, under the outer eye) a touch darker and warmer
     for sg in (1, -1):
         cb = g2(((q[:, 0] * sg - 46.0) / 13.0) ** 2 + ((q[:, 1] + 22.0) / 9.0) ** 2, 1.0)
@@ -216,11 +220,11 @@ def beard_paint(c, B, LK, pos, hw, lipm, isface, seed, BH):
     # dots): nearly opaque where the beard is dense, skin glinting between the strokes at the filled, lighter chin
     # (density ~0.6), a fine, thin edge where it thins out toward the cheek line
     cov = ss(0.04, 0.9, dens) ** 0.75
-    a = cov * (0.5 + 0.3 * hairs + 0.2 * fine) + ss(0.85, 1.0, dens) * 0.1
+    a = cov * (0.6 + 0.26 * hairs + 0.14 * fine) + ss(0.8, 1.0, dens) * 0.12
     # a faint shave shadow a little past the beard (the skin around a full beard is never bare-clean)
     halo = ss(0.0, 0.12, LK._grid(LK.beard, pos)) * ss(0.25, 0.7, hw) * isface * (1 - ss(0.12, 0.45, lipm))
     a = np.maximum(a, halo * 0.12 * (0.6 + 0.4 * fine))
-    rgb = bc[None, :] * (0.78 + 0.32 * hairs[:, None] + 0.12 * fine[:, None])
+    rgb = bc[None, :] * (0.78 + 0.32 * hairs[:, None] + 0.12 * fine[:, None]) * (1 - 0.3 * ss(0.8, 1.0, dens))[:, None]     # the dense band darker
     return np.clip(a, 0, 0.95), rgb, dens
 
 

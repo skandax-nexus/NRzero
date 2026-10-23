@@ -1212,7 +1212,7 @@ def paint(c, B, cov, res, path_out):
     lipm = np.clip(np.maximum(mu, ml) * lipfront * ss(1.05, 0.9, np.abs(t)), 0, 1)
     lipcol = skin * 0.3 + lip_c * 0.7
     over(lipm * 0.85, lipcol)
-    tint(lipm * mu * (0.1 if LK is None else 0.22), [0.9, 0.88, 0.9])              # upper lip a touch darker (photo: mauve-grey)
+    tint(lipm * mu * (0.1 if LK is None else 0.14), [0.9, 0.88, 0.9])              # upper lip a touch darker (photo: mauve-grey)
     tint(lipm * ml * 0.1 * g2(t ** 2 + ((-d - hl0 * 0.45) / 0.004) ** 2, 1.0), [1.12, 1.1, 1.1])   # lower lip highlight
     tint(0.4 * g2(d ** 2, 0.0005) * lipfront * ss(1.15, 0.85, np.abs(t)), [0.55, 0.45, 0.45])   # contact line
     tint(0.05 * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge

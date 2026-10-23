@@ -2235,7 +2235,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             flat(pts, f, 1.45, 0.85 + 0.2 * f, 1.4 + 0.8 * f, int(rng.integers(0, 3)), tipw=0.7)
         n_fill = len(cards)
         # loose strands lifting off the sleek layer (the photo: a few looping off the top)
-        for g in spread(cand, int(85 * tf) + 10, lambda P_: 1 + BH.ss(0.2, 0.8, ((P_ - head_c)[:, 1]) / 0.1)) - head_c:
+        for g in spread(cand, int(60 * tf) + 8, lambda P_: 1 + BH.ss(0.2, 0.8, ((P_ - head_c)[:, 1]) / 0.1)) - head_c:
             pts = march(g, rng.uniform(1.0, 1.15), rng.uniform(0.06, 0.14) * k, 0.01 * k, -0.2, lift=rng.uniform(0.003, 0.009) * k, ang=rng.normal(0, 0.4), wave=0.6, tie_stop=True)
             flat(pts, 1.0, 0.16, rng.uniform(1.0, 1.25), 1.6, 4 + int(rng.integers(0, 2)), tipw=0.6)
         # likeness:final: the hairline softened (no hard shell edge): fine short wisps rooted just behind the front
@@ -2246,6 +2246,14 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             hl = hl[(hl - eye)[:, 1] < np.percentile((hl - eye)[:, 1], 35)]
         for g in spread(hl, int(60 * tf) + 8) - head_c:
             pts = march(g, rng.uniform(0.15, 0.6), rng.uniform(0.025, 0.05) * k, 0.006 * k, -0.2, ang=rng.normal(0, 0.25), wave=0.35, tie_stop=True)
+            if len(pts) >= 2 and abs((pts[0] + head_c - eye)[0]) < 0.042 * k:      # rooted a few mm in front of the shell's edge, on the forehead skin (not at the temples)
+                for _ in range(2):
+                    dv = pts[0] - pts[1]
+                    ex_ = pts[0] + dv / max(np.linalg.norm(dv), 1e-9) * rng.uniform(0.002, 0.0035) * k
+                    ex_ = ex_ / np.linalg.norm(ex_) * (G.sample(Renv, ex_)[0] + 0.0006 * k)
+                    if stopped(ex_, -0.2, 0.028):
+                        break
+                    pts = np.concatenate([ex_[None], pts])
             flat(pts, 0.4, 0.3, rng.uniform(0.95, 1.2), 2.4, 4 + int(rng.integers(0, 2)), tipw=0.4)
         # (2) the halo: ringlets springing out of the pulled-back mass above and behind the ears and at the back corners
         zone = (np.abs(unc[:, 0]) > 0.45) & (unc[:, 1] > -0.45) & (unc[:, 1] < 0.4) & (unc[:, 2] < 0.3)
@@ -2265,7 +2273,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             ringlet(cl, R, pitch, 0.95, 2.0)
             n_ring += 1
         # (3) temple tendrils: two or three thin ringlets from the temple hairline (one longer on his left temple)
-        for x_, y_, ln_ in ((0.058, 0.048, 0.075), (-0.06, 0.05, 0.04), (0.046, 0.062, 0.05)):
+        for x_, y_, ln_ in ((0.058, 0.048, 0.075), (0.046, 0.062, 0.05)):      # (likeness:final: the right temple's tendril cast a loop of shadow on his cheek)
             p = eye + np.array([x_, y_, -0.02]) * k
             si, _ = shell.near(p)
             g = hP[si] - head_c
@@ -2360,7 +2368,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
     else:
         fz = cand
     for g in spread(fz, int((90 if tied else 170) * tf) + 10) - head_c:
-        if tris() > target * (1.25 if tied else 1.3):
+        if tris() > target * (1.36 if tied else 1.3):
             break
         cl = march(g, 1.0, rng.uniform(0.02, 0.045) * k, 0.006 * k, -0.15, ang=rng.normal(0, 0.8), wave=0.4, outward=rng.uniform(0.6, 1.6) if tied else 0.4, floor_y=0.035)
         if len(cl) >= 2:
@@ -2426,7 +2434,7 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     # likeness:final: more and finer cards (fine tapered strands, no wide clump cards: those read as black confetti),
     # lying close to the skin (the photo's beard is short, 1-1.5 cm), twice the share on the moustache, a fuller band
     # at the jaw angle (the beard's volume makes his round face)
-    nroot = {2: 2100, 1: 820, 0: 320}[tier]
+    nroot = {2: 1800, 1: 760, 0: 300}[tier]
     pts, ti, _ = _sample_tris(P_, T_, nroot * 4, rng)
     # barycentric weights of the samples for the head weight and the normal
     A, Bv, Cv = P_[T_[ti, 0]], P_[T_[ti, 1]], P_[T_[ti, 2]]
@@ -2451,7 +2459,7 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     mo_all = BH.ss(sto - 1.0, sto + 3.0, q_all[:, 1]) * BH.ss(34.0, 26.0, np.abs(q_all[:, 0]))
     jaw_all = BH.ss(40.0, 58.0, np.abs(q_all[:, 0])) * BH.ss(sto - 6.0, sto - 22.0, q_all[:, 1])
     if len(pts) > nroot:
-        wsel = 1.0 + 1.3 * mo_all + 0.5 * jaw_all
+        wsel = 1.0 + 2.5 * mo_all + 0.6 * jaw_all
         sel = rng.choice(len(pts), nroot, replace=False, p=wsel / wsel.sum())
         pts, nrm, dens = pts[sel], nrm[sel], dens[sel]
     skin = _Surf(B.P[B.bodyv], B.N[B.bodyv])
@@ -2480,6 +2488,8 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         # 8-15 mm on the chin and jaw, about 8 mm on the moustache (reaching the upper vermilion), shorter sideburns
         ln = 0.0095 * k * (1.0 + 0.45 * (float(lens[i]) - 1.0)) * rng.uniform(0.8, 1.15) * (0.88 if mo > 0.5 else 1.0) * (0.75 if sbf > 0.5 else 1.0)
         ln *= 0.55 + 0.45 * BH.ss(0.15, 0.7, dens[i])
+        chinb = BH.ss(sto - 30.0, sto - 48.0, y) * BH.ss(40.0, 20.0, abs(x))      # the chin's lower edge: the beard hangs below the chin
+        ln *= 1.0 + 0.4 * chinb
         f = rng.random() ** 1.1                                                   # layer: 0 on the skin .. 1 outside
         # the layer's height off the skin: 3-4.5 mm on the chin, 2 mm on the moustache, up to 7 mm at the jaw angle
         thick = (0.0020 + 0.0025 * BH.ss(sto - 4, sto - 35, y) * (1 - 0.3 * BH.ss(30, 60, abs(x))) + 0.0010 * under + 0.0045 * jaw) * k
@@ -2498,7 +2508,7 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
             h = 0.0003 + thick * (0.25 + 0.75 * f) * min(1.0, 0.55 + 0.45 * t)      # rises in the first step, then lies at its layer
             qn = qn - sn * ((qn - sp) @ sn - h)
             if mo > 0.5:          # the moustache may hang over the upper lip, never past its contact line
-                yl = np.interp(qn[0], xs, ys) + 0.0018
+                yl = np.interp(qn[0], xs, ys) + 0.0045      # likeness:final: just overlapping the upper vermilion
                 if qn[1] < yl and abs(qn[0] - L.lip_cx) < L.lip_w * 1.1:
                     qn[1] = yl
             ki, _ = coll.near(qn)
@@ -2515,7 +2525,7 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         # fine tapered strands (each card a few hairs of the fine column, tapering to a point)
         wid = (0.0008 + 0.0007 * rng.random()) * k * (0.9 if mo > 0.5 else 1.0) * (0.5 + 0.6 * BH.ss(0.15, 0.75, dens[i]))
         width = wid * np.array([1.0, 0.8, 0.5, 0.18])[:len(P)]
-        v_ = rng.normal(1.0, 0.09)
+        v_ = rng.normal(1.0, 0.09) * (1.0 - 0.3 * BH.ss(0.8, 1.0, dens[i]))     # the dense jaw band and moustache darker
         root, tip = bc_ * 0.85 * v_, bc_ * (1.05 + 0.15 * f) * v_
         K.ribbon(P, nr, width, 7, root, tip, head1, 2.0 + 0.8 * f + 0.4 * rng.random(), fine="@split", u0=0.04, u1=HT_SINGLE[0] - 0.04, kind=4)
         ntri += 2 * (len(P) - 1)

@@ -42,4 +42,8 @@ Check a set before it ships:
   `likeness/look_data.py` writes, relative to the face file), `likenessScale`, `skinExact` (the skin hex as measured, no
   natural-skin clamp), `lipScale` ([upper, lower] painted lip heights), `greyStrands` (a few grey hairs), `extends` (a
   variant: another face file's keys first). Cuts `photo_tied` / `photo_loose`: curly ringlet cards (`look2._curl_cards`).
+  Since likeness:final also `underEye` / `lidShade` (painted under-eye and upper-lid shade strength), `faintSpots`
+  (faint-spot strength), `tzoneGloss` (the T-zone's gloss factor, 1 = default) and `skinMatte` (added face roughness).
+- Kai (docs/CHARACTER_LOOK.md "Kai's face (from the owner's photo)"): `kai.json` + `kai_look.npz` here are hair A
+  (tied, as in the photo); `cp ../faces_candidates/kai_photo_B/* .` switches to hair B (loose, messy medium length).
 
