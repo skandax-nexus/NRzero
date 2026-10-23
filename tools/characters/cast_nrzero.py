@@ -528,7 +528,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 FACES_DEFAULT = os.path.join(_HERE, "faces")
 FACES_DIR = os.environ.get("FACES_DIR") or FACES_DEFAULT
 FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLift", "browThick", "stubble", "beard", "beardColor", "blush",
-                  "freckles", "scars", "hair", "hairLen", "hairColor", "hairDrop", "locs", "locLen")
+                  "freckles", "scars", "hair", "hairLen", "hairColor", "hairDrop", "locs", "locLen", "hairPart", "lashLen", "skinSmooth")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 

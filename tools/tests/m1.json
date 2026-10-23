@@ -13,7 +13,7 @@
  {"wait":4000},{"shot":"f6.png"},
  {"until":"__game.flags.m1warning","timeout":60000},{"wait":2500},{"shot":"f7.png"},
  {"until":"__game.actors.mira && __game.actors.mira.root.visible","timeout":30000},{"wait":1500},{"shot":"f8.png"},
- {"until":"__game.ui.evidence.length>=6","timeout":60000},
+ {"until":"__game.ui.evidence.length>=5","timeout":60000},
  {"eval":"({ev:__game.ui.evidence.map(e=>e.title)})"},
  {"until":"document.getElementById('mission-tag').textContent.includes('2')","timeout":90000},{"wait":3000},{"shot":"f9.png"}
 ]

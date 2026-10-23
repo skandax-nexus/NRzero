@@ -426,7 +426,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 		#else
 		  azDn = texture2D( azWeaveMap, azDuv );
 		#endif
-		float azK = azFade * ( azDoSkin ? 0.5 + 0.2 * vAzFace.x : 0.75 );
+		float azK = azFade * ( azDoSkin ? 0.36 + 0.14 * vAzFace.x : 0.75 );      // proto:makehuman: finer pores (0.5 + 0.2: orange peel in close-ups)
 		vec2 azNxy = ( azDn.xy * 2.0 - 1.0 ) * azK;
 		vec3 azS0 = vec3( dFdx( azDuv ), 0.0 ), azS1 = vec3( dFdy( azDuv ), 0.0 );
 		vec3 azR1 = cross( azQ1, normal ), azR2 = cross( normal, azQ0 );

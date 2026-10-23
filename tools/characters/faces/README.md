@@ -26,6 +26,13 @@ candidate set instead (its solved heights go to `/other/folder/_heights.json`), 
   (swept-back), `tousled` (tousled medium), `short`, `undercut`, `waves`, `pixie`, `bob`, `long`, `pony`, `bun`,
   `braid` / `braids`, `curls`, `puffs`, `locs`. `hairPart`: `left` / `right` (side-swept cuts and parts);
   `lashLen`: lash length factor (1 = default; women get 1.15 on top).
+- hero cuts (proto:makehuman, the lead's looks): `lead_quiff` (textured modern quiff, faded sides), `lead_crop` (short
+  textured crop, fringe pushed up, faded sides), `lead_part` (side part swept across and back, scissor-tapered sides;
+  `hairPart` picks the side). The cut is a sculpted volume (`look2.hero_T`): its inner half is the shell, its outer
+  half layered strand cards that stay inside the envelope (no card leaves it: no spikes). `HERO_HAIR=0` builds them
+  with the plain cut cards.
+- `skinSmooth` (0..1): finer painted pores for clear, even skin (the leads); `beard` under 0.5 is painted only (a
+  groomed short beard with a crisp cheek line and moustache, no cards); 0.5 and over adds beard cards.
 
 Check a set before it ships:
 

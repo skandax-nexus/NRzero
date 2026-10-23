@@ -55,7 +55,7 @@ function cardMaterial(src, tier, pass = 0) {
 	  azT = ( skinMatrix * vec4( azT, 0.0 ) ).xyz;
 	#endif
 	  vHTan = normalMatrix * azT; }`);
-    let F = 'varying vec3 vHCol;\nvarying vec3 vHTan;\nfloat azcShift = 0.0; float azcSpark = 1.0; float azcRoot = 1.0;\n' + sh.fragmentShader;
+    let F = 'varying vec3 vHCol;\nvarying vec3 vHTan;\nfloat azcShift = 0.0; float azcSpark = 1.0; float azcRoot = 1.0; float azcExtra = 1.0;\n' + sh.fragmentShader;
     // the strand texture: R brightness (sRGB-decoded by the sampler: back to a gentle curve), G a per-strand random,
     // B depth across the card, A coverage (kept through the mip chain: mips average thin strands away)
     F = F.replace('#include <map_fragment>', `
@@ -63,7 +63,7 @@ function cardMaterial(src, tier, pass = 0) {
 	float azLum = sqrt( azT.r );
 	// root occlusion: the strands near the scalp sit under the others (uv v = 0 at the root)
 	azcRoot = mix( 0.55, 1.0, smoothstep( 0.0, 0.5, vMapUv.y ) );
-	diffuseColor.rgb = vHCol * ( 0.6 + 0.4 * azLum ) * ( 0.84 + 0.16 * azT.b ) * azcRoot;
+	diffuseColor.rgb = vHCol * ( 0.5 + 0.5 * azLum ) * ( 0.82 + 0.18 * azT.b ) * azcRoot;      // proto:makehuman: more strand-to-strand contrast (0.6 + 0.4: flat ribbons)
 	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.65 + 0.6 * azT.g ) * azLum * azcRoot;
 	// brows and lashes carry no strand tangent (look2.py, MATTE_FINE): matte fine hairs, no sheen stripes
 	azcSpark *= smoothstep( 0.02, 0.08, length( vHTan ) );
@@ -86,7 +86,7 @@ function cardMaterial(src, tier, pass = 0) {
 	#endif
 	}`);
     F = F.replace('#include <alphatest_fragment>', '');
-    F = F.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\treflectedLight.indirectSpecular *= ( 0.3 + 0.7 * azcSpark ) * azcRoot;\n\treflectedLight.indirectDiffuse *= 0.55 + 0.45 * azcRoot;');
+    F = F.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\treflectedLight.indirectSpecular *= ( 0.06 + 0.3 * azcSpark ) * azcRoot;\n\treflectedLight.indirectDiffuse *= 0.55 + 0.45 * azcRoot;');
     F = F.replace('#include <color_fragment>', '');
     // strand highlights (Kajiya-Kay): a white primary lobe toward the root and a tinted secondary toward the tip,
     // along the strand direction; diffuse wraps a little (light through the strands)
@@ -100,12 +100,17 @@ function cardMaterial(src, tier, pass = 0) {
     float d1 = dot( T1, H ), d2 = dot( T2, H );
     float s1 = pow( sqrt( max( 0.0, 1.0 - d1 * d1 ) ), 80.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - d2 * d2 ) ), 26.0 );
     // a coherent sheen band across the head (v6: sparse white flecks from a sharper, more random primary lobe)
-    return vec3( s1 * 0.2 * azcSpark ) + col * s2 * 0.34 * azcSpark;
+    return vec3( s1 * 0.16 * azcSpark ) + col * s2 * 0.34 * azcSpark;
   }
 ` + lp.replace(c, c + `
-    irradiance = saturate( dot( geometryNormal, directLight.direction ) * 0.75 + 0.25 ) * directLight.color;`)
+    irradiance = mix( irradiance, saturate( dot( geometryNormal, directLight.direction ) * 0.8 + 0.2 ) * directLight.color, azcExtra );`)
         .replace(a, `{ vec3 azTn = normalize( vHTan + vec3( 0.0, 1e-5, 0.0 ) );
-      reflectedLight.directSpecular += azKK( directLight.direction, geometryViewDir, geometryNormal, azTn, material.diffuseColor ) * directLight.color * saturate( dot( geometryNormal, directLight.direction ) * 0.6 + 0.4 ); }`));
+      reflectedLight.directSpecular += azKK( directLight.direction, geometryViewDir, geometryNormal, azTn, material.diffuseColor ) * directLight.color * saturate( dot( geometryNormal, directLight.direction ) * 0.8 + 0.2 ) * mix( 0.3, 1.0, azcExtra ); }`));
+      // proto:makehuman: the wrap and the full strand sheen only for the key lights (directional, spot); a city scene's
+      // many point lights each added both from every side and turned dark hair silver-grey
+      { let lb = THREE.ShaderChunk.lights_fragment_begin;
+        const pk = '#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', sk = '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )';
+        if (lb.includes(pk) && lb.includes(sk)) F = F.replace('#include <lights_fragment_begin>', lb.replace(pk, 'azcExtra = 0.0;\n' + pk).replace(sk, 'azcExtra = 1.0;\n' + sk)); }
     }
     sh.fragmentShader = F;
   };

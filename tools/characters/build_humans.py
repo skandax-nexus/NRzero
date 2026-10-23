@@ -1253,7 +1253,7 @@ def paint(c, B, cov, res, path_out):
             continue
         X, Y = dx[idx], dy[idx]
         lift = c.get("browLift", 0.0)
-        T = lambda t: (-0.0185 + 0.047 * t, np.interp(t, [0, 0.35, 0.68, 1.0], [0.0150, 0.0182, 0.0198, 0.0150]) + lift,
+        T = lambda t: (-0.0185 + 0.047 * t, np.interp(t, [0, 0.35, 0.68, 1.0], [0.0150, 0.0178, 0.0192, 0.0162] if look2.ON else [0.0150, 0.0182, 0.0198, 0.0150]) + lift,
                        np.interp(t, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt))
         tk = rng.random(nstr) ** 0.85
         bx, by, bw = T(tk)
@@ -1298,9 +1298,21 @@ def paint(c, B, cov, res, path_out):
             edge = ss(-0.003, 0.012, top_b - pos[:, 1]) * ss(my - 0.12, my - 0.085, pos[:, 1])
             strands = vnoise(pos * np.array([3.0, 0.6, 3.0]), 900, seed + 2.3)
             fine = hash01(pos, 3800, seed + 1.1)
-            ab = np.clip(brd * reg * edge * (0.62 + 0.3 * strands + 0.12 * (fine - 0.5)), 0, 0.93)
+            if look2.ON and brd < 0.5:
+                # proto:makehuman: a short groomed beard painted only (no cards under 0.5): a crisp cheek line, dense short
+                # hairs that run down the jaw (fine strokes, not a grey shadow), thinner toward the cheek line and neck
+                # (moustache included: the stubble's lip ring exclusion is not applied; a 1.5 mm clear margin to the lips)
+                regb = (ss(0.0, 0.006, top_b - pos[:, 1]) * ss(-0.1, -0.055, rel[:, 2]) * ss(my - 0.128, my - 0.1, pos[:, 1]) * isface
+                        * (earf < 0.5) * ss(0.088, 0.066, ax_) * (1 - ss(0.2, 0.6, lipm)))
+                regb *= 1 - 0.5 * g2(t ** 2 + ((d + 0.0) / 0.006) ** 2, 1.0) * (np.abs(t) < 1.05)
+                dens = np.clip(brd * 2.0, 0, 1) * regb
+                speck = (hash01(pos, 4200, seed + 9.3) < 0.55 * dens).astype(float)
+                ab = np.clip(dens * (0.24 + 0.42 * speck + 0.08 * (fine - 0.5)), 0, 0.66)
+            else:
+                ab = np.clip(brd * reg * edge * (0.62 + 0.3 * strands + 0.12 * (fine - 0.5)), 0, 0.93)
             over(ab, bc_ * 0.95)
-            tint(ab * np.abs(strands - 0.5) * 0.8, [0.8, 0.8, 0.8])
+            if not (look2.ON and brd < 0.5):
+                tint(ab * np.abs(strands - 0.5) * 0.8, [0.8, 0.8, 0.8])
     # ---- freckles (0..1): small warm dots over the nose bridge and cheeks ----
     frk = c.get("freckles", 0.0)
     if frk:
@@ -1335,7 +1347,11 @@ def paint(c, B, cov, res, path_out):
         # and samples these texels, so a fade inside it painted the shell's edge skin-pale (a light outline under the
         # bangs); the soft gradient lives outside the hairline (`fa` above)
         fade_in = ss(-0.006, 0.002, hcov) * (0.88 + 0.12 * st2)
-        if look2.ON and look2.CUTS.get(c.get("hairCut") or "", {}).get("comb") in ("part", "gather", "back"):
+        if look2.ON and look2.hero_cut(c):
+            # proto:makehuman hero cuts: the volume rises from the hairline, so its shell is hair-dark right from the edge
+            # (the cards and the painted gradient outside the hairline carry the soft transition)
+            fade_in = ss(-0.005, 0.0015, hcov) * (0.9 + 0.1 * st2)
+        elif look2.ON and look2.CUTS.get(c.get("hairCut") or "", {}).get("comb") in ("part", "gather", "back"):
             # hair combed away from the face thins toward the hairline over ~1 cm (no hard band across the forehead)
             fade_in = ss(-0.004, 0.011, hcov) ** 1.3 * (0.8 + 0.2 * st2)
         st3 = hair_strands(c, rel, style, seed + 4.1, fine=2.2)
@@ -1346,6 +1362,8 @@ def paint(c, B, cov, res, path_out):
         hcol = hair_c[None, :] * (k * roots)[:, None] * (0.78 if look2.ON else 1.0)   # v2: the volume under the cards reads as depth
         sheen = 1 + 0.12 * g2((rel[:, 1] - 0.085) ** 2, 0.018) * (style not in ("crop",))
         hcol = hcol * sheen[:, None]
+        if look2.ON and look2.hero_cut(c):      # proto:makehuman: the shell under hero cards is the deep, matte under-layer
+            hcol = hcol * 0.72
         scalp = look2.CUTS.get(c.get("hairCut") or "", {}).get("scalp") if look2.ON else None
         if scalp in ("short", "fade"):      # hero pipeline: short cuts read as dense hair (the cards on top carry the
             # texture); a faint stipple of scalp between the hairs; a fade runs down the sides to stubble on the skin
@@ -2498,6 +2516,8 @@ def build(c, tex_dir):
         look2.add_bones(arm, B, B._eyes)
     for o in parts + cloth + gx + ([gh] if gh else []):
         apply_weights(o, arm)
+    if look2.ON and budget(c) >= 16000 and os.environ.get("HEAD_SUBDIV", "1") != "0":
+        subdivide_head(parts[0], B)       # proto:makehuman: smooth face silhouettes on the hero (pack lands the budget)
     if gh:
         gh.data.materials.clear()
         gh.data.materials.append(look2.hair_material(c, look2.strand_texture(os.path.join(tex_dir, "az_strands.png"))))
@@ -2541,6 +2561,47 @@ def build(c, tex_dir):
     arm["stature"] = float(c.get("metres") or round(float(B.P[:, 1].max() - B.P[:, 1].min()), 3))
     AUX_MODE[0] = False
     return arm, mesh
+
+
+def subdivide_head(o, B):
+    """proto:makehuman: one smoothed subdivision step of the visible head skin (face, ears, neck under the jaw; not the
+    scalp under the hair, not the mouth bag), after the weights are written as vertex groups (bmesh interpolates them,
+    the uvs and the shading mask). The base mesh is too coarse for a close-up silhouette (faceted jaw, cheek, ears);
+    pack_cast2.mjs then lands the HD and phone head budgets on the denser surface."""
+    if o.name.split(".")[0] != "skin":
+        return
+    me = o.data
+    hc = B.L.eye + np.array([0.0, 0.0, -0.06])
+    msk = np.zeros(len(me.vertices) * 3)
+    a = me.attributes.get("_mask")
+    if a is not None:
+        a.data.foreach_get("vector", msk)
+    msk = msk.reshape(-1, 3)
+    P = from_bl_np(obj_world_verts(o))
+    neck_y = B.Jm["neck"][1] - 0.01
+    vin = (np.linalg.norm(P - hc, axis=1) < 0.15) & (P[:, 1] > neck_y) & (msk[:, 2] < 0.5) & (P[:, 2] > B.L.lip_z - 0.035 - 0.2)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.faces.ensure_lookup_table()
+    mouthz = B.L.lip_z - 0.006
+    sel = set()
+    for f in bm.faces:
+        vs = [v.index for v in f.verts]
+        if all(vin[i] for i in vs):
+            # the mouth bag stays as it is (its rims carry the topological jaw split)
+            cz = np.mean([P[i, 2] for i in vs]); cy = np.mean([P[i, 1] for i in vs]); cx = np.mean([P[i, 0] for i in vs])
+            if cz < mouthz and abs(cx) < B.L.lip_w * 1.1 and abs(cy - B.L.mouth[1]) < 0.03 and cz > B.L.lip_z - 0.12:
+                continue
+            sel.add(f.index)
+    edges = {e for i in sel for e in bm.faces[i].edges}
+    n0 = len(bm.faces)
+    bmesh.ops.subdivide_edges(bm, edges=list(edges), cuts=1, use_grid_fill=True, smooth=1.0, use_smooth_even=True)
+    bm.to_mesh(me)
+    bm.free()
+    for p_ in me.polygons:
+        p_.use_smooth = True
+    me.update()
+    print(f"  head subdivided: {len(sel)} faces -> {len(me.polygons) - n0 + len(sel)} ({len(me.polygons)} polys)", flush=True)
 
 
 def select_class(mesh, cls, which):

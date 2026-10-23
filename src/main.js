@@ -64,16 +64,22 @@ async function startAt(i) {
   game.titleUpdate = null;
   $('title').classList.add('hidden'); $('panel').classList.add('hidden');
   game.ui.evidence = store.get('evidence', []);
+  // Story flags (trust choices, factions, rescues ...) as they stood when chapter i began, so a chapter
+  // started from the menu or Continue honours the choices of the earlier missions.
+  game.flags = i ? { ...(store.get('flags.' + i, null) || store.get('flags', {})) } : {};
   game.paused = false;
   game.input.lock();
-  await game.runMissions(MISSIONS, i, idx => { store.set('chapter', Math.max(store.get('chapter', 0), idx)); store.set('last', idx); });
-  if (game.running) { store.set('evidence', game.ui.evidence); await finale(); }
+  await game.runMissions(MISSIONS, i, idx => {
+    store.set('chapter', Math.max(store.get('chapter', 0), idx)); store.set('last', idx);
+    store.set('flags.' + idx, game.flags); store.set('flags', game.flags); store.set('evidence', game.ui.evidence);
+  });
+  if (game.running) { store.set('evidence', game.ui.evidence); store.set('flags', game.flags); await finale(); }
 }
 
 async function finale() {
-  // End-of-slice card + roadmap of remaining acts.
+  // Mission 23 plays its own ending, epilogue, credits and post-credit scene; then back to the title.
   game.ui.show('hud', false); game.input.unlock();
-  await game.ui.chapterCard('VERSION 17', 'To Be Continued', 'The Chronolith has been anticipating you, Kai.', 5000);
+  store.set('complete', true); store.set('chapter', MISSIONS.length - 1);
   game.running = false;
   showTitle(); openPanel('chapters');
 }

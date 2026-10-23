@@ -45,7 +45,8 @@ const { boneWeights, loopSubdivide, bakeHeadNormals, vertexAO, rasterUV, bakeVer
 const PRINCIPALS = new Set(['mira', 'witness', 'sera', 'rook']);
 function tierBudget(id, budget, rawHead) {
   const cap = (x) => Math.min(rawHead, x);
-  if (budget >= 16000) return { hi: 26000, lo: 16000, headHi: cap(11500), headLo: cap(6200) };
+  // proto:makehuman: the hero's head is subdivided in the generator (build_humans.subdivide_head): a denser HD head
+  if (budget >= 16000) return { hi: +(process.env.HERO_HI || 34000), lo: 16000, headHi: cap(+(process.env.HERO_HEAD_HI || 19000)), headLo: cap(+(process.env.HERO_HEAD_LO || 6400)) };
   if (PRINCIPALS.has(id)) return { hi: 17000, lo: budget, headHi: cap(8000), headLo: cap(4600) };
   if (budget > 9000) return { hi: 13000, lo: budget, headHi: cap(5600), headLo: cap(4000) };
   return { hi: budget, lo: budget, headHi: cap(Math.max(2600, Math.min(3400, rawHead * 0.3))), headLo: null };

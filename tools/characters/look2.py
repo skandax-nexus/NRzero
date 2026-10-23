@@ -215,6 +215,7 @@ def _mouth_fix(o, out, B):
 
 
 def _mouth_rims(o, out, B, pts, j, h, rings=5):
+    rings_up = rings + 3
     L = B.L
     kd = kdtree.KDTree(len(pts))
     for i, p in enumerate(pts):
@@ -255,7 +256,11 @@ def _mouth_rims(o, out, B, pts, j, h, rings=5):
                         nx.append(u)
             fr = nx
         return dist
-    du, dl = bfs(up - corners), bfs(lo - corners)
+    rings0 = rings
+    rings = rings_up
+    du = bfs(up - corners)
+    rings = rings0
+    dl = bfs(lo - corners)
     tot = out[:, j] + out[:, h]
     jw = np.where(tot > 1e-6, out[:, j] / np.maximum(tot, 1e-6), 0.0)
     new = jw.copy()
@@ -270,13 +275,38 @@ def _mouth_rims(o, out, B, pts, j, h, rings=5):
         r_ = min(a_, b_)
         k_ = 1.0 - BH.ss(0.0, rings - 1.5 * float(BH.ss(0.75, 1.0, ax[v])), r_)
         if a_ < b_:
-            new[v] = min(jw[v], jw[v] * (1 - k_))
+            # the upper lip stays on the head over its whole height (a share of MakeHuman's jaw weight on the vermilion
+            # let it sag over the upper teeth when the jaw opened)
+            ku = (1.0 - BH.ss(2.0, rings + 3.0, r_)) * BH.ss(1.0, 0.8, ax[v])
+            new[v] = min(jw[v], jw[v] * (1 - max(k_, ku)))
         else:
             new[v] = max(jw[v], jw[v] + (1 - jw[v]) * k_)
     for v in corners:
         new[v] = 0.5
     out[:, j] = tot * new
     out[:, h] = tot * (1 - new)
+    # the rims close at rest: each rim vertex moves to 0.15 mm from the middle line between the two rims (the open
+    # gap of up to 1.5 mm showed the teeth as a white line between the closed lips)
+    me = o.data
+    co = np.zeros(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    U, Lo = sorted(up - corners), sorted(lo - corners)
+    if U and Lo:
+        PU, PL = pts[U], pts[Lo]
+        M = np.array(o.matrix_world)
+        Minv = np.linalg.inv(M[:3, :3])
+        for grp, other, sg in ((U, PL, 1.0), (Lo, PU, -1.0)):
+            for vi in grp:
+                p = pts[vi]
+                q = other[np.argmin(np.abs(other[:, 0] - p[0]) + 3 * np.abs(other[:, 2] - p[2]))]
+                mid = (p[1] + q[1]) / 2
+                ty = mid + sg * 0.00015
+                if sg * (p[1] - ty) > 0:
+                    dyw = ty - p[1]
+                    co[vi] += Minv @ np.array([0.0, 0.0, dyw])      # Blender z = MH y
+        me.vertices.foreach_set("co", co.ravel())
+        me.update()
     print(f"  mouth rims: {len(up)} upper / {len(lo)} lower rim vertices, {len(set(du) | set(dl))} re-weighted", flush=True)
 
 
@@ -605,7 +635,7 @@ def _teeth_crowns(P, upper, k, yc, a0, a1):
     xs, zs, arc = _arch_curve(z0, k)
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0              # crowns grow up (upper: toward the gum) from the edge
-    edge0 = yc - 0.0018 * k if upper else yc - 0.0002 * k
+    edge0 = yc - 0.0026 * k if upper else yc - 0.0007 * k
     V_, F_, UV_ = [], [], []
     for side in (1.0, -1.0):
         s0 = 0.0
@@ -712,7 +742,7 @@ def _gum_band(P, upper, k, yc, a_gum):
     xs, zs, arc = _arch_curve(z0, k)
     crowns = CROWNS_UP if upper else CROWNS_LO
     sgn = 1.0 if upper else -1.0
-    edge0 = yc - 0.0018 * k if upper else yc - 0.0002 * k
+    edge0 = yc - 0.0026 * k if upper else yc - 0.0007 * k
     bounds = np.concatenate([[0.0], np.cumsum([(w + 0.16) * 0.001 * k for w, _, _ in crowns])])
     smax = bounds[-1]
     ns = 34
@@ -762,7 +792,7 @@ def mouth_objects(B):
     out = []
     eye = B.L.eye
     for g, fine, a0, a1, mask in (("helper-upper-teeth", None, 0.02, 0.34, (0.0, 0.55, 0.0)), ("helper-lower-teeth", "jaw", 0.02, 0.34, (0.0, 0.55, 0.0)),
-                                  ("helper-tongue", "jaw", 0.4, 0.66, (0.55, 0.6, 0.0))):
+                                  ("helper-tongue", "jaw", 0.4, 0.66, (0.45, 0.6, 0.0))):
         fs = [f for f in F if f[2] == g]
         used = sorted({v for f in fs for v in f[0]})
         rm = {v: i for i, v in enumerate(used)}
@@ -874,7 +904,7 @@ def paint_mouth_cell(c, img, mask, grid, put):
     tooth = tooth * (1 - 0.18 * ss(0.22, 0.36, ta))[..., None] + np.array([0.02, 0.03, 0.05]) * ss(0.24, 0.34, ta)[..., None]
     gum = np.array([0.62, 0.30, 0.30]) * (0.9 + 0.12 * rng_n)[..., None]
     tongue = np.array([0.66, 0.36, 0.36]) * (0.85 + 0.2 * rng_n)[..., None]
-    cav = np.array([0.07, 0.025, 0.025])
+    cav = np.array([0.10, 0.035, 0.035])      # proto:makehuman: a deep red, not black (0.07, 0.025)
     if os.environ.get("TEETH_MH") != "1":       # the gaps between the teeth along the arch (b: arc length, centre 0.5)
         arcp = np.abs(b - 0.5) / 0.45 * TEETH_HALF
         edges = np.cumsum(TOOTH_W)
@@ -895,7 +925,7 @@ def paint_mouth_cell(c, img, mask, grid, put):
 # (strands at the card's centre lie on top), A: coverage. Drawn 2x and box-filtered.
 # ---------------------------------------------------------------------------------------------------------------
 HT_W, HT_H, HT_COLS = 1024, 1024, 8
-HT_VERSION = 7
+HT_VERSION = 8
 # column kinds (same slots as v1, so a build's uvs keep their meaning): 0-2 clump cards (dense centre, sparse edges,
 # staggered tapered tips), 3 tight clump (strands gather to a point: tips of short textured cuts), 4-5 wisps (a few
 # loose strands: flyaways, edges), 6 wavy / curly, 7 fine short strokes (lashes, brows, beard)
@@ -924,10 +954,17 @@ def strand_texture(path):
         # v6: clumps spread wider with feathered, staggered ends (v5's strands converged into one point, so every
         # short card read as a spike); a clean single strand at the right edge of the fine column (HT_SINGLE: lashes and
         # brow hairs, one hair per ribbon)
-        n = {"clump": 125, "tight": 110, "wisp": 22, "curl": 90, "fine": 48}[kind]
+        n = {"clump": 150, "tight": 110, "wisp": 22, "curl": 90, "fine": 48}[kind]
         sig = {"clump": 0.21, "tight": 0.17, "wisp": 0.2, "curl": 0.17, "fine": 0.26}[kind]
+        # v8 (proto:makehuman): a clump card is 3-4 sub-clumps with gaps between them (piecey, never a flat ribbon), and
+        # every strand fades in at its own root (no straight-cut card start where a card lies on the hair below)
+        subs = np.sort(rng.uniform(0.18, 0.82, 4 if col % 2 else 3)) if kind == "clump" else None
         for s in range(n):
-            if kind != "fine":       # resampled, not clipped (v5 piled the outliers up on one straight edge line)
+            if kind == "clump":
+                x0 = float(subs[int(rng.integers(0, len(subs)))] + rng.normal(0, 0.07))
+                while not 0.06 < x0 < 0.94:
+                    x0 = float(subs[int(rng.integers(0, len(subs)))] + rng.normal(0, 0.07))
+            elif kind != "fine":       # resampled, not clipped (v5 piled the outliers up on one straight edge line)
                 x0 = float(rng.normal(0.5, sig))
                 while not 0.07 < x0 < 0.93:
                     x0 = float(rng.normal(0.5, sig))
@@ -936,7 +973,7 @@ def strand_texture(path):
             if kind == "fine":       # brow and beard hairs: rooted at the card's root edge, tapering to a fine tip
                 t0, t1 = rng.uniform(0.0, 0.06), rng.uniform(0.6, 1.0)
             else:
-                t0 = rng.uniform(0.0, 0.07)
+                t0 = rng.uniform(0.0, 0.16 if kind == "clump" else 0.07)
                 # staggered, feathered ends: the centre strands are a little longer, the rest end anywhere in the last half
                 edge = abs(x0 - 0.5) * 2
                 t1 = float(np.clip(rng.uniform(0.42, 1.0) * (1 - 0.22 * edge ** 1.5), 0.25, 1.0))
@@ -953,7 +990,7 @@ def strand_texture(path):
                 xc = xc + (cw * 0.5 - xc) * (np.clip((y - t0) / max(t1 - t0, 1e-3), 0, 1) ** 1.8) * pull
             tt = np.clip((y - t0) / max(t1 - t0, 1e-3), 0, 1)
             inside = (y >= t0) & (y <= t1)
-            taper = np.where(inside, (1 - tt) ** 1.4 * np.clip(tt * 25, 0, 1) if kind == "fine" else (1 - tt ** 2.2), 0.0)
+            taper = np.where(inside, (1 - tt) ** 1.4 * np.clip(tt * 25, 0, 1) if kind == "fine" else (1 - tt ** 2.2) * (np.clip(tt * 9, 0, 1) if kind == "clump" else 1.0), 0.0)
             w = wid * (0.3 + 0.7 * taper)
             rows = np.nonzero(taper > 0.02)[0]
             if not len(rows):
@@ -1221,11 +1258,11 @@ CUTS = {
 # outer half is built from layered strand cards that lie inside the volume's envelope, along the comb (`_hero_cards`):
 # no card leaves the envelope, so the silhouette is the cut's own shape broken up by strand tips (no spikes, no helmet)
 CUTS["lead_quiff"] = dict(base="short", hero="quiff", stiff=1.0, top=0.060, front=0.068, side=0.016, nape=0.014, comb="back", lift=0.0, frontLift=0.0,
-                          wave=0.18, W=0.0105, side_dens=1.0, wisp=0.05, scalp="fade")
+                          wave=0.18, W=0.0072, side_dens=1.0, wisp=0.05, scalp="fade")
 CUTS["lead_crop"] = dict(base="short", hero="crop", stiff=1.0, top=0.034, front=0.032, side=0.013, nape=0.011, comb="fwd", lift=0.0, frontLift=0.0,
-                         wave=0.25, W=0.0080, side_dens=1.0, wisp=0.05, scalp="fade")
-CUTS["lead_part"] = dict(base="short", hero="part", stiff=0.9, top=0.075, front=0.080, side=0.026, nape=0.020, comb="back", lift=0.0, frontLift=0.0,
-                         wave=0.14, W=0.0115, side_dens=1.0, wisp=0.04, scalp="short")
+                         wave=0.25, W=0.0058, side_dens=1.0, wisp=0.05, scalp="fade")
+CUTS["lead_part"] = dict(base="short", hero="part", stiff=0.9, top=0.075, front=0.080, side=0.016, nape=0.014, comb="back", lift=0.0, frontLift=0.0,
+                         wave=0.14, W=0.0080, side_dens=1.0, wisp=0.04, scalp="short")
 HERO_SHELL = 0.5        # the shell carries this share of the volume; the cards build the rest
 
 
@@ -1319,9 +1356,12 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
             front = BH.ss(0.0, 0.6, fwd) * BH.ss(0.1, 0.5, up)
             d = np.array([0.0, 1.0, -0.35]) * front + np.array([0.0, -0.05, -1.0]) * top * (1 - front) \
                 + np.array([0.0, -0.7, -0.75]) * (1 - top)
-        elif kind == "crop":      # from the crown forward over the top (a short textured fringe), down the sides
+        elif kind == "crop":      # from the crown forward over the top, the short fringe pushed up (never down onto the
+            # forehead: a forward fringe read as a row of spikes), down the sides
             cr = head_c + np.array([0.0, 0.10, -0.07])
-            d = _tan(p - cr, n) * 0.6 + np.array([0.0, -0.15, 0.8]) * top + g * 0.7 * (1 - top)
+            front = BH.ss(0.25, 0.7, fwd) * BH.ss(0.05, 0.45, up)
+            d = _tan(p - cr, n) * 0.5 * (1 - front) + np.array([0.0, -0.1, 0.8]) * top * (1 - front) + np.array([0.0, 1.0, 0.25]) * front \
+                + g * 0.7 * (1 - top)
         else:                     # side part: across the top toward the far side and a little back; near side down/back
             far = np.sign(r[0] - part_x) != side
             if far:
@@ -1334,9 +1374,9 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
         return t / max(np.linalg.norm(t), 1e-9)
 
     # layers: (fraction of the thickness, share of the cards, width factor, colour factor, importance)
-    layers = [(0.60, 0.26, 1.15, 0.70, 0.3), (0.78, 0.30, 1.05, 0.85, 1.0), (0.94, 0.34, 1.0, 1.0, 2.2), (1.03, 0.10, 0.55, 1.05, 1.6)]
+    layers = [(0.60, 0.24, 1.15, 0.82, 0.3), (0.78, 0.30, 1.05, 0.92, 1.0), (0.94, 0.38, 1.0, 1.0, 2.2), (0.99, 0.08, 0.5, 1.02, 1.6)]
     budget = BH.budget(c)
-    target = 11000 if budget >= 16000 else 4200 if budget > 9000 else 1600
+    target = 16000 if budget >= 16000 else 4800 if budget > 9000 else 1800
     probe, _, _ = _sample_tris(hP, hT, 800, rng)
     lens = np.array([length(q) for q in probe])
     tprobe = np.array([T_at(q)[0] for q in probe])
@@ -1351,7 +1391,7 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
             break
         p = cand[ci]
         Tp, n = T_at(p)
-        if Tp < 0.0022 * k:          # the clipper-short fade: the painted scalp carries it
+        if Tp < 0.0018 * k or rng.random() > BH.ss(0.0018 * k, 0.0036 * k, Tp):    # the fade: the painted scalp carries it, the cards thin out over it
             continue
         if cover is not None:
             qi, qd = cover.near(p)
@@ -1367,7 +1407,7 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
         ln = length(p) * rng.uniform(0.7, 1.15) * (0.8 if li == 3 else 1.0)
         nseg = int(np.clip(round(ln / (0.0085 * k)), 3, 8))
         ds = ln / nseg
-        jit = rng.normal(0, 0.10 if kind != "crop" else 0.22)
+        jit = rng.normal(0, 0.06 if kind != "crop" else 0.2)      # combed cuts: coherent strands
         d = _rot(flow(p, n), n, jit)
         ph = rng.uniform(0, 6.283)
         lam = max(0.02, ln * 0.8)
@@ -1379,7 +1419,7 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
             ki, _ = skin.near(q)
             kp, kn = skin.P[ki], skin.N[ki]
             # the root sits a little under the layer (it grows out of the hair below), the tip a little above it
-            ff = f * (0.82 + 0.18 * min(1.0, t * 3)) + (0.03 * t if li == 3 else 0.0)
+            ff = f * (0.82 + 0.18 * min(1.0, t * 3)) + (0.015 * t if li == 3 else 0.0)
             if kind == "crop":
                 ff += 0.06 * t * rng.random()         # piecey texture: tips lift a little, inside the envelope
             h = max(ff * Tq, 0.0009 * k)
@@ -1409,9 +1449,9 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
         w0 = C["W"] * wf * rng.uniform(0.8, 1.2) * k
         width = w0 * (1 - 0.55 * np.linspace(0, 1, len(pts)) ** 1.3)
         column = (4 + int(rng.integers(0, 2))) if li == 3 else int(rng.integers(0, 3))
-        v = rng.normal(1.0, 0.05)
-        root = hc * 0.6 * cf * v
-        tip = hc * rng.uniform(0.95, 1.08) * cf * v
+        v = rng.normal(1.0, 0.03)
+        root = hc * 0.72 * cf * v
+        tip = hc * rng.uniform(0.97, 1.05) * cf * v
         if grey and rng.random() < 0.18:
             kq = rng.uniform(0.7, 0.88)
             root, tip = root * kq, tip * kq
@@ -1424,7 +1464,7 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
             e_ = tuple(sorted((int(hT[t_, a_]), int(hT[t_, b_]))))
             ecount[e_] = ecount.get(e_, 0) + 1
     bedges = [e_ for e_, n_ in ecount.items() if n_ == 1 and (hP[e_[0]] - head_c)[2] > -0.02 and hP[e_[0]][1] > eye[1] + 0.02]
-    nline = {11000: 260, 4200: 110, 1600: 40}[target] if bedges else 0
+    nline = {16000: 420, 4800: 130, 1800: 44}[target] if bedges else 0
     for _ in range(nline):
         e_ = bedges[int(rng.integers(0, len(bedges)))]
         p = hP[e_[0]] + (hP[e_[1]] - hP[e_[0]]) * rng.random()
@@ -1444,7 +1484,7 @@ def _hero_cards(c, B, cov, hair_objs, coll, cover, rng, K, tier, hc, grey):
             d = flow(q, kn)
         pts = np.array(pts)
         nr = np.repeat(kn[None], 4, 0)
-        width = np.array([0.0035, 0.003, 0.0024, 0.0015]) * k
+        width = np.array([0.0022, 0.002, 0.0016, 0.001]) * k * rng.uniform(0.8, 1.2)
         v = rng.normal(1.0, 0.05)
         cards.append((pts, nr, width, 4 + int(rng.integers(0, 2)), hc * 0.7 * v, hc * 0.95 * v, np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 1.4 + rng.random()))
     for cd in cards:
@@ -1994,18 +2034,19 @@ def hair_cards(c, B, cov, parts, ex):
             tk = float(rng.random() ** 0.85)
             nn_ = float(rng.random())
             bx = -0.0185 + 0.047 * tk
-            by = np.interp(tk, [0, 0.35, 0.68, 1.0], [0.0150, 0.0182, 0.0198, 0.0150]) + c.get("browLift", 0.0)
+            by = np.interp(tk, [0, 0.35, 0.68, 1.0], [0.0150, 0.0178, 0.0192, 0.0162]) + c.get("browLift", 0.0)
             bw = np.interp(tk, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt)
-            ang = math.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [66, 46, 14, -12]) + rng.normal(0, 6) - 10 * (nn_ - 0.5))
+            # proto:makehuman: groomed (the hairs of each part of the brow lie the same way: random angles read unkempt)
+            ang = math.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [62, 40, 12, -10]) + rng.normal(0, 3.5) - 8 * (nn_ - 0.5))
             p0, n = on_skin(e + np.array([bx * sg, by + nn_ * bw, 0.03]), 0.0004)
             for _ in range(2):
                 p0, n = on_skin(p0, 0.0004)
             d = _tan(np.array([math.cos(ang) * sg, math.sin(ang), 0.0]), n)
             d /= max(np.linalg.norm(d), 1e-9)
-            ln = float(np.interp(tk, [0, 0.4, 1.0], [0.0042, 0.0060, 0.0044]) * rng.uniform(0.85, 1.15))
-            pts = np.array([on_skin(p0 + d * ln * f, 0.0004 + 0.0005 * f)[0] for f in (0.0, 0.5, 1.0)])
+            ln = float(np.interp(tk, [0, 0.4, 1.0], [0.0036, 0.0052, 0.0040]) * rng.uniform(0.85, 1.12))
+            pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.00025 * f)[0] for f in (0.0, 0.5, 1.0)])
             nr = np.repeat(n[None], 3, 0)
-            col = brow_c * (0.95 + 0.4 * rng.random())
+            col = brow_c * (1.15 + 0.35 * rng.random())       # a little lighter than the scalp hair (black stripes otherwise)
             K.ribbon(pts, nr, np.array([0.00030, 0.00026, 0.00015]) * (1.05 if male else 0.95) * (1.25 if tier < 2 else 1.0), 7, col * 0.8, col * 1.12, np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5,
                      fine="@split", u0=HT_SINGLE[0], u1=HT_SINGLE[1], kind=2)
     # ---- beard: short cards pointing down the jaw and chin over the painted beard
@@ -2145,7 +2186,7 @@ def paint_skin(c, B, pos, part, col, isface, seed):
     # ---- eye sockets: darker, cooler (more with age); the inner corner pinker
     for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
         d = (pos - (e + np.array([0.002 * sg, -0.004, 0.004]))) * np.array([0.75, 1.2, 1.0])
-        k = g2((d ** 2).sum(1), 0.016) * face * (0.09 + 0.1 * age)
+        k = g2((d ** 2).sum(1), 0.016) * face * (0.09 + 0.1 * age) * (1 - 0.5 * float(c.get("skinSmooth", 0.0)))
         col *= (1 - k[:, None] * np.array([0.12, 0.14, 0.06]) * 4)
     # ---- ears, nose wings, chin: blood close to the surface
     ear = BH.layout()["ears"]
@@ -2196,6 +2237,7 @@ def paint_skin(c, B, pos, part, col, isface, seed):
         col = col * (1 - nail[:, None] * 0.35) + nail[:, None] * np.array([0.78, 0.6, 0.56]) * 0.35 * (col.mean(1, keepdims=True) / 0.55)
     # ---- height: pores (face, finer elsewhere), skin lines by age; children nearly smooth
     pf = 0.6 if child else 1.0
+    pf *= 1.0 - 0.6 * float(c.get("skinSmooth", 0.0))     # proto:makehuman: clear, even skin for the leads (finer pores)
     pores = (hash01(pos, 2300, seed + 41) > 0.72) * (0.5 + 0.5 * hash01(pos, 1100, seed + 43))
     fine = vnoise(pos, 900, seed + 45) - 0.5
     h -= pf * (0.000045 * pores * (0.6 + 0.8 * face) + 0.00002 * fine)
@@ -2243,8 +2285,10 @@ def inner_mouth(c, B, pos, part, col):
     L = B.L
     depth = L.lip_z - pos[m, 2]
     inner = np.array([0.55, 0.26, 0.25])
-    dark = np.array([0.05, 0.018, 0.018])
-    k = BH.ss(0.0015, 0.012, depth)[:, None]
+    # proto:makehuman: the mouth bag shades from the wet pink inside the lips to a deep red (near-black read as a hole
+    # beside the teeth), darker only toward the throat
+    dark = np.array([0.16, 0.05, 0.05]) * (1 - 0.6 * BH.ss(0.03, 0.07, depth))[:, None]
+    k = BH.ss(0.0015, 0.02, depth)[:, None]
     col[m] = col[m] * BH.ss(0.006, 0.0, depth)[:, None] * 0.5 + (inner * (1 - k) + dark * k) * (1 - BH.ss(0.006, 0.0, depth)[:, None] * 0.5)
     return col
 

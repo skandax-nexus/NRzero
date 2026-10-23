@@ -15,8 +15,8 @@
   "cheek/r-cheek-volume-decr|incr": -0.55,
   "eyebrows/eyebrows-trans-backward|forward": 0.3,
   "eyebrows/eyebrows-trans-down|up": -0.2,
-  "eyes/l-eye-scale-decr|incr": 0.15,
-  "eyes/r-eye-scale-decr|incr": 0.15,
+  "eyes/l-eye-scale-decr|incr": 0.3,
+  "eyes/r-eye-scale-decr|incr": 0.3,
   "eyes/l-eye-eyefold-down|up": -0.3,
   "eyes/r-eye-eyefold-down|up": -0.3,
   "eyes/l-eye-corner1-down|up": 0.1,
@@ -31,8 +31,8 @@
   "mouth/mouth-angles-down|up": 0.05,
   "head/head-age-decr|incr": 0.15,
   "mouth/mouth-trans-down|up": 0.2,
-  "eyes/l-eye-height2-decr|incr": 0.2,
-  "eyes/r-eye-height2-decr|incr": 0.2
+  "eyes/l-eye-height2-decr|incr": 0.3,
+  "eyes/r-eye-height2-decr|incr": 0.3
  },
  "browThick": 0.95,
  "stubble": 0.6,
@@ -42,5 +42,6 @@
  "skin": "a47c52",
  "lip": "86493d",
  "eyes": "4a2e1c",
- "hairColor": "1b1411"
+ "hairColor": "1b1411",
+ "skinSmooth": 0.6
 }
