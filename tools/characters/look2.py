@@ -889,8 +889,11 @@ def paint_eye(c, dxe, dye, r, th, seed, vnoise, hash01, ss, g2):
     crypt = np.clip(vnoise(np.stack([np.cos(th) * 7, np.sin(th) * 7, rr * 4], -1).reshape(-1, 3), 1.0, seed + 5).reshape(sh) - 0.62, 0, 1) * 2.2
     warm = np.array([0.62, 0.42, 0.16])           # amber near the pupil (stroma pigment)
     inner = ss(0.55, 0.15, rr)[..., None]
-    base = iris_c[None, None, :] * (1 - 0.35 * inner) + warm[None, None, :] * 0.35 * inner * (0.4 + 0.6 * iris_c.mean() / 0.35)
-    irc = base * (0.62 + 0.62 * fib[..., None])
+    # irisWarm (face file, default 1): the amber mix near the pupil; irisGain: the iris albedo scale (fix round 1, Kai:
+    # his very dark brown irises read grey-brown with the full amber lift)
+    wk = float(c.get("irisWarm", 1.0))
+    base = iris_c[None, None, :] * (1 - 0.35 * wk * inner) + warm[None, None, :] * 0.35 * wk * inner * (0.4 + 0.6 * iris_c.mean() / 0.35)
+    irc = base * (0.62 + 0.62 * fib[..., None]) * float(c.get("irisGain", 1.0))
     irc = irc * (1 + 0.28 * g2((rr - 0.32) ** 2, 0.006))[..., None]            # collarette
     irc = irc * (1 - 0.45 * crypt * ss(0.25, 0.4, rr) * ss(0.95, 0.7, rr))[..., None]
     irc = irc * (1 - 0.5 * ss(0.78, 1.0, rr))[..., None]                       # darker outer iris toward the limbus
@@ -2434,7 +2437,10 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     # likeness:final: more and finer cards (fine tapered strands, no wide clump cards: those read as black confetti),
     # lying close to the skin (the photo's beard is short, 1-1.5 cm), twice the share on the moustache, a fuller band
     # at the jaw angle (the beard's volume makes his round face)
-    nroot = {2: 1800, 1: 760, 0: 300}[tier]
+    # fix round 1: the beard as a short, dense, slightly wavy mat: cards of several fine strands each (a window of the
+    # fine column), two segments, lying flat along the growth direction; the moustache the densest part, growing
+    # strictly down from under the nose and hanging over the top of the upper vermilion (moHang, as the paint)
+    nroot = {2: 2000, 1: 860, 0: 340}[tier]
     pts, ti, _ = _sample_tris(P_, T_, nroot * 4, rng)
     # barycentric weights of the samples for the head weight and the normal
     A, Bv, Cv = P_[T_[ti, 0]], P_[T_[ti, 1]], P_[T_[ti, 2]]
@@ -2455,19 +2461,24 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     keep = rng.random(len(pts)) < dens ** 1.3
     pts, nrm, dens = pts[keep], nrm[keep], dens[keep]
     sto = LK.lm.get("Sto", [0, -65, 0])[1]
+    li = LK.lm.get("Li", [0, sto - 11.5, 0])[1]
+    pg = LK.lm.get("Pg", [0, sto - 39.6, 0])[1]
     q_all = LK.mm(pts)
     mo_all = BH.ss(sto - 1.0, sto + 3.0, q_all[:, 1]) * BH.ss(34.0, 26.0, np.abs(q_all[:, 0]))
     jaw_all = BH.ss(40.0, 58.0, np.abs(q_all[:, 0])) * BH.ss(sto - 6.0, sto - 22.0, q_all[:, 1])
     if len(pts) > nroot:
-        wsel = 1.0 + 2.5 * mo_all + 0.6 * jaw_all
+        wsel = 1.0 + 2.6 * mo_all + 0.6 * jaw_all
         sel = rng.choice(len(pts), nroot, replace=False, p=wsel / wsel.sum())
         pts, nrm, dens = pts[sel], nrm[sel], dens[sel]
     skin = _Surf(B.P[B.bodyv], B.N[B.bodyv])
     q_mm = LK.mm(pts)
     bc_ = BH.lin(hair_floor(BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119"))), 0.16))
+    warm_ = BH.lin(BH.hexc(c["beardWarm"])) if c.get("beardWarm") else bc_
     lens = LK.beard_length(pts)
     head1 = np.eye(len(BH.BONE_NAMES))[BH.BI["head"]]
+    hang = float(c.get("moHang", 0.0))
     ntri = 0
+    fw0, fw1 = 0.03, HT_SINGLE[0] - 0.04         # the fine column's multi-strand part (u)
     for i in range(len(pts)):
         p, n, q = pts[i], nrm[i], q_mm[i]
         x, y = q[0], q[1]
@@ -2475,41 +2486,51 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         under = BH.ss(-0.2, -0.75, n[1])                                          # under the jaw / chin
         sbf = BH.ss(-44.0, -30.0, y)                                              # sideburn
         jaw = BH.ss(40.0, 58.0, abs(x)) * BH.ss(sto - 6.0, sto - 22.0, y) * (1 - sbf)   # the jaw angle: the fuller band
-        # growth direction: moustache down and out from the philtrum; chin and jaw down, barely forward (the beard lies
-        # close to the skin); the under-jaw back toward the neck (along the skin); sideburns straight down
+        ulz = BH.ss(li + 1.0, li - 3.0, y) * BH.ss(pg + 2.0, pg + 8.0, y) * BH.ss(24.0, 18.0, abs(x))     # under the lower lip (thin, warm)
+        # growth direction: the moustache down and a little out (never up toward the nostrils); chin down; the jaw
+        # down and back; the under-jaw back toward the neck (along the skin); sideburns straight down
         sx = np.sign(x) if abs(x) > 0.5 else 0.0
-        dmo = np.array([sx * (0.25 + 0.6 * BH.ss(2.0, 22.0, abs(x))), -1.0, 0.18])
-        dch = np.array([sx * (0.12 * BH.ss(10.0, 50.0, abs(x)) + 0.35 * jaw), -1.0, 0.12 - 0.12 * under])
+        dmo = np.array([sx * (0.12 + 0.55 * BH.ss(4.0, 24.0, abs(x))), -1.0, 0.08])
+        dch = np.array([sx * (0.1 * BH.ss(10.0, 50.0, abs(x)) + 0.3 * jaw), -1.0, 0.06 - 0.22 * jaw - 0.12 * under])
         d = dmo * mo + dch * (1 - mo)
-        d = _rot(_tan(d, n), n, rng.normal(0, 0.2))
+        d = _rot(_tan(d, n), n, rng.normal(0, 0.16 if mo > 0.5 else 0.22))
         if np.linalg.norm(d) < 1e-6:
             continue
         d /= np.linalg.norm(d)
-        # 8-15 mm on the chin and jaw, about 8 mm on the moustache (reaching the upper vermilion), shorter sideburns
-        ln = 0.0095 * k * (1.0 + 0.45 * (float(lens[i]) - 1.0)) * rng.uniform(0.8, 1.15) * (0.88 if mo > 0.5 else 1.0) * (0.75 if sbf > 0.5 else 1.0)
-        ln *= 0.55 + 0.45 * BH.ss(0.15, 0.7, dens[i])
-        chinb = BH.ss(sto - 30.0, sto - 48.0, y) * BH.ss(40.0, 20.0, abs(x))      # the chin's lower edge: the beard hangs below the chin
-        ln *= 1.0 + 0.4 * chinb
-        f = rng.random() ** 1.1                                                   # layer: 0 on the skin .. 1 outside
-        # the layer's height off the skin: 3-4.5 mm on the chin, 2 mm on the moustache, up to 7 mm at the jaw angle
-        thick = (0.0020 + 0.0025 * BH.ss(sto - 4, sto - 35, y) * (1 - 0.3 * BH.ss(30, 60, abs(x))) + 0.0010 * under + 0.0045 * jaw) * k
-        thick *= 0.4 + 0.6 * BH.ss(0.2, 0.7, dens[i])
+        if mo > 0.3 and d[1] > -0.7:       # the moustache only hangs
+            d = _tan(d + np.array([0.0, -0.7 - d[1], 0.0]), n)
+            d /= max(np.linalg.norm(d), 1e-9)
+        # short: 6-10 mm on the chin and jaw (the chin's lower rim longer: the beard hangs below the chin), 9-11 mm on
+        # the moustache (from under the nose over the philtrum to the lip), shorter sideburns
         if mo > 0.5:
-            thick = 0.0019 * k
-        nseg = 3
+            ln = 0.0098 * k * rng.uniform(0.85, 1.15)
+        else:
+            ln = 0.0072 * k * (1.0 + 0.4 * (float(lens[i]) - 1.0)) * rng.uniform(0.8, 1.15) * (0.75 if sbf > 0.5 else 1.0)
+            ln *= 0.6 + 0.4 * BH.ss(0.15, 0.7, dens[i])
+            ln *= 1.0 + 0.3 * BH.ss(pg + 2.0, pg - 10.0, y) * BH.ss(40.0, 20.0, abs(x))
+        f = rng.random() ** 1.1                                                   # layer: 0 on the skin .. 1 outside
+        # flat to the skin: 1.2 mm on the moustache, 1.5-3 mm on the chin, up to 4 mm at the jaw angle
+        thick = (0.0014 + 0.0016 * BH.ss(sto - 4, sto - 35, y) * (1 - 0.3 * BH.ss(30, 60, abs(x))) + 0.0008 * under + 0.0025 * jaw) * k
+        thick *= 0.45 + 0.55 * BH.ss(0.2, 0.7, dens[i])
+        if mo > 0.5:
+            thick = 0.0012 * k
+        nseg = 2
         P = [p + n * 0.0003]
         dd = d.copy()
         nn = n
-        for s in range(1, nseg + 1):
-            t = s / nseg
+        wav = rng.normal(0, 0.28)                    # a slight wave: the second segment turns the other way
+        for s_ in range(1, nseg + 1):
+            t = s_ / nseg
             qn = P[-1] + dd * (ln / nseg)
             si, _ = skin.near(qn)
             sp, sn = skin.P[si], skin.N[si]
-            h = 0.0003 + thick * (0.25 + 0.75 * f) * min(1.0, 0.55 + 0.45 * t)      # rises in the first step, then lies at its layer
+            h = 0.0003 + thick * (0.25 + 0.75 * f) * min(1.0, 0.6 + 0.4 * t)
             qn = qn - sn * ((qn - sp) @ sn - h)
-            if mo > 0.5:          # the moustache may hang over the upper lip, never past its contact line
-                yl = np.interp(qn[0], xs, ys) + 0.0045      # likeness:final: just overlapping the upper vermilion
-                if qn[1] < yl and abs(qn[0] - L.lip_cx) < L.lip_w * 1.1:
+            if mo > 0.5 and abs(qn[0] - L.lip_cx) < L.lip_w * 1.1:      # hangs over the top of the upper lip, never past moHang
+                tx = min(abs((qn[0] - L.lip_cx) / max(L.lip_w, 0.018)), 1.0)
+                hux = lipup * (1 - tx ** 2.3) ** 0.55
+                yl = np.interp(qn[0], xs, ys) + max(0.0015, hux * (1 - hang * (1 - 0.55 * BH.ss(0.3, 0.95, tx)) * rng.uniform(0.75, 1.05)))
+                if qn[1] < yl:
                     qn[1] = yl
             ki, _ = coll.near(qn)
             hh = (qn - coll.P[ki]) @ coll.N[ki]
@@ -2517,17 +2538,22 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
                 qn = qn + coll.N[ki] * (0.0006 - hh)
             dn = qn - P[-1]
             dd = _tan(dn / max(np.linalg.norm(dn), 1e-9), sn)
-            dd = _rot(dd / max(np.linalg.norm(dd), 1e-9), sn, rng.normal(0, 0.12))     # a little wiry
+            dd = _rot(dd / max(np.linalg.norm(dd), 1e-9), sn, wav * (1 if s_ == 1 else -1))
             P.append(qn)
             nn = sn
         P = np.array(P)
         nr = np.repeat(((n + nn) / np.linalg.norm(n + nn))[None], len(P), 0)
-        # fine tapered strands (each card a few hairs of the fine column, tapering to a point)
-        wid = (0.0008 + 0.0007 * rng.random()) * k * (0.9 if mo > 0.5 else 1.0) * (0.5 + 0.6 * BH.ss(0.15, 0.75, dens[i]))
-        width = wid * np.array([1.0, 0.8, 0.5, 0.18])[:len(P)]
-        v_ = rng.normal(1.0, 0.09) * (1.0 - 0.3 * BH.ss(0.8, 1.0, dens[i]))     # the dense jaw band and moustache darker
+        # several fine strands per card (a window of the fine column); narrower toward the tip
+        wid = (0.0016 + 0.0008 * rng.random()) * k * (1.1 if mo > 0.5 else 1.0) * (0.55 + 0.5 * BH.ss(0.15, 0.75, dens[i]))
+        width = wid * np.array([1.0, 0.85, 0.55])
+        win = 0.3 + 0.12 * rng.random()
+        u0 = fw0 + (fw1 - fw0 - win) * rng.random()
+        v_ = rng.normal(1.0, 0.08) * (1.0 - 0.28 * BH.ss(0.8, 1.0, dens[i]))     # the dense jaw band and moustache darker
         root, tip = bc_ * 0.85 * v_, bc_ * (1.05 + 0.15 * f) * v_
-        K.ribbon(P, nr, width, 7, root, tip, head1, 2.0 + 0.8 * f + 0.4 * rng.random(), fine="@split", u0=0.04, u1=HT_SINGLE[0] - 0.04, kind=4)
+        if ulz > 0.05:           # under the lower lip: lighter, warmer hair
+            wk = ulz * BH.ss(0.8, 0.55, dens[i])
+            root, tip = root + (warm_ * 0.9 - root) * wk, tip + (warm_ * 1.1 - tip) * wk
+        K.ribbon(P, nr, width, 7, root, tip, head1, 2.0 + 0.8 * f + 0.4 * rng.random() + 0.6 * mo, fine="@split", u0=u0, u1=u0 + win, kind=4)
         ntri += 2 * (len(P) - 1)
     print(f"  beard cards (likeness map): {len(pts)} cards, {ntri} tris", flush=True)
     return len(pts)
@@ -3072,7 +3098,7 @@ def hair_cards(c, B, cov, parts, ex):
     if LK is not None:                      # photo likeness: his thick, dense brows (the measured profile)
         nb = {2: 680, 1: 240, 0: 64}[tier]
     for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
-        bT = likeness_look.brow_T(LK, e, sg, c.get("browLift", 0.0)) if LK is not None else None
+        bT = likeness_look.brow_T(LK, e, sg, c.get("browLift", 0.0), c.get("browShape")) if LK is not None else None
         if LK is not None:      # likeness:final: brow skin seen from the front (the cards' roots projected along z, like the paint)
             bm = (np.abs(skin.P[:, 0] - (e[0] + sg * 0.005)) < 0.04) & (skin.P[:, 1] > e[1]) & (skin.P[:, 1] < e[1] + 0.045) & (skin.P[:, 2] > e[2] - 0.02)
             bP = skin.P[bm]
@@ -3088,7 +3114,7 @@ def hair_cards(c, B, cov, parts, ex):
         # hairs up, the body outward, the tail outward and down; the upper rows lie a little downward)
         for i in range(nb):
             tk = float(rng.random() ** 0.85)
-            nn_ = float(rng.random())
+            nn_ = float(rng.random()) if bT is None else float(rng.random() ** 1.2)      # (likeness: fewer hairs along the top edge: feathered)
             bx = -0.0185 + 0.047 * tk
             by = np.interp(tk, [0, 0.35, 0.68, 1.0], [0.0150, 0.0178, 0.0192, 0.0162]) + c.get("browLift", 0.0)
             bw = np.interp(tk, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt)
@@ -3096,6 +3122,8 @@ def hair_cards(c, B, cov, parts, ex):
                 bx, by, bw = (float(v) for v in bT(tk))
             # proto:makehuman: groomed (the hairs of each part of the brow lie the same way: random angles read unkempt)
             ang = math.radians(np.interp(tk, [0, 0.12, 0.35, 1.0], [62, 40, 12, -10]) + rng.normal(0, 3.5) - 8 * (nn_ - 0.5))
+            if bT is not None:      # fix round 1: the tail's hairs run out and down, the top rows lie down over the body (no raised, cut tail)
+                ang = math.radians(np.interp(tk, [0, 0.12, 0.35, 0.75, 1.0], [64, 38, 8, -4, -16]) + rng.normal(0, 4.0) - 16 * (nn_ - 0.5))
             if bT is not None:
                 p0, n = on_skin(front_root(e[0] + bx * sg, e[1] + by + nn_ * bw), 0.0004)
             else:
@@ -3105,9 +3133,16 @@ def hair_cards(c, B, cov, parts, ex):
             d = _tan(np.array([math.cos(ang) * sg, math.sin(ang), 0.0]), n)
             d /= max(np.linalg.norm(d), 1e-9)
             ln = float(np.interp(tk, [0, 0.4, 1.0], [0.0036, 0.0052, 0.0040]) * rng.uniform(0.85, 1.12))
+            col = brow_c * (1.15 + 0.35 * rng.random())       # a little lighter than the scalp hair (black stripes otherwise)
+            if bT is not None:
+                # fix round 1: one segment per hair (a 4-5 mm hair lying on the skin needs no bend: half the triangles)
+                ln *= rng.uniform(0.75, 1.1) * (1.0 - 0.25 * max(0.0, nn_ - 0.7) / 0.3)
+                pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.0003 * f)[0] for f in (0.0, 1.0)])
+                K.ribbon(pts, np.repeat(n[None], 2, 0), np.array([0.00030, 0.00012]) * (1.05 if male else 0.95) * (1.25 if tier < 2 else 1.0), 7, col * 0.8, col * 1.12,
+                         np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5, fine="@split", u0=HT_SINGLE[0], u1=HT_SINGLE[1], kind=2)
+                continue
             pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.00025 * f)[0] for f in (0.0, 0.5, 1.0)])
             nr = np.repeat(n[None], 3, 0)
-            col = brow_c * (1.15 + 0.35 * rng.random())       # a little lighter than the scalp hair (black stripes otherwise)
             K.ribbon(pts, nr, np.array([0.00030, 0.00026, 0.00015]) * (1.05 if male else 0.95) * (1.25 if tier < 2 else 1.0), 7, col * 0.8, col * 1.12, np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5,
                      fine="@split", u0=HT_SINGLE[0], u1=HT_SINGLE[1], kind=2)
     # ---- beard: short cards pointing down the jaw and chin over the painted beard
@@ -3357,13 +3392,16 @@ def paint_skin(c, B, pos, part, col, isface, seed):
     # tzoneGloss (face file, default 1): the photo likeness keeps an even lighting response (a hot forehead and a shiny
     # stripe down the nose bridge read as copper skin)
     rough = rough - 0.18 * float(c.get("tzoneGloss", 1.0)) * np.clip(tz + nose, 0, 1) - 0.04 * face + 0.05 * age + float(c.get("skinMatte", 0.0)) * face
+    # noseMatte (face file): the nose tip and wings rougher (fix round 1, Kai: a hot spot on the tip under the studio key)
+    rough = rough + float(c.get("noseMatte", 0.0)) * g2(((pos - np.array([0, L.eye[1] - 0.045, L.eye[2] + 0.03])) ** 2).sum(1), 0.008) * face
     rough = rough - 0.26 * nail
     rough += 0.06 * (pores - 0.3) * face
     return col, h, np.clip(rough, 0.25, 0.8)
 
 
-def lip_rough(rough, lipm):
-    return np.where(lipm > 0.3, np.minimum(rough, 0.34), rough)
+def lip_rough(rough, lipm, gloss=1.0):
+    """glossy lips: roughness capped at 0.34; gloss < 1 (a face file's `lipGloss`) raises the cap (matte, textured lips)"""
+    return np.where(lipm > 0.3, np.minimum(rough, 0.34 + 0.32 * (1.0 - float(gloss))), rough)
 
 
 def inner_mouth(c, B, pos, part, col):

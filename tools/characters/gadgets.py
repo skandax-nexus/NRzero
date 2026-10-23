@@ -1037,8 +1037,19 @@ def g_monocle(g):
     s = 1 if sd == "L" else -1
     M = lens_frame(K, sd, fwd=0.026, dz=0.002, dx=0.004)
     M = rot(M, "Y", s * 0.25)
+    if o.get("parked"):
+        # fix round 1 (Kai): parked, the lens folded back along its temple arm, flat on the side of the head between the
+        # outer eye corner and the ear (seen edge-on from the front): the eye, the brow and the cheek stay clear in every
+        # portrait and close-up; the HUD edge still lights on the temple in Residue Vision
+        e = K.eye[sd]
+        tgt = V((e.x + s * 0.012, e.y + 0.036 * K.k, e.z + 0.008))
+        hit = K.toward(tgt, V((s, 0, 0)), HEADH, 0.25)
+        pc = (hit[0] + hit[1] * 0.0042) if hit else V((e.x + s * 0.07, e.y + 0.036, e.z + 0.008))
+        M = frame(pc, V((s, -0.12, 0.0)), UP)
     col = o.get("color", GRAPH)
     lw, lh = 0.033 * K.k, 0.022 * K.k        # a lens, not a patch: the lower lid and the eye corner stay visible
+    if o.get("parked"):
+        lw, lh = 0.026 * K.k, 0.016 * K.k     # parked: a slimmer lens (it reads as a temple piece, not a patch)
     rim, rt = 0.0026, 0.0040
     curv = 0.006                               # the lens wraps toward the temple: z falls off with x^2
 
@@ -1082,6 +1093,8 @@ def g_monocle(g):
                  M @ V((0.011, -lh * 0.45, zc(0.011) + 0.0024))]
         g.part(tube(crack, 0.00035, n=3), "c8ccd0", 0.9, smooth=True)
     tip = M @ V((s * (lw / 2 + rim), 0.004, zc(lw / 2) + 0.001))
+    if o.get("parked"):      # the arm runs from the ear to the lens's back edge (the hinge)
+        tip = M @ V(((lw / 2 + rim) * (1 if (M @ V((1, 0, 0)) - M @ V((0, 0, 0))).y > 0 else -1), 0.0, 0.001))
     p0 = arm_from_ear(g, sd, tip, col)
     g.part(box(0.009, 0.016, 0.007, bev=0.002, M=frame(p0, V((s, 0, 0)), V((0, -1, 0.3)))), col, 0.5)
     g.idle = float(o.get("idle", 0.0))

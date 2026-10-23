@@ -1207,14 +1207,18 @@ def paint(c, B, cov, res, path_out):
     at = np.clip(np.abs(t), 0, 1)
     hu = hu0 * (1 - at ** 2.3) ** 0.55 * (1 - 0.16 * np.exp(-(t / 0.13) ** 2)) * (1 + 0.1 * np.exp(-((at - 0.3) / 0.15) ** 2))
     hl = hl0 * (1 - at ** 2.0) ** 0.7
-    mu = ss(hu + 0.0007, hu - 0.0004, d) * ss(-0.0012, 0.0, d)
-    ml = ss(hl + 0.0008, hl - 0.0005, -d) * ss(-0.0012, 0.0, -d)
+    eb = float(c.get("lipEdge", 0.0))       # fix round 1: the vermilion border blurred over eb metres (a hard outline read as a painted sausage)
+    mu = ss(hu + 0.0007 + eb * 0.5, hu - 0.0004 - eb * 0.5, d) * ss(-0.0012, 0.0, d)
+    ml = ss(hl + 0.0008 + eb * 0.5, hl - 0.0005 - eb * 0.5, -d) * ss(-0.0012, 0.0, -d)
     lipm = np.clip(np.maximum(mu, ml) * lipfront * ss(1.05, 0.9, np.abs(t)), 0, 1)
     lipcol = skin * 0.3 + lip_c * 0.7
     over(lipm * 0.85, lipcol)
-    tint(lipm * mu * (0.1 if LK is None else 0.14), [0.9, 0.88, 0.9])              # upper lip a touch darker (photo: mauve-grey)
-    tint(lipm * ml * 0.1 * g2(t ** 2 + ((-d - hl0 * 0.45) / 0.004) ** 2, 1.0), [1.12, 1.1, 1.1])   # lower lip highlight
-    tint(0.4 * g2(d ** 2, 0.0005) * lipfront * ss(1.15, 0.85, np.abs(t)), [0.55, 0.45, 0.45])   # contact line
+    tint(lipm * mu * (0.1 if LK is None else float(c.get("upperLipDark", 0.14))), [0.9, 0.88, 0.9])              # upper lip a touch darker (photo: mauve-grey)
+    tint(lipm * ml * (0.1 if LK is None else 0.03) * g2(t ** 2 + ((-d - hl0 * 0.45) / 0.004) ** 2, 1.0), [1.12, 1.1, 1.1])   # lower lip highlight
+    if LK is not None and c.get("lipLines"):      # fix round 1: fine vertical lip lines (the vermilion's furrows), darker at the centre of each lip
+        ll = vnoise(pos * np.array([1.0, 0.07, 1.0]), 2300, seed + 8.3)
+        tint(lipm * float(c["lipLines"]) * np.clip((ll - 0.45) * 2.5, 0, 1) * (1 - 0.5 * ss(0.5, 1.0, np.abs(t))), [0.82, 0.78, 0.8])
+    tint((0.4 if LK is None else float(c.get("lipParted", 0.4))) * g2(d ** 2, 0.0005 if LK is None else 0.00065) * lipfront * ss(1.15, 0.85, np.abs(t)), [0.55, 0.45, 0.45])   # contact line
     tint(0.05 * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge
     for sg in (1, -1):
         cn = np.array([sg * L.lip_w, np.interp(sg * L.lip_w, xs, ys), L.lip_z - 0.008])
@@ -1264,7 +1268,7 @@ def paint(c, B, cov, res, path_out):
         T = lambda t: (-0.0185 + 0.047 * t, np.interp(t, [0, 0.35, 0.68, 1.0], [0.0150, 0.0178, 0.0192, 0.0162] if look2.ON else [0.0150, 0.0182, 0.0198, 0.0150]) + lift,
                        np.interp(t, [0, 0.15, 0.6, 1.0], [0.0072, 0.0068, 0.0048, 0.0018]) * (1.0 if male else 0.78) * (0.8 + 0.4 * bt))
         if LK is not None:       # photo likeness: the measured brow (its own medial / lateral ends, top and bottom edge)
-            T = likeness_look.brow_T(LK, e, sg, lift)
+            T = likeness_look.brow_T(LK, e, sg, lift, c.get("browShape"))
             nstr = 620 if res >= 2048 else 440
         tk = rng.random(nstr) ** 0.85
         bx, by, bw = T(tk)
@@ -1285,6 +1289,10 @@ def paint(c, B, cov, res, path_out):
         cbx, cby, cbw = T(np.clip((X - bx0) / (bx1 - bx0), 0, 1))
         top_m = (0.0012, 0.0004) if LK is None else (0.0006, 0.0)       # photo likeness: registered to the card band (no band above it)
         inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + top_m[0], cbw - top_m[1] - 0.0004, Y - cby) * ss(bx0 - 0.002, bx0 + 0.002, X) * ss(bx1 + 0.002, bx1 - 0.001, X)
+        if LK is not None:       # fix round 1: the top edge feathered over ~1.6 mm along a broken line (a solid band read as a marker stroke)
+            brk = 0.0007 * (vnoise(pos[idx] * np.array([1.0, 0.3, 1.0]), 900, seed + 6.1) - 0.5)
+            inb = (ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0001 + brk, cbw - 0.0017 + brk, Y - cby)
+                   * ss(bx0 - 0.0005, bx0 + 0.004, X) * ss(bx1 + 0.002, bx1 - 0.003, X))
         alpha = np.clip(np.maximum(alpha, 0.0) + ((0.17 if LK is None else 0.4) if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
         m = np.zeros(len(px))
         m[idx] = alpha
@@ -1294,8 +1302,10 @@ def paint(c, B, cov, res, path_out):
     if LK is not None and c.get("beard", 0.0) >= 0.5:
         # photo likeness: the measured beard (density map): a dark painted under-layer below the beard cards, a stubble
         # shadow where it thins out (look2 grows the cards from the same map)
-        ab, brgb, _bd = likeness_look.beard_paint(c, B, LK, pos, fld(B.hw), lipm, isface, seed, sys.modules[__name__])
+        ab, brgb, _bd = likeness_look.beard_paint(c, B, LK, pos, fld(B.hw), lipm, isface, seed, sys.modules[__name__], lipgeo=(d, hu, t, lipfront))
         col = col * (1 - ab[:, None]) + brgb * ab[:, None]
+        if c.get("moHang"):      # (the moustache hanging over the upper lip is hair: no lip gloss or lip tint under it)
+            lipm = lipm * (1 - ss(0.5, 0.9, _bd) * (lipm > 0))
         stub = 0.0
     if stub:
         ax_ = np.abs(pos[:, 0])
@@ -1493,7 +1503,7 @@ def paint(c, B, cov, res, path_out):
         Image.fromarray((np.clip(nimg, 0, 1) * 255).astype(np.uint8)).save(out["normal"], quality=c.get("normalQ", 90))
         if skin_r is not None:     # v2: roughness (G) and cavity occlusion (R), half resolution
             rimg = np.full((res, res), 0.82)
-            rr = np.where(taken, 0.82, look2.lip_rough(skin_r, lipm))
+            rr = np.where(taken, 0.82, look2.lip_rough(skin_r, lipm, c.get("lipGloss", 1.0)))
             if hcov is not None:
                 rr = np.where(~taken & (hcov >= 0), 0.5, rr)
             rimg[py, px] = rr
@@ -2548,6 +2558,10 @@ def build(c, tex_dir):
     CUR_B[0] = B
     if look2.ON:
         look2.add_bones(arm, B, B._eyes)
+        if c.get("skinScatter") is not None:      # fix round 1: the run-time skin scatter tint of this build (skin.js azLook.y)
+            _m = json.loads(arm["look"])
+            _m["skinScatter"] = float(c["skinScatter"])
+            arm["look"] = json.dumps(_m)
     for o in parts + cloth + gx + ([gh] if gh else []):
         apply_weights(o, arm)
     if look2.ON and budget(c) >= 16000 and os.environ.get("HEAD_SUBDIV", "1") != "0":

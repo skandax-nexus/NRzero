@@ -134,7 +134,7 @@ function lightsChunk() {
   s = s.replace(a, `${a}
     float azNL = dot( geometryNormal, directLight.direction );
     float azW = azSkin * AZ_WRAP + azHair * 0.2 + azCloth * 0.08;
-    vec3 azIrr = ( vec3( dotNL ) + ( saturate( ( azNL + azW ) / ( 1.0 + azW ) ) - dotNL ) * mix( vec3( 1.0 ), vec3( 1.0, 0.42, 0.3 ), azSkin ) ) * directLight.color;
+    vec3 azIrr = ( vec3( dotNL ) + ( saturate( ( azNL + azW ) / ( 1.0 + azW ) ) - dotNL ) * mix( vec3( 1.0 ), vec3( 1.0, 0.42, 0.3 ), azSkin * azLook.y ) ) * directLight.color;
     // thin skin (ears, nostril wings, lids) lets red light through from behind (medium / high: per-light cost)
     #if AZ_TIER > 0
     if ( azExtra > 0.5 && azThin > 0.01 ) {
@@ -461,7 +461,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	  reflectedLight.indirectDiffuse *= azAo; reflectedLight.indirectSpecular *= azAo * azAo * ( 1.0 - 0.55 * azHair );
 	#ifdef AZ_SKIN
 	  // light that travelled under the skin comes out redder (multiple scattering): a small red shift of the ambient
-	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.04, 0.98, 0.95 ), azSkin * ( 1.0 - azEyeK ) );
+	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.04, 0.98, 0.95 ), azSkin * ( 1.0 - azEyeK ) * azLook.y );
 	#endif
 	  float azF = pow( 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ), 4.0 );
 	#ifdef AZ_LIGHT
@@ -585,6 +585,11 @@ function request(mesh, id) {
 // tools and tests: resolves when every template analysis has finished
 look.idle = () => (jobs.size ? new Promise(ok => look.waitIdle.push(ok)) : Promise.resolve());
 
+function skinScatter(h) {
+  let m = null;
+  h.root.traverse(o => { if (!m && o.userData && o.userData.look) m = o.userData.look; });
+  try { const v = m ? JSON.parse(m).skinScatter : undefined; return typeof v === 'number' ? Math.max(0, Math.min(1, v)) : 1; } catch { return 1; }
+}
 function applyLook(h, seed, atlas, main, info) {
   if (h.face) return h;
   const E = info.eyes, Fc = info.face;
@@ -593,7 +598,9 @@ function applyLook(h, seed, atlas, main, info) {
     azEye: { value: new THREE.Vector4(0, 0, 0, 0) },
     azEyeC: { value: E ? new THREE.Vector4(E.cu, E.cv, E.R, E.cs) : new THREE.Vector4(0, 0, 0, 0) },
     azLid: { value: new THREE.Vector4(E ? E.U : 0.12, E ? E.Lo : -0.22, 0, 0) },
-    azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, 0, 0, 0) },
+    // y: the skin scatter tint (the red of the wrapped terminator and of the ambient; 1 = the cast default, a build's
+    // look metadata `skinScatter` lowers it: Kai's dark warm skin read orange under the sodium key)
+    azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, skinScatter(h), 0, 0) },
     azHairTint: { value: new THREE.Vector3(...Fc.hair) },
     azLidSkin: { value: new THREE.Vector3(...(E && E.lidC ? E.lidC : [0.4, 0.25, 0.2])) },
     azLashC: { value: new THREE.Vector3(...(E && E.lashC ? E.lashC : [0.03, 0.02, 0.02])) },

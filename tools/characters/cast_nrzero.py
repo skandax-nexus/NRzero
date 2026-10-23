@@ -74,7 +74,7 @@ CAST = [
          # sleeves: the player reads apart from the black 2049 crowd on a rainy street
          wear=[("mock_neck", "2a2c2f"), ("techshell", "34454f", dict(det_add=["led:zip", "led:collar_edge", "led:sleeve"])), ("hood_down", None), ("chest_harness", "23272c"),
                ("tech_trousers", "2e3237"), ("tech_boots", "1b1611", dict(sole="6a6e74")), ("gloves", "1d1a17", dict(side="R", fingerless=True))],
-         gear=["chronolith_band", ("ar_monocle", dict(idle=0.12)), "earpiece", "belt_scanner", "shoulder_lamp", "echo_emitter", "harness_pouches", "chest_slate_pocket"]),
+         gear=["chronolith_band", ("ar_monocle", dict(idle=0.0, parked=True)), "earpiece", "belt_scanner", "shoulder_lamp", "echo_emitter", "harness_pouches", "chest_slate_pocket"]),
     # ---- Mira Varen: armoured softshell with gorget and shoulder caps; carries nothing ----
     dict(id="mira", group="Principals", era="2049", role="Mira Varen, the impossible sister", years=29, metres=1.69,
          macro=F(muscle=0.52, weight=0.4, caucasian=0.9, asian=0.1),
@@ -534,7 +534,13 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   "likeness", "likenessScale", "skinExact", "lipScale", "greyStrands", "hairVolume",
                   # likeness:final: the painted under-eye / upper-lid shade strength, the faint spots' strength, the
                   # T-zone's gloss factor (1 = the default oily T-zone) and a matte offset on the face's roughness
-                  "underEye", "lidShade", "faintSpots", "tzoneGloss", "skinMatte")
+                  "underEye", "lidShade", "faintSpots", "tzoneGloss", "skinMatte",
+                  # fix round 1 (docs/CHARACTER_LOOK.md "Kai's face"): the brow's shape, the iris, the under-eye's
+                  # mauve-grey, the lips' border, lines, gloss, contact line and upper-lip shade, the beard's painted mat,
+                  # the moustache's hang over the upper lip, the warm thin beard, a matte nose tip, softer moles and the
+                  # run-time skin scatter tint
+                  "browShape", "irisWarm", "irisGain", "underEyeDesat", "lipEdge", "lipLines", "lipGloss", "lipParted",
+                  "upperLipDark", "beardPaint", "moHang", "beardWarm", "noseMatte", "moleSoft", "skinScatter")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 

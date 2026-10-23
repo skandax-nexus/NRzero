@@ -32,6 +32,9 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "faces_cand
 FROWN = (2.6, 1.4)           # mm the brows are lifted to undo the photo's frown (medial, lateral)
 FILL = 0.62                  # density floor inside the beard's closed outline (likeness:final)
 MOUSTACHE = 0.97             # moustache density, philtrum included (likeness:final)
+UNDERLIP = 0.5               # fix round 1: the lighter zone under the lower lip (hair with skin showing through)
+SOUL = 0.72                  # fix round 1: the narrow darker strip down the middle of it
+HORSESHOE = 5.0              # fix round 1: mm the moustache's down-turned ends run further down past the mouth corners
 
 
 def main():
@@ -91,7 +94,15 @@ def main():
     sm = lambda e0, e1, v: np.clip((v - e0) / (e1 - e0), 0, 1) ** 2 * (3 - 2 * np.clip((v - e0) / (e1 - e0), 0, 1))
     mo = sm(sn_y + 1.0, sn_y - 2.5, Y) * sm(ls_y - 3.0, ls_y + 0.5, Y) * sm(chx + 7.0, chx + 2.0, ax_)
     # the moustache's lower edge follows the lip line out to the corners and turns down there
-    drop = sm(chx - 6.0, chx - 1.0, ax_) * sm(chx + 11.0, chx + 6.0, ax_) * sm(ls_y + 0.5, ls_y - 3.0, Y) * sm(sto_y - 34.0, sto_y - 26.0, Y)
+    drop = (sm(chx - 6.0, chx - 1.0, ax_) * sm(chx + 11.0, chx + 6.0, ax_) * sm(ls_y + 0.5, ls_y - 3.0, Y)
+            * sm(sto_y - 34.0 - HORSESHOE, sto_y - 26.0 - HORSESHOE, Y))
+    # fix round 1: under the lower lip, between the horseshoe's arms and above the dense bottom rim of the chin, his
+    # beard is lighter and sparser (skin shows through), with a narrow darker strip down the middle; the densest part is
+    # the bottom edge (kept: the rim rows below Pg + 4 mm are untouched)
+    li_y, pg_y = F["Li"][1], F["Pg"][1]
+    ul = sm(li_y + 1.0, li_y - 3.0, Y) * sm(pg_y + 2.0, pg_y + 8.0, Y) * sm(chx - 2.0, chx - 7.0, ax_)
+    cap = UNDERLIP + (SOUL - UNDERLIP) * sm(5.0, 2.5, ax_)
+    g = np.where(ul > 0, g * (1 - ul) + np.minimum(g, cap) * ul, g)
     g = np.maximum(g, MOUSTACHE * mo)
     g = np.maximum(g, 0.92 * drop)
     g = gaussian_filter(g, 0.6)

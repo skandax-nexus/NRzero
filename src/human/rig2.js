@@ -22,7 +22,7 @@ export const rig2 = { stats: { templates: 0, persons: 0, cards: 0 }, off: OFF, c
 
 // card distance limits (m) per tier: beyond them the hair volume alone reads the same
 const CARD_FAR = [9, 16, 26];
-// the soft fringe pass (two-pass hair) within these distances (m) per tier
+// the soft (blended) card pass within these distances (m) per tier; beyond them the dithered pass
 const SOFT_FAR = [4.5, 8, 14];
 
 // ------------------------------------------------------------------------------------------------------------------
@@ -30,16 +30,19 @@ const SOFT_FAR = [4.5, 8, 14];
 // ------------------------------------------------------------------------------------------------------------------
 const cardMats = new Map();
 // pass: 0 = one pass, coverage resolved by a stable 4x4 ordered dither (far people, ?look=nosofthair);
-//       1 = the opaque core of the strands (coverage >= AZC_CORE, writes depth);
-//       2 = the soft fringe around it (coverage below the core's threshold, alpha-blended over the core and whatever is
-//           behind, no depth write): smooth strand edges and tips without MSAA, no stipple, no sawtooth.
+//       3 = one blended pass (Kai fix round 1; it replaces the earlier core + soft fringe pair, which drew the card mesh
+//           three times: the core, then the transparent DoubleSide fringe as back and front passes): strand cores
+//           opaque, the fringe below AZC_CORE alpha-blended, depth written, single-sided draw of both faces
+//           (forceSinglePass). The template's card triangles are sorted inside-out (prepareTemplate), so the outer
+//           strands blend over the inner ones within the one draw call: smooth strand edges and tips without MSAA.
 const AZC_CORE = 0.62;
+const AZC_MIN = 0.05;      // the blended pass drops coverage below this (it would only block later strands' depth)
 function cardMaterial(src, tier, pass = 0) {
   const k = (src.map ? src.map.uuid : 'x') + '|' + tier + '|' + pass;
   let m = cardMats.get(k);
   if (m) return m;
-  m = new THREE.MeshStandardMaterial({ map: src.map || null, color: 0xffffff, roughness: 0.55, metalness: 0, side: THREE.DoubleSide, alphaTest: pass === 2 ? 0 : 0.5, envMapIntensity: 0.3 });
-  if (pass === 2) { m.transparent = true; m.depthWrite = false; m.alphaTest = 0; }
+  m = new THREE.MeshStandardMaterial({ map: src.map || null, color: 0xffffff, roughness: 0.55, metalness: 0, side: THREE.DoubleSide, alphaTest: pass === 3 ? 0 : 0.5, envMapIntensity: 0.3 });
+  if (pass === 3) { m.transparent = true; m.depthWrite = true; m.alphaTest = 0; m.forceSinglePass = true; }
   m.userData = { ...src.userData, slot: 'hair', azCards: true, azPass: pass };
   m.name = 'az_hair_cards' + (pass ? '_' + pass : '');
   m.customProgramCacheKey = () => 'azcards' + tier + '_' + pass;
@@ -71,12 +74,9 @@ function cardMaterial(src, tier, pass = 0) {
 	  vec2 azDx = dFdx( vMapUv * azSz ), azDy = dFdy( vMapUv * azSz );
 	  float azMip = max( 0.0, 0.5 * log2( max( dot( azDx, azDx ), dot( azDy, azDy ) ) ) );
 	  float azA = saturate( azT.a * ( 1.0 + 0.22 * azMip ) );
-	#if AZC_PASS == 1
-	  if ( azA < ${AZC_CORE.toFixed(2)} ) discard;
-	  diffuseColor.a = 1.0;
-	#elif AZC_PASS == 2
-	  if ( azA >= ${AZC_CORE.toFixed(2)} || azA < 0.03 ) discard;
-	  diffuseColor.a = smoothstep( 0.03, ${AZC_CORE.toFixed(2)}, azA );
+	#if AZC_PASS == 3
+	  if ( azA < ${AZC_MIN.toFixed(2)} ) discard;
+	  diffuseColor.a = smoothstep( ${AZC_MIN.toFixed(2)}, ${AZC_CORE.toFixed(2)}, azA );
 	#else
 	  ivec2 azP = ivec2( gl_FragCoord.xy ) & 3;
 	  int azI = azP.x + azP.y * 4;
@@ -174,12 +174,31 @@ export function prepareTemplate(t) {
     const g = cards.geometry;
     rename(g, '_hcol', 'azHCol'); rename(g, '_htan', 'azHTan');
     const lo = attr(g, '_hlo');
-    if (g.index && lo) {
-      const I = g.index.array, n = I.length / 3, A = [], B = [];
-      for (let i = 0; i < n; i++) (lo.getX(I[i * 3]) > 0.5 ? A : B).push(I[i * 3], I[i * 3 + 1], I[i * 3 + 2]);
-      const out = new (I.constructor)(I.length); out.set(A, 0); out.set(B, A.length);
+    if (g.index) {
+      // the low-tier set first (its draw range) and, for the one blended pass, every triangle sorted inside-out by its
+      // distance from the head (the outer strands are drawn last and blend over the inner ones in the same draw call).
+      // Where only the low set is drawn (gfx=low, the phone build) it is sorted on its own; elsewhere all of it.
+      const I = g.index.array, n = I.length / 3, P = g.attributes.position;
+      const lowOnly = tierName() === 'low' || t.root.userData.castTier === 'phone';
+      if (!g.boundingBox) g.computeBoundingBox();
+      const bb = g.boundingBox, mid = (bb.min.y + bb.max.y) / 2;
+      // the head's centre: the middle of the upper half of the cards (scalp, brows, the top of the beard)
+      const ub = new THREE.Box3();
+      for (let i = 0; i < P.count; i += 3) { _v.fromBufferAttribute(P, i); if (_v.y > mid) ub.expandByPoint(_v); }
+      const c = ub.isEmpty() ? bb.getCenter(new THREE.Vector3()) : ub.getCenter(new THREE.Vector3());
+      const dist = new Float32Array(n), A = [], B = [];
+      for (let i = 0; i < n; i++) {
+        let d = 0;
+        for (let k = 0; k < 3; k++) { _v.fromBufferAttribute(P, I[i * 3 + k]); d += _v.distanceTo(c); }
+        dist[i] = d;
+        (lo && lo.getX(I[i * 3]) > 0.5 ? A : B).push(i);
+      }
+      const byD = (a, b) => dist[a] - dist[b];
+      const order = lowOnly || !lo ? A.sort(byD).concat(B.sort(byD)) : A.concat(B).sort(byD);
+      const out = new (I.constructor)(I.length);
+      order.forEach((tI, j) => { out[j * 3] = I[tI * 3]; out[j * 3 + 1] = I[tI * 3 + 1]; out[j * 3 + 2] = I[tI * 3 + 2]; });
       g.setIndex(new THREE.BufferAttribute(out, 1));
-      V.loCount = A.length;
+      V.loCount = lo && lowOnly ? A.length * 3 : 0;
     }
     V.fullCount = g.index ? g.index.count : g.attributes.position.count;
     if (!g.attributes.azHCol) g.setAttribute('azHCol', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(0.05), 3));
@@ -269,31 +288,23 @@ export function attach(h, t) {
     h.root.traverse(o => { if (o.isSkinnedMesh && o.name === V.cardName) cm = o; if (o.isSkinnedMesh && V.main && o.name === V.main) mm = o; });
     if (cm) {
       const src = [].concat(cm.material)[0];
-      R.cardMat = { dither: cardMaterial(src, tier, 0), core: cardMaterial(src, tier, 1), soft: cardMaterial(src, tier, 2) };
+      R.cardMat = { dither: cardMaterial(src, tier, 0), soft: OFF.has('softhair') ? null : cardMaterial(src, tier, 3) };
       cm.material = R.cardMat.dither;
-      // the phone build (cast3d.js castTier: gfx=low and phones) draws the low card set and casts no card shadow
+      // one draw call for the cards on every tier, and none in the shadow map: the hair volume under them casts the
+      // hair's shadow (card shadows drew the card mesh again and laid hard strand slashes over the face). The phone
+      // build (cast3d.js castTier: gfx=low and phones) and gfx=low draw the low card set.
       const phoneBuild = t.root.userData.castTier === 'phone';
-      cm.castShadow = tier > 0 && !phoneBuild; cm.frustumCulled = false;
+      cm.castShadow = false; cm.frustumCulled = false;
       cm.geometry.setDrawRange(0, (tier === 0 || phoneBuild) && V.loCount ? V.loCount : Infinity);
       if (V.cardSprings && mm && mm.skeleton.bones.length > cm.skeleton.bones.length) {
         const n0 = cm.skeleton.bones.length, extra = mm.skeleton.bones.slice(n0);
         const inv = cm.skeleton.boneInverses.concat(mm.skeleton.boneInverses.slice(n0).map(m => m.clone().multiply(V.springFix)));
         cm.bind(new THREE.Skeleton(cm.skeleton.bones.concat(extra), inv), cm.bindMatrix);
       }
-      // the soft fringe (after the spring re-bind: it shares the final skeleton): a second draw of the same cards (same geometry and skeleton), for people near the camera
-      if (!OFF.has('softhair')) {
-        const sm = new THREE.SkinnedMesh(cm.geometry, R.cardMat.soft);
-        sm.name = cm.name + '_soft'; sm.frustumCulled = false; sm.castShadow = false; sm.receiveShadow = cm.receiveShadow;
-        sm.position.copy(cm.position); sm.quaternion.copy(cm.quaternion); sm.scale.copy(cm.scale);
-        sm.bindMode = cm.bindMode; sm.bind(cm.skeleton, cm.bindMatrix);
-        sm.visible = false; sm.userData = { ...cm.userData, azSoft: true };
-        // transparent objects are depth-sorted by their bounding sphere: the cards' rest-pose sphere (a skinned
-        // mesh would otherwise skin every vertex once on the CPU to find it)
-        if (!cm.geometry.boundingSphere) cm.geometry.computeBoundingSphere();
-        sm.boundingSphere = cm.geometry.boundingSphere.clone();
-        cm.parent.add(sm);
-        R.soft = sm;
-      }
+      // transparent objects are depth-sorted by their bounding sphere: the cards' rest-pose sphere (a skinned mesh
+      // would otherwise skin every vertex once on the CPU to find it)
+      if (!cm.geometry.boundingSphere) cm.geometry.computeBoundingSphere();
+      cm.boundingSphere = cm.geometry.boundingSphere.clone();
       R.cards = cm;
       rig2.stats.cards++;
     }
@@ -372,14 +383,11 @@ export function attach(h, t) {
         h.root.getWorldPosition(_v);
         const d2 = _v.distanceToSquared(cam.position), far = CARD_FAR[tier];
         on = d2 < far * far;
-        soft = on && !!R.soft && d2 < SOFT_FAR[tier] * SOFT_FAR[tier];
+        soft = on && !!R.cardMat.soft && d2 < SOFT_FAR[tier] * SOFT_FAR[tier];
       }
       if (R.cards.visible !== on) R.cards.visible = on;
-      if (R.soft) {
-        if (R.soft.visible !== soft) R.soft.visible = soft;
-        const want = soft ? R.cardMat.core : R.cardMat.dither;
-        if (R.cards.material !== want) R.cards.material = want;
-      }
+      const want = soft ? R.cardMat.soft : R.cardMat.dither;
+      if (R.cards.material !== want) R.cards.material = want;
     }
   };
   h.rig2 = R;
