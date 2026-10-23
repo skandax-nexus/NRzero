@@ -227,7 +227,7 @@ export default {
     });
     // local-state objects and people; far zones hide
     const ZC = { hall: [0, 62], avenue: [0, 28], plaza: [0, -3], settle: [-40, -5], future: [42, -6], lab: [0, -34], chron: [0, -76] };
-    const ZR = { hall: 48, avenue: 52, plaza: 50, settle: 50, future: 52, lab: 44, chron: 70 };   // hide radius per zone (camera to centre)
+    const ZR = { hall: 40, avenue: 52, plaza: 42, settle: 50, future: 52, lab: 44, chron: 70 };   // hide radius per zone (camera to centre)
     const people = [];   // { ch, zone, s }
     const refreshVis = () => {
       const cam = game.cine ? game.engine.camera.position : pl.pos;
@@ -280,11 +280,11 @@ export default {
     // crowds (lod): frozen commuters of 08:14 (2049), working settlers, 2196 survivors at the camp
     const frozenAt = (ch, pose) => { ch.pose = pose; let t = 0; const off = game.onUpdate(dt => { t += dt; if (t > 1.4) { ch.frozen = true; off(); } }); };
     [[-8.4, 44, PI, 'look'], [8.6, 40.5, PI * 1.1, 'look'], [-8.2, 31.5, 0.2, 'look'], [8.4, 33.5, PI, 'nod'], [-2.4, 30.4, PI / 2, 'look'], [-8.8, 26.5, PI * 0.5, 'look']].forEach(([x, z, ry, pose], i) => {
-      const c = game.ambient({ ...COMMUTERS[i % COMMUTERS.length], lod: true, seed: 2330 + i }, x, x > 7 || x < -7 ? 0.15 : 0, z, ry); frozenAt(c, pose); people.push({ ch: c, zone: 'avenue', s: ['a49'] });
+      const c = game.ambient({ ...COMMUTERS[i % COMMUTERS.length], lod: true, shadows: false, seed: 2330 + i }, x, x > 7 || x < -7 ? 0.15 : 0, z, ry); frozenAt(c, pose); people.push({ ch: c, zone: 'avenue', s: ['a49'] });
     });
-    [[3.95, 12.2, PI / 2], [3.95, 16.4, PI / 2], [5.6, 14.0, -PI / 2]].forEach(([x, z, ry], i) => { const c = game.ambient({ ...COMMUTERS[(i + 2) % COMMUTERS.length], lod: true, seed: 2340 + i }, x, 0.45, z, ry); frozenAt(c, 'sit'); c.noCollide = true; people.push({ ch: c, zone: 'avenue', s: ['a49'] }); });
-    [[-23.5, 4.5, 'work'], [-33.5, -12, 'work'], [-28.6, 6.8, 'look'], [-24.4, -12.6, 'sit']].forEach(([x, z, pose], i) => { const c = game.ambient({ ...SETTLERS[i], lod: true, seed: 2350 + i }, x, 0, z, (i * 1.9) % 6.28); c.pose = pose; people.push({ ch: c, zone: 'settle' }); });
-    [[53.6, 6, -14.6, 'work'], [61, 6, -2.2, 'sit']].forEach(([x, y, z, pose], i) => { const c = game.ambient({ ...SURVIVORS[i], lod: true, seed: 2360 + i }, x, y, z, i ? PI : 0.4); c.pose = pose; people.push({ ch: c, zone: 'future', s: ['f96'] }); });
+    [[3.95, 12.2, PI / 2], [3.95, 16.4, PI / 2], [5.6, 14.0, -PI / 2]].forEach(([x, z, ry], i) => { const c = game.ambient({ ...COMMUTERS[(i + 2) % COMMUTERS.length], lod: true, shadows: false, seed: 2340 + i }, x, 0.45, z, ry); frozenAt(c, 'sit'); c.noCollide = true; people.push({ ch: c, zone: 'avenue', s: ['a49'] }); });
+    [[-23.5, 4.5, 'work'], [-33.5, -12, 'work'], [-28.6, 6.8, 'look'], [-24.4, -12.6, 'sit']].forEach(([x, z, pose], i) => { const c = game.ambient({ ...SETTLERS[i], lod: true, shadows: false, seed: 2350 + i }, x, 0, z, (i * 1.9) % 6.28); c.pose = pose; people.push({ ch: c, zone: 'settle' }); });
+    [[53.6, 6, -14.6, 'work'], [61, 6, -2.2, 'sit']].forEach(([x, y, z, pose], i) => { const c = game.ambient({ ...SURVIVORS[i], lod: true, shadows: false, seed: 2360 + i }, x, y, z, i ? PI : 0.4); c.pose = pose; people.push({ ch: c, zone: 'future', s: ['f96'] }); });
 
     // =================================================================================================================
     // Threads, seals, collectibles
@@ -921,8 +921,8 @@ export default {
       T.configure([{ id: 'epi', key: '1', name: ENDS[k].name, year: k === 'C' ? 'A WORLD WITHOUT KAI' : 'AFTER ZERO', glyph: '◯', color: '#ffd27a' }], 'epi'); T.unlocked = false;
       ui.show('hud', false); ui.letterbox(true);
       const E = buildEpilogue(game, sc, k); game.onUpdate((dt, t) => E.update(dt, t));
-      let env2 = null; try { env2 = RZ.skyEnvironment(renderer, sc, { preset: k === 'B' ? 'sunset' : k === 'C' ? 'golden-hour' : 'day', elevation: k === 'C' ? 6 : 30, azimuth: 80, cover: k === 'B' ? 0.6 : 0.3, apply: true }); } catch (err) { console.warn('m23 epi sky', err); }
-      const h2 = new THREE.HemisphereLight(0xf0f4ff, 0x3a3a38, 0.65); sc.add(h2);
+      let env2 = null; try { env2 = RZ.skyEnvironment(renderer, sc, { preset: k === 'B' ? 'sunset' : k === 'C' ? 'golden-hour' : 'day', elevation: k === 'C' ? 16 : 30, azimuth: 80, cover: k === 'B' ? 0.6 : 0.3, apply: true }); } catch (err) { console.warn('m23 epi sky', err); }
+      const h2 = new THREE.HemisphereLight(0xf0f4ff, 0x4a4640, k === 'C' ? 0.9 : 0.65); sc.add(h2);
       const s2 = new THREE.DirectionalLight(k === 'B' ? 0xff9a6a : 0xfff0d8, 2.2); s2.castShadow = true; s2.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024);
       Object.assign(s2.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 140 }); s2.position.set(30, 40, 20); s2.target.position.set(0, 0, -4); sc.add(s2, s2.target);
       if (env2) sc.environmentIntensity = 0.7;
@@ -966,12 +966,12 @@ export default {
       } else {
         pl.place(0, 0, 25, PI); pl.char.root.visible = false;
         const m3 = game.actor('m23mira', null, 9.6, 0.5, -8, -PI / 2); m3.pose = null; S.byId.m23mira = m3;
-        await game.shot([2, 1.6, -2], [9.6, 1.5, -8], 0.01, { fov: 38 });
+        await game.shot([2.6, 1.55, -0.6], [9.4, 1.5, -8], 0.01, { fov: 44 });
         await ui.fade(0, 2600);
         await ui.chapterCard('ENDING C', 'Afterzero', 'Calder Row · a world where Kai was never born', 4000);
         await walkTo(m3, [[8.8, 0.15, -8], [7.2, 0.15, -6], [5.4, 0, -2]], 1.1);
         await cap('Mira Varen, thirty-three, walked to work the way she always did. She had never had a brother.');
-        m3.pose = 'look'; await game.shot([3.4, 1.6, 1.4], [5.4, 1.55, -2], 1.8, { fov: 34 });
+        m3.pose = 'look'; await game.shot([3.2, 1.6, 1.6], [5.4, 1.55, -2], 1.8, { fov: 34 });
         audio.silence?.(1.6);
         await game.say('m23whisper', 'Live.');
         await game.wait(0.8);

@@ -192,7 +192,7 @@ export function clockTex(key, opts = {}) {   // the stopped clock with no hands 
     g.fillStyle = opts.bg || '#ece4d0'; g.beginPath(); g.arc(w / 2, w / 2, 124, 0, PI * 2); g.fill();
     g.strokeStyle = '#1a1a1a'; g.lineWidth = 7; g.stroke();
     for (let k = 0; k < 60; k++) { const a = k / 60 * PI * 2, l = k % 5 ? 7 : 18; g.lineWidth = k % 5 ? 2 : 6; g.beginPath(); g.moveTo(128 + Math.sin(a) * (110 - l), 128 - Math.cos(a) * (110 - l)); g.lineTo(128 + Math.sin(a) * 110, 128 - Math.cos(a) * 110); g.stroke(); }
-    g.fillStyle = '#1a1a1a'; g.font = `600 15px ${SERIF}`; g.textAlign = 'center'; g.fillText(opts.label || 'HELIX · 2026', 128, 88);
+    g.fillStyle = '#1a1a1a'; g.font = `600 15px ${SERIF}`; g.textAlign = 'center'; g.fillText(opts.label ?? 'HELIX · 2026', 128, 88);
     if (opts.hands) { const [h, m] = opts.hands; const hand = (a, l, wd) => { g.lineWidth = wd; g.lineCap = 'round'; g.beginPath(); g.moveTo(128, 128); g.lineTo(128 + Math.sin(a) * l, 128 - Math.cos(a) * l); g.stroke(); };
       hand((h + m / 60) / 12 * PI * 2, 56, 9); hand(m / 60 * PI * 2, 86, 5); }
     g.beginPath(); g.arc(128, 128, 6, 0, PI * 2); g.fill();
@@ -767,7 +767,7 @@ export function buildEpilogue(game, scene, variant) {
   }
   if (variant === 'A') { try { add(RZ.forest({ species: 'broadleaf', placements: [{ x: 8, z: -12, y: 0.15, scale: 0.7 }, { x: -8, z: 20, y: 0.15, scale: 0.75 }], heightAt: () => 0.15, impostors: false, variants: 2, seed: 2393 })); } catch (e) { void e; } }
   if (variant === 'C') {
-    plane(TEX.calder(), 1.4, 0.5, 6.4, 3.0, -6.2, -PI / 2, 0.6);
+    plane(TEX.calder(), 1.4, 0.5, 9.9, 3.4, -4.2, -PI / 2, 0.6);
     // the door Mira comes out of: stoop, lit fanlight
     solid(M.stone, 9.2, 0.15, -9.2, 10, 0.5, -6.8); bat().box(glowMat(0xffd8a0, 1.6), 9.98, 2.8, -8.6, 10.02, 3.2, -7.4);
     try { add(RZ.forest({ species: 'broadleaf', placements: [{ x: 7.8, z: -14, y: 0.15, scale: 0.8 }, { x: 7.8, z: 4, y: 0.15, scale: 0.7 }], heightAt: () => 0.15, impostors: false, variants: 2, seed: 2394 })); } catch (e) { void e; }
