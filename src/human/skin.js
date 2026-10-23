@@ -329,8 +329,14 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 		#endif
 			float azRn = fract( sin( azId * 12.9898 + 78.233 ) * 43758.5453 );
 			float azCk = 1.0 - smoothstep( 0.35, 0.9, fwidth( azSx ) );
+		#ifdef AZ_CARDS
+			// under strand cards the volume is the dark under-layer: finer, fainter streaks (no barcode between cards)
+			azTilt = ( azFr - 0.5 ) * 0.5 * azCk;
+			diffuseColor.rgb *= 1.0 + ( azRn - 0.5 ) * 0.08 * azCk;
+		#else
 			azTilt = ( azFr - 0.5 ) * 1.1 * azCk;
 			diffuseColor.rgb *= 1.0 + ( azRn - 0.5 ) * 0.22 * azCk;
+		#endif
 			// frayed tips: near the shell's edge each clump ends at its own length and tapers to a point
 			float azBd = vAzFace.x * 0.03, azW = abs( azFr - 0.5 ) * 2.0;
 		#ifdef AZ_CARDS
@@ -347,6 +353,10 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	#endif
 		diffuseColor.rgb *= 1.0 + 0.16 * azN * azHair;
 		diffuseColor.rgb *= mix( 1.0, mix( 0.74, 1.14, vAzHairT.w ), azHair );
+	#ifdef AZ_CARDS
+		// the gaps between cards read as depth (the inner hair in shade), with a duller sheen than the strands on top
+		diffuseColor.rgb *= mix( 1.0, 0.72, azHair ); azSparkle *= mix( 1.0, 0.45, azHair );
+	#endif
 	}`);
   // ---- roughness by region (skin, lips, nails, hair, cornea, tear line)
   F = F.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
@@ -359,7 +369,12 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	  azRs = 0.5;
 	#endif
 	  float azRg = azEyeK > 0.5 ? mix( 0.035, 0.02, azTear ) : 0.07;
-	  roughnessFactor = mix( mix( mix( roughnessFactor, azRs, azSkin ), 0.44, azHair ), azRg, azGloss ); }`);
+	#ifdef AZ_CARDS
+	  float azHairR = 0.6;      // the volume under strand cards: a duller under-layer (the cards carry the sheen)
+	#else
+	  float azHairR = 0.44;
+	#endif
+	  roughnessFactor = mix( mix( mix( roughnessFactor, azRs, azSkin ), azHairR, azHair ), azRg, azGloss ); }`);
   // ---- normals: pore / weave detail (tier-gated), wrinkle relief with age
   F = F.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 #if AZ_TIER > 0

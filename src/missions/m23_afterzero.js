@@ -916,14 +916,14 @@ export default {
     async function epilogue(k) {
       // a new small scene for each ending
       game.control = false;
-      const sc = game.newScene({ background: 0xc8d0d8, fog: [0xc8d0d8, 0.008], exposure: 1.0, bloom: 0.6, bloomThreshold: 0.85, envIntensity: 0.7, killY: -20 });
+      const sc = game.newScene({ background: 0xc8d0d8, fog: [0xc8d0d8, 0.008], exposure: k === 'A' ? 1.25 : k === 'C' ? 1.12 : 1.0, bloom: 0.6, bloomThreshold: 0.85, envIntensity: 0.7, killY: -20 });
       game.onUpdate(dt => RZ.update(dt));
       T.configure([{ id: 'epi', key: '1', name: ENDS[k].name, year: k === 'C' ? 'A WORLD WITHOUT KAI' : 'AFTER ZERO', glyph: '◯', color: '#ffd27a' }], 'epi'); T.unlocked = false;
       ui.show('hud', false); ui.letterbox(true);
       const E = buildEpilogue(game, sc, k); game.onUpdate((dt, t) => E.update(dt, t));
       let env2 = null; try { env2 = RZ.skyEnvironment(renderer, sc, { preset: k === 'B' ? 'sunset' : k === 'C' ? 'golden-hour' : 'day', elevation: k === 'C' ? 16 : 30, azimuth: 80, cover: k === 'B' ? 0.6 : 0.3, apply: true }); } catch (err) { console.warn('m23 epi sky', err); }
-      const h2 = new THREE.HemisphereLight(0xf0f4ff, 0x4a4640, k === 'C' ? 0.9 : 0.65); sc.add(h2);
-      const s2 = new THREE.DirectionalLight(k === 'B' ? 0xff9a6a : 0xfff0d8, 2.2); s2.castShadow = true; s2.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024);
+      const h2 = new THREE.HemisphereLight(0xf0f4ff, 0x4a4640, k === 'B' ? 0.65 : 0.95); sc.add(h2);
+      const s2 = new THREE.DirectionalLight(k === 'B' ? 0xff9a6a : 0xfff0d8, k === 'A' ? 3.0 : 2.4); s2.castShadow = true; s2.shadow.mapSize.set(low ? 512 : 1024, low ? 512 : 1024);
       Object.assign(s2.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 140 }); s2.position.set(30, 40, 20); s2.target.position.set(0, 0, -4); sc.add(s2, s2.target);
       if (env2) sc.environmentIntensity = 0.7;
       const beds = k === 'B' ? { wind: 0.06 } : { wind: 0.02, crowd: k === 'A' ? 0.04 : 0.01 }; audio.rain(0); audio.wind(beds.wind); audio.hum(0); audio.crowd?.(beds.crowd || 0);

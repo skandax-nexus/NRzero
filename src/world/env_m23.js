@@ -735,6 +735,11 @@ export function buildEpilogue(game, scene, variant) {
     const z0 = -40 + i * 17.5, z1 = z0 + 17.5;
     lots.push({ width: 17.5, depth: 14, position: [side * 17, 0, (z0 + z1) / 2], yaw: face === '+x' ? PI / 2 : -PI / 2, groundFloor: 4.2, height: variant === 'C' ? 12 + R() * 4 : 20 + R() * 20, seed: 2391 + i + (side > 0 ? 10 : 0), wall: variant === 'C' ? 'brick' : ['brick', 'panel', 'concrete', 'plaster'][i], faces: ['shop', 'windows', 'blank', 'windows'] });
   }
+  // the street does not end in the void: blocks close the vista north and south (frontages face the street)
+  for (let i = 0; i < 3; i++) {
+    lots.push({ width: 16, depth: 12, position: [-16 + i * 16, 0, -48], yaw: 0, groundFloor: 4.2, height: variant === 'C' ? 13 + R() * 4 : 24 + R() * 18, seed: 2380 + i, wall: variant === 'C' ? 'brick' : ['panel', 'concrete', 'brick'][i], faces: ['shop', 'windows', 'windows', 'blank'] });
+    lots.push({ width: 16, depth: 12, position: [-16 + i * 16, 0, 38], yaw: PI, groundFloor: 4.2, height: variant === 'C' ? 12 + R() * 4 : 20 + R() * 16, seed: 2385 + i, wall: variant === 'C' ? 'brick' : ['concrete', 'plaster', 'panel'][i], faces: ['shop', 'windows', 'windows', 'blank'] });
+  }
   try {
     if (variant === 'B') {
       const west = lots.filter(l => l.position[0] < 0), east = lots.filter(l => l.position[0] > 0);
@@ -745,7 +750,9 @@ export function buildEpilogue(game, scene, variant) {
   try {
     const k = streetKit({ era: '2049', seed: 2392 + variant.charCodeAt(0) });
     k.kerb([[-6, 30], [-6, -40]]).kerb([[6, -40], [6, 30]]).markings({ lanes: [{ from: [0, 30], to: [0, -40] }], crossings: [{ at: [0, 4], yaw: PI / 2, width: 11 }] })
-      .scatter('lamp', [[7.6, 28], [7.6, -38]], { spacing: 14, turn: -PI / 2, y: 0.15 }).shelter([-7.8, 0.15, -2], PI / 2);
+      .shelter([-7.8, 0.15, -2], PI / 2);
+    // lamps on the east pavement (in C they leave Mira's doorway and crossing clear)
+    for (const seg of variant === 'C' ? [[[7.6, 28], [7.6, 10]], [[7.6, -18], [7.6, -38]]] : [[[7.6, 28], [7.6, -38]]]) k.scatter('lamp', seg, { spacing: 14, turn: -PI / 2, y: 0.15 });
     if (variant !== 'B') k.car([-3.6, 0, 18, 0], 0).car([3.4, 0, -20, PI], PI).add('bin', [-7.6, 0.15, 10]);
     if (variant === 'B') k.add('barrier', [0, 0, 12], 0).add('barrier', [0, 0, -14], 0);
     add(k.build()); for (const c of k.colliders) box(c.min[0], c.min[1], c.min[2], c.max[0], c.max[1], c.max[2]);

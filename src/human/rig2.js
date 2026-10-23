@@ -64,7 +64,7 @@ function cardMaterial(src, tier, pass = 0) {
 	// root occlusion: the strands near the scalp sit under the others (uv v = 0 at the root)
 	azcRoot = mix( 0.55, 1.0, smoothstep( 0.0, 0.5, vMapUv.y ) );
 	diffuseColor.rgb = vHCol * ( 0.6 + 0.4 * azLum ) * ( 0.84 + 0.16 * azT.b ) * azcRoot;
-	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.35 + 1.1 * azT.g ) * azLum * azcRoot;
+	azcShift = ( azT.g - 0.5 ) * 0.12; azcSpark = ( 0.65 + 0.6 * azT.g ) * azLum * azcRoot;
 	{ vec2 azSz = vec2( textureSize( map, 0 ) );
 	  vec2 azDx = dFdx( vMapUv * azSz ), azDy = dFdy( vMapUv * azSz );
 	  float azMip = max( 0.0, 0.5 * log2( max( dot( azDx, azDx ), dot( azDy, azDy ) ) ) );
@@ -96,8 +96,9 @@ function cardMaterial(src, tier, pass = 0) {
     vec3 H = normalize( L + V );
     vec3 T1 = normalize( T + N * ( azcShift - 0.08 ) ), T2 = normalize( T + N * ( azcShift + 0.12 ) );
     float d1 = dot( T1, H ), d2 = dot( T2, H );
-    float s1 = pow( sqrt( max( 0.0, 1.0 - d1 * d1 ) ), 120.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - d2 * d2 ) ), 30.0 );
-    return vec3( s1 * 0.16 * azcSpark ) + col * s2 * 0.32 * azcSpark;
+    float s1 = pow( sqrt( max( 0.0, 1.0 - d1 * d1 ) ), 80.0 ), s2 = pow( sqrt( max( 0.0, 1.0 - d2 * d2 ) ), 26.0 );
+    // a coherent sheen band across the head (v6: sparse white flecks from a sharper, more random primary lobe)
+    return vec3( s1 * 0.2 * azcSpark ) + col * s2 * 0.34 * azcSpark;
   }
 ` + lp.replace(c, c + `
     irradiance = saturate( dot( geometryNormal, directLight.direction ) * 0.75 + 0.25 ) * directLight.color;`)
