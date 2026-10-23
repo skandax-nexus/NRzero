@@ -706,7 +706,8 @@ Below, `$M` stands for `/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-
   `jump_in_place_side.mp4`, `jump_sprint_side.mp4`.
 - `$M/fh` and `$M/fh3` (high tier): `cast_sheet.jpg` (six principals walked the way missions do it), `crowd_sheet.jpg`,
   `npc_witness_npc.mp4` and `witness_sheet.jpg` (the coat swinging), `npc_mira_npc.mp4`.
-- Mission 2 played through with the new motion (`tools/tests/m2.json`, no errors): `$M/play_m2`.
+- Missions 2 and 5 played through with the new motion as the default (`tools/tests/m2.json`, `m5.json`; both complete,
+  no page errors): `$M/play_m2`, `$M/play_m5`.
 
 New measuring tools: `tools/feel/author_clips.mjs` (writes `anims_extra.glb`), `tools/feel/motion_cost.mjs`,
 `tools/feel/motion_probe.mjs` (what a template's clips measure and the gait profile). `feelhelper.js` gained

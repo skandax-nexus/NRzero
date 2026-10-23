@@ -647,7 +647,7 @@ export default {
         try { lakeMira.setGhost(GHOST_MIRA); } catch (err) { void err; }
         let follow = false;
         game.onUpdate((dt) => {
-          if (!follow) return; const r = lakeMira.root, tx = pl.pos.x + 1.5, tz = pl.pos.z + 0.6;
+          if (!follow) return; const r = lakeMira.root, tx = pl.pos.x + 1.3, tz = pl.pos.z - 2.6;
           const dx = tx - r.position.x, dz = tz - r.position.z, d = Math.hypot(dx, dz);
           r.position.x += dx * Math.min(1, dt * 2); r.position.z += dz * Math.min(1, dt * 2); r.position.y = 2 * LAKE;
           r.rotation.set(0, 0, PI); if (d > 0.05) r.rotation.y = Math.atan2(dx, dz);
@@ -656,12 +656,15 @@ export default {
         game.onUpdate(() => {
           if (S.phase !== 'bridge' || S.busy || !game.control || ui.dlgActive) return;
           if (pl.pos.z < -3 && pl.pos.z > -16 && onDeck() && once('lakeMira')) side(async () => {
-            lakeMira.root.position.set(pl.pos.x + 1.5, 2 * LAKE, pl.pos.z + 0.6); lakeMira.root.visible = true; follow = true; audio.sfxPlay('anomaly');
+            lakeMira.root.position.set(pl.pos.x + 1.3, 2 * LAKE, pl.pos.z - 2.6); lakeMira.root.visible = true; follow = true; audio.sfxPlay('anomaly');
             await game.say('m19lake', 'Kai.');
+            // staged: look down through the still water at her, walking upside down on the bridge that is only there
+            cine(true); { const m = lakeMira.root.position; await game.shot([pl.pos.x - 0.8, 2.4, pl.pos.z + 1.8], [m.x, 2 * LAKE - 1.0, m.z], 1.4, { fov: 46 }); }
             await game.say('kai', 'Mira? Where are you?');
             await game.say('m19lake', 'Down here. Where the bridge is. Don\'t stop walking. You never liked heights.');
             await game.say('kai', 'I was seven.');
             await game.say('m19lake', 'You walked like Dad even then. Like the ground owed you something.');
+            cine(false);
           });
           if (pl.pos.z < -24 && pl.pos.z > -34 && pl.pos.y > -0.5 && follow && once('lakeMiraGo')) side(async () => {
             await game.say('m19lake', 'The rest of me is past the doors. Come and ask.');

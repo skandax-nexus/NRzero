@@ -370,7 +370,7 @@ export default {
       await ui.fade(1, 900);
       await newPlace({ background: 0xbcd0e0, fog: [0xd8dce0, 0.006], exposure: 1.0, bloom: 0.5, bloomThreshold: 0.9, envIntensity: 0.9, killY: -8 }, {
         id: 'calder', title: 'Calder Row · summer 2025',
-        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'KAI · CALDER ROW 2025', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'MIRA · CALDER ROW 2025', color: '#b9a4ff', glyph: '◑' }],
+        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'KAI · 2025', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'MIRA · 2025', color: '#b9a4ff', glyph: '◑' }],
         initial: 'kai',
         bounds: {
           kai: [[-7, -36.6, 7, 34], [7, -7, 14.7, 7], [-9.4, -44.4, -7, -36], [-26, -50, 26, -44.2], [-1.6, -80, 1.6, -36, -0.8]],
@@ -639,7 +639,7 @@ export default {
       await ui.fade(1, 900);
       await newPlace({ background: 0x1a1c22, fog: [0x2a2c34, 0.01], exposure: 1.0, bloom: 0.6, bloomThreshold: 0.85, envIntensity: 0.5, killY: -6, dark: false }, {
         id: 'hall', title: 'Test Hall Zero · 19.10.2026',
-        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'KAI · 19.10.2026', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'MIRA · 19.10.2026', color: '#b9a4ff', glyph: '◑' }],
+        holders: [{ id: 'kai', key: '1', name: 'AS KAI REMEMBERS', year: 'KAI · 2026', color: '#5fe6ff', glyph: '◐' }, { id: 'mira', key: '2', name: 'AS MIRA REMEMBERS', year: 'MIRA · 2026', color: '#b9a4ff', glyph: '◑' }],
         initial: 'kai', bounds: [[-16, -36, 16, 16]],
       });
       W = buildTestHall(game, game.scene, T); prevRoot.push(W.root);
@@ -825,7 +825,7 @@ export default {
       await ui.fade(1, 900);
       await newPlace({ background: 0x0a0c12, fog: [0x141a24, 0.016], exposure: 1.05, bloom: 0.8, bloomThreshold: 0.75, envIntensity: 0.45, killY: -6, dark: true }, {
         id: 'w0907', title: 'World 0907 · Rain City 2049',
-        holders: [{ id: 'mira', key: '1', name: 'AS SHE LIVED IT', year: 'HER LIFE · 14.11.2049', color: '#b9a4ff', glyph: '◑' }, { id: 'gap', key: '2', name: 'THE SHAPE KAI LEFT', year: 'THE GAP · NOBODY HERE', color: '#5fe6ff', glyph: '○' }],
+        holders: [{ id: 'mira', key: '1', name: 'AS SHE LIVED IT', year: 'HER LIFE', color: '#b9a4ff', glyph: '◑' }, { id: 'gap', key: '2', name: 'THE SHAPE KAI LEFT', year: 'THE GAP', color: '#5fe6ff', glyph: '○' }],
         initial: 'mira', bounds: [[-8.5, -40.4, 8.5, 44], [8.5, -14, 30, -6], [-10, -68, 10, -40]],
         onEdge: () => ui.subtitle('mira', 'I never went that way. Not in that life.', 2200),
       });
@@ -833,7 +833,7 @@ export default {
       game.onUpdate((dt, t) => W.update(dt, t));
       rig(W, {
         mira: { fog: [0x1a2230, 0.016], env: 0.55, bg: 0x0a0c12, hemi: [0x8a9ab8, 0x1a1418, 0.4], sun: [0x9ab0d8, 0.25], dir: [0.3, 0.8, 0.2], exp: 1.08, beds: { rain: 0.07, crowd: 0.03, hum: 0.01, hz: 50 } },
-        gap: { fog: [0x0e2a34, 0.022], env: 0.3, bg: 0x061418, hemi: [0x5fe6ff, 0x0a1418, 0.35], sun: [0x5fe6ff, 0.15], dir: [0.3, 0.8, 0.2], exp: 1.12, beds: { hum: 0.03, hz: 120 } },
+        gap: { fog: [0x0e2a34, 0.022], env: 0.45, bg: 0x061418, hemi: [0x7feeff, 0x123038, 0.7], sun: [0x8ff0ff, 0.4], dir: [0.3, 0.8, 0.2], exp: 1.12, beds: { hum: 0.03, hz: 120 } },
       }, { mira: { preset: 'night-city', cover: 0.85 }, gap: { preset: 'night-city', cover: 0.95, glowIntensity: 0.2 } });
       game.engine.fx?.uTint?.value && T.onSwitch((id) => { game.engine.fx.uTint.value.set(...(id === 'gap' ? [0.82, 1.02, 1.08] : [1, 1, 1])); });
       holderRules({}, (id) => (id === 'gap' && S.walking && once('gapwalk' + Math.floor(game.time / 5)) ? null : null));
