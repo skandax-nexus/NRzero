@@ -554,7 +554,11 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   # forehead shade's centre / side strength, the upper cheeks' freckles
                   "lipEdgeDark", "beardRimDark", "beardRimDense", "beardClump", "beardLightPaint", "beardJawSide", "lashDrop", "lashCurl",
                   "lashLower", "eyeAO", "lidLineLo", "browTailFade", "browJitter", "foldDepth", "aoFace", "foreheadBase", "foreheadSide",
-                  "cheekSpots", "beardStroke", "shellSheen", "lipRim")
+                  "cheekSpots", "beardStroke", "shellSheen", "lipRim",
+                  # fix round 4 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 4: the complete face shape"): the dense
+                  # per-vertex shape layer (likeness/dense_fit.py; a MakeHuman-target-like .npz relative to the face file,
+                  # applied by mh.sculpt after the modifiers), its weight and per-region weights (inheritance)
+                  "shape", "shapeWeight", "shapeRegions")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 
@@ -573,8 +577,9 @@ def face_override(c, faces_dir=None):
         bp = os.path.join(os.path.dirname(p), o["extends"])
         with open(bp) as f:
             base = json.load(f)
-        if base.get("likeness") and not os.path.isabs(base["likeness"]):
-            base["likeness"] = os.path.normpath(os.path.join(os.path.dirname(bp), base["likeness"]))
+        for k in ("likeness", "shape"):
+            if base.get(k) and not os.path.isabs(base[k]):
+                base[k] = os.path.normpath(os.path.join(os.path.dirname(bp), base[k]))
         o = {**base, **{k: v for k, v in o.items() if k != "extends"}}
     unknown = set(o) - set(FACE_LOOK_KEYS) - {"details", "replace_details", "macro", "notes"}
     if unknown:
@@ -600,6 +605,11 @@ def face_override(c, faces_dir=None):
                 c[k] = o[k]
     if c.get("likeness") and not os.path.isabs(c["likeness"]):
         c["likeness"] = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(p)), c["likeness"]))
+    if c.get("shape"):
+        if not os.path.isabs(c["shape"]):
+            c["shape"] = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(p)), c["shape"]))
+        if not os.path.isfile(c["shape"]):         # never a silent fallback to the slider-only head
+            raise FileNotFoundError(f"{p}: shape file {c['shape']} is missing (copy it with the face file)")
     return p
 
 
@@ -625,19 +635,22 @@ def _solve_heights(cast):
             pass
     only = os.environ.get("ONLY")
     dirty = False
+    import mh
     for c in cast:
         key = json.dumps([c["metres"], c["macro"], c["details"]], sort_keys=True)
+        sh = mh.shape_of(c)
+        if sh:          # a dense shape layer changes the head's height: its content is part of the key
+            key = json.dumps([c["metres"], c["macro"], c["details"], mh.shape_digest(sh)], sort_keys=True)
         if key not in cache:
             if only and c["id"] not in only.split(","):
                 c["macro"]["height"] = 0.5
                 continue
-            import mh
             import numpy as np
             body = np.array(mh.group_vertices("body"))
             lo, hi = 0.0, 1.0
             for _ in range(10):
                 h = (lo + hi) / 2
-                P = mh.sculpt(dict(c["macro"], height=h), c["details"])
+                P = mh.sculpt(dict(c["macro"], height=h), c["details"], shape=sh)
                 if P[body, 1].max() - P[body, 1].min() < c["metres"]:
                     lo = h
                 else:

@@ -213,8 +213,11 @@ def nrm3(v):
 # ----------------------------------------------------------------------------------------------------------------
 # proxies (.mhclo) e.g. eyes
 # ----------------------------------------------------------------------------------------------------------------
-def fit_proxy(rel, Pdm):
-    """Fit a MakeHuman proxy (eyes) to sculpted base vertices (decimetres). Returns verts (metres), faces."""
+def fit_proxy(rel, Pdm, Pdm_scale=None):
+    """Fit a MakeHuman proxy (eyes) to sculpted base vertices (decimetres). Returns verts (metres), faces.
+    Pdm_scale (fix round 4): the vertices the proxy's x/y/z scale references are read from (the head without its
+    dense shape layer: the eye proxy's references are skull points, and a reshaped vault must not resize the eyes)."""
+    Ps = Pdm if Pdm_scale is None else Pdm_scale
     d = os.path.dirname(mh.path(rel))
     scale = {}
     rows, obj = [], None
@@ -227,7 +230,7 @@ def fit_proxy(rel, Pdm):
             obj = os.path.join(d, a[1])
         elif a[0] in ("x_scale", "y_scale", "z_scale"):
             ax = "xyz".index(a[0][0])
-            scale[ax] = abs(Pdm[int(a[1])][ax] - Pdm[int(a[2])][ax]) / float(a[3])
+            scale[ax] = abs(Ps[int(a[1])][ax] - Ps[int(a[2])][ax]) / float(a[3])
         elif a[0] == "verts":
             in_verts = True
         elif in_verts and len(a) in (1, 9):
@@ -569,14 +572,21 @@ def chain_param(P, pts):
 
 class Body:
     def __init__(self, c):
-        P = mh.sculpt(c["macro"], c.get("details"))
+        shape = mh.shape_of(c)       # fix round 4 (Kai): the face file's dense shape layer, after the modifiers
+        P = mh.sculpt(c["macro"], c.get("details"), shape=shape)
         self.P = relax_hands(P - np.array([0, P[:, 1].min(), 0]))
+        # the same head without the layer, in the same frame: the eye proxy's scale references (fit_proxy)
+        self.P0 = self.P if not shape else relax_hands(mh.sculpt(c["macro"], c.get("details")) - np.array([0, P[:, 1].min(), 0]))
+        if shape:
+            print(f"  shape layer: {len(mh.shape_target(shape)[0])} vertices ({os.path.basename(shape['path'])}, weight {shape['weight']})", flush=True)
         _, _, self.F = mh.base()
         self.faces = [i for i, f in enumerate(self.F) if f[2] == "body"]
         wear = [w if isinstance(w, str) else w[0] for w in c.get("wear", [])]
         if "sandals" in wear:      # costume sandals: the bare sole stands on the sandal (the shoe hull is not stretched down)
             bv = np.unique(np.concatenate([np.asarray(self.F[i][0]) for i in self.faces]))
-            self.P = self.P - np.array([0, self.P[bv, 1].min() - 0.012, 0])
+            dy = np.array([0, self.P[bv, 1].min() - 0.012, 0])
+            self.P = self.P - dy
+            self.P0 = self.P if not shape else self.P0 - dy
         self.W = dense_weights(len(self.P))
         self.vb = [BONE_NAMES[i] for i in self.W.argmax(1)]
         if c.get("alarSoften"):      # fix round 2 (Kai): the nose wings' crease against the cheek smoothed (a hard U line read as cut out)
@@ -1712,7 +1722,7 @@ def sphere_fit(p):
 
 
 def eye_objects(B, c):
-    ev, ef = fit_proxy("eyes/high-poly/high-poly.mhclo", B.P * 10)
+    ev, ef = fit_proxy("eyes/high-poly/high-poly.mhclo", B.P * 10, getattr(B, "P0", B.P) * 10)
     par = list(range(len(ev)))
 
     def find(a):

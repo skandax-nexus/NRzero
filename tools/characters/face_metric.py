@@ -326,8 +326,8 @@ def main(argv):
     cast = [c for c in C.CAST if not flag("ids") or c["id"] in flag("ids").split(",")]
     print(len(cast), "characters, faces from", C.FACES_DIR, "overrides:", sorted(C.FACES_APPLIED), flush=True)
 
-    def sculpt(macro, details):
-        return mh.sculpt(macro, details)
+    def sculpt(macro, details, shape=None):
+        return mh.sculpt(macro, details, shape=shape)
 
     # --- reference population
     pop = population(int(flag("pop", 400)))
@@ -362,7 +362,7 @@ def main(argv):
     # --- the cast
     X, X0, Fz, info = {}, {}, {}, {}
     for c in cast:
-        P = sculpt(c["macro"], c.get("details"))
+        P = sculpt(c["macro"], c.get("details"), mh.shape_of(c))      # fix round 4: with the face file's dense shape layer
         X[c["id"]] = FS.norm(P)
         f = FS.features(P)
         Fz[c["id"]] = (np.array([f[k] for k in FEATS]) - mu) / sd
@@ -419,10 +419,11 @@ def main(argv):
         for k, v in spec[dst].get("details", {}).items():
             if "age" in k:
                 det[k] = v
-        Pa = FS.norm(sculpt(m, det))
+        sh = mh.shape_of(spec[src])       # the source's dense shape layer goes with its details (identity)
+        Pa = FS.norm(sculpt(m, det, sh))
         geo = FS.rms(Pa - X[dst])
         g = info[dst]["group"]
-        fa = FS.features(sculpt(m, det))
+        fa = FS.features(sculpt(m, det, sh))
         lm = float(np.sqrt(((((np.array([fa[k] for k in FEATS]) - mu) / sd) - Fz[dst]) ** 2).mean()))
         return dict(src=src, dst=dst, geo_mm=round(geo, 2), lm=round(lm, 3), sim=round((pct(ref[g]["geo"], geo) + pct(ref[g]["lm"], lm)) / 2, 1))
     identity = [x for x in (aged("kai", "witness"), aged("kai", "kid_kai"), aged("mira", "kid_mira"), aged("oskar", "oskar26")) if x]

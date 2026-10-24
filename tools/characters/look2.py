@@ -463,7 +463,7 @@ def add_bones(arm, B, eyes):
 # ---------------------------------------------------------------------------------------------------------------
 def eye_spheres(B):
     """{side: (centre, radius)} of the cornea shells of MakeHuman's eye proxy (MH metres; 'L' = +x)."""
-    ev, ef = BH.fit_proxy("eyes/high-poly/high-poly.mhclo", B.P * 10)
+    ev, ef = BH.fit_proxy("eyes/high-poly/high-poly.mhclo", B.P * 10, getattr(B, "P0", B.P) * 10)
     par = list(range(len(ev)))
 
     def find(a):

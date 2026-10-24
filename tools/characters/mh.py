@@ -134,8 +134,45 @@ def detail_weights(details):
     return out
 
 
-def sculpt(macro, details=None):
-    """Final vertex positions (metres, Y-up) for macro + detail parameters."""
+@lru_cache(None)
+def _shape_file(p):
+    import numpy as _np
+    z = _np.load(p)
+    meta = json.loads(str(z["meta"])) if "meta" in z.files else {}
+    return (z["idx"].astype(np.int64), z["d"].astype(np.float64), z["region"].astype(np.int64) if "region" in z.files else None,
+            str(z["base_hash"]) if "base_hash" in z.files else "", meta)
+
+
+def shape_target(shape):
+    """A face file's dense shape layer (likeness/dense_fit.py, docs/CHARACTER_LOOK.md "Fix round 4") as a sparse
+    target: (indices, decimetre deltas). shape: a path, or {"path", "weight", "regions": {region id: weight}}."""
+    if isinstance(shape, str):
+        shape = {"path": shape}
+    idx, d, region, _, _ = _shape_file(os.path.abspath(shape["path"]))
+    w = float(shape.get("weight", 1.0))
+    if shape.get("regions") and region is not None:
+        rw = np.array([float(shape["regions"].get(str(r), shape["regions"].get(r, 1.0))) for r in range(16)])
+        return idx, d * (w * rw[region])[:, None]
+    return idx, d * w
+
+
+def shape_of(c):
+    """The dense shape argument of a cast entry (its face file's `shape`, `shapeWeight`, `shapeRegions`), or None."""
+    if not c.get("shape"):
+        return None
+    return {"path": c["shape"], "weight": float(c.get("shapeWeight", 1.0)), "regions": c.get("shapeRegions")}
+
+
+def shape_digest(shape):
+    """A short digest of a shape argument (file content + weights), for caches keyed on the sculpt."""
+    import hashlib
+    h = hashlib.sha1(open(shape["path"], "rb").read()).hexdigest()[:16]
+    return [h, shape.get("weight", 1.0), shape.get("regions")]
+
+
+def sculpt(macro, details=None, shape=None):
+    """Final vertex positions (metres, Y-up) for macro + detail parameters (+ an optional dense shape layer, applied
+    after them like one more target; None: exactly the slider sculpt)."""
     V, _, _ = base()
     P = V.copy()
     for rel, w in macro_weights(**macro) + detail_weights(details or {}):
@@ -144,6 +181,9 @@ def sculpt(macro, details=None):
             continue
         idx, d = t
         P[idx] += d * w
+    if shape:
+        idx, d = shape_target(shape)
+        P[idx] += d
     return P * 0.1   # decimetres -> metres
 
 

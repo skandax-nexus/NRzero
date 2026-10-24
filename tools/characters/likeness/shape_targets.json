@@ -1,0 +1,514 @@
+{
+ "notes": "Kai's head in three dimensions: the sculptor's targets for likeness/dense_fit.py (stage B), transcribed from the shape study's SHAPE_SPEC.md section 4 (the 12 biggest shape differences between the round-3 build and the owner's photo, each with a measurable target and a confidence). Derived numbers only, no pixels. Frame: face mm (photo mm = build mm x likenessScale), origin = the midpoint of the inner eye corners (MediaPipe 133 / 362 traced onto the base mesh, mp_to_mh.json 'front'), x his left, y up, z forward. Kinds: top (the vertex's height), z (front-most surface depth at (x, y)), zrel (z(x, y) - z(x2, y2)), zsec (second difference z(x) - 2 z(x + h) + z(x + 2h) on the section y: a groove > 0, a corner < 0), zdrop (z(x, y) - z(x2, y)), width (the section y's width, front of zmin), lm / lmrel (a MediaPipe landmark's coordinate), brow_eye (z(x, y) minus the upper lid's lash line, the eye's front as seen), ybot (the lowest surface point at (x, z)), length (glabella to the back of the vault). band: [lo, hi] (null = open); conf: high 1.0, medium 0.5, low 0.2 (the residual's weight, mm outside the band). spec: the SHAPE_SPEC item.",
+ "targets": [
+  {
+   "id": "vault_top",
+   "kind": "top",
+   "band": [
+    102,
+    108
+   ],
+   "conf": "medium",
+   "spec": 1,
+   "note": "SHAPE_SPEC 1 says 105-110 above the inner eye corners; the head breadth it pairs with is uncertain (hair), so the pair is kept proportionate: 102-108",
+   "w": 3.0
+  },
+  {
+   "id": "mid_y60",
+   "kind": "z",
+   "x": 0,
+   "y": 60,
+   "band": [
+    1,
+    3
+   ],
+   "conf": "medium",
+   "spec": 1,
+   "w": 3.0
+  },
+  {
+   "id": "mid_y75",
+   "kind": "z",
+   "x": 0,
+   "y": 75,
+   "band": [
+    -11,
+    -8
+   ],
+   "conf": "medium",
+   "spec": 1,
+   "w": 3.0
+  },
+  {
+   "id": "skull_breadth_y40",
+   "kind": "width",
+   "y": 40,
+   "band": [
+    148,
+    154
+   ],
+   "conf": "medium",
+   "spec": 2,
+   "note": "SHAPE_SPEC 2 reads 144-148 from the sleek hair outline (152 mm with the hair); the photo outline at the temples (ears hidden) already holds the skin edge, so 148-154 here, medium"
+  },
+  {
+   "id": "width_y-70",
+   "kind": "width",
+   "y": -70,
+   "zmin": -70,
+   "band": [
+    145,
+    150
+   ],
+   "conf": "low",
+   "spec": 2
+  },
+  {
+   "id": "width_y-80",
+   "kind": "width",
+   "y": -80,
+   "zmin": -70,
+   "band": [
+    142,
+    148
+   ],
+   "conf": "low",
+   "spec": 2
+  },
+  {
+   "id": "width_y-90",
+   "kind": "width",
+   "y": -90,
+   "zmin": -70,
+   "band": [
+    130,
+    136
+   ],
+   "conf": "low",
+   "spec": 2
+  },
+  {
+   "id": "width_y-100",
+   "kind": "width",
+   "y": -100,
+   "zmin": -70,
+   "band": [
+    111,
+    118
+   ],
+   "conf": "low",
+   "spec": 2
+  },
+  {
+   "id": "malar_y-25",
+   "kind": "z",
+   "y": -25,
+   "x": [
+    30,
+    40,
+    50,
+    60
+   ],
+   "bands": [
+    [
+     5,
+     8
+    ],
+    [
+     3,
+     6
+    ],
+    [
+     -1,
+     2
+    ],
+    [
+     -7.5,
+     -4.5
+    ]
+   ],
+   "conf": "medium",
+   "spec": 3
+  },
+  {
+   "id": "buccal_y-66",
+   "kind": "z",
+   "y": -66,
+   "x": [
+    40,
+    50,
+    60,
+    70
+   ],
+   "bands": [
+    [
+     -0.5,
+     3.5
+    ],
+    [
+     -5.5,
+     -1.5
+    ],
+    [
+     -14,
+     -10
+    ],
+    [
+     -32,
+     -28
+    ]
+   ],
+   "conf": "medium",
+   "spec": 3
+  },
+  {
+   "id": "turn_drop",
+   "kind": "zdrop",
+   "x": 45,
+   "x2": 62,
+   "y": [
+    -20,
+    -30,
+    -40,
+    -50,
+    -60,
+    -70,
+    -80
+   ],
+   "band": [
+    null,
+    20
+   ],
+   "conf": "medium",
+   "spec": 3,
+   "note": "SHAPE_SPEC 3 reads x 50 -> 70 <= 20 mm; his skin half-width at the mouth is about 70 mm at the photo camera (beard band taken off), so x 70 lies on the silhouette itself: the same fullness is asked between x 45 and 62"
+  },
+  {
+   "id": "tip_lobule_11",
+   "kind": "zrel",
+   "x": 11,
+   "y": -33,
+   "x2": 0,
+   "y2": -33,
+   "band": [
+    -3,
+    null
+   ],
+   "conf": "medium",
+   "spec": 4
+  },
+  {
+   "id": "tip_lobule_15",
+   "kind": "zrel",
+   "x": 15,
+   "y": -33,
+   "x2": 0,
+   "y2": -33,
+   "band": [
+    -6,
+    null
+   ],
+   "conf": "medium",
+   "spec": 4
+  },
+  {
+   "id": "dorsum_flat_y-15",
+   "kind": "zrel",
+   "x": 7,
+   "y": -15,
+   "x2": 0,
+   "y2": -15,
+   "band": [
+    -1.5,
+    null
+   ],
+   "conf": "medium",
+   "spec": 4
+  },
+  {
+   "id": "alar_groove",
+   "kind": "zsec",
+   "x": 17,
+   "h": 5,
+   "y": -39,
+   "band": [
+    4,
+    6
+   ],
+   "conf": "low",
+   "spec": 4
+  },
+  {
+   "id": "tip_apex",
+   "kind": "lm",
+   "mp": 1,
+   "axis": "z",
+   "band": [
+    29,
+    32
+   ],
+   "conf": "low",
+   "spec": 4
+  },
+  {
+   "id": "brow_over_eye_x32",
+   "kind": "brow_eye",
+   "x": 32,
+   "y": 12,
+   "band": [
+    4,
+    7
+   ],
+   "conf": "low",
+   "spec": 5,
+   "note": "brow soft tissue ahead of the upper lid lash line (round 3: 3.3 / 1.4 mm; SHAPE_SPEC 5: +2..3 mm brow, the eye 1-2 mm back)"
+  },
+  {
+   "id": "brow_over_eye_x38",
+   "kind": "brow_eye",
+   "x": 38,
+   "y": 12,
+   "band": [
+    4,
+    7
+   ],
+   "conf": "low",
+   "spec": 5,
+   "note": "brow soft tissue ahead of the upper lid lash line (round 3: 3.3 / 1.4 mm; SHAPE_SPEC 5: +2..3 mm brow, the eye 1-2 mm back)"
+  },
+  {
+   "id": "lip_Li_z",
+   "kind": "lm",
+   "mp": 17,
+   "axis": "z",
+   "band": [
+    17,
+    19
+   ],
+   "conf": "medium",
+   "spec": 6
+  },
+  {
+   "id": "lip_Ls_z",
+   "kind": "lm",
+   "mp": 0,
+   "axis": "z",
+   "band": [
+    18.5,
+    20.5
+   ],
+   "conf": "medium",
+   "spec": 6
+  },
+  {
+   "id": "lower_lip_proud",
+   "kind": "lmrel",
+   "mp": 17,
+   "mp2": 13,
+   "axis": "z",
+   "band": [
+    3,
+    4
+   ],
+   "conf": "medium",
+   "spec": 6
+  },
+  {
+   "id": "upper_lip_ahead_sn",
+   "kind": "lmrel",
+   "mp": 0,
+   "mp2": 2,
+   "axis": "z",
+   "band": [
+    -1,
+    null
+   ],
+   "conf": "low",
+   "spec": 6,
+   "note": "MediaPipe 2 traces onto the columella base, ahead of the lip: kept only as a floor"
+  },
+  {
+   "id": "menton_y",
+   "kind": "lm",
+   "mp": 152,
+   "axis": "y",
+   "band": [
+    -120,
+    -114
+   ],
+   "conf": "low",
+   "spec": 7,
+   "note": "the chin bottom is decided by the photo outline (beard band); this only bounds it"
+  },
+  {
+   "id": "chin_front_y-105",
+   "kind": "z",
+   "y": -105,
+   "x": [
+    20,
+    30,
+    40
+   ],
+   "bands": [
+    [
+     7,
+     10
+    ],
+    [
+     3,
+     6
+    ],
+    [
+     -5.5,
+     -2.5
+    ]
+   ],
+   "conf": "low",
+   "spec": 7,
+   "note": "measured 10-15 mm above his menton in SHAPE_SPEC; with the skin chin set by the photo outline (beard band) this level sits nearer the chin bottom: low"
+  },
+  {
+   "id": "forehead_lean",
+   "kind": "zrel",
+   "x": 0,
+   "y": 12,
+   "x2": 0,
+   "y2": 57,
+   "band": [
+    7.9,
+    9.6
+   ],
+   "conf": "low",
+   "spec": 8
+  },
+  {
+   "id": "nasion_depth",
+   "kind": "zrel",
+   "x": 0,
+   "y": 5,
+   "x2": 0,
+   "y2": 13,
+   "band": [
+    -4,
+    -3
+   ],
+   "conf": "low",
+   "spec": 8
+  },
+  {
+   "id": "soft_turn",
+   "kind": "zsec",
+   "x": [
+    40,
+    44,
+    48,
+    52,
+    56,
+    60,
+    62
+   ],
+   "h": 4,
+   "y": [
+    35,
+    25,
+    15,
+    -15,
+    -25,
+    -35,
+    -45,
+    -55,
+    -65
+   ],
+   "band": [
+    -2.5,
+    2.5
+   ],
+   "conf": "high",
+   "spec": 9,
+   "note": "not across the eye openings (y +5 / -5)"
+  },
+  {
+   "id": "soft_turn_low",
+   "kind": "zsec",
+   "x": [
+    40,
+    44,
+    48,
+    52
+   ],
+   "h": 4,
+   "y": [
+    -75,
+    -85
+   ],
+   "band": [
+    -2.5,
+    2.5
+   ],
+   "conf": "high",
+   "spec": 9,
+   "note": "inside the jaw outline"
+  },
+  {
+   "id": "submental",
+   "kind": "ybot",
+   "x": 0,
+   "z": -20,
+   "band": [
+    -135,
+    -131
+   ],
+   "conf": "low",
+   "spec": 10
+  },
+  {
+   "id": "neck_width_y-140",
+   "kind": "width",
+   "y": -140,
+   "band": [
+    143,
+    null
+   ],
+   "conf": "low",
+   "spec": 10
+  },
+  {
+   "id": "temple_60",
+   "kind": "zdrop",
+   "x": 50,
+   "x2": 60,
+   "y": [
+    10,
+    15,
+    20
+   ],
+   "band": [
+    null,
+    10.5
+   ],
+   "conf": "medium",
+   "spec": 11,
+   "note": "keep the temple full while the vault narrows (SHAPE_SPEC 11; its 8 / 18 mm read is not met by the round-3 head either: 10 / 34)"
+  },
+  {
+   "id": "head_length",
+   "kind": "length",
+   "y": 12,
+   "ys": [
+    0,
+    10,
+    20,
+    30,
+    40,
+    50,
+    60
+   ],
+   "band": [
+    200,
+    208
+   ],
+   "conf": "low",
+   "spec": 12
+  }
+ ]
+}
