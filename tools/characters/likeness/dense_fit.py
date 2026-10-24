@@ -26,7 +26,8 @@ least-squares problem in Gauss-Newton rounds:
     - the face outline as a band (hinge): the head's true silhouette (ears hidden: his are under the hair) and
       MediaPipe's oval on the render must lie inside [lo, hi] mm of the photo's outline along its normal. Below the
       cheekbones the photo's outline is the beard's surface: the band is the beard's thickness (sculptor's read: 3-4 mm
-      at the sideburn, 4.5-7.5 on the jaw sides, 6-11 under the chin), above it the sleek hair hides the skull (the
+      at the sideburn, 4.5-7.5 on the jaw sides; under the chin 1.5-5, the built beard's reach seen from above), above
+      it the sleek hair hides the skull (the
       skin may lie up to 6-15 mm outside the visible skin edge, never inside it); no term over the top of the head;
     - MediaPipe's depth is NOT used: the study measured its response to real depth changes at -0.3 / -0.23 / -0.03
       (study geo/cur/depth_check.json), i.e. it returns its prior whatever the geometry.
@@ -720,7 +721,8 @@ def outline_samples(pts, n_sub=3):
 def outline_band(fy):
     """(lo, hi, weight) of the skin silhouette's signed distance (mm, + = outside) from the photo's outline at face
     height fy (photo face mm), or None (no term): the sleek hair hides the skull above the brows, the beard's
-    thickness below the cheekbones (the sculptor's band: sideburn 3-4 mm, jaw sides 4.5-7.5, under the chin 6-11)."""
+    thickness below the cheekbones (the sculptor's band: sideburn 3-4 mm, jaw sides 4.5-7.5; under the chin the built
+    beard's reach from this camera, 1.5-5)."""
     if fy > 45:
         return None
     if fy > 25:
@@ -729,8 +731,11 @@ def outline_band(fy):
         return (-1.5, 6.0, 0.6)
     if fy > -28:
         return (-4.0, 1.0, 1.0)
-    lo = np.interp(fy, [-125, -110, -95, -70, -45, -28], [6.0, 6.0, 5.0, 4.5, 3.0, 0.5])
-    hi = np.interp(fy, [-125, -110, -95, -70, -45, -28], [11.0, 10.0, 8.0, 7.5, 4.5, 3.0])
+    # under the chin the band is the built beard's own reach in this view (the round-3 build: its chin outline sits
+    # 2 mm past its skin from the photo camera above, the jaw-side cards about 5 mm): the shipped beard's outline then
+    # lands on his. The sculptor's 8-12 mm hang would leave the game's beard ending 4-5 mm short of the photo's.
+    lo = np.interp(fy, [-125, -112, -98, -70, -45, -28], [1.5, 1.5, 4.5, 4.5, 3.0, 0.5])
+    hi = np.interp(fy, [-125, -112, -98, -70, -45, -28], [5.0, 5.0, 8.0, 7.5, 4.5, 3.0])
     return (-float(hi), -float(lo), 1.0)
 
 
@@ -924,7 +929,7 @@ class Dense:
         ml = (ax >= 18) & (y > -45) & (y <= 5) & ~vault
         lo[ml], hi[ml] = -3.0, 7.0
         bc = (y <= -45) & ~lp & ~vault
-        lo[bc], hi[bc] = -6.0, 9.0           # the jaw and jowl: the photo's outline (beard band) decides, both ways
+        lo[bc], hi[bc] = -8.0, 9.0           # the jaw and jowl: the photo's outline (beard band) decides, both ways
         ch = (ax < 25) & (y < -88) & (z > -10)
         lo[ch], hi[ch] = -6.0, 6.0
         sm_ = (y < -105) & (z <= -10)
@@ -953,6 +958,8 @@ class Dense:
         self.w_tissue = 2.0
         self.damp = 0.3
         self.lm_dead = 0.8
+        self.beard_ref = None
+        self.beard_lm_w = float(os.environ.get("BEARD_LM_W", 0.1))
         # landmarks on the beard (below the lower lip, or beside and below the mouth): MediaPipe reads the beard's
         # surface there, not his skin; the outline band carries the skin's place, these only a little
         fx, fy_ = photo.face[:, 0], photo.face[:, 1]
@@ -962,11 +969,20 @@ class Dense:
             if i in lips_set:
                 continue
             if fy_[i] < -82 or (abs(fx[i]) > 28 and fy_[i] < -45):
-                self.lm_w[i] = 0.3
+                self.lm_w[i] = self.beard_lm_w
             elif fy_[i] > 6 and i not in set(G["eyes"]):
                 # the forehead and brow skin: the photo frowns (corrugators bunched, brows drawn down and together);
                 # MediaPipe's points there are its guesses moved by the frown, not his neutral shape
                 self.lm_w[i] = 0.3
+        b_ = load_game_bias()
+        self.has_bias = b_ is not None
+        self.bias = b_ if b_ is not None else np.zeros((len(photo.pts), 2))
+        # the bias only where it is the look's reading of the same skin (eyes, brows, nose, lips, cheeks, forehead): on the
+        # beard (the jaw, the chin, the outline) it is the round-3 cards' thickness, and the skin there is set by the
+        # outline's beard band instead
+        for i in range(len(self.bias)):
+            if i < 468 and (i in set(fit.OVAL) or (fy_[i] < -82 and i not in lips_set) or (abs(fx[i]) > 28 and fy_[i] < -45 and i not in lips_set)):
+                self.bias[i] = 0.0
     # -------------------------------------------------------------------------------------------------------
     def regions(self, Q):
         """0 skull / vault, 1 forehead / brow, 2 orbit / lids, 3 nose, 4 cheeks / malar, 5 mouth / lips, 6 chin / jaw,
@@ -1037,6 +1053,13 @@ class Dense:
         corr = fit.correspond(self.sm, m, d, self.pose, ph, f"b{rnd}", save=os.path.join(save_dir, f"render_b{rnd}.png"))
         prob.set_corr(corr)
         prob.pose0 = self.pose0
+        if self.fixed_pose:
+            # the photo's camera and pose stay fit.py's (fit/x.npy, the camera the game's photo view reproduces through
+            # fit/photo_camera.json): the head is reshaped to the photo at that camera, so the shipped build registers
+            # with the photo exactly where the round-3 build did
+            self.corr = corr
+            self.sil = silhouette(self.sm, ph, self.pose, self.scene_noear)
+            return corr
         x = np.r_[[m[k] for k in fit.MACRO_KEYS], d, self.pose]
         n0 = 4 + prob.np
         lo, hi = prob.bounds()
@@ -1086,7 +1109,7 @@ class Dense:
         X = (Pmm[tv] * bw[:, :, None]).sum(1)
         uv, Jp = self.proj_jac(X)
         ui = prob.u_int
-        e = (uv - ph.target) / ph.ppm[:, None]
+        e = (uv + self.bias - ph.target) / ph.ppm[:, None]      # the game's reading of this head vs the photo
         rows, r0 = [], []
         for i in ui:
             # a dead zone of LM_DEAD mm (MediaPipe's own scatter between two renders): the layer does not chase noise
@@ -1107,10 +1130,10 @@ class Dense:
         for i, kk in zip(prob.u_ov, okk):
             nrm = ph.oval_n[kk]
             band = outline_band(ph.face[i, 1])
-            if band is None:
-                continue
+            if band is None or (self.beard_ref is not None and ph.face[i, 1] < -28):
+                continue          # on the beard the true silhouette's reference band holds the skin (below)
             lo_, hi_, wb = band
-            sdist = float(((uv[i] - ph.pts[i]) @ nrm) / ph.ppm[i])
+            sdist = float(((uv[i] - ph.pts[i]) @ nrm) / ph.ppm[i])         # the skin's outline: the beard band
             if lo_ <= sdist <= hi_:
                 continue
             edge = lo_ if sdist < lo_ else hi_
@@ -1129,6 +1152,9 @@ class Dense:
             if band is None:
                 continue
             lo_, hi_, wb = band
+            if self.beard_ref is not None and sil["fy"][j] < -28 and np.isfinite(self.beard_ref[j]):
+                c_ = self.beard_ref[j]
+                lo_, hi_ = c_ - 1.5, c_ + 1.5
             tri, b = pt
             Xs = (Pmm[tri] * b[:, None]).sum(0)
             uvs, Js = self.proj_jac(Xs[None])
@@ -1421,11 +1447,22 @@ def stage_b(argv):
         sm.base = sm.base + pre
     dn = Dense(sm, photo, G, targets, lam=lam, scale=scale)
     dn.pre_mm = pre * 1000.0
-    dn.w_sil = float(o.get("wsil", 0.6))
+    dn.w_sil = float(o.get("wsil", 1.0))
     dn.w_t = float(o.get("wt", 1.0))
+    if o.get("pose", "game") == "game" and load_game_pose() is not None:
+        pose = load_game_pose()                  # the game's photo view (calibrate), held
     dn.pose = pose.copy()
     dn.pose0 = pose.copy()
+    dn.fixed_pose = o.get("pose", "game") in ("fixed", "game")
     dn.scene_noear = scene_without(model.S, dn.ears)
+    dn.beard_ref = None
+    if o.get("beard", "built") == "built":
+        # the beard band from the built beard (fix round 4): on the beard the photo's outline is the beard's surface,
+        # and the round-3 build's beard, rendered in the game at this camera, reads (MediaPipe's oval, the same detector
+        # on both bearded faces) BEARD_SHIFT mm inside the photo's on the jaw and chin; its skin silhouette (this head
+        # before the layer) plus that shift is where the skin goes, +-1.5 mm, so the shipped beard lands on his
+        s0 = silhouette(sm, photo, dn.pose, dn.scene_noear)
+        dn.beard_ref = s0["err"] + float(o.get("beard_shift", 1.3))
     print(f"stage B: {dn.ncol} unknowns, H {int(dn.hm.inH.sum())} vertices, {len(targets)} targets, setup {time.time() - T0:.0f}s", flush=True)
     log = dict(face=face_path, lam=lam, rounds=[])
     for rnd in range(rounds):
@@ -1511,26 +1548,233 @@ def report(argv):
         # the installed r3 face: the build softens the nose wings after the sculpt (build_humans.soften_alar)
         sm.Dm = alar_soften_offsets(sm.base, float(face["alarSoften"]))
     photo = fit.Photo()
-    G = fit.groups()
-    prob = fit.Problem(sm, photo, G)
-    prob.pose0 = pose.copy()
-    x = np.r_[[m[k] for k in fit.MACRO_KEYS], d, pose]
-    n0 = 4 + prob.np
-    lo, hi = prob.bounds()
-    for it in range(2):
-        corr = fit.correspond(sm, m, d, x[n0:], photo, "pose")
-        prob.set_corr(corr)
-        r = least_squares(lambda p: prob.residuals(np.r_[x[:n0], p]), x[n0:], bounds=(lo[n0:], hi[n0:]), x_scale="jac")
-        x = np.r_[x[:n0], r.x]
-    pose = x[n0:]
     ears = ear_vertices(sm.base)
-    rep, corr = evaluate(sm, photo, pose, tag, wd, model.S, scene_without(model.S, ears), targets)
+    scene_ne = scene_without(model.S, ears)
+    if o.get("pose", "game") == "game" and load_game_pose() is not None:
+        pose = load_game_pose()
+    elif o.get("pose") == "solve":
+        pose = pose_solve(sm, photo, pose, scene_ne, iters=2)
+    rep, corr = evaluate(sm, photo, pose, tag, wd, model.S, scene_ne, targets)
     json.dump(rep, open(os.path.join(wd, f"report_{tag}.json"), "w"), indent=1)
     np.save(os.path.join(wd, f"pose_{tag}.npy"), pose)
     photo_camera(sm, pose, os.path.join(wd, f"photo_camera_{tag}.json"))
     print(json.dumps({k: rep[k] for k in ("regions_vs_photo", "outline_skin")}, indent=0))
     print("targets in band", rep["targets_in_band"]["in_band"], "/", rep["targets_in_band"]["total"])
     return rep
+
+
+def game_pose(sm, pc_path=None, iod=0.314):
+    """The pose (fit.cam_points convention, anchored at sm.c) that reproduces the game's photo view of this head: the
+    camera face_studio / studio_turn place with fit/photo_camera.json (relative to the eye bones = the eye proxy's
+    sphere centres, looking at the aim point, rolled, then dollied along its axis until the pupils project FS_PHOTO_IOD
+    of the frame apart). Stage B fits the head to the photo through this camera, so the shipped build registers with
+    the photo in the game's own photo view (fit.py's x.npy pose and that view differ by a few mm on the round-3 head)."""
+    pc = json.load(open(pc_path or os.path.join(LK, "fit", "photo_camera.json")))
+    P = sm.full()
+    sph = proxy_eye_spheres(P * 1000.0)
+    eL, eR = sph["L"][0] / 1000.0, sph["R"][0] / 1000.0
+    eyes = 0.5 * (eL + eR)
+    cam = eyes + np.array(pc["cam_from_eyes"])
+    aim = eyes + np.array(pc["aim_from_eyes"])
+    zt = cam - aim
+    zt /= np.linalg.norm(zt)
+    xt = np.cross([0.0, 1.0, 0.0], zt)
+    xt /= np.linalg.norm(xt)
+    yt = np.cross(zt, xt)
+    a = np.radians(-pc.get("roll_deg", 0.0))
+    xr, yr = xt * np.cos(a) + yt * np.sin(a), -xt * np.sin(a) + yt * np.cos(a)
+    R = np.array([xr, -yr, -zt])                      # OpenCV rows: x right, y down, z forward
+    th = np.radians(pc["fov_deg"]) / 2
+    for _ in range(4):
+        def ndc(p):
+            q = R @ (p - cam)
+            return q[:2] / q[2] / np.tan(th)
+        cur = np.linalg.norm(ndc(eL + [0, 0, 0.0115]) - ndc(eR + [0, 0, 0.0115])) / 2
+        cam = aim + (cam - aim) * (cur / iod)
+    from scipy.spatial.transform import Rotation
+    rv = Rotation.from_matrix(R).as_rotvec()
+    t = R @ (sm.c - cam)
+    return np.r_[rv, t, 1.0]
+
+
+def calibrate_game_pose(argv):
+    """The game's photo view as a fit.py pose (one-time calibration on the installed round-3 head): MediaPipe on the
+    shipped round-3 build rendered in the game's photo view (studio_turn / face_studio 'photo', fit/photo_camera.json,
+    FS_PHOTO_IOD, the lens gaze) against the traced mesh points of the same head; the pose that projects them where
+    the game drew them (eyes, brows, nose and the midline above the lip: the moustache and beard change MediaPipe's
+    reading of the mouth and jaw between the clay raster and the textured render). Stage B fits the new head through
+    this camera, so the shipped build registers with the photo in the game's own photo view.
+
+        $PY dense_fit.py calibrate --render=LIKENESS_DIR/.../full_a/kai_photo_studio.png [--out=WORK/game_pose.json]"""
+    from scipy.optimize import least_squares
+    import detect
+    from PIL import Image
+    o = opts(argv)
+    face = load_face(o.get("face", FACE_DEFAULT))
+    model, m, d, pose = setup_model(face)
+    sm = ShapedModel(model, m, d)
+    if face.get("alarSoften"):
+        sm.Dm = alar_soften_offsets(sm.base, float(face["alarSoften"]))
+    photo = fit.Photo()
+    pc = json.load(open(os.path.join(LK, "fit", "photo_camera.json")))
+    im = Image.open(o["render"]).convert("RGB")
+    q = np.array(detect.detect(im)["points"])
+    S = im.size[0]
+    cx, cy = pc["principal_px"]
+    h = pc["half_px"]
+    qg = q[:, :2] * (2 * h / S) + [cx - h, cy - h]
+    G = fit.groups()
+    use = sorted(set(G["eyes"]) | set(G["nose"]) | set(G["brows"]) | {168, 6, 197, 195, 5, 4, 1, 19, 94, 2, 9, 151})
+    p = pose.copy()
+    for it in range(3):
+        corr = fit.correspond(sm, m, d, p, photo, "cal")
+        tv = sm.hv[corr["tv"]]
+        X = (sm.full()[tv] * corr["bw"][:, :, None]).sum(1)[use]
+
+        def f(pp):
+            uv = fit.proj(photo.K, fit.cam_points(X, sm.c, pp))
+            return ((uv - qg[use]) / photo.ppm[use, None]).ravel()
+        r = least_squares(f, p, x_scale="jac")
+        p = r.x
+        print(f"calibrate {it}: rms {np.sqrt((r.fun ** 2).reshape(-1, 2).sum(1).mean()):.2f} mm", flush=True)
+    out = o.get("out", os.path.join(WORK, "game_pose.json"))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    json.dump(dict(pose=p.tolist(), xnpy_pose=pose.tolist(), render=os.path.basename(o["render"]), points=len(use),
+                   notes="fit.py pose (rvec, t, scale; anchored at the macro head's eye midpoint) of the game's photo view"), open(out, "w"), indent=1)
+    print("->", out, "pose change rot deg", np.degrees(p[:3] - pose[:3]).round(2), "t mm", ((p[3:6] - pose[3:6]) * 1000).round(1), "s", round(p[6] / pose[6], 4))
+
+
+def photo_camera_exact(sm, pose, path=None):
+    """The fit's camera (pose) for this head in face_studio's terms, anchored on the game's eye bones (the eye proxy's
+    sphere centres) instead of the eye helpers, with no pupil-distance dolly: FS_PHOTO_CAM / AIM / ROLL / FOV of this
+    file and FS_PHOTO_IOD=0 render the shipped build from exactly the camera the fit saw (fix round 4)."""
+    from scipy.spatial.transform import Rotation
+    P = sm.full()
+    sph = proxy_eye_spheres(P * 1000.0)
+    eyes = 0.5 * (sph["L"][0] + sph["R"][0]) / 1000.0
+    R = fit.rodrigues(pose[:3])
+    t, sc = pose[3:6], pose[6]
+    cam = sm.c + R.T @ (-t) / sc
+    fwd, right = R[2], R[0]
+    zc = -fwd
+    xl = np.cross([0, 1, 0], zc)
+    xl /= np.linalg.norm(xl)
+    roll = np.degrees(np.arctan2(np.cross(xl, right) @ fwd, xl @ right))
+    K = np.load(os.path.join(LK, "lifted.npz"))["K"]
+    fov = 2 * np.degrees(np.arctan(1850.0 / K[1, 1]))
+    out = dict(cam_from_eyes=(cam - eyes).round(5).tolist(), aim_from_eyes=(cam - eyes + fwd * 0.3).round(5).tolist(),
+               fov_deg=round(float(fov), 3), roll_deg=round(float(roll), 3), principal_px=K[:2, 2].tolist(), half_px=1850.0,
+               distance_m=round(float(np.linalg.norm(cam - eyes)), 4), scale=round(float(sc), 4), iod=0,
+               notes="fit.py's camera (x.npy pose) relative to the eye bones of this head; render with FS_PHOTO_IOD=0")
+    if path:
+        json.dump(out, open(path, "w"), indent=1)
+    return out
+
+
+def pose_from_render_camera(sm, cam):
+    """A fit.py pose from the game's logged photo-view camera (studio_turn's photoCamera: world position, quaternion,
+    fov, eye bones). The build's world frame is the sculpt's MakeHuman frame with the feet at y = 0 (Body); checked on
+    the eye bones (the eye proxy's sphere centres)."""
+    from scipy.spatial.transform import Rotation
+    P = sm.full()
+    ymin = P[:, 1].min()
+    sph = proxy_eye_spheres(P * 1000.0)
+    eL = sph["L"][0] / 1000.0 - [0, ymin, 0]
+    off_mm = (np.array(cam["eL"]) - eL) * 1000.0
+    Rt = Rotation.from_quat(cam["quat"]).as_matrix()          # camera -> world (three.js: x right, y up, looks down -z)
+    R = np.diag([1.0, -1.0, -1.0]) @ Rt.T
+    pos = np.array(cam["pos"]) - (np.array(cam["eL"]) - eL)   # the eye bones as the anchor (removes a frame offset)
+    rv = Rotation.from_matrix(R).as_rotvec()
+    t = R @ (sm.c - [0, ymin, 0] - pos)
+    return np.r_[rv, t, 1.0], off_mm
+
+
+def game_bias(argv):
+    """The game's photo view, calibrated on the installed round-3 build (one time):
+      - its exact camera (studio_turn's logged photoCamera of the round-3 build) as a fit.py pose -> WORK/game_pose.json;
+      - MediaPipe's reading difference between the shipped, textured render (painted brows and lips, beard and moustache
+        cards, the lens gaze) and the clay raster this fit renders, for the SAME head at the SAME camera:
+        bias = q_game - q_raster (photo px) -> WORK/game_bias.npz. The head's shape cancels; what is left is how the
+        look moves the detector (2.8 mm rms: the beard moves the jaw and chin points out to its surface, the moustache
+        the mouth's, the painted brows the brows'). Stage B fits the raster's points to photo - bias, so the shipped
+        build, seen in the game's photo view, lands on the photo.
+
+        $PY dense_fit.py bias --render=.../r3/full_a/kai_photo_studio.png --shots=.../r3/full_a/shots.json"""
+    import detect
+    from PIL import Image
+    o = opts(argv)
+    face = load_face(o.get("face", FACE_DEFAULT))
+    model, m, d, pose = setup_model(face)
+    sm = ShapedModel(model, m, d)
+    if face.get("alarSoften"):
+        sm.Dm = alar_soften_offsets(sm.base, float(face["alarSoften"]))
+    photo = fit.Photo()
+    cam = json.load(open(o["shots"]))["kai"]["photoCamera"]
+    pg, off = pose_from_render_camera(sm, cam)
+    pc = json.load(open(os.path.join(LK, "fit", "photo_camera.json")))
+    im = Image.open(o["render"]).convert("RGB")
+    q = np.array(detect.detect(im)["points"])
+    cx, cy = pc["principal_px"]
+    h = pc["half_px"]
+    qg = q[:, :2] * (2 * h / im.size[0]) + [cx - h, cy - h]
+    corr = fit.correspond(sm, m, d, pg, photo, "bias")
+    bias = qg - corr["q"][:, :2]
+    os.makedirs(WORK, exist_ok=True)
+    np.savez(os.path.join(WORK, "game_bias.npz"), bias=bias, q_game=qg, q_raster=corr["q"][:, :2], pose=pg)
+    json.dump(dict(pose=pg.tolist(), xnpy_pose=pose.tolist(), eye_bone_offset_mm=off.tolist(),
+                   source="studio_turn photo view of the round-3 build (fit/photo_camera.json, FS_PHOTO_IOD 0.314, lens gaze)"),
+              open(os.path.join(WORK, "game_pose.json"), "w"), indent=1)
+    e = bias[:468] / photo.ppm[:468, None]
+    print("bias rms %.2f mm, eye-bone frame offset %s mm" % (np.sqrt((e ** 2).sum(1).mean()), off.round(2)))
+
+
+def load_game_bias():
+    pth = os.path.join(WORK, "game_bias.npz")
+    return np.load(pth)["bias"] if os.path.exists(pth) else None
+
+
+def load_game_pose():
+    pth = os.path.join(WORK, "game_pose.json")
+    return np.array(json.load(open(pth))["pose"]) if os.path.exists(pth) else None
+
+
+def pose_solve(sm, photo, pose0, scene_noear, iters=2, w_sil=0.6):
+    """The photo's pose for a head (shape fixed), as stage B solves it every round: fit.py's landmark terms and priors
+    plus the true silhouette's band (its surface points held), so every candidate (the installed one too) is measured
+    at its own best pose by one rule."""
+    from scipy.optimize import least_squares
+    G = fit.groups()
+    prob = fit.Problem(sm, photo, G)
+    prob.pose0 = pose0.copy()
+    x = np.r_[[sm.m[k] for k in fit.MACRO_KEYS], sm.d, pose0]
+    n0 = 4 + prob.np
+    lo, hi = prob.bounds()
+    for it in range(iters):
+        p = x[n0:]
+        corr = fit.correspond(sm, sm.m, sm.d, p, photo, "pose")
+        prob.set_corr(corr)
+        sil = silhouette(sm, photo, p, scene_noear)
+        Pmm = sm.full() * 1000.0
+        sp_ = []
+        for j, pt in enumerate(sil["pts"]):
+            b_ = outline_band(sil["fy"][j]) if pt is not None else None
+            if b_ is None:
+                continue
+            tri, bb = pt
+            sp_.append(((Pmm[tri] * bb[:, None]).sum(0) / 1000.0, sil["S"][j], sil["n"][j], sil["ppm"][j]) + b_)
+        Xs = np.array([a[0] for a in sp_])
+
+        def f(p):
+            r = prob.residuals(np.r_[x[:n0], p])
+            uvs = fit.proj(photo.K, fit.cam_points(Xs, sm.c, p))
+            out = []
+            for (X_, S_, n_, k_, lo_, hi_, w_), u_ in zip(sp_, uvs):
+                d_ = float((u_ - S_) @ n_ / k_)
+                out.append(w_sil * w_ * (d_ - lo_ if d_ < lo_ else (d_ - hi_ if d_ > hi_ else 0.0)))
+            return np.r_[r, np.array(out)]
+        r = least_squares(f, x[n0:], bounds=(lo[n0:], hi[n0:]), x_scale="jac")
+        x = np.r_[x[:n0], r.x]
+    return x[n0:]
 
 
 def alar_soften_offsets(P, amount):
@@ -1567,5 +1811,9 @@ if __name__ == "__main__":
         stage_b(sys.argv[2:])
     elif cmd == "report":
         report(sys.argv[2:])
+    elif cmd == "calibrate":
+        calibrate_game_pose(sys.argv[2:])
+    elif cmd == "bias":
+        game_bias(sys.argv[2:])
     else:
         print(__doc__)

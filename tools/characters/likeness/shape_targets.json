@@ -61,7 +61,9 @@
     150
    ],
    "conf": "low",
-   "spec": 2
+   "spec": 2,
+   "w": 0.25,
+   "note": "inferred from the beard outline lifted with MediaPipe depth; the photo outline at its own camera (the band) is the measurement: kept as a hint only"
   },
   {
    "id": "width_y-80",
@@ -73,7 +75,9 @@
     148
    ],
    "conf": "low",
-   "spec": 2
+   "spec": 2,
+   "w": 0.25,
+   "note": "inferred from the beard outline lifted with MediaPipe depth; the photo outline at its own camera (the band) is the measurement: kept as a hint only"
   },
   {
    "id": "width_y-90",
@@ -85,7 +89,9 @@
     136
    ],
    "conf": "low",
-   "spec": 2
+   "spec": 2,
+   "w": 0.25,
+   "note": "inferred from the beard outline lifted with MediaPipe depth; the photo outline at its own camera (the band) is the measurement: kept as a hint only"
   },
   {
    "id": "width_y-100",
@@ -127,8 +133,38 @@
      -4.5
     ]
    ],
-   "conf": "medium",
-   "spec": 3
+   "conf": "high",
+   "spec": 3,
+   "w": 1.5,
+   "note": "the cheek mass (SHAPE_SPEC 3, the main source of the flat, blocky read): weighted up so the thin plate builds the mound"
+  },
+  {
+   "id": "cheek_y-45",
+   "kind": "z",
+   "y": -45,
+   "x": [
+    40,
+    50,
+    60
+   ],
+   "bands": [
+    [
+     1.5,
+     4.5
+    ],
+    [
+     -3.0,
+     0.0
+    ],
+    [
+     -10.5,
+     -7.0
+    ]
+   ],
+   "conf": "high",
+   "w": 1.5,
+   "spec": 3,
+   "note": "between the malar (y -25) and buccal (y -66) sections: the mound continues down past the nose base (interpolated)"
   },
   {
    "id": "buccal_y-66",
@@ -137,8 +173,7 @@
    "x": [
     40,
     50,
-    60,
-    70
+    60
    ],
    "bands": [
     [
@@ -150,16 +185,14 @@
      -1.5
     ],
     [
-     -14,
+     -15,
      -10
-    ],
-    [
-     -32,
-     -28
     ]
    ],
-   "conf": "medium",
-   "spec": 3
+   "conf": "high",
+   "spec": 3,
+   "w": 1.5,
+   "note": "the cheek mass beside the mouth (SHAPE_SPEC 3); x 70 dropped: there the side of the face is the photo outline's (the beard band), which reads narrower than the sculptor's -30 mm"
   },
   {
    "id": "turn_drop",
@@ -259,7 +292,7 @@
     4,
     7
    ],
-   "conf": "low",
+   "conf": "medium",
    "spec": 5,
    "note": "brow soft tissue ahead of the upper lid lash line (round 3: 3.3 / 1.4 mm; SHAPE_SPEC 5: +2..3 mm brow, the eye 1-2 mm back)"
   },
@@ -272,7 +305,7 @@
     4,
     7
    ],
-   "conf": "low",
+   "conf": "medium",
    "spec": 5,
    "note": "brow soft tissue ahead of the upper lid lash line (round 3: 3.3 / 1.4 mm; SHAPE_SPEC 5: +2..3 mm brow, the eye 1-2 mm back)"
   },
@@ -334,11 +367,24 @@
    "axis": "y",
    "band": [
     -120,
-    -114
+    -116
    ],
-   "conf": "low",
+   "conf": "medium",
    "spec": 7,
-   "note": "the chin bottom is decided by the photo outline (beard band); this only bounds it"
+   "note": "SHAPE_SPEC 7: the skin menton 116-120 mm below the inner eye corners (round 3: 118.6 at MediaPipe 152); the chin is shortened only as far as the photo outline needs"
+  },
+  {
+   "id": "pogonion_z",
+   "kind": "lm",
+   "mp": 199,
+   "axis": "z",
+   "band": [
+    10.5,
+    13.5
+   ],
+   "conf": "medium",
+   "spec": 7,
+   "note": "the chin keeps its projection (round 3: 11.8): seen from the photo camera above, raising the chin and pulling it back move its outline alike; the profile says raise, not recede"
   },
   {
    "id": "chin_front_y-105",

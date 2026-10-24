@@ -134,13 +134,20 @@ def detail_weights(details):
     return out
 
 
+def base_hash():
+    """A short digest of the base mesh's vertices (a shape layer is only valid on the mesh it was solved on)."""
+    import hashlib
+    return hashlib.sha1(np.round(base()[0], 6).tobytes()).hexdigest()[:16]
+
+
 @lru_cache(None)
 def _shape_file(p):
-    import numpy as _np
-    z = _np.load(p)
+    z = np.load(p)
     meta = json.loads(str(z["meta"])) if "meta" in z.files else {}
-    return (z["idx"].astype(np.int64), z["d"].astype(np.float64), z["region"].astype(np.int64) if "region" in z.files else None,
-            str(z["base_hash"]) if "base_hash" in z.files else "", meta)
+    bh = str(z["base_hash"]) if "base_hash" in z.files else ""
+    if bh and bh != base_hash():
+        raise ValueError(f"{p}: solved on another MakeHuman base mesh ({bh} != {base_hash()})")
+    return (z["idx"].astype(np.int64), z["d"].astype(np.float64), z["region"].astype(np.int64) if "region" in z.files else None, bh, meta)
 
 
 def shape_target(shape):
