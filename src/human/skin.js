@@ -133,8 +133,8 @@ function lightsChunk() {
   if (!s.includes(a) || !s.includes(b) || !s.includes(c)) return s;
   s = s.replace(a, `${a}
     float azNL = dot( geometryNormal, directLight.direction );
-    float azW = azSkin * AZ_WRAP + azHair * 0.2 + azCloth * 0.08;
-    vec3 azIrr = ( vec3( dotNL ) + ( saturate( ( azNL + azW ) / ( 1.0 + azW ) ) - dotNL ) * mix( vec3( 1.0 ), vec3( 1.0, 0.42, 0.3 ), azSkin * azLook.y ) ) * directLight.color;
+    float azW = azSkin * AZ_WRAP * ( 0.4 + 0.6 * azScatK ) + azHair * 0.2 + azCloth * 0.08;
+    vec3 azIrr = ( vec3( dotNL ) + ( saturate( ( azNL + azW ) / ( 1.0 + azW ) ) - dotNL ) * mix( vec3( 1.0 ), vec3( 1.0, 0.42, 0.3 ), azSkin * azLook.y * azScatK ) ) * directLight.color;
     // thin skin (ears, nostril wings, lids) lets red light through from behind (medium / high: per-light cost)
     #if AZ_TIER > 0
     if ( azExtra > 0.5 && azThin > 0.01 ) {
@@ -144,7 +144,7 @@ function lightsChunk() {
     #endif`);
   s = s.replace(b, `{ vec3 azSp = irradiance * BRDF_GGX( directLight.direction, geometryViewDir, geometryNormal, material );
     #if AZ_TIER > 0
-    if ( azExtra > 0.5 && azHair > 0.01 ) azSp = mix( azSp, azHairSpec( directLight.direction, geometryViewDir, geometryNormal ) * directLight.color * saturate( azNL * 0.6 + 0.4 ), azHair * AZ_HAIRK );
+    if ( azExtra > 0.5 && azHair > 0.01 ) azSp = mix( azSp, azHairSpec( directLight.direction, geometryViewDir, geometryNormal ) * directLight.color * saturate( azNL * 0.6 + 0.4 ) * ( 1.0 - azLook.w ), azHair * AZ_HAIRK );
     if ( azExtra > 0.5 && azEyeK > 0.5 ) azSp += ( 1.0 - azLidK ) * directLight.color * ( pow( saturate( dot( geometryNormal, normalize( directLight.direction + geometryViewDir ) ) ), 900.0 ) * 2.5 * saturate( azNL * 4.0 ) );
     #endif
     #if AZ_TIER > 1
@@ -226,7 +226,7 @@ uniform sampler2D azPoreMap;
 uniform sampler2D azWeaveMap;
 #endif
 float azSkin = 0.0; float azGloss = 0.0; float azHair = 0.0; float azCloth = 0.0; float azThin = 0.0; float azCav = 0.0;
-float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0; float azSparkle = 1.0; float azMicro = 1.0; vec3 azTv = vec3( 0.0, 1.0, 0.0 );
+float azScatK = 1.0; float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0; float azTear = 0.0; float azShift = 0.0; float azSparkle = 1.0; float azMicro = 1.0; vec3 azTv = vec3( 0.0, 1.0, 0.0 );
 ` + sh.fragmentShader;
   F = F.replace('void main() {', `void main() {
 	azSkin = vAzMask.r; azGloss = vAzMask.g; azHair = vAzMask.b;
@@ -302,6 +302,10 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 		}
 	#endif
 		diffuseColor.rgb = azC;
+		// fix round 3: hair painted on the skin (a beard's mat, painted brows, stubble) is not skin: no red scatter tint
+		// there (the wrapped terminator and the ambient turned a near-black beard mat red-brown)
+		{ vec3 azLw = vec3( 0.2126, 0.7152, 0.0722 );
+		  azScatK = smoothstep( 0.22, 0.5, dot( azC, azLw ) / max( dot( azLidSkin, azLw ), 1e-3 ) ); }
 	}
 #endif
 	if ( azHair > 0.01 ) {
@@ -461,7 +465,7 @@ float azExtra = 1.0; float azTilt = 0.0; float azEyeK = 0.0; float azLidK = 0.0;
 	  reflectedLight.indirectDiffuse *= azAo; reflectedLight.indirectSpecular *= azAo * azAo * ( 1.0 - 0.55 * azHair );
 	#ifdef AZ_SKIN
 	  // light that travelled under the skin comes out redder (multiple scattering): a small red shift of the ambient
-	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.04, 0.98, 0.95 ), azSkin * ( 1.0 - azEyeK ) * azLook.y );
+	  reflectedLight.indirectDiffuse *= mix( vec3( 1.0 ), vec3( 1.04, 0.98, 0.95 ), azSkin * ( 1.0 - azEyeK ) * azLook.y * azScatK );
 	#endif
 	  float azF = pow( 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ), 4.0 );
 	#ifdef AZ_LIGHT
@@ -593,6 +597,9 @@ function buildLook(h) {
 }
 function skinScatter(h) { const v = buildLook(h).skinScatter; return typeof v === 'number' ? Math.max(0, Math.min(1, v)) : 1; }
 function lipRough(h) { const v = buildLook(h).lipRough; return typeof v === 'number' ? Math.max(0.05, Math.min(1, v)) : 0; }
+// fix round 3: shellSheen (1 = the default): the strand highlight of the painted hair volume under a build's cards (Kai's
+// sleek, tied curls read as a glossy striped helmet between the cards); azLook.w carries 1 - shellSheen
+function shellDim(h) { const v = buildLook(h).shellSheen; return typeof v === 'number' ? 1 - Math.max(0, Math.min(1, v)) : 0; }
 function applyLook(h, seed, atlas, main, info) {
   if (h.face) return h;
   const E = info.eyes, Fc = info.face;
@@ -604,7 +611,7 @@ function applyLook(h, seed, atlas, main, info) {
     // y: the skin scatter tint (the red of the wrapped terminator and of the ambient; 1 = the cast default, a build's
     // look metadata `skinScatter` lowers it: Kai's dark warm skin read orange under the sodium key); z: the lips'
     // roughness (0: the default 0.3; a build's `lipRough`: Kai's matte, textured lips)
-    azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, skinScatter(h), lipRough(h), 0) },
+    azLook: { value: new THREE.Vector4(age != null ? Math.max(0, Math.min(1, (age - 22) / 50)) : 0.15, skinScatter(h), lipRough(h), shellDim(h)) },
     azHairTint: { value: new THREE.Vector3(...Fc.hair) },
     azLidSkin: { value: new THREE.Vector3(...(E && E.lidC ? E.lidC : [0.4, 0.25, 0.2])) },
     azLashC: { value: new THREE.Vector3(...(E && E.lashC ? E.lashC : [0.03, 0.02, 0.02])) },

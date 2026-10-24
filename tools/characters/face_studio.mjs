@@ -6,7 +6,9 @@
 //   views:  front (0 deg), three (three-quarter, 35 deg to the person's left), profile (90 deg)
 //           photo: a reference photo's camera (likeness/fit.py): FS_PHOTO_CAM="x,y,z" camera position from the eye
 //           midpoint (metres, the person's frame: x his left, y up, z forward), FS_PHOTO_AIM="x,y,z" the point it
-//           looks at (same frame), FS_PHOTO_FOV vertical field of view (deg), FS_PHOTO_ROLL (deg, + = clockwise)
+//           looks at (same frame), FS_PHOTO_FOV vertical field of view (deg), FS_PHOTO_ROLL (deg, + = clockwise),
+//           FS_PHOTO_IOD (optional) the photo's pupil distance / frame width: the camera dollies to match it;
+//           FS_PHOTO_GAZE=1 turns the eyes to the camera (a selfie looks into the lens)
 //   lights: studio (neutral: soft white key with a face shadow, fill, rim, grey background)
 //           game   (Rain City night: sodium street-lamp key from above right, cyan rim from behind left, wet blue ambient)
 // Writes OUTDIR/<id>_<view>_<light>.png and OUTDIR/shots.json (camera, eye positions, triangle counts per id).
@@ -82,7 +84,7 @@ await p.evaluate(async (O) => {
       const eL = v('eye_L'), eR = v('eye_R');
       let eyes = eL && eR ? eL.clone().add(eR).multiplyScalar(0.5) : null;
       if (!eyes) { const h = v('head'); eyes = h.add(new THREE.Vector3(0, 0.075, 0.075)); }
-      this.cur = pr; this.eyes = eyes;
+      this.cur = pr; this.eyes = eyes; this.eL = eL; this.eR = eR;
       // triangles in total and on the face (atlas body mesh, all three corners inside the face box in the rest pose:
       // 7.5 cm either side of the eyes, 13 cm below to 7 cm above them, in front of the ears): the simplifier's share
       let tris = 0, faceTris = 0;
@@ -110,11 +112,36 @@ await p.evaluate(async (O) => {
         cam.fov = O.photoFov || 45; cam.updateProjectionMatrix();
         cam.up.set(0, 1, 0); cam.position.copy(pc); cam.lookAt(aim);
         if (O.photoRoll) cam.rotateZ(-O.photoRoll * Math.PI / 180);
+        if (O.photoIod > 0 && this.eL && this.eR) {
+          // FS_PHOTO_IOD (fix round 3): the photo's pupil distance as a share of the frame width; the camera dollies along
+          // its axis until the build's pupils (the eye bones plus the eyeball's radius, forward) project as far apart, so
+          // the photo and the render register for blends (the eye-bone anchor sits ~1 cm behind the fit's anchor: 4 %)
+          cam.updateMatrixWorld(true);
+          const pu = e => e.clone().add(new THREE.Vector3(0, 0, 0.0115)).project(cam);
+          for (let it = 0; it < 4; it++) {
+            const a = pu(this.eL), b = pu(this.eR), cur = Math.hypot(a.x - b.x, a.y - b.y) / 2;
+            const k = cur / O.photoIod, dir = cam.position.clone().sub(aim);
+            cam.position.copy(aim.clone().add(dir.multiplyScalar(k))); cam.updateMatrixWorld(true);
+          }
+        }
         for (const k of ['key', 'fill', 'rim']) {
           const [x, y, z] = L[k].userData.rel; L[k].position.set(aim.x + x, aim.y + y, aim.z + z); L[k].target.position.copy(aim);
         }
         r.render(scene, cam);
-        if (this.cur.rig2 && this.cur.rig2.update) { this.cur.rig2.update(0); r.render(scene, cam); }
+        if (this.cur.rig2 && this.cur.rig2.update) {
+          const F = this.cur.rig2.face;
+          if (O.photoGaze && F) {
+            // FS_PHOTO_GAZE (fix round 3): a selfie looks into the lens: the eyes (and lids) turn to the photo camera
+            // through the rig's own gaze (the rest pose looks straight ahead: from the photo's high camera the iris sat
+            // low with white above it, a stare)
+            const d = cam.position.clone().sub(this.eyes);
+            F.want.yaw = Math.atan2(d.x, d.z) * O.photoGazeK; F.want.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z)) * O.photoGazeK;
+          }
+          this.cur.rig2.update(0);
+          if (O.photoGaze && F) { F.apply(); this.cur.root.updateMatrixWorld(true); }
+          r.render(scene, cam);
+          if (O.photoGaze && F) { F.want.yaw = 0; F.want.pitch = 0; F.apply(); this.cur.root.updateMatrixWorld(true); }
+        }
         const url = r.domElement.toDataURL('image/png');
         cam.fov = 24; cam.updateProjectionMatrix(); cam.up.set(0, 1, 0);
         return url;
@@ -143,7 +170,7 @@ await p.evaluate(async (O) => {
     },
   };
 }, { size, expr: process.env.EXPR || '', photoCam: process.env.FS_PHOTO_CAM || '', photoAim: process.env.FS_PHOTO_AIM || '',
-  photoFov: +(process.env.FS_PHOTO_FOV || 0), photoRoll: +(process.env.FS_PHOTO_ROLL || 0) });
+  photoFov: +(process.env.FS_PHOTO_FOV || 0), photoRoll: +(process.env.FS_PHOTO_ROLL || 0), photoIod: +(process.env.FS_PHOTO_IOD || 0), photoGaze: process.env.FS_PHOTO_GAZE === '1', photoGazeK: +(process.env.FS_PHOTO_GAZE_K || 1) });
 const meta = {};
 for (const id of ids) {
   const t0 = Date.now();

@@ -197,11 +197,16 @@ for (const scene of root.listScenes()) for (const top of scene.listChildren()) {
         if (near) occ.push(rawIdx[t], rawIdx[t + 1], rawIdx[t + 2]);
       }
       const t0 = Date.now(), ao = vertexAO(P, N, rs, new Uint32Array(occ));
+      // fix round 3: a build's per-vertex occlusion relief (`_aor`, build_humans.ao_relief: Kai's nose sides, nasolabial
+      // folds and under-eye crescent), applied to the bake, then dropped from the shipped mesh
+      const aorA = prim.getAttribute('_AOR') || prim.getAttribute('_aor');
+      if (aorA) { const R = floats(aorA); for (const v of new Set(rs)) ao[v] = 1 - (1 - ao[v]) * (1 - R[v]); }
       let mean = 0, nn = 0; for (const v of new Set(rs)) { mean += ao[v]; nn++; }
       bakeJobs[id].ao = { UV, skin: rs, other: ro, val: ao };
       bakeLogEarly.push(`${id}: head ao ${(Date.now() - t0) / 1000}s, mean ${(mean / nn).toFixed(2)}, ${occ.length / 3} occluders`);
     }
   }
+  for (const nm_ of ['_AOR', '_aor']) if (prim.getAttribute(nm_)) prim.setAttribute(nm_, null);      // (bake input only)
   let err = 0, head = rawHead;
   const target = tb.hi - others;
   if (mine > target || (tb.headHi != null && rawHead > tb.headHi)) {

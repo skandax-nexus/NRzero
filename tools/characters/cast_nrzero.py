@@ -547,7 +547,14 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   # tweaks, a matte nose bridge
                   "moHangCorner", "sclera", "caruncle", "lashWing", "lashLowerOut", "lashLenLower", "browCards", "browHairW", "browBase",
                   "browEdge", "underEyeBlur", "lidHood", "lipLower", "lipAsym", "moleTweak", "bridgeMatte", "browCardGain", "browPaintGain",
-                  "beardCardGain", "moPaintDark", "underEyeLift", "foreheadRamp", "sideburnTop", "alarSoften")
+                  "beardCardGain", "moPaintDark", "underEyeLift", "foreheadRamp", "sideburnTop", "alarSoften",
+                  # fix round 3: the lower lip's darker edges, the beard's dark rim, clumps, lighter under-lip mat and the
+                  # jaw-side cards, the lashes (root, curl, no lower lashes), the eyeball's lid shade, the lower lid line,
+                  # the brows' fading tail and irregular hairs, shallower painted folds, the occlusion relief, the
+                  # forehead shade's centre / side strength, the upper cheeks' freckles
+                  "lipEdgeDark", "beardRimDark", "beardRimDense", "beardClump", "beardLightPaint", "beardJawSide", "lashDrop", "lashCurl",
+                  "lashLower", "eyeAO", "lidLineLo", "browTailFade", "browJitter", "foldDepth", "aoFace", "foreheadBase", "foreheadSide",
+                  "cheekSpots", "beardStroke", "shellSheen", "lipRim")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 

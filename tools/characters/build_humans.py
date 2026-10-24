@@ -1261,13 +1261,15 @@ def paint(c, B, cov, res, path_out):
     if LK is not None and c.get("lipLower"):      # fix round 2: the lower lip's centre rosier and a little darker (not a pale clay lozenge)
         lc_ = g2((t / 0.55) ** 2 + ((-d - hl0 * 0.5) / (hl0 * 0.6)) ** 2, 1.0) * ml
         over(lipm * lc_ * 0.7, hexc(c["lipLower"]))
+        if c.get("lipEdgeDark"):      # fix round 3: the lower lip darker toward its edges (mauve-brown, not a pale glossy lens)
+            tint(lipm * ml * float(c["lipEdgeDark"]) * (1 - g2((t / 0.7) ** 2 + ((-d - hl0 * 0.5) / (hl0 * 0.45)) ** 2, 1.0)), [0.85, 0.82, 0.84])
     if LK is not None and c.get("lipAsym"):       # fix round 2: a slight left / right asymmetry (one side a touch darker and fuller-toned)
         tint(lipm * float(c["lipAsym"]) * ss(-0.6, 0.8, t) * (0.6 + 0.4 * vnoise(pos, 160, seed + 4.4)), [0.9, 0.86, 0.88])
     if LK is not None and c.get("lipLines"):      # fix round 1: fine vertical lip lines (the vermilion's furrows), darker at the centre of each lip
         ll = vnoise(pos * np.array([1.0, 0.07, 1.0]), 2300, seed + 8.3)
         tint(lipm * float(c["lipLines"]) * np.clip((ll - 0.45) * 2.5, 0, 1) * (1 - 0.5 * ss(0.5, 1.0, np.abs(t))), [0.82, 0.78, 0.8])
     tint((0.4 if LK is None else float(c.get("lipParted", 0.4))) * g2(d ** 2, 0.0005 if LK is None else 0.00065) * lipfront * ss(1.15, 0.85, np.abs(t)), [0.55, 0.45, 0.45])   # contact line
-    tint(0.05 * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge
+    tint((0.05 if LK is None else float(c.get("lipRim", 0.05))) * g2((d - hu - 0.0012) ** 2, 0.0007) * lipfront * (np.abs(t) < 0.9), [1.08, 1.06, 1.04])   # vermilion edge (fix round 3: lipRim, Kai 0: no light outline)
     for sg in (1, -1):
         cn = np.array([sg * L.lip_w, np.interp(sg * L.lip_w, xs, ys), L.lip_z - 0.008])
         if look2.ON:      # scaled to the mouth (a child's corners read as dirt at the adult size) and softer
@@ -1298,7 +1300,7 @@ def paint(c, B, cov, res, path_out):
         tint(g2(((dd - 0.003) / 0.003) ** 2, 1.0) * inside * near * 0.05, [0.92, 0.88, 0.9])      # lid
         ylo = np.interp(dx, lx, ly)
         lo_line = g2(((dy - ylo + 0.0005) / 0.0008) ** 2, 1.0) * ((dx > lx.min()) & (dx < lx.max())) * near
-        tint(lo_line * 0.22, [0.7, 0.62, 0.6])
+        tint(lo_line * (0.22 if LK is None else float(c.get("lidLineLo", 0.22))), [0.7, 0.62, 0.6])      # (fix round 3, Kai 0.06: no dark ring round the sclera)
         inner = g2(((dx - ux.min() + 0.002) / 0.004) ** 2 + (dy / 0.004) ** 2, 1.0) * near
         tint(inner * (0.18 if LK is None else 0.07), [0.86, 0.72, 0.72])
         if c.get("caruncle"):      # fix round 2: the pink caruncle in the inner corner (the skin of the canthus, at the opening's height)
@@ -1335,6 +1337,8 @@ def paint(c, B, cov, res, path_out):
         tt = np.clip(((X[:, None] - rx[None]) * sx[None] + (Y[:, None] - ry[None]) * sy[None]) / L2[None], 0, 1)
         dd = np.hypot(X[:, None] - (rx[None] + tt * sx[None]), Y[:, None] - (ry[None] + tt * sy[None]))
         cvg = np.clip(1 - dd / (wd[None] * (1.15 - 0.55 * tt)), 0, 1)
+        if LK is not None and c.get("browTailFade"):      # fix round 3: the painted strokes fade toward the tail too
+            cvg = cvg * (1 - float(c["browTailFade"]) * ss(0.55, 1.0, tk))[None, :]
         alpha = 1 - np.prod(1 - (0.38 if look2.ON else 0.7) * cvg, axis=1)     # v2: brow hair cards lie on top (proto:makehuman 0.55 -> 0.38)
         # soft base tint under the strokes
         bx0, bx1 = float(T(0.0)[0]), float(T(1.0)[0])
@@ -1346,6 +1350,8 @@ def paint(c, B, cov, res, path_out):
             be = float(c.get("browEdge", 0.0))      # fix round 2: both edges softened over ~1.5 mm (no ragged marker outline)
             inb = (ss(-0.0006 - be * 0.5, 0.001 + be * 0.3, Y - cby) * ss(cbw + 0.0001 + be * 0.3 + brk, cbw - 0.0017 + brk, Y - cby)
                    * ss(bx0 - 0.0005, bx0 + 0.004, X) * ss(bx1 + 0.002, bx1 - 0.003, X))
+        if LK is not None and c.get("browTailFade"):
+            inb = inb * (1 - float(c["browTailFade"]) * ss(bx0 + 0.55 * (bx1 - bx0), bx1, X))
         alpha = np.clip(np.maximum(alpha, 0.0) + ((0.17 if LK is None else float(c.get("browBase", 0.4))) if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
         m = np.zeros(len(px))
         m[idx] = alpha
@@ -1439,6 +1445,16 @@ def paint(c, B, cov, res, path_out):
         if ed_ > 0:     # fix round 2: the skin right at the shell's border darkened (it caught the light as a pale strip)
             fa = np.maximum(fa, ed_ * ss(-0.0035, -0.0005, hcov) * band)
         over(fa, hair_c * 0.8 + skin * 0.2)
+        if look2.ON and look2.CUTS.get(c.get("hairCut") or "", {}).get("hairlineJag"):
+            # fix round 3: the hairline as hair, not a band: the edge broken by a 2-4 mm noise (no straight edge, no
+            # square temples), fine dark hair strokes along the growth direction rooted on it (dark roots, no greyed
+            # skin-and-hair mix that caught the light as a pale comb)
+            jg = float(look2.CUTS[c["hairCut"]]["hairlineJag"])
+            jag = jg * (vnoise(rel, 210, seed + 5.5) - 0.5) + 0.4 * jg * (vnoise(rel, 700, seed + 6.6) - 0.5)
+            hc2 = hcov + jag
+            strokes = np.clip((vnoise(rel * np.array([1.0, 0.2, 1.0]), 1500, seed + 7.7) - 0.35) * 2.4, 0, 1)
+            ea = ss(-0.0045, 0.0005, hc2) * (0.45 + 0.55 * strokes) * ((hcov < 0.002) & ~ears)
+            over(np.clip(ea, 0, 0.92), hair_c * 0.95)
         under = (hcov >= 0) & ~ears
         # the density is already full a couple of mm inside the hairline: the hair shell's border sits on the hairline
         # and samples these texels, so a fade inside it painted the shell's edge skin-pale (a light outline under the
@@ -2626,12 +2642,14 @@ def build(c, tex_dir):
         look2.add_bones(arm, B, B._eyes)
         # fix round 1: run-time skin values of this build (skin.js azLook): the scatter tint and the lips' roughness
         _m = json.loads(arm["look"])
-        for _k in ("skinScatter", "lipRough"):
+        for _k in ("skinScatter", "lipRough", "shellSheen"):      # (fix round 3: shellSheen)
             if c.get(_k) is not None:
                 _m[_k] = float(c[_k])
         arm["look"] = json.dumps(_m)
     for o in parts + cloth + gx + ([gh] if gh else []):
         apply_weights(o, arm)
+    if c.get("aoFace"):
+        ao_relief(parts[0], B, c)
     if look2.ON and budget(c) >= 16000 and os.environ.get("HEAD_SUBDIV", "1") != "0":
         subdivide_head(parts[0], B)       # proto:makehuman: smooth face silhouettes on the hero (pack lands the budget)
     if gh:
@@ -2677,6 +2695,34 @@ def build(c, tex_dir):
     arm["stature"] = float(c.get("metres") or round(float(B.P[:, 1].max() - B.P[:, 1].min()), 3))
     AUX_MODE[0] = False
     return arm, mesh
+
+
+def ao_relief(o, B, c):
+    """fix round 3 (a face file's `aoFace`, Kai): per skin vertex, the share of the baked ambient occlusion that
+    pack_cast2.mjs removes (`_aor`, 0 = unchanged; the other joined parts carry 0): the nose's side walls, the
+    nasolabial folds and the under-eye crescent, where the bake's 6 cm rays darkened a full, round face into a gaunt,
+    contoured one (narrow bridge, deep grooves, hard bags). aoFace: {"nose": .., "fold": .., "underEye": ..} = the
+    occlusion kept there (0.6 = 40 % less)."""
+    if o.name.split(".")[0] != "skin":
+        return
+    cfg = c["aoFace"]
+    P = from_bl_np(obj_world_verts(o))
+    LK = likeness_look.load(c, B)
+    q = LK.mm(P) if LK is not None else (P - B.L.eye) * 1000.0
+    ax_, y = np.abs(q[:, 0]), q[:, 1]
+    front = ss(-30.0, -15.0, q[:, 2])
+    nose = ss(3.0, 8.0, ax_) * ss(25.0, 18.0, ax_) * ss(-2.0, -10.0, y) * ss(-48.0, -38.0, y)
+    a_, b_ = np.array([17.0, -36.0]), np.array([33.0, -70.0])
+    ab = b_ - a_
+    t_ = np.clip(((ax_ - a_[0]) * ab[0] + (y - a_[1]) * ab[1]) / (ab @ ab), 0, 1)
+    dd = np.hypot(ax_ - (a_[0] + t_ * ab[0]), y - (a_[1] + t_ * ab[1]))
+    fold = ss(9.0, 3.0, dd)
+    ue = g2(((ax_ - 32.0) / 17.0) ** 2 + ((y + 13.0) / 8.0) ** 2, 1.0)
+    red = np.maximum.reduce([(1 - float(cfg.get("nose", 1.0))) * nose, (1 - float(cfg.get("fold", 1.0))) * fold,
+                             (1 - float(cfg.get("underEye", 1.0))) * ue]) * front
+    a = o.data.attributes.get("_aor") or o.data.attributes.new("_aor", "FLOAT", "POINT")
+    a.data.foreach_set("value", np.clip(red, 0, 1).astype(np.float32))
+    print(f"  ao relief: {int((red > 0.05).sum())} vertices, max {red.max():.2f}", flush=True)
 
 
 def subdivide_head(o, B):

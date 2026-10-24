@@ -11,9 +11,11 @@ origin = the midpoint of the inner eye corners, 0.25 mm per pixel) and writes OU
                               even beard; small speckles removed; carried outward past the face outline so the side
                               of the jaw, which the frontal view does not see, gets the density of its outline)
   beard_len  (H, W) float16  hair length factor (moustache 1, chin and jaw 1.6-1.9, cheeks 0.6)
+  beard_light (H, W) float16 fix round 3: where the beard's hair is lighter and warmer (under the lower lip, the philtrum)
+  beard_rim  (H, W) float16  fix round 3: the beard's dark, dense rim (jaw and neck edge, the chin's bottom)
   frame      [x0, y0, step]  mm of grid cell (0, 0) and the step (row 0 at the top: y = y0 - row * step)
   brows      (2, n, 4)       per side (0 = left, 1 = right): x (mm, outward from the midline), top, bottom, thickness;
-                              the two sides averaged (mirrored), the frown undone (FROWN: medial end up 2.6 mm,
+                              the two sides averaged (mirrored), the frown undone (FROWN: medial end up 1.3 mm,
                               lateral 1.4 mm; the fit found the frown lowers the brows 1.5-3 mm)
   moles      (n, 6)          x, y, z (mm), diameter (mm), contrast (0..1, darker = lower), kind (1 mole, 0 faint spot)
   colours    json string     the measured albedos (linear) used for the colour zones
@@ -29,11 +31,17 @@ from scipy.ndimage import binary_closing, binary_fill_holes, gaussian_filter, la
 HERE = os.path.dirname(os.path.abspath(__file__))
 LK = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LIKENESS_DIR", "/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/faces/likeness")
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "faces_candidates", "kai_photo", "kai_look.npz")
-FROWN = (2.6, 1.4)           # mm the brows are lifted to undo the photo's frown (medial, lateral)
+FROWN = (1.3, 1.4)           # mm the brows are lifted to undo the photo's frown (medial, lateral; fix round 3: medial 2.6 -> 1.3,
+                             # his inner brows sit low and heavy over the eyes even unfrowned)
 FILL = 0.62                  # density floor inside the beard's closed outline (likeness:final)
 MOUSTACHE = 0.97             # moustache density, philtrum included (likeness:final)
-UNDERLIP = 0.35              # the lighter zone under the lower lip (hair with skin showing through; fix round 1 0.5, round 2 0.35)
-SOUL = 0.6                   # the narrow darker strip down the middle of it (fix round 1 0.72, round 2 0.6)
+UNDERLIP = 0.78              # fix round 3: the density floor of the lighter zone under the lower lip (it is lighter HAIR, not skin:
+                             # round 1 capped it at 0.5, round 2 at 0.35, which painted a skin window with hard edges)
+UNDERLIP_E = (25.0, 14.0, 12.0)  # its ellipse: half width, half height (mm) and its centre below Li (the whole inner chin between
+                             # the horseshoe's arms down to the rim), feathered radially over ~10 mm
+SOUL = 0.12                  # the soul strip down its middle: a soft, slightly denser (darker) gradient on top of the floor
+PHILTRUM = 0.74              # fix round 3: the moustache is thinner and lighter over the philtrum (|x| < 4 mm): two dense wings
+UNDERJAW = 14.0              # fix round 3: mm the chin's bottom rim is carried further down beside the centre (|x| 10-30 mm)
 HORSESHOE = 5.0              # fix round 1: mm the moustache's down-turned ends run further down past the mouth corners
 SIDEBAND = (0.88, 10.0, 8.0)  # fix round 2: the beard's outer band above the nose base (density, width at the nose base and
                              # at eye level, mm inside the photo's face outline), from the nose base up to eye level
@@ -94,19 +102,40 @@ def main():
     chx = 0.5 * (abs(F["Ch_L"][0]) + abs(F["Ch_R"][0]))
     ax_ = np.abs(X)
     sm = lambda e0, e1, v: np.clip((v - e0) / (e1 - e0), 0, 1) ** 2 * (3 - 2 * np.clip((v - e0) / (e1 - e0), 0, 1))
-    mo = sm(sn_y + 1.0, sn_y - 2.5, Y) * sm(ls_y - 3.0, ls_y + 0.5, Y) * sm(chx + 7.0, chx + 2.0, ax_)
+    # fix round 3: the moustache's top edge follows the nostril base and rises along the alar base (sn + 1 mm at the
+    # midline, sn + 2.5 mm under the alae at |x| 14-18 mm), then runs down and out along the nasolabial line into the
+    # horseshoe, so its outer ends are rounded, not square corners; feathered over ~2.5 mm (the cards add single hairs)
+    al_x = 0.5 * (abs(F["Al_L"][0]) + abs(F["Al_R"][0]))
+    top = sn_y + 1.0 + 1.5 * sm(3.0, al_x - 6.0, ax_)
+    top = top - np.clip(ax_ - (al_x - 4.0), 0, None) * ((sn_y + 2.5) - (ls_y - 7.0)) / max(chx + 6.0 - (al_x - 4.0), 4.0)
+    mo = sm(top + 1.0, top - 1.5, Y) * sm(ls_y - 3.0, ls_y + 0.5, Y) * sm(chx + 9.0, chx + 3.0, ax_)
     # the moustache's lower edge follows the lip line out to the corners and turns down there
-    drop = (sm(chx - 6.0, chx - 1.0, ax_) * sm(chx + 11.0, chx + 6.0, ax_) * sm(ls_y + 0.5, ls_y - 3.0, Y)
+    drop = (sm(chx - 11.0, chx - 1.0, ax_) * sm(chx + 11.0, chx + 6.0, ax_) * sm(ls_y + 0.5, ls_y - 3.0, Y)
             * sm(sto_y - 34.0 - HORSESHOE, sto_y - 26.0 - HORSESHOE, Y))
-    # fix round 1: under the lower lip, between the horseshoe's arms and above the dense bottom rim of the chin, his
-    # beard is lighter and sparser (skin shows through), with a narrow darker strip down the middle; the densest part is
-    # the bottom edge (kept: the rim rows below Pg + 4 mm are untouched)
+    # fix round 3: under the lower lip his beard is lighter, finer HAIR (no skin window): a soft ellipse about 8 mm below Li,
+    # radially feathered (no vertical edges at the mouth-corner columns, no flat top or bottom), filled to UNDERLIP; its
+    # light look comes from lighter hair in the build (`beard_light`: the cards and the painted mat tinted toward
+    # beardWarm), and the soul strip down the middle is a soft, slightly denser gradient
     li_y, pg_y = F["Li"][1], F["Pg"][1]
-    ul = sm(li_y + 1.0, li_y - 3.0, Y) * sm(pg_y + 2.0, pg_y + 8.0, Y) * sm(chx - 2.0, chx - 7.0, ax_)
-    cap = UNDERLIP + (SOUL - UNDERLIP) * sm(7.0, 3.5, ax_)
-    g = np.where(ul > 0, g * (1 - ul) + np.minimum(g, cap) * ul, g)
+    rx_, ry_, dy_ = UNDERLIP_E
+    de_ = np.sqrt((X / rx_) ** 2 + ((Y - (li_y - dy_)) / ry_) ** 2)
+    ul = sm(1.5, 0.75, de_) * sm(li_y + 0.5, li_y - 2.5, Y)
+    soul = np.exp(-(X / 4.5) ** 2) * sm(li_y + 0.5, li_y - 3.0, Y) * sm(li_y - 16.0, li_y - 6.0, Y)
+    g = np.maximum(g, UNDERLIP * ul)
+    g = np.minimum(1.0, g + SOUL * soul * ul)
     g = np.maximum(g, MOUSTACHE * mo)
     g = np.maximum(g, 0.92 * drop)
+    # fix round 3: the philtrum notch (the moustache's two dense wings meet in a thinner, lighter middle above the lip's
+    # fringe)
+    notch = np.exp(-(X / 3.6) ** 2) * sm(ls_y + 1.0, ls_y + 5.0, Y) * sm(top + 1.0, top - 2.5, Y)
+    g = g * (1 - notch) + np.minimum(g, PHILTRUM) * notch
+    # fix round 3: the chin's bottom rim beside the centre carried UNDERJAW mm lower (the photo's beard hangs ~14 mm
+    # further at |x| 10-30 mm than the build's)
+    sh_ = int(round(UNDERJAW / step))
+    gd = np.zeros_like(g)
+    gd[sh_:] = g[:-sh_]
+    wj = sm(4.0, 10.0, ax_) * sm(38.0, 28.0, ax_) * sm(pg_y + 4.0, pg_y - 4.0, Y)
+    g = np.maximum(g, gaussian_filter(gd, 1.5) * wj)
     # fix round 2: the mask was cut at the nose base, but in the photo his beard runs as one continuous dark band down
     # the face outline from the sideburn at eye level to the jaw: the outermost 8-10 mm inside the outline (the
     # measured widths at the eye, cheekbone, nose-base and mouth levels; carried out to the frame edge for the side of
@@ -120,6 +149,11 @@ def main():
     band = sm(half - bw - 2.5, half - bw + 1.5, ax_) * sm(lv_y[4] + 6.0, lv_y[4] + 1.0, Y) * sm(sn_y - 14.0, sn_y + 2.0, Y)
     g = np.maximum(g, SIDEBAND[0] * band)
     g = gaussian_filter(g, 0.6)
+    # fix round 3: where the beard's hair is lighter (under the lower lip, the philtrum: tinted toward beardWarm in the
+    # build) and its dark, dense rim (along the jaw and the neck, the chin's bottom edge: darker cards and mat)
+    light = np.clip(ul * sm(pg_y - 2.0, li_y - 6.0, Y) * (1 - 0.7 * soul) + 0.3 * notch, 0, 1)
+    rim = np.clip(sm(pg_y + 3.0, pg_y - 6.0, Y) + sm(half - 16.0, half - 5.0, ax_) * sm(sn_y + 6.0, sn_y - 12.0, Y), 0, 1) * (1 - ul)
+    rim = gaussian_filter(rim * (g > 0.25), 1.5)
     # length factor: long on the chin, the jaw and the soul patch, short on the cheeks, medium on the moustache
     lip_y = F["Sto"][1]
     chin = np.clip((lip_y - 6 - Y) / 30.0, 0, 1)
@@ -155,11 +189,12 @@ def main():
     if os.path.exists(cp):
         cam = np.array(json.load(open(cp))["cam_from_eyes"], float) * 1000.0
     np.savez_compressed(OUT, beard=g.astype(np.float16), beard_len=ln.astype(np.float16), frame=np.array([x0, y0, step]),
+                        beard_light=light.astype(np.float16), beard_rim=rim.astype(np.float16),
                         brows=brows.astype(np.float32), moles=moles.astype(np.float32),
                         colours=json.dumps(col), landmarks=json.dumps(lm), photo_cam=cam.astype(np.float32))
     print(OUT, g.shape, "beard cells > 0.5:", int((g > 0.5).sum()), "brow x", br[0, 0], br[-1, 0], "moles", len(moles))
     # a preview of the map (scratch, outside the repo)
-    prev = (np.stack([g, g, ln / ln.max()], -1) * 255).astype(np.uint8)
+    prev = (np.stack([g, g * (1 - 0.5 * light), np.clip(ln / ln.max() * 0.5 + 0.5 * rim, 0, 1)], -1) * 255).astype(np.uint8)
     Image.fromarray(prev).save(os.path.join(LK, "look_beard_map.png"))
 
 
