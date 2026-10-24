@@ -1985,8 +1985,8 @@ CURLY = ("curly_tied", "curly_loose")
 # tight curl clumps over the crown)
 CUTS["photo_tied"] = dict(base="pony", hero="curly_tied", stiff=0.5, top=0.20, front=0.20, side=0.05, nape=0.06, comb="back", lift=0.0, frontLift=0.0,
                           wave=0.22, W=0.0095, side_dens=1.0, wisp=0.05, scalp="full", nopart=True, sheen=0.18,
-                          ringW=0.08, ringR=(0.005, 0.008), ringPitch=(0.014, 0.02), ringPpt=14, haloOut=0.03,
-                          frizz=(120, 0.003, 0.006, 0.00042), frizzCap=1.75, target=13500, sleekW=0.5, sleekDs=0.016, sleekN=330, sleekCols=(0, 1, 2), temple=110,
+                          ringW=0.08, ringR=(0.005, 0.008), ringPitch=(0.014, 0.02), ringPpt=14,
+                          frizz=(85, 0.003, 0.006, 0.00042), frizzCap=1.75, target=13500, haloN=125, haloTemple=1.2, haloOut=0.04, sleekW=0.5, sleekDs=0.016, sleekN=330, sleekCols=(0, 1, 2), temple=110,
                           shellDark=0.62, shellStripe=0.35, edgeDark=0.0, hairlineJag=0.004, clumpW=(0.006, 0.009), ringKeep=0.45,
                           clumpCols=(4, 5, 6), clumpTip=1.3, babyHair=(170, 0.0004, (0.008, 0.022)))
 CUTS["photo_loose"] = dict(base="bob", hero="curly_loose", stiff=0.3, top=0.12, front=0.07, side=0.09, nape=0.11, comb="tousle", lift=0.0, frontLift=0.0,
@@ -2371,8 +2371,9 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         zone = (np.abs(unc[:, 0]) > 0.45) & (unc[:, 1] > -0.12) & (unc[:, 1] < 0.4) & (unc[:, 2] < 0.3)
         back = (unc[:, 2] < -0.55) & (unc[:, 1] > -0.5) & (unc[:, 1] < 0.2)
         hz = cand[(zone | back) & ((cand - eye)[:, 1] > ear_top + 0.004 * k)]
-        nh = int(90 * tf) + 10
-        for g in spread(hz, nh, lambda P_: 1 + 1.2 * (np.abs((P_ - head_c)[:, 0]) / 0.07)) - head_c:
+        nh = int(C.get("haloN", 90) * tf) + 10      # (fix round 3, Kai 125: fuller frizz at the temples)
+        tw_ = float(C.get("haloTemple", 0.0))      # fix round 3: denser toward the temples (in front, above the ears)
+        for g in spread(hz, nh, lambda P_: (1 + 1.2 * (np.abs((P_ - head_c)[:, 0]) / 0.07)) * (1 + tw_ * BH.ss(-0.35, 0.1, ((P_ - head_c) / np.linalg.norm(P_ - head_c, axis=1, keepdims=True))[:, 2]))) - head_c:
             ln = rng.uniform(0.016, 0.034) * k
             R = rng.uniform(*rR) * k
             pitch = rng.uniform(*rP) * k

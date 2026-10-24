@@ -45,7 +45,9 @@ Check a set before it ships:
   Since likeness:final also `underEye` / `lidShade` (painted under-eye and upper-lid shade strength), `faintSpots`
   (faint-spot strength), `tzoneGloss` (the T-zone's gloss factor, 1 = default) and `skinMatte` (added face roughness).
 - Kai (docs/CHARACTER_LOOK.md "Kai's face (from the owner's photo)"): `kai.json` + `kai_look.npz` here are hair A
-  (tied, as in the photo); `cp ../faces_candidates/kai_photo_B/* .` switches to hair B (loose, messy medium length).
+  (tied, as in the photo, = `../faces_candidates/kai_photo/`); `cp ../faces_candidates/kai_photo_B/kai.json
+  ../faces_candidates/kai_photo_B/kai_look.npz .` switches to hair B (loose, messy medium length), the same two files
+  from `../faces_candidates/kai_photo/` switch back (not `_heights.json`: that is the candidate set's height cache).
 
 - Fix round 1 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 1"): `browShape` ({flat, rise, tail, tailThin, head,
   thick}: the measured brow reshaped for the painted brow and the brow cards alike), `irisWarm` / `irisGain`,
@@ -61,3 +63,16 @@ Check a set before it ships:
   shade), `lipLower` (hex: the lower lip's rose centre) / `lipAsym`, `moleTweak` ([index, dx, dy mm, size, strength]),
   `bridgeMatte`, `alarSoften` (smoothing passes over the nose wings' crease), `foreheadRamp` ([mm, mm]; `foreheadShade`
   is now the tone's exponent), `hairline.arch` ([azimuth deg, height m] pairs: the front hairline as measured).
+- Fix round 3 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 3"): `lipEdgeDark` (the lower lip darker toward its
+  edges), `lipRim` (the light vermilion outline, default 0.05), `beardRimDark` / `beardRimDense` (the beard's dark rim
+  along the jaw, neck and chin bottom: mat and cards darker, more cards there), `beardClump` (5-8 mm tone patches in
+  the mat), `beardLightPaint` (the lighter hair under the lower lip: the mat's lift), `beardStroke` (resolvable hair
+  strokes in the painted mat), `beardJawSide` ({len: [m, m], off: [m, m], curl, rimLen}: the jaw-side cards' length,
+  stand-off and curl, the chin rim's extra length), `lashDrop` / `lashCurl` / `lashLower` (0: no lower lashes),
+  `eyeAO` (the lid's contact shadow on the eyeball, darker sclera corners), `lidLineLo` (the lower lid line's
+  strength), `browTailFade` / `browJitter` (a lighter fading tail; irregular hairs, some under the lower edge),
+  `foldDepth` (the painted nasolabial and under-eye lines' depth), `aoFace` ({nose, fold, underEye}: the baked
+  occlusion kept there; `build_humans.ao_relief` -> `_aor`, applied by `pack_cast2.mjs`), `foreheadBase` /
+  `foreheadSide` (the forehead shade at the centre and toward the temples), `cheekSpots` ([right, left] faint freckles
+  on the upper cheeks), and `shellSheen` (run time, skin.js: the painted hair volume's strand highlight). The look data
+  adds `beard_light` / `beard_rim` maps (`likeness/look_data.py`).
