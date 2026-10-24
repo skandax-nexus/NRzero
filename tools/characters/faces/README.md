@@ -44,10 +44,11 @@ Check a set before it ships:
   variant: another face file's keys first). Cuts `photo_tied` / `photo_loose`: curly ringlet cards (`look2._curl_cards`).
   Since likeness:final also `underEye` / `lidShade` (painted under-eye and upper-lid shade strength), `faintSpots`
   (faint-spot strength), `tzoneGloss` (the T-zone's gloss factor, 1 = default) and `skinMatte` (added face roughness).
-- Kai (docs/CHARACTER_LOOK.md "Kai's face (from the owner's photo)"): `kai.json` + `kai_look.npz` here are hair A
-  (tied, as in the photo, = `../faces_candidates/kai_photo/`); `cp ../faces_candidates/kai_photo_B/kai.json
-  ../faces_candidates/kai_photo_B/kai_look.npz .` switches to hair B (loose, messy medium length), the same two files
-  from `../faces_candidates/kai_photo/` switch back (not `_heights.json`: that is the candidate set's height cache).
+- Kai (docs/CHARACTER_LOOK.md "Kai's face (from the owner's photo)"): `kai.json` + `kai_look.npz` + `kai_shape.npz`
+  here are hair A (tied, as in the photo, = `../faces_candidates/kai_photo/`); `cp ../faces_candidates/kai_photo_B/kai.json
+  ../faces_candidates/kai_photo_B/kai_look.npz ../faces_candidates/kai_photo_B/kai_shape.npz .` switches to hair B (loose,
+  messy medium length), the same three files from `../faces_candidates/kai_photo/` switch back (not `_heights.json`:
+  that is the candidate set's height cache).
 
 - Fix round 1 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 1"): `browShape` ({flat, rise, tail, tailThin, head,
   thick}: the measured brow reshaped for the painted brow and the brow cards alike), `irisWarm` / `irisGain`,
@@ -76,3 +77,11 @@ Check a set before it ships:
   `foreheadSide` (the forehead shade at the centre and toward the temples), `cheekSpots` ([right, left] faint freckles
   on the upper cheeks), and `shellSheen` (run time, skin.js: the painted hair volume's strand highlight). The look data
   adds `beard_light` / `beard_rim` maps (`likeness/look_data.py`).
+- Fix round 4 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 4: the complete face shape"): `shape` (a dense per-vertex
+  shape layer, `likeness/dense_fit.py`: an `.npz` relative to the face file, stored like a MakeHuman target, decimetre
+  deltas on base-mesh vertex ids; `mh.sculpt(..., shape=)` adds it after the macro and detail targets, so the rig,
+  eyes, teeth, cards, hair, gear and paint all follow; a missing file is an error), `shapeWeight` (default 1) and
+  `shapeRegions` (`{region id: weight}`, the npz's `region`: 0 vault, 1 forehead / brow, 2 orbit / lids, 3 nose,
+  4 cheeks, 5 mouth / lips, 6 chin / jaw, 7 under-chin / neck, 8 ears, 9 helpers: for the Witness / Mira inheriting
+  part of it). A shaped face file needs no `alarSoften`: the layer carries the wings' softening. The height solve keys
+  on the layer's content (`cast_nrzero_heights.json` gains one entry per shaped face).

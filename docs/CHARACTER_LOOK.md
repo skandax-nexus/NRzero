@@ -949,11 +949,12 @@ was 41 900 / 46 100; the current numbers are under "Final" below).
   along the fall), not long regular corkscrews.
 - `faces_candidates/kai_photo_loose/` is B as a two-line variant of A (`extends`), for working on A and B together.
 
-**How to switch** (one copy, then rebuild the cast as usual):
+**How to switch** (one copy, then rebuild the cast as usual; since fix round 4 three files, the shape layer
+`kai_shape.npz` included):
 
     cd tools/characters
-    cp faces_candidates/kai_photo_B/kai.json faces_candidates/kai_photo_B/kai_look.npz faces/     # B: loose curls
-    cp faces_candidates/kai_photo/kai.json faces_candidates/kai_photo/kai_look.npz faces/         # A: tied (default)
+    cp faces_candidates/kai_photo_B/kai.json faces_candidates/kai_photo_B/kai_look.npz faces_candidates/kai_photo_B/kai_shape.npz faces/   # B: loose curls
+    cp faces_candidates/kai_photo/kai.json faces_candidates/kai_photo/kai_look.npz faces_candidates/kai_photo/kai_shape.npz faces/         # A: tied (default)
     ONLY=kai FACES_DIR=$PWD/faces_candidates/kai_photo_B ./face_studio.sh kai_b       # preview B without installing
 
 The shipped `assets/models/cast*.glb` change only when the cast is rebuilt and packed.
@@ -1132,15 +1133,15 @@ The shipped `assets/models/cast*.glb` change only when the cast is rebuilt and p
 in-game dialogue close-up (high) and the chase view (high and phone), from the fix round 3 builds (stages `r3_a6` /
 `r3_b6`, the files now in `faces/` and `faces_candidates/kai_photo_B/`). The fix round 2 sheet is kept as
 `likeness/review/r2_kai_photo_final_0151.png`.
-- **Installed:** hair A. `faces/kai.json` + `faces/kai_look.npz` are byte-identical to `faces_candidates/kai_photo/`;
-  hair B is the complete pair in `faces_candidates/kai_photo_B/` (same `kai_look.npz`, the cut `photo_loose`, no
-  `hairDrop`). `faces_candidates/kai_photo_loose/` is B as a two-line `extends` of A, for working on both at once.
-- **How to switch hair** (one copy of two files, then rebuild and pack the cast as usual; do not copy `_heights.json`,
-  that is the candidate set's height cache):
+- **Installed:** hair A. `faces/kai.json` + `faces/kai_look.npz` (+ `faces/kai_shape.npz` since fix round 4) are
+  byte-identical to `faces_candidates/kai_photo/`; hair B is the complete set in `faces_candidates/kai_photo_B/` (same
+  `kai_look.npz` and `kai_shape.npz`, the cut `photo_loose`, no `hairDrop`). `faces_candidates/kai_photo_loose/` is B as a two-line `extends` of A, for working on both at once.
+- **How to switch hair** (one copy of three files since fix round 4, then rebuild and pack the cast as usual; do not
+  copy `_heights.json`, that is the candidate set's height cache):
 
       cd tools/characters
-      cp faces_candidates/kai_photo_B/kai.json faces_candidates/kai_photo_B/kai_look.npz faces/    # B: loose curls
-      cp faces_candidates/kai_photo/kai.json faces_candidates/kai_photo/kai_look.npz faces/        # A: tied (default)
+      cp faces_candidates/kai_photo_B/kai.json faces_candidates/kai_photo_B/kai_look.npz faces_candidates/kai_photo_B/kai_shape.npz faces/   # B: loose curls
+      cp faces_candidates/kai_photo/kai.json faces_candidates/kai_photo/kai_look.npz faces_candidates/kai_photo/kai_shape.npz faces/         # A: tied (default)
 
   The shipped `assets/models/cast*.glb` still carry the pre-photo Kai until the cast is rebuilt and packed.
 - **Likeness** (the latest review, 10 = he recognises himself at once): **A 6/10, B 5.5/10. The bar is not met yet.**
@@ -1175,6 +1176,96 @@ in-game dialogue close-up (high) and the chase view (high and phone), from the f
   suspect.
 - **Privacy:** unchanged (above): the photo and every crop, sheet and review image stay in `/home/user/tools/kai_ref/`
   and the likeness work folder; the repo holds only derived numbers and maps (`kai_look.npz`, the face file).
+
+**Fix round 4: the complete face shape** (the owner on the round-3 sheet: "Still face need to be redefined. Give
+complete shape of the face."; the shape study `likeness/shape/study/` (SHAPE_SPEC.md, METHOD.md), the fit and every
+render, overlay and table in `likeness/shape/`, outside the repo). The round-3 head matched the photo from the photo's
+own camera, but in three dimensions it was MakeHuman's: a low, wide loaf of a skull (vertex 90 mm above the inner eye
+corners), cheeks as flat ramps ending in a corner, a forehead leaning back 18 deg, a V chin, thin lips set back. MakeHuman's
+sliders cannot make these masses, so Kai now has a dense shape layer on top of them:
+- **`likeness/dense_fit.py`** (stage B of METHOD.md): a per-vertex offset field over the head (the 4 372 body vertices
+  above the neck joint - 35 mm and the helpers riding on it), a sparse regularised least squares in Gauss-Newton rounds
+  (8 rounds x 6 steps, about 90 s):
+  - data at the photo's own camera (fit.py's pose, held: the head is reshaped through the camera that measured the
+    photo): the 468 MediaPipe points, traced onto the mesh by analysis by synthesis every round (the frown undone, a
+    0.8 mm dead zone for the detector's scatter, the points on the beard and on the frowning forehead at a tenth / a
+    third of their weight), and the head's true silhouette (ears hidden, as his are under the hair) against the photo's
+    outline: a band, the sleek hair over the skull above the brows (the skin may lie up to 6-15 mm outside the visible
+    skin edge, never inside it), the cheekbone level -4..+1 mm, and on the beard the skin where the round-3 build's
+    skin was plus the 1.3 mm by which its built beard read inside the photo's (MediaPipe's oval of the shipped render
+    against the photo's, the same detector on two bearded faces), +-1.5 mm: the beard thickness is taken off as the
+    built beard has it, so the shipped beard's outline lands on his;
+  - the depth the photo cannot see: the sculptor's targets, `likeness/shape_targets.json` (SHAPE_SPEC's 12 items as 120
+    measurable bands with confidence weights: vault height and midline profile, skull breadth, cheek sections, the
+    nose tip and dorsum, the brow over the lid, the lips' depth, the chin, the forehead's lean, the soft front-to-side
+    turns, the under-chin, the temples, the head length);
+  - fair and anatomical: a thin-plate (bi-Laplacian, cotangent) energy on the offsets, smooth everywhere (the
+    features ride on a smooth field and keep their reviewed small forms), stiffer on the skull and the brow roll;
+    exactly symmetric; rigid patches (one translation each) for each eye with its lid margins, socket lining, lash
+    helpers and eye joints (blinks and gaze keep their geometry; the eye spacing is held), each ear, and the lip contact
+    line with the teeth and tongue riding on it (the jaw split); soft-tissue bounds along the normal per region; the
+    lid skin never nearer the eyeball than now; the neck held toward the collar line.
+  - not used: MediaPipe's depth (the study measured its response to real depth changes at -0.3 / -0.23 / -0.03: its
+    prior, whatever the geometry).
+- **Deviations from METHOD.md, written down:** stage A (a de-compensated slider refit with the whole-head terms at 0)
+  was run twice and dropped: with `head-scale-vert` freed, the face-local sliders that took the proportions back
+  (nose base +0.7, nose length -1.0, forehead height -1.0 in the first try) gave a long hooked nose and deep folds, and
+  the reviewed feature values matter more than slider purity; the layer raises and narrows the skull itself. The
+  softer thin plate METHOD proposes at the features let the landmarks carve them (a hooked tip, a brow shelf, dents in
+  the cheeks), so the field is smooth there too. Stage C (the definition-layer normal displacement), the per-vertex
+  decimation importance (`_imp`) and nostril patches are not part of this round. `alarSoften` is baked into the layer
+  (12 passes, was 20) and dropped from the face file.
+- **`faces/kai_shape.npz`** (33 KB; byte-identical copies in `faces_candidates/kai_photo/` and `kai_photo_B/`, both hair
+  options get the same face): 4 893 vertex offsets in MakeHuman target units with a region id each and the
+  provenance (`meta`: digests, weights, the target values, the pose); geometry only, no pixel, crop or texture of the
+  photo. The largest offsets: the vault 11.5 mm, the nose and lips 5.7, the cheeks 3.7, the chin 2.2; the eyes sink
+  0.9 mm, the lip line moves 1.9 mm down and 1.0 forward.
+- **In the generator** (every path gated on the face file's `shape`; faces/README.md): `mh.sculpt(macro, details,
+  shape=)` adds the layer after the modifiers (checked against the base mesh's hash), `build_humans.Body` sculpts with
+  it, so the landmarks, rig joints, weights, eyes, teeth, lashes, brow / beard / hair cards, hair shells, gear and the
+  skin bake all follow; the eye proxy's scale references are read from the head without the layer (`Body.P0`,
+  `fit_proxy(..., Pdm_scale)`), so the reshaped skull does not resize the eyes; the stature solve keys on the layer
+  (he stays 1.83 m: the taller vault takes 0.7 % off the rest of him, his eyes sit 12 mm lower in the world);
+  `face_metric.py` measures the shaped head. **Every other character builds exactly as before:** the deterministic
+  build inputs of all 65 others (the sculpted positions, the unshaped copy, the rig joints, the landmarks, the eye
+  spheres, the macro) are bit-identical between the pre-change code and now (only `kai` differs); the generator's own
+  output is not byte-reproducible between two runs of unchanged code (decimation and texture noise), so that is the
+  proof.
+- **Results** (all private, `likeness/shape/build/dense/final/`: `sheet_clay.jpg`, `sheet_full.jpg`, `sheet_sculpt.jpg`,
+  `overlay_photo_camera.jpg`, `sheet_expr.jpg`, `table_targets.txt`, `table_game.txt`):
+  - the 3D read (rms mm outside the sculptor's bands, round 3 -> round 4): vault and profile 10.4 -> 0.3 (vertex
+    89.5 -> 101.5 mm above the inner eye corners), cheek mass 3.0 -> 0.8, soft turns 0.9 -> 0.2, lips 1.3 -> 0.7, chin
+    4.5 -> 3.0, forehead lean 5.0 -> 2.2 (16.4 -> 11.6 mm over 45 mm), nose 3.3 -> 2.3; the skull breadth (156.7
+    against 148-154), the head length (213.6 against 200-208), the brow over the lid (3.6 / 1.6 against 4-7) and the
+    under-chin are still outside;
+  - at the photo's own camera, the clay (fit.py's raster, MediaPipe on the clay against the photo, mm rms): nose
+    bridge 2.7 -> 1.6, tip 3.0 -> 1.3, wings 1.9 -> 1.5, philtrum 2.1 -> 1.4, lips 3.1 -> 1.2, mouth corners 2.9 -> 1.4,
+    jaw angle 3.0 -> 2.2, cheeks 2.2 -> 2.0, temples 2.5 -> 2.2; worse: the forehead 2.7 -> 4.1 (MediaPipe's guess over a
+    bald clay forehead, which is now more upright and higher), cheekbones 1.4 -> 2.2, lids 1.2 -> 1.5, nasolabial
+    1.3 -> 1.6;
+  - the shipped build A at that camera (studio_turn's photo view with FS_PHOTO_IOD=0 and the camera of
+    `likeness/shape/build/photo_camera_exact_*.json`): the mean of the 16 regions 1.91 -> 1.87 mm (B 1.74 -> 1.70);
+    better: forehead 1.6 -> 1.2, lids 1.5 -> 1.2, nasolabial 1.8 -> 0.9, lips 2.3 -> 1.7, mouth corners 2.3 -> 1.5, chin
+    1.8 -> 1.0, jawline 2.4 -> 1.3, the beard's outline below the brows 1.6 -> 1.4 (chin 1.6 -> 0.8); worse: temples
+    1.9 -> 2.8, cheeks 2.0 -> 2.8, nose tip 1.5 -> 2.5, philtrum 1.4 -> 1.8, jaw angle 2.9 -> 3.5. In the photo's view the
+    round-3 head was already near the floor of this measurement (MediaPipe reads the textured render and the clay of
+    the same head at the same camera 2.8 mm apart), so the gain of this round is the head in depth, seen in the
+    three-quarter and profile views and the sculptor's table, not a smaller 2D error;
+  - **the review camera:** face_studio's photo view with `FS_PHOTO_IOD` 0.314 dollies the camera until the pupils
+    match the photo's; that was tuned on the round-3 head, which at the fit's own camera is about 4 % small. On the new
+    head (matched at the fit's camera) the dolly over-magnifies by the same 4 % (nose tip 0.4 -> 4.1 mm in that view).
+    Review this head with the fit's camera: `photo_camera_exact` (cam_from_eyes relative to the eye bones) and
+    `FS_PHOTO_IOD=0`.
+  - talking (jaw 0.7, wide 0.4), blinking, smiling and the brows deform as before on the new shape (close,
+    three-quarter, mouth macro); the far side's lower premolar stack in the open mouth is the old open item.
+  - budgets unchanged: body HD 34 000 (head 19 021), phone 16 000 (head 6 422), card mesh A 42 354 / B 41 720 (round 3:
+    42 402 / 41 774), the mouth's jaw split intact (25 / 15 rim vertices).
+- **Open for the next round:** the owner's verdict on the new shape (clay and full, front / three-quarter / profile);
+  the eyes still read proud (the brow 1.6-3.6 mm ahead of the lash line against 4-7); the skull a little wide and long;
+  the nose tip and philtrum in the photo view; stage C's secondary forms and the silhouette importance in the
+  decimation; the Witness and Mira inherit the layer through `shape` / `shapeRegions` when their faces are rebuilt
+  from Kai's. A profile or three-quarter photo of him would turn the inferred depth targets into measured ones
+  (METHOD.md §4.9 designs the extra views; `dense_fit.py` fits the one photo today).
 
 **What this means for the faces that follow** (the faces phase rebuilds them from this face):
 - **The Witness** (`witness`, the older Kai, 58) must now be built from this face: the same structure (his head shape
