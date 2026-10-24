@@ -900,7 +900,8 @@ def paint_eye(c, dxe, dye, r, th, seed, vnoise, hash01, ss, g2):
     irc = irc * (1 - 0.35 * ss(0.12, 0.0, rr))[..., None]                      # pupillary ruff
     # hero pipeline v7: a little darker (0.86 read as paper white under the dialogue key and ACES), more shade toward the
     # corners and under the lids
-    sclera = np.array([0.79, 0.75, 0.71]) * (1 - 0.3 * ss(0.45, 1.0, r))[..., None]
+    # fix round 2: a face file's `sclera` (sRGB hex; Kai: his warm ivory, about 20 % darker than the default, which stared)
+    sclera = (BH.hexc(c["sclera"]) if c.get("sclera") else np.array([0.79, 0.75, 0.71])) * (1 - 0.3 * ss(0.45, 1.0, r))[..., None]
     sclera = sclera * (1 - 0.1 * ss(0.45, 1.0, np.abs(dxe))[..., None] * np.array([0.0, 1.0, 0.8]))    # pinker corners
     ves = (0.5 + 0.5 * np.sin(th * 23 + 6 * vnoise(p3 * 0.7, 2.0, seed + 9).reshape(sh))) ** 80 * ss(0.5, 0.95, r) * ss(0.3, 0.8, np.abs(dxe))
     sclera = sclera * (1 - 0.07 * ves[..., None] * np.array([0.0, 1.0, 0.9]))
@@ -947,7 +948,7 @@ def paint_mouth_cell(c, img, mask, grid, put):
 # (strands at the card's centre lie on top), A: coverage. Drawn 2x and box-filtered.
 # ---------------------------------------------------------------------------------------------------------------
 HT_W, HT_H, HT_COLS = 1024, 1024, 8
-HT_VERSION = 9
+HT_VERSION = 10
 # column kinds (same slots as v1, so a build's uvs keep their meaning): 0-2 clump cards (dense centre, sparse edges,
 # staggered tapered tips), 3 tight clump (strands gather to a point: tips of short textured cuts), 4-5 wisps (a few
 # loose strands: flyaways, edges), 6 wavy / curly, 7 fine short strokes (lashes, brows, beard)
@@ -1044,6 +1045,10 @@ def strand_texture(path):
             xs_ = np.arange(int(HT_SINGLE[0] * cw), cw) + 0.5
             d_ = np.abs(xs_[None, :] - xc_)
             cov_ = np.clip(1.0 - (d_ - w_[:, None] * 0.5) / (0.9 * S), 0, 1) * np.clip((0.985 - y) * 40, 0, 1)[:, None]
+            # v10 (Kai fix round 2): the single hair's coverage fades over its last 40 % (soft, see-through tips: brow,
+            # beard and moustache hairs read as stiff strokes with a cut end)
+            t6 = np.clip((y - 0.6) / 0.4, 0, 1)
+            cov_ = cov_ * (1 - 0.55 * t6 * t6 * (3 - 2 * t6))[:, None]
             sl_ = slice(int(HT_SINGLE[0] * cw), cw)
             A[:, sl_] = cov_
             Rr[:, sl_] = 0.85
@@ -1950,7 +1955,7 @@ def _messy_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
                  shell=hP, eye=eye, head_c=head_c, Renv=Renv, T=T, cov=cov, Rsh=Rsh)
     tris = sum(2 * (len(cd[0]) - 1) for cd in cards)
     print(f"  messy cut {c['hairCut']}: {len(cards)} cards ({nused} clumps, {nflick} flicked, {nwisp} wisps, {nline} hairline), {tris} tris, "
-          f"thickness {T.min():.4f}-{T.max():.4f} m", flush=True)
+          f"thickness {T.min():.4f}-{T.max():.4f} m; tris by section (cumulative) {sect}", flush=True)
     return len(cards)
 
 
@@ -1967,13 +1972,22 @@ CURLY = ("curly_tied", "curly_loose")
 # fix round 1: ringW (ringlet ribbon width / pitch: strand-clump width, 3-4 mm, not wide flat ribbons), frizz (count,
 # radius, width of the fine halo strands), target (card triangles on the HD build), frontFloor (loose: nothing hangs
 # over the forehead below this height above the eyes: the hairline shows), the sleek top's card width and step
+# fix round 2: ringR / ringPitch (m) and ringPpt (points per turn) of the ringlets (small, tight, smooth curls: the
+# polygonal 9-15 mm rings read as wire), haloOut (m: the halo's cap beyond the hair volume), sleekN (sleek top roots
+# on the HD build), temple (dense strands lying down the temple into the sideburn), shellDark / shellStripe (the painted
+# shell under the cards darker and with weaker strand stripes: a grey striped cap read as a helmet), crown (loose: dense
+# tight curl clumps over the crown)
 CUTS["photo_tied"] = dict(base="pony", hero="curly_tied", stiff=0.5, top=0.20, front=0.20, side=0.05, nape=0.06, comb="back", lift=0.0, frontLift=0.0,
-                          wave=0.22, W=0.0095, side_dens=1.0, wisp=0.05, scalp="full", nopart=True, sheen=0.35,
-                          ringW=0.14, frizz=(230, 0.004, 0.008, 0.0007), target=12500, sleekW=0.62, sleekDs=0.018)
-CUTS["photo_loose"] = dict(base="bob", hero="curly_loose", stiff=0.3, top=0.12, front=0.07, side=0.115, nape=0.14, comb="tousle", lift=0.0, frontLift=0.0,
-                           wave=0.4, W=0.0100, side_dens=1.0, wisp=0.06, scalp="full", nopart=True, sheen=0.5,
-                           ringW=0.12, frizz=(200, 0.004, 0.008, 0.0007), target=15000, frontFloor=0.058, fillW=0.6,
-                           sheet=dict(drop=0.135, clear=0.004, flare=0.015, tip=0.045, a0=104, a1=256))
+                          wave=0.22, W=0.0095, side_dens=1.0, wisp=0.05, scalp="full", nopart=True, sheen=0.3,
+                          ringW=0.08, ringR=(0.005, 0.008), ringPitch=(0.014, 0.02), ringPpt=14, haloOut=0.03,
+                          frizz=(120, 0.003, 0.006, 0.00042), frizzCap=1.75, target=13500, sleekW=0.5, sleekDs=0.016, sleekN=190, temple=110,
+                          shellDark=0.62, shellStripe=0.35, edgeDark=0.7)
+CUTS["photo_loose"] = dict(base="bob", hero="curly_loose", stiff=0.3, top=0.12, front=0.07, side=0.09, nape=0.11, comb="tousle", lift=0.0, frontLift=0.0,
+                           wave=0.4, W=0.0100, side_dens=1.0, wisp=0.06, scalp="full", nopart=True, sheen=0.25,
+                           ringW=0.08, ringR=(0.005, 0.009), ringPitch=(0.014, 0.024), ringPpt=14, crown=70, ringCap=0.95, sheetN=40, fillN=50,
+                           frizz=(150, 0.003, 0.006, 0.00042), frizzCap=1.6, target=15500, frontFloor=0.058, fillW=0.3, temple=50,
+                           shellDark=0.6, shellStripe=0.3, edgeDark=0.7,
+                           sheet=dict(drop=0.115, clear=0.004, flare=0.015, tip=0.045, a0=104, a1=256))
 
 
 def _helix(cl, up, R, pitch, ph0, rng, taper=0.3, wob=0.22, ppt=8):
@@ -2170,16 +2184,18 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         root, tip = colour(cf, grey_strand)
         cards.append((P, nrm, width, column, root, tip, W_at(pts[0]) if Wv is None else Wv, imp + rng.random(), None))
 
-    def ringlet(cl, R, pitch, cf, imp, column=None, wf=1.0, grey_strand=False, Wv=None, thin=False, double=True, ph=None, wob=0.22, tw=0.0011, ppt=8):
+    def ringlet(cl, R, pitch, cf, imp, column=None, wf=1.0, grey_strand=False, Wv=None, thin=False, double=True, ph=None, wob=0.22, tw=0.0011, ppt=None):
         if len(cl) < 2:
             return 0
+        if ppt is None:
+            ppt = int(C.get("ringPpt", 8))
         upv = cl / np.linalg.norm(cl, axis=1, keepdims=True)
         ph0 = rng.uniform(0, 6.283)
         P, N = _helix(cl, upv, R, pitch, ph0, rng, wob=wob, ppt=ppt)
         if P is None or len(P) < 4:
             return 0
         if not thin and double:      # a second strand bundle half a turn on: a full ringlet, not a flat strip
-            ringlet(cl, R * 0.88, pitch, cf, imp - 0.3, column, wf, grey_strand, Wv, thin, double=False, ph=ph0 + math.pi, wob=wob)
+            ringlet(cl, R * 0.88, pitch, cf, imp - 0.3, column, wf, grey_strand, Wv, thin, double=False, ph=ph0 + math.pi, wob=wob, ppt=ppt)
         if ph is not None:
             P, N = _helix(cl, upv, R, pitch, ph, rng, wob=wob, ppt=ppt)
         n = len(P)
@@ -2199,6 +2215,36 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
 
     def tris():
         return sum(2 * (len(cd[0]) - 1) for cd in cards)
+
+    def cap_out(cl, cap):
+        """fix round 2: a centre line (rel head_c) pulled in to at most `cap` beyond the hair volume's outer surface"""
+        out = []
+        for q in cl:
+            r = np.linalg.norm(q)
+            lim = lo(q, 1.0) + max(cap, 0.002 * k)
+            out.append(q * (min(r, lim) / max(r, 1e-9)))
+        return np.array(out)
+
+    def temple_strand(p0, y_end, ds=0.004):
+        """fix round 2: a strand (MH) from p0 lying down the temple, 0.6-1.6 mm off the skin, to the height y_end"""
+        pts, q = [p0.copy()], p0.copy()
+        d = np.array([0.0, -1.0, -0.12])
+        lift = (0.0006 + 0.001 * rng.random()) * k
+        for _ in range(24):
+            ki, _ = coll.near(q)
+            kn = coll.N[ki]
+            dd = d - kn * (d @ kn)
+            dd /= max(np.linalg.norm(dd), 1e-9)
+            qn = q + dd * ds * k
+            ki, _ = coll.near(qn)
+            kp, kn = coll.P[ki], coll.N[ki]
+            qn = qn - kn * ((qn - kp) @ kn - lift)
+            pts.append(qn)
+            q = qn
+            if q[1] < y_end:
+                break
+            d = _rot(np.array([0.0, -1.0, -0.12]), kn, rng.normal(0, 0.12))
+        return np.array(pts)
 
     budget = BH.budget(c)
     target = C.get("target", 18000 if tied else 22000) if budget >= 16000 else 6000 if budget > 9000 else 2400
@@ -2222,13 +2268,16 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
     relc = cand - head_c
     unc = relc / np.linalg.norm(relc, axis=1, keepdims=True)
     n_ring = n_frizz = n_fill = 0
+    sect = {}
+    ear_top = float(np.percentile(B.P[B.ear > 0.5][:, 1], 97)) - eye[1] if (B.ear > 0.5).any() else 0.01 * k
+    rR, rP = C.get("ringR", (0.009, 0.015)), C.get("ringPitch", (0.024, 0.034))
     if tied:
         # (1) the sleek swept-back layer: long strands from the hairline over the crown into the tie, in layers
         import likeness_look as LL_
         ez = LL_.ear_front_z(B)
         okr = ~(((cand - eye)[:, 1] < 0.028 * k) & (cand[:, 2] > ez - 0.03))
         sw, sds = C.get("sleekW", 1.0), C.get("sleekDs", 0.012)
-        groots = spread(cand[okr], int((125 if sw < 1 else 105) * tf) + 16) - head_c
+        groots = spread(cand[okr], int(C.get("sleekN", 125 if sw < 1 else 105) * tf) + 16) - head_c
         for g in groots:
             for j in range(2):
                 off = rng.normal(0, 0.006 * k, 3) if j else np.zeros(3)
@@ -2241,6 +2290,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
                 # likeness:final: wavy, not a helmet (his top is swept back in soft waves), a little tone variation
                 pts = march(r0, f, 0.24 * k, sds * k, -0.2, lift=0.0, ang=rng.normal(0, 0.08), wave=0.26, tie_stop=True)
                 flat(pts, f, (1.1 if j else 1.0) * sw, (0.8 + 0.25 * f) * rng.uniform(0.9, 1.18), 1.0 + 1.2 * f, int(rng.choice([0, 1, 2, 6])), tipw=0.55)
+        sect["sleek"] = tris()
         # the nape: the hair below the tie is pulled up into it (dense, so no stripes of shell between the pieces)
         napeR = cand[((cand - head_c)[:, 1] < -0.02 * k) & ((cand - head_c)[:, 2] < -0.04 * k)]
         for g in spread(napeR, int(45 * tf) + 8) - head_c:
@@ -2249,10 +2299,13 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             flat(pts, f, 1.45, 0.85 + 0.2 * f, 1.4 + 0.8 * f, int(rng.integers(0, 3)), tipw=0.7)
         n_fill = len(cards)
         # loose strands lifting off the sleek layer (the photo: a few looping off the top)
-        nl_, lft = (int(36 * tf) + 6, (0.0015, 0.005)) if C.get("frizz") else (int(60 * tf) + 8, (0.003, 0.009))
+        sect["nape"] = tris()
+        # (fix round 2: thin and lying down on the layer, no twigs standing up off the top)
+        nl_, lft = (int(30 * tf) + 6, (0.0004, 0.0016)) if C.get("frizz") else (int(60 * tf) + 8, (0.003, 0.009))
         for g in spread(cand, nl_, lambda P_: 1 + BH.ss(0.2, 0.8, ((P_ - head_c)[:, 1]) / 0.1)) - head_c:
-            pts = march(g, rng.uniform(1.0, 1.15), rng.uniform(0.06, 0.14) * k, 0.01 * k, -0.2, lift=rng.uniform(*lft) * k, ang=rng.normal(0, 0.4), wave=0.6, tie_stop=True)
-            flat(pts, 1.0, 0.1 if C.get("frizz") else 0.16, rng.uniform(1.0, 1.25), 1.6, 4 + int(rng.integers(0, 2)), tipw=0.6)
+            pts = march(g, rng.uniform(1.0, 1.1), rng.uniform(0.06, 0.14) * k, 0.01 * k, -0.2, lift=rng.uniform(*lft) * k, ang=rng.normal(0, 0.25), wave=0.45, tie_stop=True)
+            flat(pts, 1.0, 0.06 if C.get("frizz") else 0.16, rng.uniform(1.0, 1.2), 1.6, 4 + int(rng.integers(0, 2)), tipw=0.5)
+        sect["liftoff"] = tris()
         # likeness:final: the hairline softened (no hard shell edge): fine short wisps rooted just behind the front
         # hairline and the temples, combed back into the sleek layer
         relh = cand - eye
@@ -2270,25 +2323,40 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
                         break
                     pts = np.concatenate([ex_[None], pts])
             flat(pts, 0.4, 0.3, rng.uniform(0.95, 1.2), 2.4, 4 + int(rng.integers(0, 2)), tipw=0.4)
+        sect["hairline"] = tris()
         # (2) the halo: ringlets springing out of the pulled-back mass above and behind the ears and at the back corners
-        zone = (np.abs(unc[:, 0]) > 0.45) & (unc[:, 1] > -0.45) & (unc[:, 1] < 0.4) & (unc[:, 2] < 0.3)
+        # fix round 2: small, tight ringlets (ringR, ringPitch) close to the head: capped haloOut beyond the volume and
+        # nothing below the top of the ear (the temple hair lies down into the sideburn instead; the ear stays clear)
+        zone = (np.abs(unc[:, 0]) > 0.45) & (unc[:, 1] > -0.12) & (unc[:, 1] < 0.4) & (unc[:, 2] < 0.3)
         back = (unc[:, 2] < -0.55) & (unc[:, 1] > -0.5) & (unc[:, 1] < 0.2)
-        hz = cand[zone | back]
-        nh = int(80 * tf) + 10
+        hz = cand[(zone | back) & ((cand - eye)[:, 1] > ear_top + 0.004 * k)]
+        nh = int(90 * tf) + 10
         for g in spread(hz, nh, lambda P_: 1 + 1.2 * (np.abs((P_ - head_c)[:, 0]) / 0.07)) - head_c:
-            u = g / np.linalg.norm(g)
-            ln = rng.uniform(0.022, 0.05) * k
-            R = rng.uniform(0.009, 0.015) * k * (0.9 if C.get("frizz") else 1.0)
-            pitch = rng.uniform(0.024, 0.034) * k
-            cl = march(g, 1.0, ln, 0.006 * k, -0.16, ang=rng.normal(0, 0.6), wave=0.3, outward=rng.uniform(0.6, 1.3), floor_y=0.03)
+            ln = rng.uniform(0.016, 0.034) * k
+            R = rng.uniform(*rR) * k
+            pitch = rng.uniform(*rP) * k
+            cl = march(g, 1.0, ln, 0.005 * k, (ear_top / k) + 0.002, ang=rng.normal(0, 0.6), wave=0.3, outward=rng.uniform(0.4, 0.9), floor_y=0.03)
             if len(cl) < 3:
                 continue
             cl = np.concatenate([cl, cl[-1:] + (cl[-1:] - cl[-2:-1]) * 0.5])
-            _ = u
-            ringlet(cl, R, pitch, 0.95, 2.0)
+            cl = cap_out(cl, C.get("haloOut", 0.05) * k - R)
+            ringlet(cl, R, pitch, 0.95, 2.0, double=rng.random() < 0.5)
             n_ring += 1
+        sect["halo"] = tris()
+        # fix round 2: the temples: dense strands lying down the temple into the sideburn (the photo: the temple hair
+        # lies close to the head and runs on down into the beard)
+        for j in range(int(C.get("temple", 0) * tf)):
+            sd = 1.0 if j % 2 else -1.0
+            p = eye + np.array([sd * rng.uniform(0.058, 0.072), rng.uniform(0.005, 0.04), rng.uniform(-0.06, -0.025)]) * k
+            si, _ = shell.near(p)
+            # short, fine wisps from the shell's temple edge down over it (a soft edge into the sideburn, not cables)
+            pts = temple_strand(hP[si], hP[si][1] - rng.uniform(0.008, 0.018) * k)
+            if len(pts) >= 3:
+                flat(pts - head_c, 0.3, rng.uniform(0.06, 0.1), rng.uniform(1.0, 1.2), 2.2, int(rng.choice([4, 5])), tipw=0.35)
+                n_fill += 1
+        sect["temple"] = tris()
         # (3) temple tendrils: two or three thin ringlets from the temple hairline (one longer on his left temple)
-        for x_, y_, ln_ in ((0.058, 0.048, 0.075), (0.046, 0.062, 0.05)):      # (likeness:final: the right temple's tendril cast a loop of shadow on his cheek)
+        for x_, y_, ln_ in ((0.058, 0.048, 0.075), (0.046, 0.062, 0.05)) if not C.get("temple") else ():      # (likeness:final: the right temple's tendril cast a loop of shadow on his cheek; fix round 2: none with temple strands, they read as cables)
             p = eye + np.array([x_, y_, -0.02]) * k
             si, _ = shell.near(p)
             g = hP[si] - head_c
@@ -2296,8 +2364,9 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             if len(cl) >= 3:
                 # they fall: down and a little out from the temple, outside the eye corner
                 cl = np.array(cl)
-                ringlet(cl, 0.006 * k, 0.016 * k, 0.95, 2.6, wf=0.8)
+                ringlet(cl, 0.0045 * k, 0.012 * k, 0.95, 2.6, wf=0.8)
                 n_ring += 1
+        sect["tendrils"] = tris()
         # (4) the tail: ringlets and wavy fill hanging from the tie along the pony tube
         if pony:
             ax = pP[np.argsort(-pP[:, 1])]
@@ -2317,7 +2386,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
                 cl = np.array([tie + axn * ln * (i / n_) + (math.cos(a) * e1 + math.sin(a) * e2) * r0 * (0.6 + 0.6 * (i / n_)) for i in range(n_ + 1)])
                 # keep it off the neck and the collar: lift out of the envelope
                 cl = np.array([head_c + (q - head_c) / np.linalg.norm(q - head_c) * max(np.linalg.norm(q - head_c), lo(q - head_c, 1.0) + 0.01 * k) for q in cl])
-                ringlet(cl - head_c, rng.uniform(0.009, 0.013) * k, rng.uniform(0.022, 0.03) * k, 0.92, 2.2, Wv=Wtie)
+                ringlet(cl - head_c, rng.uniform(*rR) * k * 1.2, rng.uniform(*rP) * k * 1.15, 0.92, 2.2, Wv=Wtie, ppt=10)
                 n_ring += 1
             for j in range(0):        # (the tail's body: the tube's own painted hair under the ringlets)
                 a = rng.uniform(0, 2 * math.pi)
@@ -2333,33 +2402,46 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
                 flat(np.array(cl) - head_c, 1.0, 1.2, 0.85, 1.2, 6)
     else:
         # (1) fill: wavy clumps over the inner volume down to the hem
-        for g in spread(cand, int(70 * tf) + 12) - head_c:
+        for g in spread(cand, int(C.get("fillN", 70) * tf) + 12) - head_c:
             u = g / np.linalg.norm(g)
             ln = (C["side"] + (C["top"] - C["side"]) * BH.ss(0.2, 0.7, u[1])) * k * rng.uniform(0.8, 1.05)
             ln += (C["front"] * k - ln) * BH.ss(0.2, 0.7, u[2]) * BH.ss(0.0, 0.5, u[1])
             ln += (C["nape"] * k - ln) * BH.ss(0.0, -0.5, u[2])
-            hem = -0.10 - 0.04 * BH.ss(-0.2, -0.8, u[2])
+            hem = -0.085 - 0.03 * BH.ss(-0.2, -0.8, u[2])
             for j in range(2):
                 f = rng.uniform(0.25, 0.6)
                 pts = march(g + rng.normal(0, 0.004 * k, 3), f, ln, 0.01 * k, hem, ang=rng.normal(0, 0.3), wave=0.55, floor_y=0.03)
                 flat(pts, f, 1.25 * C.get("fillW", 1.0), 0.72 + 0.3 * f, 0.8, int(rng.choice([0, 1, 6, 6])), tipw=0.6)
         n_fill = len(cards)
+        sect["fill"] = tris()
+        # fix round 2: the crown: dense, tight curl clumps lying on the volume (the top read as a striped cap with a
+        # few ribbons): short ringlets of small radius rooted over the top of the head, barely leaving the volume
+        crn = cand[unc[:, 1] > 0.35]
+        for g in spread(crn, int(C.get("crown", 0) * tf)) - head_c:
+            f = rng.uniform(0.75, 1.0)
+            cl = march(g, f, rng.uniform(0.022, 0.04) * k, 0.005 * k, -0.02, ang=rng.normal(0, 0.9), wave=0.5, floor_y=0.04, outward=0.12)
+            if len(cl) < 3:
+                continue
+            ringlet(cl, rng.uniform(0.0035, 0.006) * k, rng.uniform(0.009, 0.014) * k, (0.8 + 0.25 * f) * rng.uniform(0.9, 1.12), 1.6 + f, wob=0.4, double=False, ppt=10)
+            n_ring += 1
+        sect["crown"] = tris()
         # (2) ringlets over the outer layers
         nr = int(190 * tf) + 20
         candA, _, _ = _sample_tris(aP, aT, 8000, rng)
         for g in spread(candA, nr, lambda P_: 1 + 0.5 * BH.ss(-0.3, 0.6, ((P_ - head_c) / np.linalg.norm(P_ - head_c, axis=1, keepdims=True))[:, 1])) - head_c:
-            if tris() > target * (0.62 if C.get("frizz") else 0.72):      # (fix round 1: room for the frizz halo over the top)
+            if tris() > target * C.get("ringCap", 0.62 if C.get("frizz") else 0.72):      # (fix round 1: room for the frizz halo over the top)
                 break
             u = g / np.linalg.norm(g)
             ln = (C["side"] + (C["top"] - C["side"]) * BH.ss(0.2, 0.7, u[1])) * k * rng.uniform(0.75, 1.1)
             ln += (C["front"] * k - ln) * BH.ss(0.2, 0.7, u[2]) * BH.ss(0.0, 0.5, u[1])
             ln += (C["nape"] * k - ln) * BH.ss(0.0, -0.5, u[2])
-            hem = -0.10 - 0.045 * BH.ss(-0.2, -0.8, u[2]) + rng.normal(0, 0.008)
+            # fix round 2: to the jaw at the sides and the chin line at the back (messy medium length, not to the shoulders)
+            hem = -0.082 - 0.03 * BH.ss(-0.2, -0.8, u[2]) + rng.normal(0, 0.007)
             f = rng.uniform(0.62, 1.0)
             # likeness:final: his loose, frizzy curls, not long regular corkscrews: short, irregular loops (radius and
-            # pitch vary a lot, wobbly), broken into pieces along the hair's fall
-            R = rng.uniform(0.007, 0.017) * k * (0.8 if u[2] > 0.4 else 1.0) * (0.75 if C.get("frizz") else 1.0)
-            pitch = rng.uniform(0.02, 0.042) * k
+            # pitch vary a lot, wobbly), broken into pieces along the hair's fall (fix round 2: smaller and tighter, ringR)
+            R = rng.uniform(*rR) * k * (0.85 if u[2] > 0.4 else 1.0) * rng.uniform(0.85, 1.3)
+            pitch = rng.uniform(*rP) * k
             if (g + head_c - eye)[1] < -0.02 * k:          # rooted on the hanging mass: a shorter drop to the hem
                 ln = max(0.03 * k, ln * 0.6)
             cl = march(g, f, ln * rng.uniform(0.45, 0.8), 0.007 * k, hem, ang=rng.normal(0, 0.5), wave=0.45, floor_y=0.03 + rng.uniform(0, 0.01), outward=0.25)
@@ -2367,31 +2449,37 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
                 continue
             ringlet(cl, R, pitch, (0.82 + 0.25 * f) * rng.uniform(0.9, 1.15), 1.4 + 1.4 * f, wob=0.45)
             n_ring += 1
+    sect["tail/ringlets"] = tris()
     if not tied:
         sheet = [o for o in hair_objs if o.name.split(".")[0] == "hair_sheet"]
         if sheet:
             sP, _, sT, _ = _obj_surface(sheet)
             cS, _, _ = _sample_tris(sP, sT, 3000, rng)
-            for g in spread(cS, int(85 * tf) + 6) - head_c:
-                cl = march(g, rng.uniform(0.7, 1.0), rng.uniform(0.05, 0.1) * k, 0.007 * k, -0.15 + rng.normal(0, 0.008), ang=rng.normal(0, 0.3), wave=0.25, floor_y=0.03)
+            for g in spread(cS, int(C.get("sheetN", 85) * tf) + 6) - head_c:
+                if tris() > target * C.get("ringCap", 10.0) + 2500:
+                    break
+                cl = march(g, rng.uniform(0.7, 1.0), rng.uniform(0.04, 0.08) * k, 0.007 * k, -0.115 + rng.normal(0, 0.008), ang=rng.normal(0, 0.3), wave=0.25, floor_y=0.03)
                 if len(cl) >= 3:
-                    ringlet(cl, rng.uniform(0.009, 0.014) * k, rng.uniform(0.024, 0.032) * k, 0.9, 1.8)
+                    ringlet(cl, rng.uniform(*rR) * k * 1.25, rng.uniform(*rP) * k * 1.1, 0.9, 1.8)
                     n_ring += 1
+    sect["sheet"] = tris()
     # frizz: fine open loops and flyaways over the outside (tied: the halo and the crown; loose: everywhere)
-    if tied:
-        fz = cand[(np.abs(unc[:, 0]) > 0.35) & (unc[:, 1] > -0.4) & (unc[:, 2] < 0.35)]
+    if tied:      # (fix round 2: above the top of the ears only)
+        fz = cand[(np.abs(unc[:, 0]) > 0.35) & (unc[:, 1] > -0.4) & (unc[:, 2] < 0.35) & ((cand - eye)[:, 1] > ear_top + 0.004 * k)]
     else:
         fz = cand
     FZ = C.get("frizz")
     if FZ:      # fix round 1: a halo of many fine, smooth frizz curls (thin single strands, 4-8 mm loops, tapered), not wire rings
         nfz, r0_, r1_, tw_ = FZ
         for g in spread(fz, int(nfz * tf) + 10) - head_c:
-            if tris() > target * 1.4:
+            if tris() > target * C.get("frizzCap", 1.4):
                 break
-            cl = march(g, 1.0, rng.uniform(0.012, 0.028) * k, 0.005 * k, -0.15, ang=rng.normal(0, 0.9), wave=0.5, outward=rng.uniform(0.5, 1.4) if tied else 0.35,
+            cl = march(g, 1.0, rng.uniform(0.012, 0.028) * k, 0.005 * k, (ear_top / k - 0.004) if tied else -0.15, ang=rng.normal(0, 0.9), wave=0.5, outward=rng.uniform(0.5, 1.2) if tied else 0.35,
                        floor_y=0.035, tie_stop=False)
             if len(cl) >= 2:
-                ringlet(cl, rng.uniform(r0_, r1_) * k, rng.uniform(0.011, 0.018) * k, rng.uniform(1.05, 1.3), 1.1, column=7, thin=True, tw=tw_ * rng.uniform(0.8, 1.2), ppt=11, wob=0.35)
+                if tied:
+                    cl = cap_out(cl, C.get("haloOut", 0.05) * k - r1_ * k)
+                ringlet(cl, rng.uniform(r0_, r1_) * k, rng.uniform(0.009, 0.015) * k, rng.uniform(1.05, 1.3), 1.1, column=7, thin=True, tw=tw_ * rng.uniform(0.8, 1.2), ppt=12, wob=0.35)
                 n_frizz += 1
     for g in (spread(fz, int((90 if tied else 170) * tf) + 10) - head_c) if not FZ else []:
         if tris() > target * (1.36 if tied else 1.3):
@@ -2400,6 +2488,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         if len(cl) >= 2:
             ringlet(cl, rng.uniform(0.007, 0.014) * k, rng.uniform(0.02, 0.03) * k, 1.0, 1.1, column=7, thin=True)
             n_frizz += 1
+    sect["frizz"] = tris()
     # the photo's few silver-grey strands: two or three long ones looping across the front-top on his left
     ng = int(c.get("greyStrands", 0))
     for j in range(ng):
@@ -2429,7 +2518,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
         np.savez(os.environ["HAIR_DUMP"], pts=np.concatenate([cd[0] for cd in cards]), cid=np.concatenate([np.full(len(cd[0]), i) for i, cd in enumerate(cards)]),
                  shell=hP, eye=eye, head_c=head_c, Renv=Renv, T=T, cov=cov, Rsh=Rsh)
     print(f"  curly cut {c['hairCut']}: {len(cards)} cards ({n_fill} sleek / fill, {n_ring} ringlets, {n_frizz} frizz loops, {ng} grey), {tris()} tris, "
-          f"thickness {T.min():.4f}-{T.max():.4f} m", flush=True)
+          f"thickness {T.min():.4f}-{T.max():.4f} m; tris by section (cumulative) {sect}", flush=True)
     return len(cards)
 
 
@@ -2467,8 +2556,10 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     # fix round 1: the beard as a short, dense, slightly wavy mat: cards of several fine strands each (a window of the
     # fine column), two segments, lying flat along the growth direction; the moustache the densest part, growing
     # strictly down from under the nose and hanging over the top of the upper vermilion (moHang, as the paint)
-    nroot = {2: 1700, 1: 760, 0: 300}[tier]
-    pts, ti, _ = _sample_tris(P_, T_, nroot * 4, rng)
+    # fix round 2: more roots (the beard now runs up the face outline to the sideburns, and the moustache gets about
+    # twice its cards: a dense, soft mass of fine hairs instead of a few stiff strokes)
+    nroot = {2: 2500, 1: 900, 0: 340}[tier]
+    pts, ti, _ = _sample_tris(P_, T_, nroot * 5, rng)
     # barycentric weights of the samples for the head weight and the normal
     A, Bv, Cv = P_[T_[ti, 0]], P_[T_[ti, 1]], P_[T_[ti, 2]]
     nrm = np.cross(Bv - A, Cv - A)
@@ -2476,7 +2567,7 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     vn = B.N[T_[ti]].mean(1)
     nrm = np.where(((nrm * vn).sum(1) < 0)[:, None], -nrm, nrm)
     hw = B.hw[T_[ti]].mean(1)
-    dens = LK.beard_density(pts, hw, ear_z, LL.ear_low_y(B), sb_top=20.0)
+    dens = LK.beard_density(pts, hw, ear_z, LL.ear_low_y(B), sb_top=float(c.get("sideburnTop", 20.0)), nrm=nrm)
     # never on the lips (a 1 mm clear margin round the vermilion) or inside the mouth
     xs, ys = L.lip_line
     t_ = (pts[:, 0] - L.lip_cx) / max(L.lip_w, 0.018)
@@ -2494,16 +2585,19 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
     mo_all = BH.ss(sto - 1.0, sto + 3.0, q_all[:, 1]) * BH.ss(34.0, 26.0, np.abs(q_all[:, 0]))
     jaw_all = BH.ss(40.0, 58.0, np.abs(q_all[:, 0])) * BH.ss(sto - 6.0, sto - 22.0, q_all[:, 1])
     if len(pts) > nroot:
-        wsel = 1.0 + 2.6 * mo_all + 0.6 * jaw_all
+        wsel = 1.0 + 5.5 * mo_all + 0.8 * jaw_all
         sel = rng.choice(len(pts), nroot, replace=False, p=wsel / wsel.sum())
         pts, nrm, dens = pts[sel], nrm[sel], dens[sel]
     skin = _Surf(B.P[B.bodyv], B.N[B.bodyv])
     q_mm = LK.mm(pts)
-    bc_ = BH.lin(hair_floor(BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119"))), 0.16))
+    # fix round 2: beardCardGain: the cards' colour scaled (Kai 1.35: the near-black cards over the lighter painted mat
+    # read as stiff dark strokes; lighter cards over a darker mat read as one soft mass)
+    bc_ = BH.lin(hair_floor(BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119"))), 0.16)) * float(c.get("beardCardGain", 1.0))
     warm_ = BH.lin(BH.hexc(c["beardWarm"])) if c.get("beardWarm") else bc_
     lens = LK.beard_length(pts)
     head1 = np.eye(len(BH.BONE_NAMES))[BH.BI["head"]]
     hang = float(c.get("moHang", 0.0))
+    hang_c = float(c.get("moHangCorner", hang * 0.45))      # fix round 2: the hang toward the mouth corners (Kai: more than the centre)
     ntri = 0
     fw0, fw1 = 0.03, HT_SINGLE[0] - 0.04         # the fine column's multi-strand part (u)
     # the beard's edges (the map's gradient over +-2.5 mm, the under-jaw silhouette, the moustache's lower edge, the
@@ -2519,12 +2613,17 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         under = BH.ss(-0.2, -0.75, n[1])                                          # under the jaw / chin
         sbf = BH.ss(-44.0, -30.0, y)                                              # sideburn
         jaw = BH.ss(40.0, 58.0, abs(x)) * BH.ss(sto - 6.0, sto - 22.0, y) * (1 - sbf)   # the jaw angle: the fuller band
+        # fix round 2: the jaw sides from mouth level down to the jaw angle (the beard's outer silhouette: longer cards
+        # standing 5-7 mm off the skin, pointing down and out, so the beard frames and widens the lower face)
+        jside = BH.ss(46.0, 60.0, abs(x)) * BH.ss(sto + 18.0, sto + 4.0, y) * BH.ss(pg - 18.0, pg - 4.0, y) * (1 - 0.6 * sbf)
+        # fix round 2: the chin's lower rim beside the centre (x = 12-32 mm) hangs lower: a broad U, not a V
+        rimU = BH.ss(pg - 2.0, pg - 12.0, y) * BH.ss(6.0, 14.0, abs(x)) * BH.ss(40.0, 28.0, abs(x))
         ulz = BH.ss(li + 1.0, li - 3.0, y) * BH.ss(pg + 2.0, pg + 8.0, y) * BH.ss(24.0, 18.0, abs(x))     # under the lower lip (thin, warm)
         # growth direction: the moustache down and a little out (never up toward the nostrils); chin down; the jaw
         # down and back; the under-jaw back toward the neck (along the skin); sideburns straight down
         sx = np.sign(x) if abs(x) > 0.5 else 0.0
         dmo = np.array([sx * (0.12 + 0.55 * BH.ss(4.0, 24.0, abs(x))), -1.0, 0.08])
-        dch = np.array([sx * (0.1 * BH.ss(10.0, 50.0, abs(x)) + 0.3 * jaw), -1.0, 0.06 - 0.22 * jaw - 0.12 * under])
+        dch = np.array([sx * (0.1 * BH.ss(10.0, 50.0, abs(x)) + 0.3 * jaw + 0.45 * jside), -1.0, 0.06 - 0.22 * jaw - 0.12 * under])
         d = dmo * mo + dch * (1 - mo)
         d = _rot(_tan(d, n), n, rng.normal(0, 0.16 if mo > 0.5 else 0.22))
         if np.linalg.norm(d) < 1e-6:
@@ -2535,18 +2634,20 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
             d /= max(np.linalg.norm(d), 1e-9)
         # short: 6-10 mm on the chin and jaw (the chin's lower rim longer: the beard hangs below the chin), 9-11 mm on
         # the moustache (from under the nose over the philtrum to the lip), shorter sideburns
-        if mo > 0.5:
-            ln = 0.0098 * k * rng.uniform(0.85, 1.15)
+        if mo > 0.5:      # fix round 2: 6-9 mm fine hairs (was 9-11 mm), the lower fringe a little longer and ragged
+            ln = 0.0075 * k * rng.uniform(0.8, 1.2) * (1.0 + 0.15 * BH.ss(sto + 8.0, sto + 3.0, y))
         else:
             ln = 0.0072 * k * (1.0 + 0.4 * (float(lens[i]) - 1.0)) * rng.uniform(0.8, 1.15) * (0.75 if sbf > 0.5 else 1.0)
             ln *= 0.6 + 0.4 * BH.ss(0.15, 0.7, dens[i])
-            ln *= 1.0 + 0.3 * BH.ss(pg + 2.0, pg - 10.0, y) * BH.ss(40.0, 20.0, abs(x))
+            ln *= 1.0 + 0.3 * BH.ss(pg + 2.0, pg - 10.0, y) * BH.ss(40.0, 20.0, abs(x)) + 0.45 * rimU
+            ln = max(ln, (0.012 + 0.006 * rng.random()) * k * jside) if jside > 0.3 else ln      # 12-18 mm on the jaw sides
         f = rng.random() ** 1.1                                                   # layer: 0 on the skin .. 1 outside
         # flat to the skin: 1.2 mm on the moustache, 1.5-3 mm on the chin, up to 4 mm at the jaw angle
         thick = (0.0014 + 0.0016 * BH.ss(sto - 4, sto - 35, y) * (1 - 0.3 * BH.ss(30, 60, abs(x))) + 0.0008 * under + 0.0025 * jaw) * k
         thick *= 0.45 + 0.55 * BH.ss(0.2, 0.7, dens[i])
+        thick += (0.004 + 0.0015 * rng.random()) * k * jside * BH.ss(0.3, 0.7, dens[i]) + 0.0035 * k * rimU
         if mo > 0.5:
-            thick = 0.0012 * k
+            thick = 0.0014 * k
         nseg = 2
         P = [p + n * 0.0003]
         dd = d.copy()
@@ -2562,7 +2663,7 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
             if mo > 0.5 and abs(qn[0] - L.lip_cx) < L.lip_w * 1.1:      # hangs over the top of the upper lip, never past moHang
                 tx = min(abs((qn[0] - L.lip_cx) / max(L.lip_w, 0.018)), 1.0)
                 hux = lipup * (1 - tx ** 2.3) ** 0.55
-                yl = np.interp(qn[0], xs, ys) + max(0.0015, hux * (1 - hang * (1 - 0.55 * BH.ss(0.3, 0.95, tx)) * rng.uniform(0.75, 1.05)))
+                yl = np.interp(qn[0], xs, ys) + max(0.0015, hux * (1 - (hang + (hang_c - hang) * BH.ss(0.25, 0.85, tx)) * rng.uniform(0.75, 1.1)))
                 if qn[1] < yl:
                     qn[1] = yl
             ki, _ = coll.near(qn)
@@ -2579,7 +2680,10 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         moedge = mo * BH.ss(sto + 9.0, sto + 4.0, y)                               # the moustache's lower edge
         rim = BH.ss(pg - 8.0, pg - 16.0, y)                                         # the chin's bottom rim
         edge = max(float(grad[i]), 0.8 * under, moedge, 0.7 * rim, 0.6 * jaw)
-        if edge > 0.45 and rng.random() < 0.85:      # a thin wisp of a few strands (a narrow window of the fine column)
+        if mo > 0.3:                                 # fix round 2: the moustache: thin single hairs (0.3-0.5 mm), tapering
+            width = (0.0003 + 0.0002 * rng.random()) * k * np.array([1.0, 0.75, 0.35])
+            u0, u1 = HT_SINGLE
+        elif edge > 0.45 and rng.random() < 0.85:    # a thin wisp of a few strands (a narrow window of the fine column)
             wid = (0.0008 + 0.0005 * rng.random()) * k
             width = wid * np.array([1.0, 0.8, 0.45])
             win = 0.12 + 0.06 * rng.random()
@@ -2590,9 +2694,15 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
             u0, u1 = HT_SINGLE
         v_ = rng.normal(1.0, 0.08) * (1.0 - 0.1 * BH.ss(0.8, 1.0, dens[i]))     # the dense jaw band and moustache a touch darker
         root, tip = bc_ * 0.85 * v_, bc_ * (1.05 + 0.15 * f) * v_
+        if mo > 0.3:             # fix round 2: the moustache's tips 15-20 % lighter than its roots (soft, never pure black)
+            root, tip = bc_ * 0.92 * v_, bc_ * (1.1 + 0.1 * f) * v_
         if ulz > 0.05:           # under the lower lip: lighter, warmer hair
             wk = ulz * BH.ss(0.8, 0.55, dens[i])
             root, tip = root + (warm_ * 0.9 - root) * wk, tip + (warm_ * 1.1 - tip) * wk
+            if c.get("beardCardGain") and wk > 0.3:      # fix round 2: fine, light, warm single hairs there (a soft haze, not ticks)
+                width = (0.00034 + 0.00012 * rng.random()) * k * np.array([1.0, 0.75, 0.35])
+                u0, u1 = HT_SINGLE
+                root, tip = root * 1.3, tip * 1.45
         K.ribbon(P, nr, width, 7, root, tip, head1, 2.0 + 0.8 * f + 0.4 * rng.random() + 0.6 * mo + 0.5 * edge, fine="@split", u0=u0, u1=u1, kind=4)
         ntri += 2 * (len(P) - 1)
     print(f"  beard cards (likeness map): {len(pts)} cards, {ntri} tris", flush=True)
@@ -2863,6 +2973,10 @@ def _lash_strands(K, c, rts, tps, e, s, bone, lash_c, tier, B):
     k_ = B.H / 1.75
     fem = c["macro"].get("gender", 0.5) < 0.5
     n = {2: 78, 1: 44, 0: 22}[tier] if upper else {2: 20, 1: 12, 0: 6}[tier]
+    if not upper and float(c.get("lashLowerOut", 0.0)) > 0:
+        n = {2: 14, 1: 9, 0: 5}[tier]
+    wing = float(c.get("lashWing", 1.0))      # fix round 2: the outer corner's fan and length (Kai 0.25: short, dense, no wing)
+    lo_out = float(c.get("lashLowerOut", 0.0))      # fix round 2: lower lashes rooted on the lid margin outside the eye, angled down and out
     seg = np.linalg.norm(np.diff(rts, axis=0), axis=1)
     arc = np.concatenate([[0], np.cumsum(seg)])
     arc /= max(arc[-1], 1e-9)
@@ -2873,27 +2987,35 @@ def _lash_strands(K, c, rts, tps, e, s, bone, lash_c, tier, B):
     lat = rts[-1] - rts[0]
     lat /= max(np.linalg.norm(lat), 1e-9)
     up = np.array([0.0, 1.0 if upper else -1.0, 0.0])
-    Lmax = (0.0068 if upper else 0.0019) * k_ * (1.2 if fem else 1.0) * float(c.get("lashLen", 1.0))
+    Lmax = (0.0068 if upper else 0.0019) * k_ * (1.2 if fem else 1.0) * float(c.get("lashLen", 1.0) if upper else c.get("lashLenLower", 1.0))
     # MakeHuman's lash helper sits on the front-upper edge of a ~1.8 mm thick lid rim (the rim faces forward and is seen
     # from the front): the roots move down over the rim to the opening and a little back toward the eyeball, so the
     # lashes leave the lid margin itself (checked against the eye opening in Blender renders of the raw build)
     drop = (0.0012 if upper else 0.0013) * k_
-    col = lash_c if upper else lash_c * 3.0 + 0.012
+    col = lash_c if upper else (lash_c * 3.0 + 0.012 if lo_out <= 0 else lash_c * 4.5 + 0.03)     # (fix round 2: rooted outside, lighter: no dotted line)
     W = np.zeros(len(BH.BONE_NAMES))
     W[BH.BI["head"]] = 1
-    wid = np.array([0.00034, 0.00030, 0.00023, 0.00014]) * k_ * (1.0 if upper else 0.55)
+    wid = np.array([0.00034, 0.00030, 0.00023, 0.00014]) * k_ * (1.0 if upper else (0.55 if lo_out <= 0 else 0.4))
     ip = lambda A, u: np.array([np.interp(u, arc, A[:, d]) for d in range(3)])
     for i in range(n):
-        u = 0.03 + 0.94 * (i + rng.uniform(0.15, 0.85)) / n
+        u = 0.03 + (0.94 - 0.08 * (1 - wing)) * (i + rng.uniform(0.15, 0.85)) / n      # (lashWing < 1: none past the outer corner)
+        if not upper and lo_out > 0:      # (no lower lashes at the very corners: they drew as dots on the sclera)
+            u = 0.14 + 0.72 * (i + rng.uniform(0.15, 0.85)) / n
         root, dn, on = ip(rts, u), ip(tipd, u), ip(outn, u)
         bk = e - root
         root = root - up * drop + bk / max(np.linalg.norm(bk), 1e-9) * 0.0006 * k_
         dn /= max(np.linalg.norm(dn), 1e-9)
         on /= max(np.linalg.norm(on), 1e-9)
+        if not upper and lo_out > 0:
+            # rooted on the lower lid's margin a little below and in front of the opening (never over the iris), leaving
+            # down and forward-out, so the eyeball's depth hides nothing and no tick crosses the iris
+            root = root + up * lo_out * k_ + on * 0.0005 * k_
+            dn = on * 0.55 + up * 0.85
+            dn /= max(np.linalg.norm(dn), 1e-9)
         # proto:makehuman: shorter toward the outer corner (a long fanned outer corner read as a painted eyeliner wing)
-        shape = np.interp(u, [0.0, 0.18, 0.5, 0.8, 1.0], [0.42, 0.72, 1.0, 0.82, 0.38] if upper else [0.3, 0.6, 1.0, 0.8, 0.35])
+        shape = np.interp(u, [0.0, 0.18, 0.5, 0.8, 1.0], [0.42, 0.72, 1.0, 0.82 - 0.12 * (1 - wing), 0.38 * wing + 0.2 * (1 - wing)] if upper else [0.3, 0.6, 1.0, 0.8, 0.35])
         ln = Lmax * shape * rng.uniform(0.82, 1.1)
-        d = dn + lat * (u - 0.45) * (0.16 if upper else 0.12)
+        d = dn + lat * (u - 0.45) * (0.16 * wing if upper else 0.12)
         d = _rot(d / max(np.linalg.norm(d), 1e-9), on, rng.normal(0, 0.07))
         curl = rng.uniform(0.8, 1.2)
         pts = np.array([root - dn * 0.0003 * k_,
@@ -3140,6 +3262,7 @@ def hair_cards(c, B, cov, parts, ex):
     LK = likeness_look.load(c, B)
     if LK is not None:                      # photo likeness: his thick, dense brows (the measured profile)
         nb = {2: 680, 1: 240, 0: 64}[tier]
+        nb = int(nb * float(c.get("browCards", 1.0)))      # fix round 2: Kai 2x (finer hairs, browHairW): a dense, soft bar
     for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
         bT = likeness_look.brow_T(LK, e, sg, c.get("browLift", 0.0), c.get("browShape")) if LK is not None else None
         if LK is not None:      # likeness:final: brow skin seen from the front (the cards' roots projected along z, like the paint)
@@ -3176,12 +3299,12 @@ def hair_cards(c, B, cov, parts, ex):
             d = _tan(np.array([math.cos(ang) * sg, math.sin(ang), 0.0]), n)
             d /= max(np.linalg.norm(d), 1e-9)
             ln = float(np.interp(tk, [0, 0.4, 1.0], [0.0036, 0.0052, 0.0040]) * rng.uniform(0.85, 1.12))
-            col = brow_c * (1.15 + 0.35 * rng.random())       # a little lighter than the scalp hair (black stripes otherwise)
+            col = brow_c * (1.15 + 0.35 * rng.random()) * float(c.get("browCardGain", 1.0))       # a little lighter than the scalp hair (black stripes otherwise)
             if bT is not None:
                 # fix round 1: one segment per hair (a 4-5 mm hair lying on the skin needs no bend: half the triangles)
                 ln *= rng.uniform(0.75, 1.1) * (1.0 - 0.25 * max(0.0, nn_ - 0.7) / 0.3)
                 pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.0003 * f)[0] for f in (0.0, 1.0)])
-                K.ribbon(pts, np.repeat(n[None], 2, 0), np.array([0.00030, 0.00012]) * (1.05 if male else 0.95) * (1.25 if tier < 2 else 1.0), 7, col * 0.8, col * 1.12,
+                K.ribbon(pts, np.repeat(n[None], 2, 0), np.array([0.00030, 0.00012]) * float(c.get("browHairW", 1.0)) * (1.05 if male else 0.95) * (1.25 if tier < 2 else 1.0), 7, col * 0.8, col * 1.12,
                          np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5, fine="@split", u0=HT_SINGLE[0], u1=HT_SINGLE[1], kind=2)
                 continue
             pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.00025 * f)[0] for f in (0.0, 0.5, 1.0)])
@@ -3438,6 +3561,14 @@ def paint_skin(c, B, pos, part, col, isface, seed):
     rough = rough - 0.18 * float(c.get("tzoneGloss", 1.0)) * np.clip(tz + nose, 0, 1) - 0.04 * face + 0.05 * age + float(c.get("skinMatte", 0.0)) * face
     # noseMatte (face file): the nose tip and wings rougher (fix round 1, Kai: a hot spot on the tip under the studio key)
     rough = rough + float(c.get("noseMatte", 0.0)) * g2(((pos - np.array([0, L.eye[1] - 0.045, L.eye[2] + 0.03])) ** 2).sum(1), 0.008) * face
+    if c.get("bridgeMatte"):      # fix round 2 (Kai): the wings matte too (their rims caught the key as a light outline)
+        for sg in (1, -1):
+            wing_ = np.array([0.018 * sg, L.eye[1] - 0.042, L.eye[2] + 0.016])
+            rough = rough + float(c.get("noseMatte", 0.0)) * g2(((pos - wing_) ** 2).sum(1), 0.006) * face
+    # bridgeMatte (fix round 2, Kai): the nose dorsum rougher (a bright highlight stripe down a narrow bridge)
+    if c.get("bridgeMatte"):
+        dors = g2(rel[:, 0] ** 2, 0.006) * ss(0.0, -0.012, rel[:, 1]) * ss(-0.042, -0.03, rel[:, 1]) * ss(0.0, 0.015, rel[:, 2]) * face
+        rough = rough + float(c["bridgeMatte"]) * dors
     rough = rough - 0.26 * nail
     rough += 0.06 * (pores - 0.3) * face
     return col, h, np.clip(rough, 0.25, 0.8)

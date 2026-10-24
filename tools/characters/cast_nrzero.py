@@ -540,7 +540,14 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   # the moustache's hang over the upper lip, the warm thin beard, a matte nose tip, softer moles and the
                   # run-time skin scatter tint
                   "browShape", "irisWarm", "irisGain", "underEyeDesat", "lipEdge", "lipLines", "lipGloss", "lipParted",
-                  "upperLipDark", "beardPaint", "moHang", "beardWarm", "noseMatte", "moleSoft", "skinScatter", "beardDark", "foreheadShade", "hairline", "lipRough")
+                  "upperLipDark", "beardPaint", "moHang", "beardWarm", "noseMatte", "moleSoft", "skinScatter", "beardDark", "foreheadShade", "hairline", "lipRough",
+                  # fix round 2: the moustache's hang at the corners, the sclera, the caruncle, the lashes (outer wing, lower
+                  # lashes rooted outside the eye, their length), the brows (card count and width, the painted base, soft
+                  # edges), the under-eye's softness, the hooded lid, the lower lip's rose centre and asymmetry, per-mole
+                  # tweaks, a matte nose bridge
+                  "moHangCorner", "sclera", "caruncle", "lashWing", "lashLowerOut", "lashLenLower", "browCards", "browHairW", "browBase",
+                  "browEdge", "underEyeBlur", "lidHood", "lipLower", "lipAsym", "moleTweak", "bridgeMatte", "browCardGain", "browPaintGain",
+                  "beardCardGain", "moPaintDark", "underEyeLift", "foreheadRamp", "sideburnTop", "alarSoften")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 

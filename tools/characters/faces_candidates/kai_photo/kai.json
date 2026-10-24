@@ -27,8 +27,8 @@
   "eyebrows/eyebrows-angle-down|up": -0.214,
   "eyebrows/eyebrows-trans-backward|forward": 0.12,
   "eyebrows/eyebrows-trans-down|up": -0.71,
-  "eyes/l-eye-bag-decr|incr": -0.025,
-  "eyes/l-eye-bag-height-decr|incr": -0.469,
+  "eyes/l-eye-bag-decr|incr": 0.25,
+  "eyes/l-eye-bag-height-decr|incr": -0.2,
   "eyes/l-eye-bag-in|out": -0.22,
   "eyes/l-eye-corner1-down|up": 0.131,
   "eyes/l-eye-corner2-down|up": -0.149,
@@ -40,8 +40,8 @@
   "eyes/l-eye-scale-decr|incr": 0.542,
   "eyes/l-eye-trans-down|up": 0.896,
   "eyes/l-eye-trans-in|out": 0.057,
-  "eyes/r-eye-bag-decr|incr": -0.025,
-  "eyes/r-eye-bag-height-decr|incr": -0.469,
+  "eyes/r-eye-bag-decr|incr": 0.25,
+  "eyes/r-eye-bag-height-decr|incr": -0.2,
   "eyes/r-eye-bag-in|out": -0.22,
   "eyes/r-eye-corner1-down|up": 0.131,
   "eyes/r-eye-corner2-down|up": -0.149,
@@ -74,19 +74,19 @@
   "mouth/mouth-lowerlip-width-decr|incr": 0.0,
   "mouth/mouth-philtrum-volume-decr|incr": -0.01,
   "mouth/mouth-scale-depth-decr|incr": -0.341,
-  "mouth/mouth-scale-horiz-decr|incr": 0.1,
+  "mouth/mouth-scale-horiz-decr|incr": -0.06,
   "mouth/mouth-scale-vert-decr|incr": 0.484,
   "mouth/mouth-trans-backward|forward": -0.162,
-  "mouth/mouth-trans-down|up": 0.7,
+  "mouth/mouth-trans-down|up": 0.9,
   "mouth/mouth-upperlip-ext-down|up": 0.167,
-  "mouth/mouth-upperlip-height-decr|incr": 0.856,
+  "mouth/mouth-upperlip-height-decr|incr": 1.0,
   "mouth/mouth-upperlip-middle-down|up": 0.755,
   "mouth/mouth-upperlip-volume-decr|incr": 0.0,
   "mouth/mouth-upperlip-width-decr|incr": -0.013,
   "nose/nose-base-down|up": 0.351,
   "nose/nose-compression-compress|uncompress": -0.117,
   "nose/nose-curve-concave|convex": 0.484,
-  "nose/nose-flaring-decr|incr": 0.03,
+  "nose/nose-flaring-decr|incr": -0.25,
   "nose/nose-greek-decr|incr": 0.244,
   "nose/nose-hump-decr|incr": 0.229,
   "nose/nose-nostrils-angle-down|up": 0.698,
@@ -97,22 +97,24 @@
   "nose/nose-scale-vert-decr|incr": -0.75,
   "nose/nose-septumangle-decr|incr": 0.4,
   "nose/nose-trans-backward|forward": -0.05,
-  "nose/nose-trans-down|up": 0.424,
-  "nose/nose-volume-decr|incr": 0.3,
-  "nose/nose-width1-decr|incr": 0.12,
-  "nose/nose-width2-decr|incr": 0.07,
+  "nose/nose-trans-down|up": 0.3,
+  "nose/nose-volume-decr|incr": 0.4,
+  "nose/nose-width1-decr|incr": 0.45,
+  "nose/nose-width2-decr|incr": 0.25,
   "nose/nose-width3-decr|incr": 0.701,
-  "nose/nose-point-width-decr|incr": 0.5
+  "nose/nose-point-width-decr|incr": 0.7,
+  "eyes/l-eye-eyefold-down|up": -0.9,
+  "eyes/r-eye-eyefold-down|up": -0.9
  },
  "likeness": "kai_look.npz",
  "likenessScale": 1.007,
  "skinExact": true,
  "skin": "88614b",
- "lip": "7a5550",
+ "lip": "6e4a46",
  "eyes": "32231b",
- "browColor": "1c1612",
+ "browColor": "2a2119",
  "browThick": 1.0,
- "browLift": -0.0066,
+ "browLift": -0.0063,
  "stubble": 0.0,
  "beard": 1.0,
  "beardColor": "35281e",
@@ -121,41 +123,121 @@
  "hairDrop": 0.17,
  "greyStrands": 3,
  "lipScale": [
-  1.1,
+  1.45,
   1.05
  ],
  "skinSmooth": 0.45,
- "underEye": 0.08,
- "faintSpots": 0.8,
+ "underEye": 0.0,
+ "faintSpots": 1.3,
  "tzoneGloss": 0.2,
  "skinMatte": 0.05,
  "browShape": {
-  "flat": 0.85,
+  "flat": 1.0,
   "rise": 0.8,
   "tail": 1.4,
   "tailThin": 0.42,
-  "head": 0.7,
-  "thick": 1.15
+  "head": 0.3,
+  "thick": 1.15,
+  "latDrop": 1.3
  },
- "irisWarm": 0.35,
- "irisGain": 0.9,
- "underEyeDesat": 0.75,
- "upperLipDark": 0.28,
+ "irisWarm": 0.5,
+ "irisGain": 1.05,
+ "underEyeDesat": 0.6,
+ "upperLipDark": 0.2,
  "lipEdge": 0.0012,
- "lipLines": 0.5,
+ "lipLines": 0.65,
  "lipGloss": 0.25,
  "lipParted": 0.5,
  "beardPaint": 0.72,
- "moHang": 0.12,
+ "moHang": 0.22,
  "beardWarm": "4e3c2e",
  "noseMatte": 0.35,
- "moleSoft": 0.5,
- "skinScatter": 0.5,
- "beardDark": 0.1,
- "foreheadShade": 2.0,
+ "moleSoft": 0.3,
+ "skinScatter": 0.3,
+ "beardDark": 0.0,
+ "foreheadShade": 4.0,
  "hairline": {
   "centre": -0.003,
-  "temple": 0.007
+  "arch": [
+   [
+    0,
+    0.059
+   ],
+   [
+    12,
+    0.057
+   ],
+   [
+    24,
+    0.051
+   ],
+   [
+    34,
+    0.044
+   ],
+   [
+    44,
+    0.037
+   ],
+   [
+    54,
+    0.029
+   ],
+   [
+    64,
+    0.019
+   ],
+   [
+    72,
+    0.006
+   ]
+  ]
  },
- "lipRough": 0.52
+ "lipRough": 0.52,
+ "irisR": 0.22,
+ "pupilR": 0.085,
+ "sclera": "b89d86",
+ "caruncle": 0.55,
+ "lashLen": 0.6,
+ "lashWing": 0.25,
+ "lashLowerOut": 0.0011,
+ "lashLenLower": 0.85,
+ "browCards": 2.0,
+ "browHairW": 0.83,
+ "browBase": 0.65,
+ "browEdge": 0.0015,
+ "moHangCorner": 0.35,
+ "lipLower": "8e5850",
+ "lipAsym": 0.08,
+ "underEyeBlur": 2.0,
+ "lidShade": 1.3,
+ "lidHood": 0.9,
+ "moleTweak": [
+  [
+   0,
+   0.0,
+   1.5,
+   0.5,
+   1.0
+  ],
+  [
+   5,
+   0.0,
+   0.0,
+   1.0,
+   0.8
+  ]
+ ],
+ "bridgeMatte": 0.4,
+ "browCardGain": 1.25,
+ "browPaintGain": 0.55,
+ "beardCardGain": 1.35,
+ "moPaintDark": 0.3,
+ "foreheadRamp": [
+  8.0,
+  34.0
+ ],
+ "underEyeLift": 0.09,
+ "sideburnTop": 34.0,
+ "alarSoften": 9
 }

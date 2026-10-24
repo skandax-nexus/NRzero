@@ -579,6 +579,8 @@ class Body:
             self.P = self.P - np.array([0, self.P[bv, 1].min() - 0.012, 0])
         self.W = dense_weights(len(self.P))
         self.vb = [BONE_NAMES[i] for i in self.W.argmax(1)]
+        if c.get("alarSoften"):      # fix round 2 (Kai): the nose wings' crease against the cheek smoothed (a hard U line read as cut out)
+            self.P = soften_alar(self.P, self.F, Landmarks(self.P).eye, float(c["alarSoften"]))
         self.L = Landmarks(self.P)
         self.J = rig_points(self.P)
         self.Jm = {k: np.array([v.x, v.z, -v.y]) for k, v in self.J.items()}
@@ -597,6 +599,31 @@ class Body:
         self.bodyv = np.array(bodyv)
         self.ear = np.zeros(len(self.P))
         self.ear[layout()["ears"]] = 1.0
+
+
+def soften_alar(P, F, eye, amount):
+    """Laplacian smoothing of the skin around the nose wings (the alar-facial groove and the wing's rim), with a soft
+    falloff: amount = iterations of a 0.45 step. The tip, the nostrils' openings and the philtrum stay as sculpted."""
+    faces = [f[0] for f in F if f[2] == "body"]
+    nb = {}
+    for f in faces:
+        for i in range(len(f)):
+            a, b = f[i], f[(i + 1) % len(f)]
+            nb.setdefault(a, set()).add(b)
+            nb.setdefault(b, set()).add(a)
+    rel = P - eye
+    ax = np.abs(rel[:, 0])
+    w = ss(0.006, 0.013, ax) * ss(0.036, 0.028, ax) * ss(-0.06, -0.052, rel[:, 1]) * ss(-0.018, -0.026, rel[:, 1]) * ss(-0.004, 0.006, rel[:, 2])
+    idx = np.nonzero(w > 0.01)[0]
+    P = P.copy()
+    for _ in range(int(round(amount))):
+        Q = P.copy()
+        for i in idx:
+            n_ = nb.get(int(i))
+            if n_:
+                Q[i] = P[i] + 0.45 * w[i] * (P[list(n_)].mean(0) - P[i])
+        P = Q
+    return P
 
 
 NECK = {  # neckline: (height above the neck base at the back, front dip) in metres (1.75 m body)
@@ -630,6 +657,13 @@ def hairline(rel, style, male, old, shape=None):
             "locs": -0.086, "undercut": -0.058, "fade": -0.055, "pixie": -0.078}.get(style, -0.08)
     ks = [0, 28, 48, 66, 78, 88, 100, 114, 132, 152, 180]
     hs = [hf, hf - 0.003, temple, 0.026, sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
+    if shape and shape.get("arch"):
+        # fix round 2: `arch`: the front hairline as [azimuth deg, height m] pairs from the centre to the temple (Kai: the
+        # photo's measured hairline, a rounded dome with the hair coming down over the temples, no square corners)
+        ar = sorted((float(a_), float(h_)) for a_, h_ in shape["arch"])
+        ks = [a_ for a_, _ in ar] + [78, 88, 100, 114, 132, 152, 180]
+        hs = [h_ for _, h_ in ar] + [sb, 0.024, 0.036, 0.016, nape * 0.55, nape, nape]
+        return np.interp(th, ks, hs)
     if shape:
         cen, tem = float(shape.get("centre", 0.0)), float(shape.get("temple", 0.0))
         ks = [0, 12, 24, 36, 46, 56, 66, 78, 88, 100, 114, 132, 152, 180]
@@ -1224,6 +1258,11 @@ def paint(c, B, cov, res, path_out):
     over(lipm * 0.85, lipcol)
     tint(lipm * mu * (0.1 if LK is None else float(c.get("upperLipDark", 0.14))), [0.9, 0.88, 0.9])              # upper lip a touch darker (photo: mauve-grey)
     tint(lipm * ml * (0.1 if LK is None else 0.03) * g2(t ** 2 + ((-d - hl0 * 0.45) / 0.004) ** 2, 1.0), [1.12, 1.1, 1.1])   # lower lip highlight
+    if LK is not None and c.get("lipLower"):      # fix round 2: the lower lip's centre rosier and a little darker (not a pale clay lozenge)
+        lc_ = g2((t / 0.55) ** 2 + ((-d - hl0 * 0.5) / (hl0 * 0.6)) ** 2, 1.0) * ml
+        over(lipm * lc_ * 0.7, hexc(c["lipLower"]))
+    if LK is not None and c.get("lipAsym"):       # fix round 2: a slight left / right asymmetry (one side a touch darker and fuller-toned)
+        tint(lipm * float(c["lipAsym"]) * ss(-0.6, 0.8, t) * (0.6 + 0.4 * vnoise(pos, 160, seed + 4.4)), [0.9, 0.86, 0.88])
     if LK is not None and c.get("lipLines"):      # fix round 1: fine vertical lip lines (the vermilion's furrows), darker at the centre of each lip
         ll = vnoise(pos * np.array([1.0, 0.07, 1.0]), 2300, seed + 8.3)
         tint(lipm * float(c["lipLines"]) * np.clip((ll - 0.45) * 2.5, 0, 1) * (1 - 0.5 * ss(0.5, 1.0, np.abs(t))), [0.82, 0.78, 0.8])
@@ -1262,6 +1301,10 @@ def paint(c, B, cov, res, path_out):
         tint(lo_line * 0.22, [0.7, 0.62, 0.6])
         inner = g2(((dx - ux.min() + 0.002) / 0.004) ** 2 + (dy / 0.004) ** 2, 1.0) * near
         tint(inner * (0.18 if LK is None else 0.07), [0.86, 0.72, 0.72])
+        if c.get("caruncle"):      # fix round 2: the pink caruncle in the inner corner (the skin of the canthus, at the opening's height)
+            ycar = 0.5 * (np.interp(ux.min() + 0.0012, ux, uy) + np.interp(ux.min() + 0.0012, lx, ly))
+            car = g2(((dx - ux.min() - 0.0004) / 0.0019) ** 2 + ((dy - ycar) / 0.0014) ** 2, 1.0) * near
+            over(car * float(c["caruncle"]), np.array([0.70, 0.42, 0.40]))
     # ---- eyebrows: hair strokes placed from the eye centres ----
     bt = c.get("browThick", 0.5)
     nstr = 260 if res >= 2048 else 200
@@ -1300,18 +1343,20 @@ def paint(c, B, cov, res, path_out):
         inb = ss(-0.0006, 0.001, Y - cby) * ss(cbw + top_m[0], cbw - top_m[1] - 0.0004, Y - cby) * ss(bx0 - 0.002, bx0 + 0.002, X) * ss(bx1 + 0.002, bx1 - 0.001, X)
         if LK is not None:       # fix round 1: the top edge feathered over ~1.6 mm along a broken line (a solid band read as a marker stroke)
             brk = 0.0007 * (vnoise(pos[idx] * np.array([1.0, 0.3, 1.0]), 900, seed + 6.1) - 0.5)
-            inb = (ss(-0.0006, 0.001, Y - cby) * ss(cbw + 0.0001 + brk, cbw - 0.0017 + brk, Y - cby)
+            be = float(c.get("browEdge", 0.0))      # fix round 2: both edges softened over ~1.5 mm (no ragged marker outline)
+            inb = (ss(-0.0006 - be * 0.5, 0.001 + be * 0.3, Y - cby) * ss(cbw + 0.0001 + be * 0.3 + brk, cbw - 0.0017 + brk, Y - cby)
                    * ss(bx0 - 0.0005, bx0 + 0.004, X) * ss(bx1 + 0.002, bx1 - 0.003, X))
-        alpha = np.clip(np.maximum(alpha, 0.0) + ((0.17 if LK is None else 0.4) if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
+        alpha = np.clip(np.maximum(alpha, 0.0) + ((0.17 if LK is None else float(c.get("browBase", 0.4))) if look2.ON else 0.34) * inb * (1 - alpha), 0, 0.9)      # proto:makehuman: 0.28 (a painted brow block under the hairs)
         m = np.zeros(len(px))
         m[idx] = alpha
-        over(m, brow_c)
+        over(m, brow_c * (float(c.get("browPaintGain", 1.0)) if LK is not None else 1.0))     # fix round 2: browPaintGain (Kai: the painted base as dark as the cards, no light patches)
     # ---- stubble ----
     stub = c.get("stubble", 0.0)
     if LK is not None and c.get("beard", 0.0) >= 0.5:
         # photo likeness: the measured beard (density map): a dark painted under-layer below the beard cards, a stubble
         # shadow where it thins out (look2 grows the cards from the same map)
-        ab, brgb, _bd = likeness_look.beard_paint(c, B, LK, pos, fld(B.hw), lipm, isface, seed, sys.modules[__name__], lipgeo=(d, hu, t, lipfront))
+        ab, brgb, _bd = likeness_look.beard_paint(c, B, LK, pos, fld(B.hw), lipm, isface, seed, sys.modules[__name__], lipgeo=(d, hu, t, lipfront),
+                                                  nrm=np.stack([fld(B.N[:, i]) for i in range(3)], 1))
         col = col * (1 - ab[:, None]) + brgb * ab[:, None]
         if c.get("moHang"):      # (the moustache hanging over the upper lip is hair: no lip gloss or lip tint under it)
             lipm = lipm * (1 - ss(0.5, 0.9, _bd) * (lipm > 0))
@@ -1390,6 +1435,9 @@ def paint(c, B, cov, res, path_out):
         # a soft density gradient outside the hairline (no discrete strokes: they read as a row of stitches), with a
         # faint, low-contrast strand modulation
         fa = (0.4 * u ** 1.7) * (0.85 + 0.15 * st2) * band
+        ed_ = float(look2.CUTS.get(c.get("hairCut") or "", {}).get("edgeDark", 0.0)) if look2.ON else 0.0
+        if ed_ > 0:     # fix round 2: the skin right at the shell's border darkened (it caught the light as a pale strip)
+            fa = np.maximum(fa, ed_ * ss(-0.0035, -0.0005, hcov) * band)
         over(fa, hair_c * 0.8 + skin * 0.2)
         under = (hcov >= 0) & ~ears
         # the density is already full a couple of mm inside the hairline: the hair shell's border sits on the hairline
@@ -1413,6 +1461,11 @@ def paint(c, B, cov, res, path_out):
         hcol = hcol * sheen[:, None]
         if look2.ON and look2.hero_cut(c):      # proto:makehuman: the shell under hero cards is the deep, matte under-layer
             hcol = hcol * 0.72
+            cut_ = look2.CUTS.get(c.get("hairCut") or "", {})
+            if cut_.get("shellStripe") is not None:     # fix round 2 (curly cuts): weaker strand stripes on the shell (a grey striped cap)
+                km = float(np.mean(k))
+                hcol = hcol / np.maximum(k, 1e-3)[:, None] * (km + (k - km) * float(cut_["shellStripe"]))[:, None]
+            hcol = hcol * float(cut_.get("shellDark", 1.0))
         scalp = look2.CUTS.get(c.get("hairCut") or "", {}).get("scalp") if look2.ON else None
         if scalp in ("short", "fade"):      # hero pipeline: short cuts read as dense hair (the cards on top carry the
             # texture); a faint stipple of scalp between the hairs; a fade runs down the sides to stubble on the skin
@@ -1619,6 +1672,10 @@ def paint_cells(c, img, mask, res, seed, cov=None):
         if name == "hair":
             cc = cc * (0.9 if look2.ON else 1.0)
             k = 0.8 + 0.12 * np.sin(a * 60 + 2 * vnoise(p3, 3, seed).reshape(a.shape)) + 0.08 * np.sin(a * 151 + 1.3)
+            cut_ = look2.CUTS.get(c.get("hairCut") or "", {}) if look2.ON else {}
+            if cut_.get("shellStripe") is not None:      # fix round 2 (curly cuts): the hanging pieces' cell as dark and unstriped as the shell
+                k = 0.8 + (k - 0.8) * float(cut_["shellStripe"])
+                cc = cc * float(cut_.get("shellDark", 1.0)) * 0.72
         elif name in ("shoe", "sole"):
             k = 0.9 + 0.12 * vnoise(p3, 9, seed).reshape(a.shape)
         elif name in ("colA", "colB", "acc"):    # skirts, coat tails, aprons: the same mean shade as the painted garments
