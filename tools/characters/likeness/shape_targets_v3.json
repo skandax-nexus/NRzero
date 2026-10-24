@@ -1,0 +1,285 @@
+{
+ "notes": "Kai v3 (docs/CHARACTER_LOOK.md \"Kai v3: the three photos\"): the targets of likeness/dense_fit.py stage_b3 for what NONE of the three 2026 photos sees directly at its own camera (the photos' landmarks and silhouettes are fitted there): the skin under the beard, the skull under the sleek hair, the cheek mass and the soft turns between the profile and the front, the brow over the eye. Sources: the side step's estimates (sides_targets.json estimates_under_hair, combined, the cheek and mole points), the sculptor's SHAPE_SPEC_V3.md (targets_v3.json) and its section 6 (which round-4 targets were wrong: the vault 105-110 mm, the upright forehead, the nasion dip, the hanging tip, the pouting lips, the low chin, the short head, the narrow skull are dropped; the cheek mass, the soft turns and the full temples are kept). Derived numbers only. Frame: the v3 head frame (the front photo's: mm, origin the midpoint of the inner eye corners, x his left, y up, z forward), read on the model through the fit's pose (dense_fit.Frame with the rotation R_f^T R and the scale s). Kinds and bands as shape_targets.json. Round 4's kept targets (soft turns, temples, brow over the eye) are moved to the v3 head frame's scale: their x / y in round 4's photo mm x 0.9 (the v3 frame reads the build at 0.906 head mm per build mm, round 4's at 1.007).",
+ "targets": [
+  {
+   "id": "skull_top",
+   "kind": "top",
+   "band": [
+    88,
+    97
+   ],
+   "conf": "medium",
+   "spec": "8",
+   "w": 2.0,
+   "note": "the hair's top 96-103 mm above the eye corners (side2 102.5 level), the sleek hair 6-9 mm: the skull 90-96 (SHAPE_SPEC_V3 2.2)"
+  },
+  {
+   "id": "pg_skin",
+   "kind": "z",
+   "x": 0,
+   "y": -89,
+   "band": [
+    16.5,
+    24.5
+   ],
+   "conf": "medium",
+   "spec": "12",
+   "note": "skin pogonion under the beard (sides estimates_under_hair Pg_skin 20.7 +- 4)"
+  },
+  {
+   "id": "me_skin",
+   "kind": "ybot",
+   "x": 0,
+   "z": 4,
+   "band": [
+    -109,
+    -104
+   ],
+   "conf": "medium",
+   "spec": "12",
+   "note": "skin menton: the lowest chin point at the midline (sides Me_skin (0, -106.5, 4.2); MediaPipe's chin on the front photo -106.8)"
+  },
+  {
+   "id": "submental",
+   "kind": "ybot",
+   "x": 0,
+   "z": -20,
+   "band": [
+    -118,
+    -106
+   ],
+   "conf": "low",
+   "spec": "12",
+   "note": "the under-chin skin between Me (-106.5, z 4) and the throat (-116, z -38) (sides estimates)"
+  },
+  {
+   "id": "throat",
+   "kind": "ybot",
+   "x": 0,
+   "z": -36,
+   "band": [
+    -124,
+    -110
+   ],
+   "conf": "low",
+   "spec": "12"
+  },
+  {
+   "id": "ls_under_moustache",
+   "kind": "lm",
+   "mp": 0,
+   "axis": "z",
+   "band": [
+    17.5,
+    24.0
+   ],
+   "conf": "low",
+   "spec": "7",
+   "note": "labrale superius hidden by the moustache: moustache front 26.6 - 6 mm (sides Ls 20.6 +- 3.5)"
+  },
+  {
+   "id": "lower_lip_proud",
+   "kind": "lmrel",
+   "mp": 17,
+   "mp2": 13,
+   "axis": "z",
+   "band": [
+    2.0,
+    5.5
+   ],
+   "conf": "low",
+   "spec": "7",
+   "note": "Li 24.2 against Sto 20.8 (sides)"
+  },
+  {
+   "id": "cheek_1",
+   "kind": "z",
+   "x": 20,
+   "y": -10,
+   "band": [
+    1.0,
+    7.0
+   ],
+   "conf": "low",
+   "spec": "sides",
+   "note": "nose-cheek junction below the inner eye (side1 2.3, side2 5.5, sd 4)"
+  },
+  {
+   "id": "cheek_2",
+   "kind": "z",
+   "x": 20.5,
+   "y": -21,
+   "band": [
+    3.5,
+    8.0
+   ],
+   "conf": "high",
+   "spec": "sides",
+   "note": "nose-cheek junction mid-nose (side1 4.9, side2 6.4 high)"
+  },
+  {
+   "id": "nlf_1",
+   "kind": "z",
+   "x": 23,
+   "y": -39,
+   "band": [
+    3.0,
+    9.0
+   ],
+   "conf": "low",
+   "spec": "sides"
+  },
+  {
+   "id": "mole_cheek",
+   "kind": "z",
+   "x": 34.5,
+   "y": -20.8,
+   "band": [
+    -10.5,
+    -3.7
+   ],
+   "conf": "high",
+   "spec": "sides",
+   "note": "the dark mole on his left cheek (side2 bundle point -7.1 +- 3.4): the cheek's depth there"
+  },
+  {
+   "id": "soft_turn",
+   "kind": "zsec",
+   "x": [
+    36,
+    40,
+    43,
+    47,
+    50,
+    54,
+    56
+   ],
+   "h": 3.6,
+   "y": [
+    32,
+    22,
+    13,
+    -13,
+    -22,
+    -31,
+    -40,
+    -50,
+    -58
+   ],
+   "band": [
+    -2.5,
+    2.5
+   ],
+   "conf": "high",
+   "spec": "old 9 (right: keep)",
+   "note": "no box: a soft front-to-side turn (round 4's target in its photo mm x 0.9 = the v3 head frame's scale against the build, 0.906 / 1.007); not across the eye openings"
+  },
+  {
+   "id": "soft_turn_low",
+   "kind": "zsec",
+   "x": [
+    36,
+    40,
+    43,
+    47
+   ],
+   "h": 3.6,
+   "y": [
+    -67,
+    -76
+   ],
+   "band": [
+    -2.5,
+    2.5
+   ],
+   "conf": "high",
+   "spec": "old 9"
+  },
+  {
+   "id": "temple_54",
+   "kind": "zdrop",
+   "x": 45,
+   "x2": 54,
+   "y": [
+    9,
+    13,
+    18
+   ],
+   "band": [
+    null,
+    9.5
+   ],
+   "conf": "medium",
+   "spec": "old 11 (right: keep)",
+   "note": "full temples (round 4's x 50 -> 60, 10.5 mm, scaled 0.9)"
+  },
+  {
+   "id": "brow_over_eye_x29",
+   "kind": "brow_eye",
+   "x": 29,
+   "y": 11,
+   "band": [
+    3.5,
+    8.0
+   ],
+   "conf": "medium",
+   "spec": "3 / old 5",
+   "note": "the brow roll ahead of the upper lash line: deep-set eyes under heavy lids (direction confirmed, mm not: SHAPE_SPEC_V3 section 6)"
+  },
+  {
+   "id": "brow_over_eye_x34",
+   "kind": "brow_eye",
+   "x": 34,
+   "y": 11,
+   "band": [
+    3.5,
+    8.0
+   ],
+   "conf": "medium",
+   "spec": "3 / old 5"
+  },
+  {
+   "id": "head_length",
+   "kind": "length",
+   "y": 12,
+   "ys": [
+    0,
+    10,
+    20,
+    30,
+    40,
+    50,
+    60
+   ],
+   "band": [
+    205,
+    217
+   ],
+   "conf": "medium",
+   "spec": "old 12 (wrong direction: not shorter)",
+   "note": "glabella to the back of the skull: the hair 213-227, the skin about 205-215"
+  },
+  {
+   "id": "cheek_y-30",
+   "kind": "z",
+   "y": -30,
+   "x": [
+    35,
+    45
+   ],
+   "bands": [
+    [
+     -6.0,
+     2.0
+    ],
+    [
+     -14.0,
+     -5.0
+    ]
+   ],
+   "conf": "medium",
+   "spec": "sides",
+   "note": "the cheek receding toward the side (the mole at x 34.5, y -20.8: z -7.1; the outer canthus z -11.4; the beard's back edge (62, -65, -60))"
+  }
+ ]
+}

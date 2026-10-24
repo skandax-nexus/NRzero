@@ -62,6 +62,14 @@ import raster  # noqa: E402
 
 LK = os.environ.get("LIKENESS_DIR", "/tmp/claude-0/-home-user-NRzero/bd5ae5bd-ae4a-555b-ac14-7c4895688d29/scratchpad/feel/faces/likeness")
 PHOTO = os.environ.get("KAI_PHOTO", "/home/user/tools/kai_ref/kai_ref.jpg")
+OUT = os.environ.get("FIT_OUT", LK)          # fit.json, fit/x.npy and the pictures (v3: likeness/v3/fit/work)
+# v3 (the owner's three 2026 photos, docs/CHARACTER_LOOK.md "Kai v3"): measure.py's folder holds fit_inputs_front.json
+# (the photo's size, which corrections are off for a photo at rest, the skin's inset under the beard per oval point)
+CFG_PATH = os.path.join(LK, "fit_inputs_front.json")
+CFG = json.load(open(CFG_PATH)) if os.path.exists(CFG_PATH) else {}
+PHOTO_WH = tuple(CFG.get("photo_size", (3121, 6528)))
+AT_REST = CFG.get("corrections_OFF_for_this_photo", {}).get("frown_undo") is False      # no frown to undo, lids at rest
+FIT_EARS = os.environ.get("LIKENESS_EARS", "1" if CFG else "0") == "1"                 # the side photos see the ears
 YEARS, METRES = 32, 1.83
 SA = dict(caucasian=0.55, asian=0.25, african=0.2)      # cast_nrzero.SA (South Asian)
 
@@ -104,11 +112,19 @@ SKIP = ("head-trans-", "nose-trans-in|out", "mouth-trans-in|out", "-eye-push", "
 GROUPS_FIT = ("head/", "forehead/", "eyebrows/", "eyes/", "nose/", "mouth/", "chin/", "cheek/", "neck/neck-double")
 
 
+# v3: the ear's place, size, tilt and stand-off (the side photos measure the ear; FIT_EARS)
+EAR_FIT = ("ear-trans-backward|forward", "ear-trans-down|up", "ear-scale-decr|incr", "ear-scale-vert-decr|incr",
+           "ear-rot-backward|forward", "ear-wing-decr|incr", "ear-lobe-decr|incr")
+
+
 def detail_params():
     """[(name, [modifier keys])]: one value per symmetric pair (l- and r- together)."""
     out, seen = [], set()
     for k in mh.list_modifiers():
-        if not k.startswith(GROUPS_FIT) or any(s in k for s in SKIP) or k in seen:
+        ear = FIT_EARS and k.startswith("ears/") and k.split("/")[1][2:] in EAR_FIT
+        # v3: the side photos see the eye's depth (the old single view could not: eye-push was skipped)
+        skip = tuple(s for s in SKIP if not (FIT_EARS and s == "-eye-push"))
+        if not (k.startswith(GROUPS_FIT) or ear) or any(s in k for s in skip) or k in seen:
             continue
         g, n = k.split("/")
         if n.startswith(("l-", "r-")):
@@ -167,9 +183,13 @@ def solve_height(macro, details):
 class Model:
     """Head vertices as a fast function of (macro, details): macro sculpts are cached, details are linear per sign."""
 
-    def __init__(self, P_ref):
+    def __init__(self, P_ref, wide=False):
         self.S = raster.head_scene(P_ref)
         self.hv = self.S.verts                          # head vertex ids (global)
+        if wide:
+            # v3: the side photos see the neck under the jaw and the back of the head too (the front render keeps its
+            # jaw cut: the detector traces the jaw there)
+            self.hv = np.unique(np.r_[self.hv, raster.head_scene(P_ref, neck_drop=0.06, jaw_cut=False).verts])
         self.loc = -np.ones(len(P_ref), np.int64)
         self.loc[self.hv] = np.arange(len(self.hv))
         self.params = detail_params()
@@ -261,8 +281,20 @@ class Photo:
         self.ppm = self.K[0, 0] / self.Xc[:, 2] / 1000.0  # pixels per mm at each landmark
         self.face = (self.Xh - self.eyes_mid) * 1000.0    # face mm (x = subject's left, y up)
         self.target = self.pts.copy()
-        self._brows()
+        self.cfg = CFG
+        self.W, self.H = PHOTO_WH
+        if AT_REST:
+            self.brow_shift = "none: the photo's brows and lids are at rest (fit_inputs_front.json)"
+        else:
+            self._brows()
         self._oval()
+        # the crop the pictures and the true-silhouette renders use: the face's landmarks padded
+        lo, hi = self.pts[:468].min(0), self.pts[:468].max(0)
+        sz = hi - lo
+        self.box = tuple(int(v) for v in (max(lo[0] - 0.45 * sz[0], 0), max(lo[1] - 0.45 * sz[1], 0),
+                                           min(hi[0] + 0.45 * sz[0], self.W), min(hi[1] + 0.35 * sz[1], self.H)))
+        if not CFG:
+            self.box = (250, 1200, 2950, 4900)
 
     def _reproj(self, X):
         return proj(self.K, X @ self.R.T + self.t)
@@ -286,7 +318,12 @@ class Photo:
         X[:, 1] += 0.0006
         self.target[lids] = self._reproj(X)
 
-    def beard_mm(self, y):
+    def beard_mm(self, y, idx=None):
+        if self.cfg.get("beard_on_outline") and idx is not None:
+            # v3: MediaPipe's oval runs inside the beard close to the skin (the front measurement's per-point estimate
+            # of the skin's inset from it, 0-2 mm; the beard's surface lies 3-24 mm beyond it)
+            tab = {r["mp_index"]: r.get("skin_inset_from_mp_mm_estimate") or 0.0 for r in self.cfg["beard_on_outline"]["rows"]}
+            return np.array([float(tab.get(int(i), 0.0)) for i in idx])
         # the low end of measure.json's estimate (6-12 mm under the chin, 4-8 mm on the jaw): the skin is never fitted
         # smaller than he is; the beard pass adds the rest of the volume
         return np.interp(y, [-124, -100, -70, -40, -28], [6.0, 5.0, 4.0, 3.0, 0.0])
@@ -302,7 +339,7 @@ class Photo:
         flip = ((P - cen) * n).sum(1) < 0
         n[flip] *= -1
         self.oval_n = n
-        th = self.beard_mm(self.face[o, 1])
+        th = self.beard_mm(self.face[o, 1], o)
         self.oval_beard = th
         self.target[o] = P - n * (th * self.ppm[o])[:, None]
 
@@ -310,7 +347,8 @@ class Photo:
 # ---------------------------------------------------------------------------------------------------------------
 # correspondences: render, detect, trace back
 # ---------------------------------------------------------------------------------------------------------------
-def crop_for(uv, pad=0.25, scale=0.5, W=3121, H=6528):
+def crop_for(uv, pad=0.25, scale=0.5, W=None, H=None):
+    W, H = (W or PHOTO_WH[0]), (H or PHOTO_WH[1])
     lo, hi = uv.min(0), uv.max(0)
     sz = hi - lo
     lo, hi = np.maximum(lo - sz * pad, 0), np.minimum(hi + sz * pad, [W, H])
@@ -393,7 +431,7 @@ def frontal_table(model, m, d, out_json):
     q = detect_render(img)
     tv, bw, ok = trace(buf, model.S, q)
     from PIL import Image
-    Image.fromarray(raster.to_u8(img)).save(os.path.join(LK, "fit", "neutral_front.png"))
+    Image.fromarray(raster.to_u8(img)).save(os.path.join(OUT, "fit", "neutral_front.png"))
     X = (P[tv] * bw[:, :, None]).sum(1)
     return dict(tv=tv, bw=bw, ok=ok, X=X)
 
@@ -438,10 +476,16 @@ class Problem:
         self.use = np.nonzero(self.w > 0)[0][:468].tolist() + [468, 473]
         self.oval_k = {i: k for k, i in enumerate(OVAL)}
         r = photo.M["frontal"]["ratios"]
+        # v3: the upper vermilion is partly under the moustache (measure: lower / upper 1.24), not a shape ratio
+        self.ratio_keys = tuple(k for k in RATIOS if not (CFG and k == "lower_over_upper_lip"))
         self.r_photo = {k: r[k] for k in RATIOS}
         self.r_photo["canthal_tilt_deg"] = photo.M["frontal"]["face_metric_canon"]["photo"]["canthal_tilt_deg"]
         self.w_ratio = 4.0
+        self.w_depth = W_DEPTH
+        self.pose_sd = (0.015, 0.04)            # the camera distance (m) and the size held to the iris measurement
         self.pose0 = None
+        self.d_ref = np.zeros(self.np)          # the details' prior centre (0: MakeHuman's average)
+        self.np_pose = 7
 
     def set_corr(self, corr):
         self.tv, self.bw = corr["tv"], corr["bw"]
@@ -462,7 +506,7 @@ class Problem:
         m, d, pose = self.unpack(x)
         Ph, c = self.model.heads(m, d, self.sub)
         X = (Ph[self.tv_sub] * self.bw[:, :, None]).sum(1)
-        return X, c, pose
+        return X, c, pose[:7]
 
     def residuals(self, x, parts=False):
         X, c, pose = self.landmarks(x)
@@ -473,15 +517,16 @@ class Problem:
         Zm = cam_points(X, c, pose)[:, 2]
         # scale-free: the model's depths in its own size (/ scale) against the photo's in the measured size (/ face scale)
         dz = ((Zm[DEPTH] - Zm[[133, 362]].mean()) / pose[6] - (ph.Xc[DEPTH, 2] - ph.Xc[[133, 362], 2].mean()) / ph.s0) * 1000.0
-        res = np.r_[res, dz * W_DEPTH]
+        res = np.r_[res, dz * self.w_depth]
         rr = ratios(X)
-        rat = np.array([(rr[k] / self.r_photo[k] - 1) / 0.03 for k in RATIOS] + [(rr["canthal_tilt_deg"] - self.r_photo["canthal_tilt_deg"]) / 3.0]) * self.w_ratio * 0.25
+        rat = np.array([(rr[k] / self.r_photo[k] - 1) / 0.03 for k in self.ratio_keys] + [(rr["canthal_tilt_deg"] - self.r_photo["canthal_tilt_deg"]) / 3.0]) * self.w_ratio * 0.25
         m, d, _ = self.unpack(x)
-        pri_d = np.r_[self.model.prior * d, 12.0 * np.clip(np.abs(d) - 0.7, 0, None)]    # soft wall past |0.7|
-        pri_m = np.array([(m[k] - MACRO_PRIOR[k][0]) / MACRO_PRIOR[k][1] for k in MACRO_KEYS]) * 0.6
-        dp = pose - self.pose0
+        pri_d = np.r_[self.model.prior * (d - self.d_ref), 12.0 * np.clip(np.abs(d) - 0.7, 0, None)]    # soft wall past |0.7|
+        mp_ = getattr(self, "macro_prior", None) or MACRO_PRIOR
+        pri_m = np.array([(m[k] - mp_[k][0]) / mp_[k][1] for k in MACRO_KEYS]) * 0.6
+        dp = pose[:7] - self.pose0[:7]
         # the iris gives the size (+-5 %) and the camera distance: scale and depth are held to it, x / y move freely
-        pri_p = np.r_[dp[:3] / np.radians(6) * 0.5, dp[3:5] / 0.03 * 0.5, dp[5] / 0.015, dp[6] / 0.04]
+        pri_p = np.r_[dp[:3] / np.radians(6) * 0.5, dp[3:5] / 0.03 * 0.5, dp[5] / self.pose_sd[0], dp[6] / self.pose_sd[1]]
         if parts:
             return dict(e=e, dz=dz, ratios=rr, rat=rat, pri_d=pri_d, pri_m=pri_m, pri_p=pri_p)
         return np.r_[res, rat, pri_d, pri_m, pri_p]
@@ -490,6 +535,368 @@ class Problem:
         lo = [MACRO_BOUNDS[k][0] for k in MACRO_KEYS] + [-1.0] * self.np + [-np.pi] * 3 + [-1, -1, 0.05] + [0.7]
         hi = [MACRO_BOUNDS[k][1] for k in MACRO_KEYS] + [1.0] * self.np + [np.pi] * 3 + [1, 1, 1.5] + [1.4]
         return np.array(lo), np.array(hi)
+
+
+KEEP_REVIEWED = ("eyes/eye-eyefold-down|up", "eyes/eye-eyefold-angle-down|up", "eyes/eye-bag-decr|incr", "eyes/eye-bag-in|out",
+                 "eyes/eye-bag-height-decr|incr",
+                 # the brow's place is a look key (browLift: the game paints the brows from the eye centres, so the
+                 # detector on the render cannot see this slider move them), the upper lip is under the moustache
+                 "eyebrows/eyebrows-trans-down|up", "mouth/mouth-cupidsbow-decr|incr", "mouth/mouth-cupidsbow-width-decr|incr",
+                 "mouth/mouth-upperlip-height-decr|incr", "mouth/mouth-upperlip-middle-down|up", "mouth/mouth-philtrum-volume-decr|incr")
+HOLD_FIXED = ("eyebrows/eyebrows-trans-down|up",)
+MACRO_HOLD_SD = dict(weight=0.03, muscle=0.04, african=0.05, asian=0.05)
+
+
+class MultiProblem(Problem):
+    """v3 (docs/CHARACTER_LOOK.md "Kai v3"): the front photo's terms (Problem, at its own camera: the 478 points, the
+    oval with the skin's inset under the beard, the ratios; MediaPipe's depth off: the side photos measure depth) plus
+    each side photo at its own camera (views.py): the ear and lateral landmarks and the true silhouette (hair and beard
+    taken off by bands), the side cameras refined by a delta held to the bundle's pose covariance. x = macro (4),
+    details, the front pose (7), one camera delta (6) per side."""
+
+    def __init__(self, model, photo, G, sides, table, mirror):
+        super().__init__(model, photo, G)
+        import views
+        self.V = views
+        self.front = views.Front(photo)
+        self.sides = sides
+        self.np_pose = 7 + 6 * len(sides)
+        self.w_depth = 0.0
+        self.pose_sd = (0.05, 0.10)             # the side cameras (chained to this pose) carry the depth and the size
+        self.w_slm, self.w_ssil, self.w_spri = 1.0, 1.0, 1.0
+        self.lm_pts = [s.lm_points(mirror, table) for s in sides]
+        self.sils = [None] * len(sides)
+        # the moustache hides the upper vermilion and the philtrum (the front measurement: MediaPipe's Ls sits on the
+        # hair's edge): those points on the photo are hair, not his lip
+        import geom
+        hidden = sorted(set(geom.LIP_OUT_UP) - {61, 291}) + [164, 167, 393, 165, 391, 92, 322]
+        self.w[hidden] = np.minimum(self.w[hidden], 0.05)
+        # the brows: painted from the eye centres in the render (and in the game, browLift), so their points measure
+        # the paint, not the shape; the brow ridge is the side photos' profile
+        self.w[G["brows"]] = 0.0
+        self.use = np.nonzero(self.w > 0)[0][:468].tolist() + [468, 473]
+        # the macro (his body: sex, build, the ancestry mix that shapes the whole body) stays the installed one unless
+        # the photos insist: MACRO_PRIOR centred on the start, tight
+        self.macro_prior = None
+
+    def set_corr(self, corr, sils=None):
+        Problem.set_corr(self, corr)
+        if sils is not None:
+            self.sils = sils
+        loc = self.model.loc
+        ids = [self.tv.ravel()]
+        self._slm, self._ssil = [], []
+        for k, side in enumerate(self.sides):
+            L = []
+            for nm, (v, w) in self.lm_pts[k].items():
+                if nm in self.V.MP_SIDE:
+                    # the front photo's own correspondence of that MediaPipe point (refreshed every round): the side
+                    # photo measures its depth, the front its x / y
+                    i = self.V.MP_SIDE[nm][0 if side.near > 0 else 1]
+                    lv, w = self.tv[i], self.bw[i]
+                else:
+                    lv = loc[v]
+                if (lv < 0).any():
+                    continue
+                o = side.lm[nm]
+                sig = np.hypot(o["sigma"], (self.V.EAR_MODEL_SD_MM if nm in self.V.EAR_PICKS else self.V.FACE_MODEL_SD_MM) * side.ppm0)
+                L.append((nm, lv, w, o["px"], sig, o["conf"]))
+                ids.append(lv)
+            self._slm.append(L)
+            Sx = []
+            sil = self.sils[k]
+            if sil is not None:
+                for j, pt in enumerate(sil["pts"]):
+                    if pt is None:
+                        continue
+                    lv = loc[pt[0]]
+                    if (lv < 0).any():
+                        continue
+                    Sx.append((j, lv, pt[1]))
+                    ids.append(lv)
+            self._ssil.append(Sx)
+        self.sub = np.unique(np.concatenate([np.asarray(i).ravel() for i in ids]))
+        self.tv_sub = np.searchsorted(self.sub, self.tv)
+        for L in self._slm:
+            for i, e in enumerate(L):
+                L[i] = (e[0], np.searchsorted(self.sub, e[1])) + e[2:]
+        for k, Sx in enumerate(self._ssil):
+            if Sx:
+                self._ssil[k] = (np.array([e[0] for e in Sx]), np.searchsorted(self.sub, np.array([e[1] for e in Sx])), np.array([e[2] for e in Sx]))
+            else:
+                self._ssil[k] = None
+
+    def unpack_sides(self, x):
+        n0 = 4 + self.np
+        return x[n0:n0 + 7], x[n0 + 7:].reshape(len(self.sides), 6)
+
+    def side_residuals(self, x, parts=False):
+        m, d, _ = self.unpack(x)
+        pose, deltas = self.unpack_sides(x)
+        Ph, c = self.model.heads(m, d, self.sub)
+        out, rep = [], []
+        for k, side in enumerate(self.sides):
+            A, b = side.affine(self.front, pose, c, deltas[k])
+            L = self._slm[k]
+            lm_rows, lm_rep = [], {}
+            if L:
+                X = np.array([(Ph[v] * w[:, None]).sum(0) for _, v, w, _, _, _ in L])
+                uv, _, _ = self.V.project_affine(side.K, A, b, X)
+                for (nm, _, _, px, sig, conf), u in zip(L, uv):
+                    e = (u - px) / sig * conf * self.w_slm
+                    lm_rows.append(e)
+                    lm_rep[nm] = round(float(np.linalg.norm(u - px) / side.ppm0), 2)
+            sil_rows, d_mm = [], {}
+            Sx = self._ssil[k]
+            if Sx is not None:
+                j, tv_, bb_ = Sx
+                X = (Ph[tv_] * bb_[:, :, None]).sum(1)
+                uv, Xc, _ = self.V.project_affine(side.K, A, b, X)
+                ppm = side.K[0, 0] / Xc[:, 2]
+                dd = ((uv - side.S[j]) * side.n[j]).sum(1) / ppm
+                lo, hi, w = side.band[j, 0], side.band[j, 1], side.band[j, 2]
+                h = np.where(dd < lo, dd - lo, np.where(dd > hi, dd - hi, 0.0))
+                sil_rows = h * w * self.w_ssil
+                d_mm = dict(j=j, d=dd)
+            pri = side.prior(deltas[k]) * self.w_spri
+            out.append(np.r_[np.ravel(lm_rows), sil_rows, pri])
+            rep.append(dict(landmarks_mm=lm_rep, sil=d_mm))
+        if parts:
+            return rep
+        return np.concatenate(out) if out else np.zeros(0)
+
+    def residuals(self, x, parts=False):
+        if parts:
+            return Problem.residuals(self, x, parts=True)
+        return np.r_[Problem.residuals(self, x), self.side_residuals(x)]
+
+    def bounds(self):
+        lo, hi = Problem.bounds(self)
+        dl = np.tile([np.radians(12)] * 3 + [40.0] * 3, len(self.sides))
+        return np.r_[lo, -dl], np.r_[hi, dl]
+
+
+def mirror_map():
+    """The base mesh's exact x -> -x vertex map."""
+    from scipy.spatial import cKDTree
+    V0, _, _ = mh.base()
+    dd, j = cKDTree(V0).query(V0 * [-1, 1, 1])
+    assert dd.max() < 1e-5
+    return j
+
+
+def side_refresh(model, m, d, x, prob, scenes, want_img=False):
+    """Render the current head at each side camera and find its silhouette against the photo's outline samples."""
+    import views
+    pose, deltas = prob.unpack_sides(x)
+    P_full = model.full(m, d)
+    Ph, c = model.heads(m, d)
+    P = P_full.copy()
+    P[model.hv] = Ph
+    sils = []
+    for side, sc_, dl in zip(prob.sides, scenes, deltas):
+        side.delta = dl.copy()
+        sils.append(views.silhouette(P, sc_, side, prob.front, pose, c, want_img=want_img))
+    return sils
+
+
+def side_landmarks_uv(prob, x):
+    """{tag: {landmark: model pixel}} at each side camera."""
+    import views
+    m, d, _ = prob.unpack(x)
+    pose, deltas = prob.unpack_sides(x)
+    Ph, c = prob.model.heads(m, d, prob.sub)
+    out = {}
+    for k, side in enumerate(prob.sides):
+        A, b = side.affine(prob.front, pose, c, deltas[k])
+        L = prob._slm[k]
+        out[side.tag] = {}
+        if L:
+            X = np.array([(Ph[v] * w[:, None]).sum(0) for _, v, w, _, _, _ in L])
+            uv, _, _ = views.project_affine(side.K, A, b, X)
+            out[side.tag] = {e[0]: u for e, u in zip(L, uv)}
+    return out
+
+
+def side_pictures(prob, x, sils, outdir):
+    """PRIVATE (photo pixels): per side photo the render's silhouette, the outline samples and the landmarks."""
+    import views
+    from PIL import Image
+    luv = side_landmarks_uv(prob, x)
+    for side, sil in zip(prob.sides, sils):
+        views.side_overlay(side, sil, luv[side.tag], os.path.join(outdir, f"side_{side.tag}.jpg"))
+        if sil.get("img") is not None:
+            Image.fromarray(raster.to_u8(sil["img"])).save(os.path.join(outdir, f"render_{side.tag}.png"))
+
+
+def multi_report(prob, x, corr, sils):
+    """The per-photo errors (mm): front regions (the detector on the clay render against the photo), front outline,
+    side landmarks, side silhouettes per segment and per stretch of the profile."""
+    import views
+    out = dict(front=region_report(prob, x, corr["q"]))
+    rep = prob.side_residuals(x, parts=True)
+    for side, r, sil in zip(prob.sides, rep, sils):
+        out[side.tag] = dict(landmarks_mm=r["landmarks_mm"], segments=views.side_parts(side, sil["err"]), profile=views.profile_parts(side, sil["err"]))
+    return out
+
+
+def initial_pose(photo):
+    """measure.py's pose (the template scaled by face_scale) about the template's eye midpoint, as main() starts."""
+    s0 = photo.M["camera"]["face_scale_vs_template"]
+    Pt = mh.sculpt(dict(gender=1.0, age=fmx.mh_age(YEARS), muscle=0.5, weight=0.5))
+    ct = 0.5 * (Pt[mh.group_vertices("helper-l-eye")].mean(0) + Pt[mh.group_vertices("helper-r-eye")].mean(0))
+    return np.r_[rvec(photo.R), photo.R @ (s0 * ct) + photo.t, s0]
+
+
+def pose_multi(model, m, d, photo, sides, pose, rounds=2, outdir=None, tag="pose"):
+    """The front pose of a fixed head (sliders and any shape layer held; model may be dense_fit.ShapedModel) against all
+    three photos, the side cameras held: (prob, x, corr, sils). Every candidate is measured at its own best pose by
+    this one rule (the before / after reports)."""
+    from scipy.optimize import least_squares
+    import views
+    G = groups()
+    table = json.load(open(os.path.join(HERE, "mp_to_mh.json")))["front"]
+    prob = MultiProblem(model, photo, G, sides, table, mirror_map())
+    prob.pose0 = np.r_[pose, np.zeros(6 * len(sides))]
+    x = np.r_[[m[k] for k in MACRO_KEYS], d, pose, np.zeros(6 * len(sides))]
+    n0 = 4 + prob.np
+    lo, hi = prob.bounds()
+    lo[:n0], hi[:n0] = x[:n0] - 1e-9, x[:n0] + 1e-9
+    lo[n0 + 7:], hi[n0 + 7:] = x[n0 + 7:] - 1e-9, x[n0 + 7:] + 1e-9
+    x = np.clip(x, lo, hi)
+    prob.w_slm = 2.0
+    _, c = model.heads(m, d)
+    scenes = [views.side_scene(model.full(m, d), prob.front, pose, c) for _ in sides]
+    for it in range(rounds + 1):
+        corr = correspond(model, m, d, x[n0:n0 + 7], photo, tag, save=os.path.join(outdir, f"render_{tag}.png") if outdir else None)
+        sils = side_refresh(model, m, d, x, prob, scenes, want_img=(it == rounds))
+        prob.set_corr(corr, sils)
+        if it == rounds:
+            break
+        r = least_squares(lambda p: prob.residuals(np.r_[x[:n0], p]), x[n0:], bounds=(lo[n0:], hi[n0:]), x_scale="jac")
+        x[n0:] = r.x
+    return prob, x, corr, sils
+
+
+def main_multi(argv):
+    """fit.py --views=front,side1,side2 [--start=FACE.json] [--prior=zero|start] [--rounds=4] [--pose_only]
+    [--out=OUT/kai.json]: the multi-view slider fit (v3)."""
+    from scipy.optimize import least_squares
+    import views
+    opt = dict(a[2:].split("=", 1) for a in argv if a.startswith("--") and "=" in a)
+    rounds = int(opt.get("rounds", 4))
+    tags = [t for t in opt.get("views", "front,side1,side2").split(",") if t != "front"]
+    start = opt.get("start", os.path.join(CHAR, "faces", "kai.json"))
+    out_face = opt.get("out", os.path.join(OUT, "kai.json"))
+    pose_only = "--pose_only" in argv
+    os.makedirs(os.path.join(OUT, "fit"), exist_ok=True)
+    T0 = time.time()
+    face0 = json.load(open(start))
+    m = {k: float(face0["macro"][k]) for k in MACRO_KEYS}
+    P0 = mh.sculpt(macro_dict(m))
+    model = Model(P0, wide=True)
+    d = np.zeros(len(model.params))
+    for j, (nm, keys) in enumerate(model.params):
+        vals = [face0["details"][k] for k in keys if k in face0["details"]]
+        if vals:
+            d[j] = float(np.mean(vals))
+    model.height = solve_height(macro_dict(m), model.details(d, 0.0))
+    model._macro.cache_clear()
+    G = groups()
+    photo = Photo()
+    sides = views.load_sides(tags, step=int(opt.get("step", 3)))
+    table = json.load(open(os.path.join(HERE, "mp_to_mh.json")))["front"]
+    prob = MultiProblem(model, photo, G, sides, table, mirror_map())
+    if opt.get("prior", "zero") == "start":
+        prob.d_ref = d.copy()
+    else:
+        # what no photo measures keeps its reviewed value (fix round 2's hooded lid)
+        for j, (nm, _) in enumerate(model.params):
+            if nm in KEEP_REVIEWED:
+                prob.d_ref[j] = d[j]
+    if opt.get("macro", "hold") == "hold":
+        prob.macro_prior = {k: (m[k], MACRO_HOLD_SD[k]) for k in MACRO_KEYS}
+    fixed = [j for j, (nm, _) in enumerate(model.params) if nm in HOLD_FIXED]
+    if opt.get("x0"):
+        x = np.load(opt["x0"])
+        pose = x[4 + len(model.params):4 + len(model.params) + 7]
+        dls = x[4 + len(model.params) + 7:]
+    else:
+        Ph, c = model.heads(m, d)
+        s0 = photo.M["camera"]["face_scale_vs_template"]
+        Pt = mh.sculpt(dict(gender=1.0, age=fmx.mh_age(YEARS), muscle=0.5, weight=0.5))
+        ct = 0.5 * (Pt[mh.group_vertices("helper-l-eye")].mean(0) + Pt[mh.group_vertices("helper-r-eye")].mean(0))
+        pose = np.r_[rvec(photo.R), photo.R @ (s0 * ct) + photo.t, s0]
+        dls = np.zeros(6 * len(sides))
+    prob.pose0 = np.r_[pose, np.zeros(6 * len(sides))]
+    x = np.r_[[m[k] for k in MACRO_KEYS], d, pose, dls]
+    lo, hi = prob.bounds()
+    if pose_only:
+        n0 = 4 + prob.np
+        lo[:n0] = x[:n0] - 1e-9
+        hi[:n0] = x[:n0] + 1e-9
+    for j in fixed:
+        # tried free: the brow tissue slid down onto the lids to close them (the hooded look), folding the skin
+        # over the inner canthi; the lid opening is the eye sliders'
+        lo[4 + j], hi[4 + j] = d[j] - 1e-9, d[j] + 1e-9
+    if "--free_sides" not in argv:
+        # the side cameras stay the bundle's (likeness:sides, solved on surface points): refined against an imperfect
+        # head they absorb its shape errors (tried: 14-27 mm, 5-10 deg moves that broke the ear and eye fits)
+        n1 = 4 + prob.np + 7
+        lo[n1:] = x[n1:] - 1e-9
+        hi[n1:] = x[n1:] + 1e-9
+    prob.w_slm = float(opt.get("wslm", 2.0))
+    prob.w_ssil = float(opt.get("wssil", 1.0))
+    x = np.clip(x, lo, hi)
+    scenes = [views.side_scene(model.full(m, d), prob.front, pose, model.heads(m, d)[1]) for _ in sides]
+    log = dict(start=start, views=["front"] + tags, pose_only=pose_only, rounds=[])
+    corr = correspond(model, m, d, x[4 + prob.np:4 + prob.np + 7], photo, "m0", save=os.path.join(OUT, "fit", "render_m0.png"))
+    sils = side_refresh(model, m, d, x, prob, scenes)
+    prob.set_corr(corr, sils)
+    log["before"] = multi_report(prob, x, corr, sils)
+    n0 = 4 + prob.np
+    for rnd in range(rounds):
+        T = time.time()
+        prob.set_corr(corr, sils)
+        if rnd == 0 or pose_only:     # the pose (and the side cameras) alone first
+            rp = least_squares(lambda p: prob.residuals(np.r_[x[:n0], p]), x[n0:], bounds=(lo[n0:], hi[n0:]), x_scale="jac")
+            x[n0:] = rp.x
+        if not pose_only:
+            r = least_squares(prob.residuals, x, bounds=(lo, hi), x_scale="jac", max_nfev=60 if rnd < rounds - 1 else 120, verbose=0)
+            x = r.x
+        m, d, _ = prob.unpack(x)
+        if not pose_only:
+            model.height = solve_height(macro_dict(m), model.details(d, 0.0))
+            model._macro.cache_clear()
+        pose = x[n0:n0 + 7]
+        corr = correspond(model, m, d, pose, photo, f"m{rnd + 1}", save=os.path.join(OUT, "fit", f"render_m{rnd + 1}.png"))
+        sils = side_refresh(model, m, d, x, prob, scenes, want_img=(rnd == rounds - 1))
+        prob.set_corr(corr, sils)
+        rep = multi_report(prob, x, corr, sils)
+        ent = dict(round=rnd + 1, seconds=round(time.time() - T, 1), cost=round(float(0.5 * (prob.residuals(x) ** 2).sum()), 2),
+                   height=model.height, macro={k: round(float(v), 3) for k, v in m.items()},
+                   pose=dict(rvec_deg=np.degrees(pose[:3]).round(2).tolist(), t_m=pose[3:6].round(4).tolist(), scale=round(float(pose[6]), 4)),
+                   side_deltas={s.tag: np.r_[np.degrees(dl[:3]), dl[3:]].round(2).tolist() for s, dl in zip(sides, prob.unpack_sides(x)[1])},
+                   report=rep, biggest_details=sorted(((nm, round(float(v), 3)) for (nm, _), v in zip(model.params, d)), key=lambda a: -abs(a[1]))[:30])
+        log["rounds"].append(ent)
+        print(f"round {rnd + 1}: cost {ent['cost']:.1f} {ent['seconds']:.0f}s scale {pose[6]:.4f} deltas {ent['side_deltas']}", flush=True)
+        for g in ("eyes", "nose", "lips", "oval"):
+            print("   front", g, {k: v for k, v in rep["front"][g].items() if k.startswith("detector") and "rms" in k}, flush=True)
+        for s in sides:
+            print("   ", s.tag, "lm", rep[s.tag]["landmarks_mm"], flush=True)
+            print("   ", s.tag, "profile", {k: v["outside_band_median_mm"] for k, v in rep[s.tag]["profile"].items()}, flush=True)
+        json.dump(log, open(os.path.join(OUT, "fit_multi.json"), "w"), indent=1)
+        np.save(os.path.join(OUT, "fit", "x.npy"), x)
+        if not pose_only:
+            new = json.load(open(start))
+            new["details"] = dict(sorted(model.details(d).items()))
+            new["macro"] = dict(new["macro"], **{k: round(float(m[k]), 3) for k in MACRO_KEYS})
+            new["macro"]["caucasian"] = round(max(0.0, 1 - new["macro"]["african"] - new["macro"]["asian"]), 3)
+            json.dump(new, open(out_face, "w"), indent=1)
+    side_pictures(prob, x, sils, os.path.join(OUT, "fit"))
+    draw_overlay(prob, x, corr, os.path.join(OUT, "fit_overlay.png"))
+    print("done %.0fs" % (time.time() - T0), out_face)
+    return prob, x
 
 
 def brow_up_dir(prob, idx):
@@ -559,8 +966,8 @@ def draw_overlay(prob, x, corr, path):
     ph = prob.photo
     X, c, pose = prob.landmarks(x)
     uv = proj(ph.K, cam_points(X, c, pose))
-    box = (250, 1200, 2950, 4900)
-    sc = 0.5
+    box = ph.box
+    sc = 0.5 if not CFG else 1.0
     im = photo_crop(box, sc)
     # silhouette of the fitted head at the photo's pose (rendered at full photo scale in the same crop)
     m, d, _ = prob.unpack(x)
@@ -597,10 +1004,11 @@ def draw_overlay(prob, x, corr, path):
 def compare(prob, x, corr, path):
     from PIL import Image, ImageDraw
     ph = prob.photo
-    box = (250, 1200, 2950, 4900)
-    sc = 0.32
+    box = ph.box
+    sc = 0.32 if not CFG else 0.6
     pc = photo_crop(box, sc)
     m, d, pose = prob.unpack(x)
+    pose = pose[:7]
     model = prob.model
     P_full = model.full(m, d)
     Ph, cc = model.heads(m, d)
@@ -667,7 +1075,7 @@ def main(argv):
     opt = dict(a[2:].split("=", 1) for a in argv if a.startswith("--") and "=" in a)
     rounds = int(opt.get("rounds", 4))
     out_face = opt.get("out", os.path.join(CHAR, "faces_candidates", "kai_photo", "kai.json"))
-    os.makedirs(os.path.join(LK, "fit"), exist_ok=True)
+    os.makedirs(os.path.join(OUT, "fit"), exist_ok=True)
     from scipy.optimize import least_squares
     T0 = time.time()
     m = dict(MACRO_INIT)
@@ -694,7 +1102,7 @@ def main(argv):
     # the correspondence table for the starting head (frontal + the photo's view), written once
     tab_path = os.path.join(HERE, "mp_to_mh.json")
     log = dict(rounds=[])
-    corr = correspond(model, m, d, pose, photo, "r0", save=os.path.join(LK, "fit", "render_r0.png"))
+    corr = correspond(model, m, d, pose, photo, "r0", save=os.path.join(OUT, "fit", "render_r0.png"))
     if not os.path.exists(tab_path) or "--table" in argv:
         ft = frontal_table(model, m, d, tab_path)
         Pfull0 = model.full(m, d)
@@ -730,7 +1138,7 @@ def main(argv):
         model.height = solve_height(macro_dict(m), model.details(d, 0.0))
         model._macro.cache_clear()
         rep_fit = region_report(prob, x)
-        corr = correspond(model, m, d, pose, photo, f"r{rnd + 1}", save=os.path.join(LK, "fit", f"render_r{rnd + 1}.png"))
+        corr = correspond(model, m, d, pose, photo, f"r{rnd + 1}", save=os.path.join(OUT, "fit", f"render_r{rnd + 1}.png"))
         rep_det = region_report(prob, x, corr["q"])
         parts = prob.residuals(x, parts=True)
         ent = dict(round=rnd + 1, seconds=round(time.time() - T, 1), cost=round(float(r.cost), 2), height=model.height,
@@ -746,14 +1154,17 @@ def main(argv):
         print(f"round {rnd + 1}: cost {r.cost:.1f}  {time.time() - T:.0f}s  macro {ent['macro']}  scale {pose[6]:.3f}  height {model.height}")
         for g in ("eyes", "nose", "lips", "brows", "oval"):
             print("   ", g, rep_det[g])
-        json.dump(log, open(os.path.join(LK, "fit.json"), "w"), indent=1)
-        np.save(os.path.join(LK, "fit", "x.npy"), x)
+        json.dump(log, open(os.path.join(OUT, "fit.json"), "w"), indent=1)
+        np.save(os.path.join(OUT, "fit", "x.npy"), x)
         write_face(model, m, d, out_face, ent)
     prob.set_corr(corr)
-    draw_overlay(prob, x, corr, os.path.join(LK, "fit_overlay.png"))
-    compare(prob, x, corr, os.path.join(LK, "fit_compare.png"))
+    draw_overlay(prob, x, corr, os.path.join(OUT, "fit_overlay.png"))
+    compare(prob, x, corr, os.path.join(OUT, "fit_compare.png"))
     print("done %.0fs" % (time.time() - T0), out_face)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    if any(a.startswith("--views=") for a in sys.argv[1:]):
+        main_multi(sys.argv[1:])
+    else:
+        main(sys.argv[1:])

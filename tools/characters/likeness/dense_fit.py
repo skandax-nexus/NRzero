@@ -441,11 +441,14 @@ def ear_vertices(P=None):
 # x his left, y up, z forward; photo mm = build mm x likenessScale)
 # ---------------------------------------------------------------------------------------------------------------
 class Frame:
-    def __init__(self, scale):
+    def __init__(self, scale, rot=None):
         m = json.load(open(os.path.join(HERE, "mp_to_mh.json")))
         self.tv = np.array(m["front"]["v"])
         self.tw = np.array(m["front"]["w"])
         self.k = scale
+        # v3: the head frame of the three photos is the model's axes turned by the fit's pose (R_f^T R): targets
+        # measured in the photos' frame (the forehead's lean, the profile depths) are read in it
+        self.rot = np.eye(3) if rot is None else np.asarray(rot, float)
 
     def lm(self, Pmm, i):
         return (Pmm[self.tv[i]] * self.tw[i][:, None]).sum(0)
@@ -462,7 +465,7 @@ class Frame:
         return list(out.items())
 
     def q(self, Pmm):
-        return (Pmm - self.origin(Pmm)) * self.k
+        return ((Pmm - self.origin(Pmm)) @ self.rot.T) * self.k
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -560,9 +563,10 @@ class TargetEval:
         self.k = self.fr.k
 
     def _pt(self, terms, axis_vec):
-        """Row of axis_vec . (k * (sum w X_v - O))."""
-        out = [(v, self.k * w * axis_vec) for v, w in terms]
-        out += [(v, -self.k * w * axis_vec) for v, w in self.oterms]
+        """Row of axis_vec . (k * rot (sum w X_v - O))."""
+        a = self.fr.rot.T @ np.asarray(axis_vec, float)
+        out = [(v, self.k * w * a) for v, w in terms]
+        out += [(v, -self.k * w * a) for v, w in self.oterms]
         return out
 
     def z(self, x, y, want="max"):
@@ -605,17 +609,16 @@ class TargetEval:
     def lm(self, i, axis):
         e = np.zeros(3)
         e[axis] = 1.0
-        val = float(self.fr.q(self.Pmm)[0, 0] * 0)       # placeholder (overwritten below)
         X = (self.Pmm[self.fr.tv[i]] * self.fr.tw[i][:, None]).sum(0)
-        val = float(((X - self.fr.origin(self.Pmm)) * self.k)[axis])
+        val = float((((X - self.fr.origin(self.Pmm)) @ self.fr.rot.T) * self.k)[axis])
         return Row(val, self._pt(list(zip(self.fr.tv[i], self.fr.tw[i])), e))
 
     def cornea_front(self, side):
         """The eye's front as the brow target reads it: the upper lid's lash line (the most forward point of the
         upper lash helper, which rides on the lid margin; SHAPE_SPEC's 'eye front z 7.9' of the round-3 head)."""
         vs = np.array(group_exact(f"helper-{side.lower()}-eyelashes-2"))
-        v = int(vs[np.argmax(self.Pmm[vs, 2])])
-        val = float((self.Pmm[v, 2] - self.fr.origin(self.Pmm)[2]) * self.k)
+        v = int(vs[np.argmax(self.Q[vs, 2])])
+        val = float(self.Q[v, 2])
         return Row(val, self._pt([(v, 1.0)], np.array([0, 0, 1.0])))
 
     def back(self, ys):
@@ -724,7 +727,7 @@ def outline_samples(pts, n_sub=3):
     return S, n, idx
 
 
-def outline_band(fy):
+def outline_band(fy, inset=None):
     """(lo, hi, weight) of the skin silhouette's signed distance (mm, + = outside) from the photo's outline at face
     height fy (photo face mm), or None (no term): the sleek hair hides the skull above the brows, the beard's
     thickness below the cheekbones (the sculptor's band: sideburn 3-4 mm, jaw sides 4.5-7.5; under the chin the built
@@ -737,6 +740,10 @@ def outline_band(fy):
         return (-1.5, 6.0, 0.6)
     if fy > -28:
         return (-4.0, 1.0, 1.0)
+    if fit.CFG and inset is not None:
+        # v3 (the 2026 front photo): MediaPipe's oval runs inside the beard close to the skin; the skin lies the front
+        # measurement's estimated inset (0-2 mm) inside it, +-1.5
+        return (-float(inset) - 2.0, -float(inset) + 1.0, 1.0)
     # under the chin the band is the built beard's own reach in this view (the round-3 build: its chin outline sits
     # 2 mm past its skin from the photo camera above, the jaw-side cards about 5 mm): the shipped beard's outline then
     # lands on his. The sculptor's 8-12 mm hang would leave the game's beard ending 4-5 mm short of the photo's.
@@ -745,10 +752,12 @@ def outline_band(fy):
     return (-float(hi), -float(lo), 1.0)
 
 
-def silhouette(sm, photo, pose, scene, box=(250, 1200, 2950, 4900), sc=0.5, want_pts=True):
+def silhouette(sm, photo, pose, scene, box=None, sc=0.5, want_pts=True):
     """The head's true silhouette at the photo's camera against the photo's outline: per outline sample, the signed
     distance (mm, + = the render's silhouette outside the photo's) and the surface point on the silhouette (global
     vertex ids + barycentrics)."""
+    box = box or photo.box
+    pose = pose[:7]
     P_full = sm.full()
     Pc = np.ones_like(P_full)
     Ph, c = sm.heads()
@@ -760,6 +769,8 @@ def silhouette(sm, photo, pose, scene, box=(250, 1200, 2950, 4900), sc=0.5, want
     S, n, idx = outline_samples(photo.pts[:, :2])
     ppm = np.array([photo.ppm[a] * (1 - t) + photo.ppm[b] * t for a, b, t in idx])
     fy = np.array([photo.face[a, 1] * (1 - t) + photo.face[b, 1] * t for a, b, t in idx])
+    ob = {i: th for i, th in zip(fit.OVAL, photo.oval_beard)}
+    inset = np.array([ob[a] * (1 - t) + ob[b] * t for a, b, t in idx])
     H, W = mask.shape
     err, pts = [], []
     for p, nn, k in zip(S, n, ppm):
@@ -777,7 +788,7 @@ def silhouette(sm, photo, pose, scene, box=(250, 1200, 2950, 4900), sc=0.5, want
         err.append(ts[j])
         k_ = tid[yi[j], xi[j]]
         pts.append((scene.tris[k_], buf["bary"][yi[j], xi[j]].copy()))
-    return dict(S=S, n=n, ppm=ppm, fy=fy, err=np.array(err), pts=pts, mask=mask, img=img)
+    return dict(S=S, n=n, ppm=ppm, fy=fy, inset=inset, err=np.array(err), pts=pts, mask=mask, img=img, box=box, sc=sc)
 
 
 def scene_without(scene, verts):
@@ -795,7 +806,7 @@ def scene_without(scene, verts):
 # Stage B: the dense layer
 # ---------------------------------------------------------------------------------------------------------------
 class Dense:
-    def __init__(self, sm, photo, G, targets, lam=8.0, scale=1.007):
+    def __init__(self, sm, photo, G, targets, lam=8.0, scale=1.007, sides=None, rot=None):
         import scipy.sparse as sp
         self.sp = sp
         self.sm, self.photo = sm, photo
@@ -803,7 +814,10 @@ class Dense:
         self.Pmm0 = P * 1000.0
         self.hm = hm = HeadMesh(P)
         N = hm.N
-        self.fr = Frame(scale)
+        self.fr = Frame(scale, rot)
+        # v3: the side photos (views.Side) at their own cameras, chained to the front pose
+        self.sides = sides or []
+        self.w_slm, self.w_ssil = 1.0, 1.0
         Q0 = self.fr.q(self.Pmm0)
         self.Q0 = Q0
         # ---- patches ----
@@ -898,6 +912,13 @@ class Dense:
         # the offsets are smooth everywhere, the features included: a smooth field moves and reshapes the masses and
         # carries MakeHuman's (reviewed) nose, lids and lips along unchanged in their small forms (METHOD.md's softer
         # stiffness at the features let the landmarks carve them: a hooked tip, a brow shelf, dents in the cheeks)
+        if fit.AT_REST:
+            # v3: the skin round the rigid eye patches (the lids) is stiffer, so the radix, the brow and the cheeks that
+            # move against the still lids do not fold the skin over the canthi (seen in the first v3 run)
+            from scipy.spatial import cKDTree
+            lidv = np.r_[self.lid["L"], self.lid["R"]]
+            dl, _ = cKDTree(self.Pmm0[lidv]).query(self.Pmm0)
+            stiff = stiff + 2.0 * ss(14.0, 3.0, dl)
         lamv = lam * stiff
         rows = np.nonzero(hm.inH | (np.asarray(np.abs(C).sum(1)).ravel() * 0 > 1))[0]
         # include the ring just outside H so the offsets fade with continuous slope at its border
@@ -927,13 +948,13 @@ class Dense:
         fh = (y > 20) & (y <= 50) & ~vault
         lo[fh], hi[fh] = -2.5, 7.0
         br = (y > 5) & (y <= 20) & ~vault
-        lo[br], hi[br] = -2.0, 5.0
+        lo[br], hi[br] = (-5.0 if fit.AT_REST else -2.0), 5.0      # v3: the lids sink under the brow roll
         ns = (ax < 18) & (y > -45) & (y <= 5) & (z > 5)
         lo[ns], hi[ns] = -3.0, 5.0
         lp = (ax < 30) & (y > -88) & (y <= -45) & (z > 0)
         lo[lp], hi[lp] = -2.5, 5.0
         ml = (ax >= 18) & (y > -45) & (y <= 5) & ~vault
-        lo[ml], hi[ml] = -3.0, 7.0
+        lo[ml], hi[ml] = (-9.0 if fit.AT_REST else -3.0), 7.0      # v3: the side photos see the cheeks recede (the mole, Ex)
         bc = (y <= -45) & ~lp & ~vault
         lo[bc], hi[bc] = -8.0, 9.0           # the jaw and jowl: the photo's outline (beard band) decides, both ways
         ch = (ax < 25) & (y < -88) & (z > -10)
@@ -975,7 +996,11 @@ class Dense:
             if i in lips_set:
                 continue
             if fy_[i] < -82 or (abs(fx[i]) > 28 and fy_[i] < -45):
-                self.lm_w[i] = self.beard_lm_w
+                # v3: the 2026 photo's points there sit close to the skin inside the beard (the front measurement)
+                self.lm_w[i] = 0.4 if fit.AT_REST else self.beard_lm_w
+            elif fy_[i] > 6 and i not in set(G["eyes"]) and fit.AT_REST:
+                # v3: no frown; the forehead's points are MediaPipe's guesses on smooth skin (the side photos see it)
+                self.lm_w[i] = 0.6
             elif fy_[i] > 6 and i not in set(G["eyes"]):
                 # the forehead and brow skin: the photo frowns (corrugators bunched, brows drawn down and together);
                 # MediaPipe's points there are its guesses moved by the frown, not his neutral shape
@@ -1056,6 +1081,7 @@ class Dense:
             # with the photo exactly where the round-3 build did
             self.corr = corr
             self.sil = silhouette(self.sm, ph, self.pose, self.scene_noear)
+            self.refresh_sides()
             return corr
         x = np.r_[[m[k] for k in fit.MACRO_KEYS], d, self.pose]
         n0 = 4 + prob.np
@@ -1066,7 +1092,7 @@ class Dense:
         Pmm = (self.sm.full() * 1000.0)
         sp_, bands = [], []
         for j, pt in enumerate(sil["pts"]):
-            b_ = outline_band(sil["fy"][j]) if pt is not None else None
+            b_ = outline_band(sil["fy"][j], sil["inset"][j]) if pt is not None else None
             if b_ is None:
                 continue
             tri, bb = pt
@@ -1086,6 +1112,68 @@ class Dense:
         self.corr = corr
         self.sil = silhouette(self.sm, ph, self.pose, self.scene_noear)
         return corr
+
+    def refresh_sides(self):
+        """v3: the head's silhouette at each side camera (views.silhouette) and the side landmarks' mesh points (the
+        MediaPipe ones from this round's front trace)."""
+        import views
+        if not self.sides:
+            return
+        P = self.sm.full()
+        self.side_sil = [views.silhouette(P, sc_, sd, self.front, self.pose[:7], self.sm.c) for sd, sc_ in zip(self.sides, self.side_scenes)]
+        tv = self.sm.hv[self.prob.tv]
+        self.side_lm = []
+        for sd in self.sides:
+            L = {}
+            for nm, o in sd.lm.items():
+                if nm in views.MP_SIDE:
+                    i = views.MP_SIDE[nm][0 if sd.near > 0 else 1]
+                    v, w = tv[i], self.prob.bw[i]
+                else:
+                    v = views.EAR_PICKS[nm] if sd.near > 0 else int(self.hm.mirror[views.EAR_PICKS[nm]])
+                    v, w = np.array([v]), np.array([1.0])
+                sig = np.hypot(o["sigma"], (views.EAR_MODEL_SD_MM if nm in views.EAR_PICKS else views.FACE_MODEL_SD_MM) * sd.ppm0)
+                L[nm] = (v, w, o["px"], sig, o["conf"])
+            self.side_lm.append(L)
+
+    def side_rows(self, Pmm, add):
+        """v3: the side photos' rows: landmarks (px / sigma) and the silhouette's band (mm), at each side camera."""
+        import views
+        for k, sd in enumerate(self.sides):
+            A, b = sd.affine(self.front, self.pose[:7], self.sm.c)
+            rows, r0 = [], []
+            for nm, (v, w, px, sig, conf) in self.side_lm[k].items():
+                X = (Pmm[v] * w[:, None]).sum(0) / 1000.0
+                uv, _, J = views.project_affine(sd.K, A, b, X[None])
+                e = (uv[0] - px) / sig
+                if np.linalg.norm(e) * sig / sd.ppm0 <= self.lm_dead:
+                    continue
+                ww = conf * self.w_slm
+                for a in range(2):
+                    rows.append([(int(v[q]), ww * w[q] * J[0, a] / 1000.0 / sig) for q in range(len(v))])
+                    r0.append(ww * e[a])
+            if rows:
+                add(self._rows_to_sparse(rows), np.array(r0), f"{sd.tag}_landmarks")
+            sil = self.side_sil[k]
+            rows, r0 = [], []
+            for j, pt in enumerate(sil["pts"]):
+                if pt is None:
+                    continue
+                lo_, hi_, wb = sd.band[j]
+                tri, bb = pt
+                X = (Pmm[tri] * bb[:, None]).sum(0) / 1000.0
+                uv, Xc, J = views.project_affine(sd.K, A, b, X[None])
+                ppm = sd.K[0, 0] / Xc[0, 2]
+                dd = float((uv[0] - sd.S[j]) @ sd.n[j]) / ppm
+                if lo_ <= dd <= hi_:
+                    continue
+                edge = lo_ if dd < lo_ else hi_
+                w = self.w_ssil * wb
+                g = sd.n[j] @ J[0] / 1000.0 / ppm
+                rows.append([(int(tri[q]), w * bb[q] * g) for q in range(3)])
+                r0.append(w * (dd - edge))
+            if rows:
+                add(self._rows_to_sparse(rows), np.array(r0), f"{sd.tag}_silhouette")
 
     # ---- the linear system at the current offsets ----
     def system(self):
@@ -1126,7 +1214,7 @@ class Dense:
         okk = [prob.oval_k[i] for i in prob.u_ov]
         for i, kk in zip(prob.u_ov, okk):
             nrm = ph.oval_n[kk]
-            band = outline_band(ph.face[i, 1])
+            band = outline_band(ph.face[i, 1], ph.oval_beard[kk])
             if band is None or (self.beard_ref is not None and ph.face[i, 1] < -28):
                 continue          # on the beard the true silhouette's reference band holds the skin (below)
             lo_, hi_, wb = band
@@ -1145,7 +1233,7 @@ class Dense:
         for j, pt in enumerate(sil["pts"]):
             if pt is None:
                 continue
-            band = outline_band(sil["fy"][j])
+            band = outline_band(sil["fy"][j], sil["inset"][j])
             if band is None:
                 continue
             lo_, hi_, wb = band
@@ -1165,6 +1253,8 @@ class Dense:
             r0.append(w * (sdist - edge))
         if rows:
             add(self._rows_to_sparse(rows), np.array(r0), "silhouette")
+        if self.sides:
+            self.side_rows(Pmm, add)
         # targets
         self.te.update(Pmm)
         rows, r0 = [], []
@@ -1226,7 +1316,7 @@ class Dense:
         names.append(("tikhonov", self.ncol))
         # the patches' translations cost (the eye may sit 1-2 mm deeper, the lips come forward a little)
         pw = np.zeros(self.ncol)
-        pw[self.pc["eye"]:self.pc["eye"] + 3] = 1.5
+        pw[self.pc["eye"]:self.pc["eye"] + 3] = 0.3 if fit.AT_REST else 1.5      # v3: deep-set eyes (Ex, the brow roll)
         pw[self.pc["eye"]] = 40.0          # the eye spacing (validated in three review rounds; the review camera's
                                            # pupil-distance dolly reads it) stays: the eyes may only sink or rise
         pw[self.pc["ear"]:self.pc["ear"] + 3] = 0.3
@@ -1315,6 +1405,7 @@ def region_errors(photo, q, ref="pts"):
 
 def outline_parts(sil, beard_allowance=True):
     e, fy = sil["err"], sil["fy"]
+    ins = sil.get("inset", np.zeros(len(fy)))
     out = {}
     for part, sel in (("upper_forehead_sides", (fy > 25) & (fy <= 45)), ("temples", (fy > 0) & (fy <= 25)),
                       ("cheekbone_level", (fy > -28) & (fy <= 0)), ("cheeks_mouth_level", (fy > -70) & (fy <= -28)),
@@ -1324,12 +1415,12 @@ def outline_parts(sil, beard_allowance=True):
             continue
         ee = e[ok]
         # distance outside the allowed band (0 inside): the skin against where his skin is
-        bands = [outline_band(f) for f in fy[ok]]
+        bands = [outline_band(f, i) for f, i in zip(fy[ok], ins[ok])]
         ob = np.array([0.0 if b is None else (x - b[1] if x > b[1] else (x - b[0] if x < b[0] else 0.0)) for x, b in zip(ee, bands)])
         out[part] = dict(n=int(ok.sum()), signed_mean_mm=round(float(ee.mean()), 2), rms_mm=round(float(np.sqrt((ee ** 2).mean())), 2),
                          outside_band_rms_mm=round(float(np.sqrt((ob ** 2).mean())), 2), outside_band_mean_mm=round(float(ob.mean()), 2))
     sel = (fy <= 45) & np.isfinite(e)
-    bands = [outline_band(f) for f in fy[sel]]
+    bands = [outline_band(f, i) for f, i in zip(fy[sel], ins[sel])]
     ob = np.array([0.0 if b is None else (x - b[1] if x > b[1] else (x - b[0] if x < b[0] else 0.0)) for x, b in zip(e[sel], bands)])
     out["all_below_hairline"] = dict(outside_band_rms_mm=round(float(np.sqrt((ob ** 2).mean())), 2), rms_mm=round(float(np.sqrt((e[sel] ** 2).mean())), 2))
     return out
@@ -1387,9 +1478,11 @@ def target_summary(targets, tv):
     return dict(in_band=n_in, total=n, outside=miss)
 
 
-def overlay(photo, q, sil, path, box=(250, 1200, 2950, 4900), sc=0.5):
+def overlay(photo, q, sil, path, box=None, sc=None):
     from PIL import Image, ImageDraw
     from scipy.ndimage import binary_dilation
+    box = box or sil.get("box") or photo.box
+    sc = sc or sil.get("sc", 0.5)
     im = fit.photo_crop(box, sc)
     a = np.asarray(im).copy()
     edge = fit.silhouette_edges(np.where(sil["mask"], 0, -1))
@@ -1404,9 +1497,9 @@ def overlay(photo, q, sil, path, box=(250, 1200, 2950, 4900), sc=0.5):
         dr.line([p, qq], fill=(255, 80, 80), width=1)
         dr.ellipse([p[0] - 2, p[1] - 2, p[0] + 2, p[1] + 2], fill=(60, 255, 60))
         dr.ellipse([qq[0] - 2, qq[1] - 2, qq[0] + 2, qq[1] + 2], fill=(255, 40, 40))
-    for p, nn, e, k, fy in zip(sil["S"], sil["n"], sil["err"], sil["ppm"], sil["fy"]):
+    for p, nn, e, k, fy, ins in zip(sil["S"], sil["n"], sil["err"], sil["ppm"], sil["fy"], sil.get("inset", np.zeros(len(sil["fy"])))):
         if np.isfinite(e):
-            b = outline_band(fy)
+            b = outline_band(fy, ins)
             col = (255, 255, 0) if b is None or b[0] - 0.5 <= e <= b[1] + 0.5 else (255, 120, 0)
             dr.line([tr(p), tr(p + nn * e * k)], fill=col, width=2)
     dr.rectangle([0, 0, 1000, 70], fill=(0, 0, 0))
@@ -1605,7 +1698,7 @@ def pose_solve(sm, photo, pose0, scene_noear, iters=2, w_sil=0.6):
         Pmm = sm.full() * 1000.0
         sp_ = []
         for j, pt in enumerate(sil["pts"]):
-            b_ = outline_band(sil["fy"][j]) if pt is not None else None
+            b_ = outline_band(sil["fy"][j], sil["inset"][j]) if pt is not None else None
             if b_ is None:
                 continue
             tri, bb = pt
@@ -1651,6 +1744,198 @@ def alar_soften_offsets(P, amount):
     return Q - P
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# v3: the three 2026 photos at once (docs/CHARACTER_LOOK.md "Kai v3")
+# ---------------------------------------------------------------------------------------------------------------
+TARGETS_V3 = os.path.join(HERE, "shape_targets_v3.json")
+
+
+def setup_v3(face, shape=None):
+    """fit.Model (wide: the neck under the jaw and the back of the head, for the side views) for the face file's
+    macro and details, the height solved with the shape."""
+    m = build_macro(face)
+    model = fit.Model(mh.sculpt(fit.macro_dict(m)), wide=True)
+    d = d_from_details(model, face["details"])
+    model.height = solve_height(fit.macro_dict(m), model.details(d, 0.0), shape)
+    model._macro.cache_clear()
+    return model, m, d
+
+
+def head_frame(photo, pose):
+    """(rotation, scale) of the v3 head frame against the model's axes (dense_fit.Frame)."""
+    return photo.R.T @ fit.rodrigues(pose[:3]), float(pose[6])
+
+
+def midline_yz(sm, fr, hm):
+    Pmm = sm.full() * 1000.0
+    Q = fr.q(Pmm)
+    sel = hm.mid & hm.inH
+    return Q[sel][:, 1:3]
+
+
+def report3(argv):
+    """The per-photo errors of a face file (+ its shape layer) at the three photos' cameras: the front pose solved
+    for this head (pose_multi), then the front regions (MediaPipe on the clay render against the photo), the front
+    outline (the v3 bands), the side landmarks and silhouettes (per segment and per stretch of the profile) and the
+    v3 targets. Writes report_<tag>.json, the sagittal plot, the clay renders and the private overlays."""
+    import views
+    o = opts(argv)
+    face_path = o.get("face", FACE_DEFAULT)
+    face = load_face(face_path)
+    shape = o.get("shape") or (os.path.join(os.path.dirname(os.path.abspath(face_path)), face["shape"]) if face.get("shape") else None)
+    if o.get("shape") == "none":
+        shape = None
+    tag = o.get("tag", "report")
+    wd = o.get("work", os.path.join(WORK, "report3"))
+    os.makedirs(wd, exist_ok=True)
+    model, m, d = setup_v3(face, shape)
+    sm = ShapedModel(model, m, d)
+    if shape:
+        sh = mh.shape_target(shape)
+        Dm = np.zeros_like(sm.base)
+        Dm[sh[0]] = sh[1] * 0.1
+        sm.Dm = Dm
+    elif face.get("alarSoften"):
+        sm.Dm = alar_soften_offsets(sm.base, float(face["alarSoften"]))
+    photo = fit.Photo()
+    sides = views.load_sides(step=2)
+    pose0 = np.load(o["pose"]) if o.get("pose") else fit.initial_pose(photo)
+    if len(pose0) > 19:                        # a whole fit.py x vector: its front pose
+        pose0 = pose0[4 + len(model.params):4 + len(model.params) + 7]
+    prob, x, corr, sils = fit.pose_multi(sm, m, d, photo, sides, pose0[:7], rounds=int(o.get("pose_rounds", 2)), outdir=wd, tag=tag)
+    n0 = 4 + prob.np
+    pose = x[n0:n0 + 7]
+    rep = fit.multi_report(prob, x, corr, sils)
+    ears = ear_vertices(sm.base)
+    scene_ne = scene_without(model.S, ears)
+    sil_f = silhouette(sm, photo, pose, scene_ne)
+    out = dict(tag=tag, face=face_path, shape=shape, pose=dict(rvec_deg=np.degrees(pose[:3]).round(2).tolist(), t=pose[3:6].round(4).tolist(), scale=round(float(pose[6]), 4)),
+               front_regions_vs_photo_mm=region_errors(photo, corr["q"], "pts"), front_outline=outline_parts(sil_f),
+               front_groups={g: {k: v for k, v in r.items() if k.startswith("detector")} for g, r in rep["front"].items()})
+    for sd in sides:
+        out[sd.tag] = rep[sd.tag]
+    rot, k = head_frame(photo, pose)
+    fr = Frame(k, rot)
+    hm = HeadMesh(sm.base)
+    eyes = dict(L=np.array(group_exact("helper-l-eye")), R=np.array(group_exact("helper-r-eye")))
+    eyes["sphere"] = proxy_eye_spheres(sm.base * 1000.0)
+    te = TargetEval(fr, hm, eyes)
+    te.update(sm.full() * 1000.0)
+    targets = expand_targets(json.load(open(o.get("targets", TARGETS_V3))))
+    tv = {}
+    for t in targets:
+        r = te.evaluate(t)
+        tv[t["id"]] = None if r is None else round(float(r.value), 2)
+    out["targets_v3"] = tv
+    out["targets_v3_in_band"] = target_summary(targets, tv)
+    # profile numbers in the head frame (the model's skin midline): what the sculptor tabulated
+    Q = te.Q
+    prof = {}
+    for y in (55, 45, 35, 25, 15, 5, 0, -5, -10, -15, -20, -25):
+        r = te.z(0.0, float(y))
+        prof[str(y)] = None if r is None else round(r.value, 1)
+    out["midline_z_at_y"] = prof
+    out["landmarks_head_mm"] = {nm: [round(float(v), 1) for v in (((sm.full()[model.hv][prob.tv[i]] * prob.bw[i][:, None]).sum(0) * 1000.0 - fr.origin(sm.full() * 1000.0)) @ rot.T) * k]
+                                for nm, i in (("Prn", 1), ("Sn", 2), ("Li", 17), ("Sto", 13), ("Me", 152), ("Ex_L", 263), ("N", 168))}
+    out["ears_head_mm"] = {nm: [round(float(v), 1) for v in ((sm.full()[vv] * 1000.0 - fr.origin(sm.full() * 1000.0)) @ rot.T) * k] for nm, vv in views.EAR_PICKS.items()}
+    json.dump(out, open(os.path.join(wd, f"report_{tag}.json"), "w"), indent=1)
+    np.save(os.path.join(wd, f"x_{tag}.npy"), x)
+    overlay(photo, corr["q"], sil_f, os.path.join(wd, f"front_{tag}.jpg"))
+    fit.side_pictures(prob, x, sils, wd)
+    for sd in sides:
+        for nm in (f"side_{sd.tag}.jpg", f"render_{sd.tag}.png"):
+            if os.path.exists(os.path.join(wd, nm)):
+                os.replace(os.path.join(wd, nm), os.path.join(wd, nm.replace(sd.tag, sd.tag + "_" + tag)))
+    curves = {sd.tag: views.mask_contour_sagittal(sd, sil) for sd, sil in zip(sides, sils)}
+    views.sagittal_plot(os.path.join(wd, f"sagittal_{tag}.png"), curves, midline_yz(sm, fr, hm), title=tag)
+    print(json.dumps({k: out[k] for k in ("pose", "front_regions_vs_photo_mm")}, indent=0))
+    for sd in sides:
+        print(sd.tag, "lm", out[sd.tag]["landmarks_mm"])
+        print(sd.tag, "profile", {k_: v["outside_band_median_mm"] for k_, v in out[sd.tag]["profile"].items()})
+    print("front outline", {k_: v.get("outside_band_rms_mm") for k_, v in out["front_outline"].items()})
+    print("targets in band", out["targets_v3_in_band"]["in_band"], "/", out["targets_v3_in_band"]["total"], out["targets_v3_in_band"]["outside"])
+    return out
+
+
+def stage_b3(argv):
+    """The dense layer against the three photos at once (v3): the front photo's landmarks and outline at its own
+    camera (fit.py's multi-view pose, x.npy), each side photo's landmarks and silhouette at its own camera
+    (views.py), the v3 targets (shape_targets_v3.json) for what no photo sees; the regularisers, patches and bounds of
+    stage B."""
+    import views
+    o = opts(argv)
+    face_path = o["face"]
+    out = o.get("out", os.path.join(WORK, "kai_shape.npz"))
+    rounds = int(o.get("rounds", 8))
+    inner = int(o.get("inner", 6))
+    lam = float(o.get("lam", 10.0))
+    wd = o.get("work", WORK)
+    os.makedirs(wd, exist_ok=True)
+    face = load_face(face_path)
+    T0 = time.time()
+    model, m, d = setup_v3(face)
+    x0 = np.load(o.get("x", os.path.join(fit.OUT, "fit", "x.npy")))
+    n0 = 4 + len(model.params)
+    pose = x0[n0:n0 + 7].copy()
+    photo = fit.Photo()
+    G = fit.groups()
+    sm = ShapedModel(model, m, d)
+    alar = float(o.get("alar", 12))
+    pre = np.zeros_like(sm.base)
+    if alar > 0:
+        pre = alar_soften_offsets(sm.base, alar)
+        sm.base = sm.base + pre
+    sides = views.load_sides(step=int(o.get("step", 2)))
+    rot, k = head_frame(photo, pose)
+    spec_path = o.get("targets", TARGETS_V3)
+    targets = expand_targets(json.load(open(spec_path)))
+    dn = Dense(sm, photo, G, targets, lam=lam, scale=k, sides=sides, rot=rot)
+    dn.front = views.Front(photo)
+    dn.side_scenes = [views.side_scene(sm.full(), dn.front, pose, sm.c) for _ in sides]
+    dn.pre_mm = pre * 1000.0
+    dn.w_sil = float(o.get("wsil", 1.0))
+    dn.w_t = float(o.get("wt", 1.0))
+    dn.w_slm = float(o.get("wslm", 1.0))
+    dn.w_ssil = float(o.get("wssil", 1.0))
+    dn.pose = pose.copy()
+    dn.pose0 = pose.copy()
+    dn.fixed_pose = True
+    dn.scene_noear = scene_without(model.S, dn.ears)
+    dn.beard_ref = None
+    print(f"stage B3: {dn.ncol} unknowns, H {int(dn.hm.inH.sum())} vertices, {len(targets)} targets, {sum(len(sd.S) for sd in sides)} side samples, setup {time.time() - T0:.0f}s", flush=True)
+    log = dict(face=face_path, lam=lam, rounds=[])
+    for rnd in range(rounds):
+        T = time.time()
+        dn.refresh(rnd, wd)
+        reps = [dn.step() for _ in range(inner)]
+        D = dn.D()
+        ent = dict(round=rnd + 1, seconds=round(time.time() - T), energy=reps,
+                   max_offset_mm=round(float(np.linalg.norm(D, axis=1).max()), 2),
+                   patches=dict(eye=dn.u[dn.pc["eye"]:dn.pc["eye"] + 3].round(2).tolist(), ear=dn.u[dn.pc["ear"]:dn.pc["ear"] + 3].round(2).tolist(),
+                                lip=dn.u[dn.pc["lip"]:dn.pc["lip"] + 2].round(2).tolist()),
+                   detector_regions=region_errors(photo, dn.corr["q"], "pts"),
+                   outline=outline_parts(dn.sil),
+                   sides={sd.tag: views.profile_parts(sd, sil["err"]) for sd, sil in zip(sides, dn.side_sil)})
+        log["rounds"].append(ent)
+        print(f"round {rnd + 1}: {ent['seconds']}s energy {reps[-1]} max |D| {ent['max_offset_mm']} patches {ent['patches']}", flush=True)
+        print("    regions (render, last round's)", ent["detector_regions"], flush=True)
+        print("    outline", {k_: v.get("outside_band_rms_mm") for k_, v in ent["outline"].items()}, flush=True)
+        for sd in sides:
+            print("   ", sd.tag, {k_: v["outside_band_median_mm"] for k_, v in ent["sides"][sd.tag].items()}, flush=True)
+        json.dump(log, open(os.path.join(wd, "stage_b3.json"), "w"), indent=1)
+        np.save(os.path.join(wd, "u_stage_b3.npy"), dn.u)
+    dn.system()
+    meta = dict(version=VERSION, method="likeness/dense_fit.py stage_b3 (v3: the front photo's landmarks + outline at its camera, both side photos' landmarks + silhouettes at theirs, shape_targets_v3.json; thin plate, symmetric, rigid patches)",
+                face=os.path.basename(face_path), details_digest=hashlib.sha1(json.dumps(face["details"], sort_keys=True).encode()).hexdigest()[:12],
+                targets_digest=hashlib.sha1(open(spec_path, "rb").read()).hexdigest()[:12], lam=lam, rounds=rounds,
+                mediapipe="0.10.21", views=["kai_ref_front (front camera, 8 deg above, at rest)", "kai_ref_side1 (his right, 16 deg above)", "kai_ref_side2 (his left, level)"],
+                date=time.strftime("%Y-%m-%d"), pose=dict(rvec=pose[:3].tolist(), t=pose[3:6].tolist(), s=float(pose[6])),
+                head_scale_per_build_mm=k, targets={k_: (None if v is None else round(float(v), 2)) for k_, v in dn.tvals.items()})
+    idx = dn.to_npz(out, meta)
+    print(f"stage B3 done {time.time() - T0:.0f}s -> {out} ({len(idx)} vertices)")
+    return dn
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "stage_a":
@@ -1659,5 +1944,9 @@ if __name__ == "__main__":
         stage_b(sys.argv[2:])
     elif cmd == "report":
         report(sys.argv[2:])
+    elif cmd == "report3":
+        report3(sys.argv[2:])
+    elif cmd == "stage_b3":
+        stage_b3(sys.argv[2:])
     else:
         print(__doc__)
