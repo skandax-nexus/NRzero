@@ -222,9 +222,10 @@
     3.5,
     8.0
    ],
-   "conf": "medium",
+   "conf": "high",
    "spec": "3 / old 5",
-   "note": "the brow roll ahead of the upper lash line: deep-set eyes under heavy lids (direction confirmed, mm not: SHAPE_SPEC_V3 section 6)"
+   "note": "the brow roll ahead of the upper lash line: deep-set eyes under heavy lids (direction confirmed, mm not: SHAPE_SPEC_V3 section 6)",
+   "w": 2.0
   },
   {
    "id": "brow_over_eye_x34",
@@ -235,8 +236,9 @@
     3.5,
     8.0
    ],
-   "conf": "medium",
-   "spec": "3 / old 5"
+   "conf": "high",
+   "spec": "3 / old 5",
+   "w": 2.0
   },
   {
    "id": "head_length",

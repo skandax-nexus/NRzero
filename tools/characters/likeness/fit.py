@@ -543,7 +543,10 @@ KEEP_REVIEWED = ("eyes/eye-eyefold-down|up", "eyes/eye-eyefold-angle-down|up", "
                  # detector on the render cannot see this slider move them), the upper lip is under the moustache
                  "eyebrows/eyebrows-trans-down|up", "mouth/mouth-cupidsbow-decr|incr", "mouth/mouth-cupidsbow-width-decr|incr",
                  "mouth/mouth-upperlip-height-decr|incr", "mouth/mouth-upperlip-middle-down|up", "mouth/mouth-philtrum-volume-decr|incr")
-HOLD_FIXED = ("eyebrows/eyebrows-trans-down|up",)
+HOLD_FIXED = ("eyebrows/eyebrows-trans-down|up",
+              # the upper lip under the moustache: free, the cupid's bow rose (0.67) and parted the lips over the teeth
+              "mouth/mouth-cupidsbow-decr|incr", "mouth/mouth-cupidsbow-width-decr|incr", "mouth/mouth-upperlip-height-decr|incr",
+              "mouth/mouth-upperlip-middle-down|up")
 MACRO_HOLD_SD = dict(weight=0.03, muscle=0.04, african=0.05, asian=0.05)
 
 
@@ -835,6 +838,9 @@ def main_multi(argv):
         n0 = 4 + prob.np
         lo[:n0] = x[:n0] - 1e-9
         hi[:n0] = x[:n0] + 1e-9
+    if opt.get("macro", "hold") == "fix":
+        # the body stays exactly the installed one (sex, build and the ancestry mix shape the whole body)
+        lo[:4], hi[:4] = x[:4] - 1e-9, x[:4] + 1e-9
     for j in fixed:
         # tried free: the brow tissue slid down onto the lids to close them (the hooded look), folding the skin
         # over the inner canthi; the lid opening is the eye sliders'

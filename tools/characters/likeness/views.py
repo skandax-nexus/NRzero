@@ -83,6 +83,10 @@ def side_band(tag, seg, y, z):
             # the radix from 16 deg above: an off-midline contour (the side step and the sculptor read it from side2,
             # the level camera); the two photos disagree there by up to 8 mm
             return (-1.5, 1.5, 0.3)
+        if seg == "face_profile" and -15 < y <= 4:
+            # the radix and upper dorsum from the level camera: wider, a little lighter (the photos disagree here and
+            # a hard pull folds the skin between the rigid inner canthi)
+            return (-2.5, 1.5, 0.6)
         if seg == "face_profile" and 4 < y < 24:
             return (-3.0, 1.0, 1.0)          # the glabella: brow-head hairs reach the outline
         if y > 50:

@@ -913,12 +913,13 @@ class Dense:
         # carries MakeHuman's (reviewed) nose, lids and lips along unchanged in their small forms (METHOD.md's softer
         # stiffness at the features let the landmarks carve them: a hooked tip, a brow shelf, dents in the cheeks)
         if fit.AT_REST:
-            # v3: the skin round the rigid eye patches (the lids) is stiffer, so the radix, the brow and the cheeks that
-            # move against the still lids do not fold the skin over the canthi (seen in the first v3 run)
+            # v3: the skin round the rigid eye patches (the lids) is a little softer, so the socket can deepen under the
+            # brow roll (his deep-set eyes) with a smooth fall-off to the orbital rim; the fold of the first v3 run came
+            # from the brow slider pulling the brow tissue down over the lids (now held: fit.HOLD_FIXED)
             from scipy.spatial import cKDTree
             lidv = np.r_[self.lid["L"], self.lid["R"]]
             dl, _ = cKDTree(self.Pmm0[lidv]).query(self.Pmm0)
-            stiff = stiff + 2.0 * ss(14.0, 3.0, dl)
+            stiff = stiff * (1.0 - EYE_SOFT * ss(12.0, 2.0, dl)) + EYE_STIFF * ss(12.0, 2.0, dl)
         lamv = lam * stiff
         rows = np.nonzero(hm.inH | (np.asarray(np.abs(C).sum(1)).ravel() * 0 > 1))[0]
         # include the ring just outside H so the offsets fade with continuous slope at its border
@@ -950,7 +951,7 @@ class Dense:
         br = (y > 5) & (y <= 20) & ~vault
         lo[br], hi[br] = (-5.0 if fit.AT_REST else -2.0), 5.0      # v3: the lids sink under the brow roll
         ns = (ax < 18) & (y > -45) & (y <= 5) & (z > 5)
-        lo[ns], hi[ns] = -3.0, 5.0
+        lo[ns], hi[ns] = -3.0, (8.0 if fit.AT_REST else 5.0)        # v3: the high, straight radix of the side photos
         lp = (ax < 30) & (y > -88) & (y <= -45) & (z > 0)
         lo[lp], hi[lp] = -2.5, 5.0
         ml = (ax >= 18) & (y > -45) & (y <= 5) & ~vault
@@ -1748,6 +1749,8 @@ def alar_soften_offsets(P, amount):
 # v3: the three 2026 photos at once (docs/CHARACTER_LOOK.md "Kai v3")
 # ---------------------------------------------------------------------------------------------------------------
 TARGETS_V3 = os.path.join(HERE, "shape_targets_v3.json")
+EYE_SOFT = float(os.environ.get("EYE_SOFT", 0.0))     # v3: how much softer the skin round the lids is (0 = as elsewhere)
+EYE_STIFF = float(os.environ.get("EYE_STIFF", 1.5))   # v3: added stiffness round the lids (no folds over the canthi)
 
 
 def setup_v3(face, shape=None):
