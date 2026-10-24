@@ -542,8 +542,13 @@ KEEP_REVIEWED = ("eyes/eye-eyefold-down|up", "eyes/eye-eyefold-angle-down|up", "
                  # the brow's place is a look key (browLift: the game paints the brows from the eye centres, so the
                  # detector on the render cannot see this slider move them), the upper lip is under the moustache
                  "eyebrows/eyebrows-trans-down|up", "mouth/mouth-cupidsbow-decr|incr", "mouth/mouth-cupidsbow-width-decr|incr",
-                 "mouth/mouth-upperlip-height-decr|incr", "mouth/mouth-upperlip-middle-down|up", "mouth/mouth-philtrum-volume-decr|incr")
-HOLD_FIXED = ("eyebrows/eyebrows-trans-down|up",
+                 "mouth/mouth-upperlip-height-decr|incr", "mouth/mouth-upperlip-middle-down|up", "mouth/mouth-philtrum-volume-decr|incr",
+                 # the broad nasal bridge of fix rounds 1-2 (the 2026 front photo shows it as broad): MediaPipe's bridge
+                 # points barely see its width, the free fit narrowed it into a ridge
+                 "nose/nose-width1-decr|incr", "nose/nose-width2-decr|incr")
+HOLD_FIXED = ("eyebrows/eyebrows-trans-down|up", "eyebrows/eyebrows-angle-down|up", "eyebrows/eyebrows-trans-backward|forward",
+              # (the brow tissue: freed, it angled down at the heads (-0.5) and went back (-0.46) behind the lifted radix,
+              # a transverse ridge between the eyes that read as a frown; he has none)
               # the upper lip under the moustache: free, the cupid's bow rose (0.67) and parted the lips over the teeth
               "mouth/mouth-cupidsbow-decr|incr", "mouth/mouth-cupidsbow-width-decr|incr", "mouth/mouth-upperlip-height-decr|incr",
               "mouth/mouth-upperlip-middle-down|up")

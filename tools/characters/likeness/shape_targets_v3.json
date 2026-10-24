@@ -140,7 +140,8 @@
    ],
    "conf": "high",
    "spec": "sides",
-   "note": "the dark mole on his left cheek (side2 bundle point -7.1 +- 3.4): the cheek's depth there"
+   "note": "the dark mole on his left cheek (side2 bundle point -7.1 +- 3.4): the cheek's depth there",
+   "w": 3.0
   },
   {
    "id": "soft_turn",
@@ -222,10 +223,10 @@
     3.5,
     8.0
    ],
-   "conf": "high",
+   "conf": "low",
    "spec": "3 / old 5",
-   "note": "the brow roll ahead of the upper lash line: deep-set eyes under heavy lids (direction confirmed, mm not: SHAPE_SPEC_V3 section 6)",
-   "w": 2.0
+   "note": "the brow roll ahead of the upper lash line (deep-set eyes): direction confirmed, mm not (SHAPE_SPEC_V3 section 6); low: pushed harder it built a transverse ridge across the radix (v3 runs d6-d9)",
+   "w": 1.0
   },
   {
    "id": "brow_over_eye_x34",
@@ -236,9 +237,10 @@
     3.5,
     8.0
    ],
-   "conf": "high",
+   "conf": "low",
    "spec": "3 / old 5",
-   "w": 2.0
+   "w": 1.0,
+   "note": "the brow roll ahead of the upper lash line (deep-set eyes): direction confirmed, mm not (SHAPE_SPEC_V3 section 6); low: pushed harder it built a transverse ridge across the radix (v3 runs d6-d9)"
   },
   {
    "id": "head_length",
@@ -279,9 +281,107 @@
      -5.0
     ]
    ],
-   "conf": "medium",
+   "conf": "high",
    "spec": "sides",
-   "note": "the cheek receding toward the side (the mole at x 34.5, y -20.8: z -7.1; the outer canthus z -11.4; the beard's back edge (62, -65, -60))"
+   "note": "the cheek receding toward the side (the mole at x 34.5, y -20.8: z -7.1; the outer canthus z -11.4; the beard's back edge (62, -65, -60))",
+   "w": 2.0
+  },
+  {
+   "id": "bridge_broad",
+   "kind": "zsec",
+   "x": -6,
+   "h": 6,
+   "y": [
+    2,
+    -2,
+    -6,
+    -10
+   ],
+   "band": [
+    -4.5,
+    1.0
+   ],
+   "conf": "high",
+   "spec": "keep",
+   "note": "the nasal bridge's cross-section (z(-6) - 2 z(0) + z(6)) as broad as the reviewed round-4 head's (-1..-4.6): the side profile lifts the radix, the bridge must not become a narrow ridge (first v3 runs: -7..-8.5)",
+   "w": 2.0
+  },
+  {
+   "id": "bridge_broad_low",
+   "kind": "zsec",
+   "x": -6,
+   "h": 6,
+   "y": [
+    -14,
+    -18
+   ],
+   "band": [
+    -7.5,
+    1.0
+   ],
+   "conf": "high",
+   "spec": "keep"
+  },
+  {
+   "id": "radix_side_x10",
+   "kind": "zsecy",
+   "x": 10,
+   "h": 4,
+   "y": [
+    -4
+   ],
+   "band": [
+    2.0,
+    6.5
+   ],
+   "conf": "medium",
+   "spec": "keep",
+   "note": "beside the bridge at the inner canthus (z(y) - 2 z(y + 4) + z(y + 8)): no transverse fold across the radix (round 4: 4.4 / -4.2)"
+  },
+  {
+   "id": "radix_side2_x10",
+   "kind": "zsecy",
+   "x": 10,
+   "h": 4,
+   "y": [
+    0
+   ],
+   "band": [
+    -6.5,
+    -2.0
+   ],
+   "conf": "medium",
+   "spec": "keep"
+  },
+  {
+   "id": "radix_side_x13",
+   "kind": "zsecy",
+   "x": 13,
+   "h": 4,
+   "y": [
+    -4
+   ],
+   "band": [
+    7.0,
+    11.5
+   ],
+   "conf": "medium",
+   "spec": "keep"
+  },
+  {
+   "id": "radix_side2_x13",
+   "kind": "zsecy",
+   "x": 13,
+   "h": 4,
+   "y": [
+    0
+   ],
+   "band": [
+    -8.5,
+    -4.5
+   ],
+   "conf": "medium",
+   "spec": "keep"
   }
  ]
 }

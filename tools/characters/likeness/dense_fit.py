@@ -644,6 +644,12 @@ class TargetEval:
                 if any(x is None for x in r):
                     return None
                 return r[0] - r[1].scale(2.0) + r[2]
+            if k == "zsecy":
+                h = t.get("h", 4.0)
+                r = [self.z(t["x"], t["y"] + i * h) for i in range(3)]
+                if any(x is None for x in r):
+                    return None
+                return r[0] - r[1].scale(2.0) + r[2]
             if k == "zdrop":
                 a, b = self.z(t["x"], t["y"]), self.z(t["x2"], t["y"])
                 return a - b if a is not None and b is not None else None
@@ -677,7 +683,7 @@ def expand_targets(spec):
         if t["kind"] in ("z",) and isinstance(t.get("x"), list):
             for x, band in zip(t["x"], t["bands"]):
                 out.append(dict(t, x=x, band=band, id=f"{t['id']}_x{x}"))
-        elif t["kind"] in ("zsec", "zdrop", "temple") and isinstance(t.get("y"), list):
+        elif t["kind"] in ("zsec", "zsecy", "zdrop", "temple") and isinstance(t.get("y"), list):
             for y in t["y"]:
                 xs = t["x"] if isinstance(t["x"], list) else [t["x"]]
                 for x in xs:
@@ -842,6 +848,13 @@ class Dense:
         ears = ears[hm.inH[ears]]
         self.ears = ears
         lipline = np.array(json.load(open(os.path.join(HERE, "mh_lip_line.json")))["verts"])
+        if fit.AT_REST:
+            # v3: the lips' seal rides with the contact line (the skin within LIP_SEAL_MM of it): pulled apart by the
+            # moustache and the lower lip's profile the vermilion edges parted and showed the teeth (first v3 runs)
+            from scipy.spatial import cKDTree
+            dd_, _ = cKDTree(P[lipline] * 1000.0).query(P[hm.body] * 1000.0)
+            seal = hm.body[(dd_ < LIP_SEAL_MM) & hm.inH[hm.body]]
+            lipline = np.unique(np.r_[lipline, seal])
         self.lipline = lipline
         patch = {}          # vertex -> (patch name, sign of x)
         for side, sg in (("L", 1), ("R", -1)):
@@ -1750,6 +1763,7 @@ def alar_soften_offsets(P, amount):
 # ---------------------------------------------------------------------------------------------------------------
 TARGETS_V3 = os.path.join(HERE, "shape_targets_v3.json")
 EYE_SOFT = float(os.environ.get("EYE_SOFT", 0.0))     # v3: how much softer the skin round the lids is (0 = as elsewhere)
+LIP_SEAL_MM = float(os.environ.get("LIP_SEAL_MM", 2.5))   # v3: the band round the lips' contact line that moves with it
 EYE_STIFF = float(os.environ.get("EYE_STIFF", 1.5))   # v3: added stiffness round the lids (no folds over the canthi)
 
 
