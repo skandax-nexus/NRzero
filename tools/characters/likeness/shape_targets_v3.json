@@ -130,18 +130,60 @@
    "spec": "sides"
   },
   {
-   "id": "mole_cheek",
+   "id": "mole_cheek_x32.5_y-22.8",
    "kind": "z",
-   "x": 34.5,
-   "y": -20.8,
+   "x": 32.5,
+   "y": -22.8,
    "band": [
     -10.5,
     -3.7
    ],
    "conf": "high",
+   "w": 0.8,
    "spec": "sides",
-   "note": "the dark mole on his left cheek (side2 bundle point -7.1 +- 3.4): the cheek's depth there",
-   "w": 3.0
+   "note": "the cheek's depth round his mole (side2 bundle point (34.5, -20.8, -7.1) +- 3.4), as four points 2 mm round it (one point weighted 3 dented a single triangle)"
+  },
+  {
+   "id": "mole_cheek_x32.5_y-18.8",
+   "kind": "z",
+   "x": 32.5,
+   "y": -18.8,
+   "band": [
+    -10.5,
+    -3.7
+   ],
+   "conf": "high",
+   "w": 0.8,
+   "spec": "sides",
+   "note": "the cheek's depth round his mole (side2 bundle point (34.5, -20.8, -7.1) +- 3.4), as four points 2 mm round it (one point weighted 3 dented a single triangle)"
+  },
+  {
+   "id": "mole_cheek_x36.5_y-22.8",
+   "kind": "z",
+   "x": 36.5,
+   "y": -22.8,
+   "band": [
+    -10.5,
+    -3.7
+   ],
+   "conf": "high",
+   "w": 0.8,
+   "spec": "sides",
+   "note": "the cheek's depth round his mole (side2 bundle point (34.5, -20.8, -7.1) +- 3.4), as four points 2 mm round it (one point weighted 3 dented a single triangle)"
+  },
+  {
+   "id": "mole_cheek_x36.5_y-18.8",
+   "kind": "z",
+   "x": 36.5,
+   "y": -18.8,
+   "band": [
+    -10.5,
+    -3.7
+   ],
+   "conf": "high",
+   "w": 0.8,
+   "spec": "sides",
+   "note": "the cheek's depth round his mole (side2 bundle point (34.5, -20.8, -7.1) +- 3.4), as four points 2 mm round it (one point weighted 3 dented a single triangle)"
   },
   {
    "id": "soft_turn",

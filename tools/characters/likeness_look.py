@@ -64,6 +64,25 @@ class Look:
         self.rim_map = d["beard_rim"].astype(np.float32) if "beard_rim" in d.files else None
         self.scale = scale          # photo mm per build mm (the fit's head scale)
         self.origin = None
+        # Kai v3 (likeness/look_data.py --v3): the front photo's head frame bound by the fit's anchors (a similarity,
+        # rotation included), the frontal beard thickness, the side photos' beard per vertex, the midline profile and
+        # bottom of the beard, the brows at rest with their depth, the under-eye rows
+        self.version = int(d["version"]) if "version" in d.files else 2
+        self.v3 = self.version >= 3
+        if self.v3:
+            self.anchor_v = d["anchor_v"].astype(np.int64)
+            self.anchor_mm = d["anchor_mm"].astype(np.float64)
+            self.thick = d["beard_thick"].astype(np.float32)
+            self.side_v = d["beard_side"].astype(np.float64)
+            self.prof = d["beard_prof"].astype(np.float64)
+            self.bottom = d["beard_bottom"].astype(np.float64)
+            self.brow_z = d["brow_z"].astype(np.float64)
+            self.brow_dens = d["brow_dens"].astype(np.float64)
+            self.under_eye = d["under_eye"].astype(np.float64)
+            self.R = np.eye(3)
+            self.sm = 1000.0 * scale
+            self.tr = np.zeros(3)
+            self._shell = None
 
     # ---- frame
     def bind(self, P):
@@ -74,15 +93,74 @@ class Look:
             v, w = np.array(t["v"][i]), np.array(t["w"][i])
             pts.append((P[v] * w[:, None]).sum(0))
         self.origin = 0.5 * (pts[0] + pts[1])
+        if self.v3:
+            # Kai v3: the similarity (scale, rotation, translation) that takes the build's own anchor vertices onto their
+            # head-frame mm under the fit's final pose (Umeyama): the maps then land where the photos saw them, whatever
+            # the build's stature scale (the game keeps his 1.83 m: the build's head is ~8 % larger than the photo frame)
+            A = np.asarray(P, float)[self.anchor_v]
+            Bm = self.anchor_mm
+            ca, cb = A.mean(0), Bm.mean(0)
+            Ac, Bc = A - ca, Bm - cb
+            U, S_, Vt = np.linalg.svd(Bc.T @ Ac)
+            dd = np.sign(np.linalg.det(U @ Vt))
+            Dg = np.diag([1.0, 1.0, dd])
+            R = U @ Dg @ Vt
+            sm = float(np.trace(np.diag(S_) @ Dg) / (Ac ** 2).sum())
+            self.R, self.sm = R, sm
+            self.tr = cb - sm * (R @ ca)
+            self.scale = sm / 1000.0
+            self.origin = self.to_mh(np.zeros(3))
+            self.P = np.asarray(P, float)
+            res = np.sqrt((((A @ R.T) * sm + self.tr - Bm) ** 2).sum(1).mean())
+            self.bind_rms = float(res)
         return self
 
     def mm(self, pos):
         """MH metres -> face mm (x, y, z) of the photo frame."""
+        if self.v3:
+            return np.asarray(pos, float) @ (self.sm * self.R).T + self.tr
         return (np.asarray(pos, float) - self.origin) * 1000.0 * self.scale
 
     def to_mh(self, q):
         """face mm -> MH metres"""
+        if self.v3:
+            return ((np.asarray(q, float) - self.tr) @ self.R) / self.sm
         return self.origin + np.asarray(q, float) / 1000.0 / self.scale
+
+    def dir_mm(self, v):
+        """directions MH -> head frame (rotation only)"""
+        return np.asarray(v, float) @ self.R.T if self.v3 else np.asarray(v, float)
+
+    def dir_mh(self, v):
+        """directions head frame -> MH"""
+        return np.asarray(v, float) @ self.R if self.v3 else np.asarray(v, float)
+
+    def front_surface(self, xy, near=None):
+        """v3: build points (MH metres) on the front of the skin at head-frame (x, y) mm: the nearest front-facing head
+        vertices in (x, y), inverse-distance weighted (near: an optional mask of candidate vertices)."""
+        if not hasattr(self, "_fs"):
+            q = self.mm(self.P)
+            ok = (np.abs(q[:, 0]) < 80) & (q[:, 1] > -140) & (q[:, 1] < 80) & (q[:, 2] > -45)
+            idx = np.nonzero(ok)[0]
+            # keep the front-most vertex per 1.5 mm cell (the visible skin, not the eyeball, the mouth bag or the
+            # back of the ear)
+            cell = {}
+            for i in idx[np.argsort(-q[idx, 2])]:
+                k = (int(np.floor(q[i, 0] / 1.5)), int(np.floor(q[i, 1] / 1.5)))
+                if k not in cell:
+                    cell[k] = i
+            self._fs = np.array(sorted(cell.values()))
+            self._fsq = q[self._fs]
+        xy = np.atleast_2d(np.asarray(xy, float))
+        out = np.zeros((len(xy), 3))
+        for k, (x, y) in enumerate(xy):
+            d2 = (self._fsq[:, 0] - x) ** 2 + (self._fsq[:, 1] - y) ** 2
+            j = np.argsort(d2)[:4]
+            w = 1.0 / np.maximum(d2[j], 0.05)
+            # the head-frame z there, then back to the build (the point lies on the skin, at exactly (x, y))
+            z = float((self._fsq[j, 2] * w).sum() / w.sum())
+            out[k] = self.to_mh(np.array([x, y, z]))
+        return out
 
     def _grid(self, G, pos):
         q = self.mm(pos)
@@ -97,11 +175,14 @@ class Look:
         return np.where(out, 0.0, v)
 
     # ---- beard
-    def beard_density(self, pos, hw, ear_z, ear_lo=None, sb_top=None, nrm=None):
+    def beard_density(self, pos, hw, ear_z, ear_lo=None, sb_top=None, nrm=None, side=None):
         """Beard density 0..1 at MH points pos: the frontal map (rows below the nose base), a sideburn band in front of
         the ear from the map's top up to the hairline, gated to the head (MakeHuman's head weights end under the jaw:
         the neckline) and to the front of the ear (above the lobe; below it the beard runs back along the jaw to its angle). hw: head weight per point;
-        ear_z: z (MH) of the ear's front edge; ear_lo: y (MH) of the lowest point of the ear."""
+        ear_z: z (MH) of the ear's front edge; ear_lo: y (MH) of the lowest point of the ear. side (v3): the side
+        photos' coverage at the points (Look.side_at; -1 unseen)."""
+        if self.v3:
+            return self._beard_density_v3(pos, hw, ear_z, ear_lo, nrm, side)
         q = self.mm(pos)
         d = self._grid(self.beard, pos)
         z = np.asarray(pos)[:, 2]
@@ -152,6 +233,146 @@ class Look:
             d = np.maximum(d, SIDE_BAND[0] * band)
         neck = _ss(0.25, 0.7, hw)
         return np.clip(d * front * neck, 0, 1)
+
+    def side_at(self, tri_v, bary=None):
+        """v3: the side photos' beard coverage at points on triangles (vertex ids (n, k), barycentrics or the mean):
+        -1 where neither side photo saw the surface."""
+        v = self.side_v[np.asarray(tri_v)]
+        ok = v >= 0
+        w = np.ones(v.shape) / v.shape[1] if bary is None else np.asarray(bary, float)
+        wv = (w * ok).sum(1)
+        return np.where(wv > 0.5, (w * np.where(ok, v, 0.0)).sum(1) / np.maximum(wv, 1e-9), -1.0)
+
+    def _beard_density_v3(self, pos, hw, ear_z, ear_lo, nrm, side):
+        """Kai v3: the front photo's map where the skin faces the front, the side photos' coverage (per vertex,
+        interpolated: `side`) where it turns to the side or under the jaw; never on the ear or the scalp (the hair's)."""
+        pos = np.asarray(pos, float)
+        q = self.mm(pos)
+        d_f = self._grid(self.beard, pos)
+        if nrm is None:
+            wf = np.ones(len(pos))
+        else:
+            nh = self.dir_mm(nrm)
+            nh = nh / np.maximum(np.linalg.norm(nh, axis=1, keepdims=True), 1e-9)
+            # the frontal map holds where the front camera sees the skin squarely; past ~55 deg the side photos
+            wf = _ss(0.3, 0.62, nh[:, 2])
+        z = pos[:, 2]
+        front = _ss(ear_z - 0.004, ear_z + 0.006, z)          # (the frontal map's outline columns would paint the ear)
+        if ear_lo is not None:
+            front = np.maximum(front, _ss(ear_lo + 0.004, ear_lo - 0.008, pos[:, 1]) * _ss(ear_z - 0.03, ear_z - 0.016, z))
+        if side is None:
+            d = d_f * front
+        else:
+            side = np.asarray(side, float)
+            seen = side >= 0
+            d = np.where(seen, wf * d_f + (1 - wf) * np.clip(side, 0, 1), d_f * front)
+        # the scalp's hair is the hair's: the sideburn fades in above eye level into the hairline
+        d = d * _ss(10.0, 2.0, q[:, 1])
+        # the neckline: under the jaw the beard runs onto the throat (the side photos), not down the neck
+        d = d * _ss(0.03, 0.3, np.asarray(hw, float)) * _ss(-150.0, -132.0, q[:, 1])
+        return np.clip(d, 0, 1)
+
+    # ---- v3: the beard's volume (the shell the build grows its mat on, and the cards over it)
+    def _midline_z(self):
+        """the build's skin profile at the midline: head-frame (y, z) mm, the front-most skin per 2 mm of y"""
+        if not hasattr(self, "_mid"):
+            q = self.mm(self.P)
+            m = (np.abs(q[:, 0]) < 3.0) & (q[:, 1] > -150) & (q[:, 1] < 40) & (q[:, 2] > -60)
+            yy = np.arange(-150.0, 40.0, 2.0)
+            zz = np.full(len(yy), np.nan)
+            for k, y in enumerate(yy):
+                s_ = m & (np.abs(q[:, 1] - y) < 1.5)
+                if s_.any():
+                    zz[k] = q[s_, 2].max()
+            ok = np.isfinite(zz)
+            self._mid = (yy[ok], zz[ok])
+        return self._mid
+
+    def beard_thickness(self, pos, nrm, dens):
+        """Kai v3: the beard's standoff off the skin (head-frame mm) and the direction it stands off in (MH, unit) at
+        skin points pos with normals nrm and beard density dens. The beard's measured volume:
+          - the moustache 3-4.5 mm (the side photos: its front 2.5-2.8 mm past the fitted skin);
+          - from under the lower lip to the chin's front, the side photo's midline outline (the beard front 22 -> 34 mm
+            ahead of the eye corners from y -80 to -110), easing off toward the jaw;
+          - under the chin it hangs: the standoff is taken down (the normal bent toward -y) to the front photo's dense
+            bottom (y -135 at the midline, -127 at x 20, -113 at 30, -98 at 45), rising toward the throat;
+          - the jaw sides 4.5-6.5 mm (the front silhouette 3-9; the side photos' back-edge step 5-9), the cheek band
+            3.5 mm, the sideburn 1.5-2.5 mm (frizzy, sparse);
+          - elsewhere the front map's standoff (measured on its silhouette, interpolated inside)."""
+        pos = np.asarray(pos, float)
+        q = self.mm(pos)
+        nh = self.dir_mm(nrm)
+        nh = nh / np.maximum(np.linalg.norm(nh, axis=1, keepdims=True), 1e-9)
+        x, y, z = q.T
+        ax = np.abs(x)
+        lm = self.lm
+        sn, ls, li, pg = lm["Sn"][1], lm["Ls"][1], lm["Li"][1], lm["Pg"][1]
+        tf = np.clip(self._grid(self.thick, pos).astype(float), 0, 32)
+        # the midline profile target: the beard front z(y), and the build's own skin profile
+        pr = self.prof
+        fr = pr[pr[:, 1] > 15.0]
+        o = np.argsort(fr[:, 0])
+        yy, zf = fr[o, 0], fr[o, 1]
+        my, mz = self._midline_z()
+        t_mid = np.interp(y, yy, zf) - np.interp(y, my, mz)
+        # chin front (front-facing, under the lower lip): the midline standoff, easing toward the jaw
+        chin = _ss(li - 2.0, li - 10.0, y) * _ss(0.2, 0.55, nh[:, 2])
+        t_chin = np.clip(t_mid, 2.0, 26.0) * (1.0 - 0.45 * _ss(8.0, 48.0, ax))
+        # under the chin: down to the front photo's bottom (rising 0.35 mm per mm toward the throat)
+        yb = np.interp(ax, self.bottom[:, 0], self.bottom[:, 1], right=self.bottom[-1, 1])
+        yb = yb + 0.35 * np.clip(-(z + 8.0), 0, None)
+        hang = _ss(pg + 6.0, pg - 6.0, y) * _ss(-0.05, -0.5, nh[:, 1])
+        dvec = nh + np.array([0.0, -0.9, 0.0])[None] * hang[:, None]
+        dvec = dvec / np.maximum(np.linalg.norm(dvec, axis=1, keepdims=True), 1e-9)
+        t_hang = np.clip((y - yb) / np.maximum(-dvec[:, 1], 0.45), 3.0, 30.0)
+        # the moustache
+        mo = _ss(ls - 1.0, ls + 3.0, y) * _ss(sn + 2.0, sn - 2.0, y) * _ss(34.0, 26.0, ax)
+        t_mo = 3.0 + 1.5 * _ss(4.0, 18.0, ax)
+        # jaw sides, cheek band, sideburn (the skin turned to the side)
+        lat = _ss(0.45, 0.75, np.abs(nh[:, 0])) * (1 - hang)
+        t_lat = np.interp(y, [-95.0, -70.0, -45.0, -20.0, 0.0, 8.0], [6.5, 5.5, 4.5, 3.5, 2.5, 1.5])
+        t = tf.copy()
+        t = t * (1 - chin) + t_chin * chin
+        t = t * (1 - lat) + np.maximum(t_lat, 0.6 * tf) * lat
+        t = t * (1 - hang) + t_hang * hang
+        t = t * (1 - mo) + t_mo * mo
+        # where the beard thins out it lies flat: the standoff follows the density
+        t = t * _ss(0.15, 0.75, np.asarray(dens, float))
+        t = np.clip(t, 0.0, 32.0)
+        return t, self.dir_mh(dvec)
+
+    def shell(self, B):
+        """Kai v3: the beard's outer surface over the base mesh (cached per build): per vertex the density, the
+        standoff (head mm), the offset direction (MH) and the offset point (MH metres). The standoff is smoothed over
+        the mesh (one beard, not a relief of the skin's bumps)."""
+        if self._shell is not None and self._shell[0] is B:
+            return self._shell[1]
+        P, N = np.asarray(B.P, float), np.asarray(B.N, float)
+        ez, el = ear_front_z(B), ear_low_y(B)
+        dens = self.beard_density(P, B.hw, ez, el, nrm=N, side=self.side_v[:len(P)])
+        t, dv = self.beard_thickness(P, N, dens)
+        F = [B.F[i][0] for i in B.faces]
+        ii, jj = [], []
+        for f in F:
+            k = len(f)
+            for a in range(k):
+                ii.append(f[a])
+                jj.append(f[(a + 1) % k])
+        ii, jj = np.array(ii + jj), np.array(jj + ii)
+        cnt = np.maximum(np.bincount(ii, minlength=len(P)), 1).astype(float)
+        act = dens > 0.02
+        for _ in range(6):
+            acc = np.zeros(len(P))
+            np.add.at(acc, ii, t[jj])
+            t = np.where(act, 0.5 * t + 0.5 * acc / cnt, t)
+            acc3 = np.zeros((len(P), 3))
+            np.add.at(acc3, ii, dv[jj])
+            dv = np.where(act[:, None], 0.5 * dv + 0.5 * acc3 / cnt[:, None], dv)
+        dv = dv / np.maximum(np.linalg.norm(dv, axis=1, keepdims=True), 1e-9)
+        S = P + dv * (t / self.sm)[:, None]
+        out = dict(dens=dens, t=t, dir=dv, S=S)
+        self._shell = (B, out)
+        return out
 
     def beard_light(self, pos):
         """fix round 3: 0..1 where the beard's hair is lighter and warmer (look_data `beard_light`)"""
@@ -220,6 +441,8 @@ def paint_zones(c, B, LK, pos, col, isface, front, BH):
     eyes and the darker upper lids, a little darker nose bridge and side of the nose, a warmer, redder nose tip, the
     slightly darker cheekbone band; ratios from the photo's albedo samples (left / right averaged; about half of the
     under-eye darkness in the photo is the shadow of the brow ridge, which the renderer adds itself)."""
+    if LK.v3:
+        return paint_zones_v3(c, B, LK, pos, col, isface, front, BH)
     ss, g2 = BH.ss, BH.g2
     L = B.L
     q = LK.mm(pos)
@@ -291,7 +514,10 @@ def paint_moles(c, LK, pos, col, isface, BH):
         dx_, dy_, dsc, ssc = tw.get(mi, (0.0, 0.0, 1.0, 1.0))
         x, y = x + dx_, y + dy_
         d2 = (q[:, 0] - x) ** 2 + (q[:, 1] - y) ** 2
-        near = (d2 < (dia * 3) ** 2) & (np.abs(q[:, 2] - z) < 9.0) & isface
+        if LK.v3:       # (v3: MediaPipe's depth of a cheek mole is a guess; the skin facing forward on its side is enough)
+            near = (d2 < (dia * 3) ** 2) & (np.abs(q[:, 2] - z) < 25.0) & (q[:, 0] * np.sign(x) > 0) & isface
+        else:
+            near = (d2 < (dia * 3) ** 2) & (np.abs(q[:, 2] - z) < 9.0) & isface
         if not near.any():
             continue
         # likeness:final: the two moles read alike (the upper one was measured fainter: it sits in the cheek's shading),
@@ -434,6 +660,8 @@ def brow_T(LK, e, sg, lift=0.0, shape=None):
     centre outward, the lower edge above the eye centre, the thickness), metres. shape: the face file's `browShape`
     (brow_shape); the painted brow and the brow cards pass the same, so they stay registered (no double brow)."""
     b = brow_shape(LK.brow(0 if sg > 0 else 1), shape)
+    if LK.v3:
+        return _brow_T_v3(LK, e, sg, lift, b)
     ex = abs(e[0] - LK.origin[0]) * 1000 * LK.scale
     ey = (e[1] - LK.origin[1]) * 1000 * LK.scale
     xs = b[:, 0]
@@ -447,3 +675,98 @@ def brow_T(LK, e, sg, lift=0.0, shape=None):
         s = 1.0 / 1000 / LK.scale
         return (x - ex) * s, (bot - ey) * s + lift, np.maximum(th, 0.6) * s
     return T
+
+
+def _brow_T_v3(LK, e, sg, lift, b):
+    """Kai v3: the brow at rest (head-frame mm rows: x outward, top, bottom) put on the build's skin through the fit's
+    frame (Look.front_surface), then read as build_humans.paint's T(t) from the eye centre e (MH metres)."""
+    xs = b[:, 0]
+    Pb = LK.front_surface(np.stack([sg * xs, b[:, 2]], 1))
+    Pt = LK.front_surface(np.stack([sg * xs, b[:, 2] + np.maximum(b[:, 3], 0.6)], 1))
+    dx = (Pb[:, 0] - e[0]) * sg
+    dy = Pb[:, 1] - e[1]
+    th = np.maximum(Pt[:, 1] - Pb[:, 1], 0.6 / LK.sm)
+    t0 = (xs - xs[0]) / (xs[-1] - xs[0])
+
+    def T(t):
+        t = np.asarray(t, float)
+        return np.interp(t, t0, dx), np.interp(t, t0, dy) + lift, np.interp(t, t0, th)
+    return T
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Kai v3: the de-lit skin zones of the 2026 front photo (front_look skin_zones: ratio of each zone's de-lit albedo to
+# the skin reference), the measured under-eye crescent, and the lids (the face file's lidShade / lidHood as before)
+# ---------------------------------------------------------------------------------------------------------------
+V3_ZONES = (      # zone name, centre (head mm, his left; mirrored), radius mm, strength (the share of the measured deviation
+                  # painted: the glabella's and the wings' darkness is half the renderer's own shading of those folds)
+    ("forehead_centre", (0.0, 26.0), 14.0, 1.0),
+    ("forehead_left", (34.3, 31.5), 13.0, 1.0),
+    ("temple_left", (61.0, 22.0), 10.0, 0.6),
+    ("glabella", (0.0, 12.9), 5.5, 0.45),
+    ("nose_bridge", (0.0, -3.9), 5.0, 1.0),
+    ("nose_dorsum", (0.0, -15.0), 5.5, 1.0),
+    ("nose_tip", (0.0, -27.5), 6.5, 1.0),
+    ("ala_left", (19.0, -28.4), 4.5, 0.55),
+    ("cheekbone_left", (46.0, -13.4), 10.0, 1.0),
+    ("cheek_left", (31.5, -30.9), 10.0, 1.0),
+    ("lateral_cheek_left", (54.1, -33.8), 9.0, 1.0),
+)
+
+
+def _zone_ratio(LK, name):
+    Z = LK.colours.get("zones", {})
+    r = [np.array(Z[n]["ratio"], float) for n in (name, name.replace("_left", "_right")) if n in Z]
+    return np.mean(r, 0) if r else np.ones(3)
+
+
+def paint_zones_v3(c, B, LK, pos, col, isface, front, BH):
+    ss, g2 = BH.ss, BH.g2
+    L = B.L
+    q = LK.mm(pos)
+    face = isface.astype(float) * front
+    k = lambda m, rgb: np.clip(m, 0, 1)[:, None] * (np.asarray(rgb)[None, :] - 1.0) + 1.0      # noqa: E731
+    zk = float(c.get("zoneStrength", 1.0))
+    # the zones' tints (linear albedo ratio -> sRGB), blended as a normalised radial field, mirrored for his right
+    acc = np.zeros((len(pos), 3))
+    wsum = np.full(len(pos), 0.08)
+    for name, (zx, zy), r, kz in V3_ZONES:
+        t_ = _zone_ratio(LK, name) ** (1 / 2.2)
+        t_ = 1.0 + zk * kz * (t_ - 1.0)
+        for sgn in ((1.0, -1.0) if zx > 0 else (1.0,)):
+            w = np.exp(-(((q[:, 0] - sgn * zx) ** 2 + (q[:, 1] - zy) ** 2) / (2 * r * r)))
+            acc += w[:, None] * t_[None, :]
+            wsum += w
+    tint = (acc + 0.08) / wsum[:, None]
+    col *= 1.0 + (tint - 1.0) * face[:, None]
+    # the under-eye crescent, as measured (per x: first / last mm below the lower lid margin, peak darkness), toward
+    # the measured core colour (its ratio to the skin) by underEyeV3 of the way (the deep-set socket's own shading
+    # does the rest)
+    ue_k = float(c.get("underEyeV3", 0.7))
+    core = np.mean([np.array(v, float) for v in LK.colours.get("under_eye_core", [])], 0) / np.array(LK.colours["skin_ref"], float)
+    core = core ** (1 / 2.2)
+    lid_lo = {1: -1.4, -1: -0.6}
+    for e, sg in ((L.eyeL, 1), (L.eyeR, -1)):
+        rows = LK.under_eye[0 if sg > 0 else 1]
+        x = q[:, 0] * sg
+        top = np.interp(x, rows[:, 0], rows[:, 1], left=rows[0, 1], right=rows[-1, 1])
+        bot = np.minimum(np.interp(x, rows[:, 0], rows[:, 2], left=rows[0, 2], right=rows[-1, 2]), float(c.get("underEyeDepth", 16.0)))
+        pk = np.interp(x, rows[:, 0], rows[:, 3], left=0.0, right=0.0)
+        dep = lid_lo[sg] - q[:, 1]
+        m = ss(top - 1.5, top + 1.5, dep) * ss(bot + 2.5, bot - 2.0, dep) * ss(12.0, 17.0, x) * ss(50.0, 45.0, x)
+        m = m * np.clip(pk / 0.72, 0, 1) * face * (q[:, 2] > -40)
+        col *= 1.0 + (m * ue_k)[:, None] * (core[None, :] - 1.0)
+        # upper lid: darker skin between the lash line and the crease, and the hooded fold (the face file's keys)
+        ex = (e[0] - LK.origin[0]) * 1000 * LK.scale
+        ey = (e[1] - LK.origin[1]) * 1000 * LK.scale
+        qe = LK.mm(np.asarray(e)[None])[0]
+        dx, dy = (q[:, 0] - qe[0]) * sg, q[:, 1] - qe[1]
+        (ux, uy), _ = L.lid["L" if sg > 0 else "R"]
+        top_l = np.interp(dx / LK.sm, ux, uy) * LK.sm
+        lid = ss(-0.5, 0.8, dy - top_l) * ss(7.5, 4.0, dy - top_l) * ss(-11.0, -6.0, dx) * ss(17.0, 13.0, dx)
+        col *= k(lid * face * float(c.get("lidShade", 0.8)), [0.86, 0.80, 0.82])
+        hd = float(c.get("lidHood", 0.0))
+        if hd > 0:
+            hood = ss(0.0, 2.5, dy - top_l) * ss(12.0, 7.0, dy - top_l) * ss(-12.0, -5.0, dx) * ss(19.0, 13.0, dx)
+            col *= k(hood * face * hd, [0.86, 0.81, 0.82])
+    return col
