@@ -53,3 +53,11 @@ Check a set before it ships:
   `beardWarm` / `moHang` (the painted beard mat and the moustache over the upper lip), `noseMatte`, `foreheadShade`,
   `moleSoft`, `hairline` ({centre, temple} m: a rounded front hairline), and two run-time values written into the
   build's look metadata for `src/human/skin.js`: `skinScatter` (the skin's scatter tint, 1 = default) and `lipRough`.
+- Fix round 2 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 2"): `moHangCorner` (the moustache's hang at the mouth
+  corners), `beardCardGain` / `moPaintDark` (lighter beard cards over a darker moustache mat), `sideburnTop` (mm: the
+  sideburn's top), `sclera` (hex), `caruncle`, `lashWing` / `lashLowerOut` / `lashLenLower` (no outer wing; lower lashes
+  rooted outside the eye), `browCards` / `browHairW` / `browBase` / `browEdge` / `browCardGain` / `browPaintGain` (the
+  brow as one dense, soft bar; `browShape.latDrop` mm), `underEyeBlur` / `underEyeLift`, `lidHood` (the hooded lid's
+  shade), `lipLower` (hex: the lower lip's rose centre) / `lipAsym`, `moleTweak` ([index, dx, dy mm, size, strength]),
+  `bridgeMatte`, `alarSoften` (smoothing passes over the nose wings' crease), `foreheadRamp` ([mm, mm]; `foreheadShade`
+  is now the tone's exponent), `hairline.arch` ([azimuth deg, height m] pairs: the front hairline as measured).

@@ -845,7 +845,8 @@ Pipeline (`tools/characters/likeness/`, an offline venv with MediaPipe 0.10.21 a
   beard's painted under-layer (nearly solid dark with a fine down-running hair texture where the beard is dense, a
   stubble of fine dots where it thins, a faint shave shadow just past it). The beard map's 3D gates: the front of the ear
   above the lobe (below it the beard runs back along the jaw to its angle), MakeHuman's head weights as the neckline, a
-  sideburn band 0-24 mm ahead of the ear up to the hairline.
+  sideburn band 0-45 mm ahead of the ear up to the hairline (fix round 2: its front edge a diagonal cheek line), and
+  (fix round 2) the face outline band as the photo's own camera saw it (below).
 
 Face file keys (`faces/README.md`): `likeness` (the look data, relative to the face file), `likenessScale` (photo mm per
 build mm, the fit's 1.007), `skinExact` (the skin hex used as is, no `natural_skin` hue / chroma clamp), `lipScale`
@@ -853,7 +854,7 @@ build mm, the fit's 1.007), `skinExact` (the skin hex used as is, no `natural_sk
 another file's keys first, its own on top; `kai_photo_loose` extends `kai_photo`).
 
 Strand cards (`look2.py`):
-- beard (`_beard_cards`, when the entry has `likeness` and `beard` >= 0.5): 1 800 fine tapered cards on the HD build
+- beard (`_beard_cards`, when the entry has `likeness` and `beard` >= 0.5): 1 800 (fix round 2: 2 500) fine tapered cards on the HD build
   (760 / 300 on the lower tiers), rooted where the map has beard (sampled area-weighted on the lower face and the
   under-jaw, kept with probability density^1.3, the moustache picked 3.5x and the jaw angle 1.6x as often, never on the
   lips or within 1 mm of them), along the growth direction (the moustache down and out from the philtrum, its tips just
@@ -863,11 +864,13 @@ Strand cards (`look2.py`):
   few strands of the fine column tapering to a point (likeness:final removed the wide clump cards: they read as black
   confetti); the dense jaw band and moustache 30 % darker; matte (no strand sheen), `@split` weights. About 10 800
   triangles on the HD build.
-- brows: the measured profile drives both the painted brow (620 strokes, a 0.4 base tint for his dense brows) and the
+- brows: the measured profile drives both the painted brow (620 strokes, a 0.4 base tint for his dense brows; fix round 2:
+  `browBase` 0.65) and the
   brow cards (680 per side).
 - curls (`_curl_cards`, cuts `photo_tied` and `photo_loose`): ringlets are helical strand ribbons around a centre line
   that marches along the cut's flow inside the smooth envelope of `_messy_cards` (width along the axis, normal out from
-  it, two strand bundles half a turn apart, radius 9-15 mm, pitch 24-34 mm, a little tighter and thinner toward the end,
+  it, two strand bundles half a turn apart, radius 9-15 mm, pitch 24-34 mm (fix round 2: the cut's `ringR` / `ringPitch`,
+  5-8 mm / 14-20 mm for Kai), a little tighter and thinner toward the end,
   8 points per turn), so they read as loops from every side. `photo_tied` (A, the photo): a sleek layer of long strands
   from the hairline over the crown into the tie at the top of the pony tube (no strand ever continues past the tie), the
   nape pulled up into it, a few loose strands lifting off; a halo of ringlets springing out above and behind the ears
@@ -880,7 +883,7 @@ Strand cards (`look2.py`):
   joint, so `springs.js` builds its hair chain and `rig2.prepareCardSprings` hangs the nearby cards on it (checked in
   the viewer: about 6 400 card vertices on the spring bones for A, 13 700 for B).
 
-Budgets: the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000). Since fix round 1 (below) the
+Budgets (fix round 2: see "Fix round 2" below for the current card counts): the body builds are unchanged (HD 34 000 with the head at 19 000, phone 16 000). Since fix round 1 (below) the
 card mesh is 28 500 triangles for A and 31 800 for B (hair 17 800 / 21 100, beard 6 800, brows and lashes 3 900; it was
 41 900 / 46 100), drawn once (one draw call, no shadow pass); the phone build and gfx=low draw at most 10 000 of them
 (`look2.LO_CARD_TRIS`; it was 45 %: 18 900 / 20 800).
@@ -1000,6 +1003,65 @@ The shipped `assets/models/cast*.glb` change only when the cast is rebuilt and p
   classic build on each tier.
 - Teeth: the back teeth are painted into the mouth's shade. Still open: with the jaw wide open, the macro seen from the
   side shows the far side's lower premolars as a stack of bright crowns (geometry, `_teeth_crowns` / `_gum_band`).
+
+**Fix round 2** (the review of fix round 1; sheets `likeness/kai_photo_A.png`, `kai_photo_B.png`, metrics
+`likeness/r2fix/metrics_final.txt`, outside the repo; photo = 1.00, the build seen from the photo's camera, A / B):
+- Beard outline (the main likeness gap: a goatee plus a jaw strap instead of his full beard framing the face):
+  - `likeness_look.beard_density` takes the skin normal and the photo's camera (`photo_cam`, written by `look_data.py`
+    from `fit/photo_camera.json`): where the skin turns away from that close selfie camera (n.v < 0.56..0.36: the
+    outermost ~10 mm inside its silhouette, and everything past it toward the ear) the beard runs as one band (0.88)
+    from eye level down to the jaw. Its front edge is a diagonal cheek line (32 mm ahead of the ear at eye level, 95 mm at
+    the nose base), so the three-quarter and profile views show a natural cheek line, not a box.
+  - the sideburn band is 0-45 mm ahead of the ear (was 0-24), its front edge diagonal too, up to `sideburnTop` 34 mm.
+  - `look_data.py`: the photo's own outline band above the nose base (`SIDEBAND`, from the measured widths at the eye,
+    cheekbone and nose-base levels).
+  - `_beard_cards`: 2 500 cards (was 1 700); on the jaw sides from the nose base to the jaw angle 13-19 mm long, 5.5-7 mm
+    off the skin, pointing down and out; the chin's lower rim beside the centre longer and hanging lower (a U, not a V).
+  - Beard outline width at the nose-base / mouth / lower-lip rows (1024 px frame): 590 / 551 / 488 px against the photo's
+    591 / 552 / 504 (round 1: 572 / 525 / 452). The bottom at the chin's side is 879 against 896 px (round 1 876).
+- Moustache: twice the share of cards, thin single hairs (0.3-0.5 mm, 6-9 mm, tapering), tips 15-20 % lighter, a ragged
+  fringe hanging over the upper vermilion (`moHang` 0.22 at the centre, `moHangCorner` 0.35 at the corners), on a darker,
+  solid mat (`moPaintDark`) with lighter cards (`beardCardGain` 1.25; the chin and jaw keep the dark tone). The single
+  hair of the strand texture now fades over its last 40 % (`HT_VERSION` 10: softer brow, lash and beard tips for the whole
+  cast once rebuilt). Under the lip `UNDERLIP` 0.35, the soul strip 0.6 and wider, the light warm hairs off the strip;
+  `beardDark` 0. Luminance (photo / build): moustache 37-44 / 37-44, under-lip 117-118 / 102-108, soul 89 / 57-86, chin
+  42-48 / 55-60.
+- Eyes: `irisR` 0.22 (iris diameter 0.19 of the iris distance, photo 0.185; was 0.23), `pupilR` 0.085; a warm ivory
+  `sclera` b89d86 (195/173/150 in studio light, photo 191/171/147 and 179/155/137; was 183/176/169); a pink `caruncle`;
+  `irisGain` 1.05, `irisWarm` 0.5. Lashes: `lashLen` 0.6, `lashWing` 0.25 (no outer wing, none past the corner), lower
+  lashes rooted on the lid margin outside the eye and angled down and out (`lashLowerOut`), fewer, thinner, lighter: no
+  ticks over the iris.
+- Brows: `browShape` flat 1.0, head 0.3, `latDrop` 1.3 mm (the lateral half lower, over the hooded lid), `browLift`
+  -0.0063; twice the cards (`browCards` 2), finer (`browHairW` 0.83: 0.25 mm), colour 2a2119, the painted base 0.65
+  (`browBase`) and as dark as the cards (`browCardGain` 1.25, `browPaintGain` 0.55), both edges soft over 1.5 mm
+  (`browEdge`). Brow lower edge to lid 0.99-1.02 (was 1.07-1.13).
+- Hair A (`photo_tied`): ringlets 5-8 mm radius, 14-20 mm pitch, 14 points per turn, `ringW` 0.08, capped 30 mm beyond
+  the volume (`haloOut`) and nothing below the top of the ear; finer, sparser frizz (0.42 mm); lift-off strands thin and
+  lying down; the temple tendrils (they read as cables) replaced by short fine wisps from the shell's temple edge. The
+  hairline is the photo's measured rounded dome (`hairline.arch`), the hair coming down over the temples into the
+  sideburn; the skin at the shell's border darkened (`edgeDark`, no pale strip) and the shell darker with weaker strand
+  stripes (`shellDark`, `shellStripe`; also the hanging pieces' cell).
+- Hair B (`photo_loose`): dense tight curl clumps over the crown (`crown` 70), smaller, tighter ringlets (5-9 mm) to the
+  jaw at the sides and the chin line at the back (was to the shoulders), the fill as thin wisps, no ribbons; the same
+  hairline and shell as A.
+- Lips and mouth: the lower lip's centre rose (`lipLower` 8e5850; 131 against the photo's 126, was 140), lip 6e4a46,
+  `upperLipDark` 0.2, a slight asymmetry (`lipAsym`), lip lines 0.65, upper lip painted 1.45x; `mouth-scale-horiz` -0.06
+  (mouth width 1.04, was 1.06), the mouth 0.2 higher (nose-mouth 1.16-1.20, was 1.35-1.42; the moustache now hides the
+  top of the upper vermilion, as in the photo).
+- Nose: the alar crease smoothed in the geometry (`alarSoften`, 9 Laplacian passes over the wings' groove: a soft
+  shadow, no cut-out U line), wider bridge (`nose-width1/2` 0.45 / 0.25), matte bridge and wings (`bridgeMatte`),
+  `nose-point-width` 0.7, `nose-volume` 0.4, the nose base lower (`nose-trans` 0.3).
+- Under-eye and lid: the tear trough filled (`eye-bag` 0.25, `eye-bag-height` -0.2), the crescent lighter and softer
+  (`underEye` 0, `underEyeBlur` 2, `underEyeLift` 0.09: 116-119 against the photo's 115-117, was 96-97), the hooded lid
+  shaded from the lashes to the brow (`lidHood` 0.9, `lidShade` 1.3, `eyefold` -0.9).
+- Skin: `foreheadShade` is now the tone's exponent (it was a strength clipped at 1), 4 over `foreheadRamp` 8-34 mm:
+  forehead 141-144 against cheek 142-145 (was 154 / 140); `faintSpots` 1.3; the lower mole half the size and 1.5 mm
+  higher, the upper one lighter (`moleTweak`), `moleSoft` 0.3; in game `skinScatter` 0.3 (less orange in the sodium key).
+- Budgets: body builds unchanged (HD 33 999 with the head at 19 022, phone 15 999). Card mesh A 40 468 triangles (hair
+  23 924, beard 10 000, brows and lashes 6 544; round 1 39 466), B 40 538 (round 1 44 188), one draw, no shadow pass; the
+  phone and gfx=low draw at most 10 000 of them (`LO_CARD_TRIS`; the doubled brow hairs past the first set are kind 8, off the phone set). Measured with Kai shown /
+  hidden in m1 Rain City night: high +5 calls, +108 500 triangles (round 1 +96 500); low `--mobile` +4 calls, +29 100 /
+  +29 400 triangles for A / B (round 1 +29 000). One call over the classic build on each tier, as before.
 
 **What this means for the faces that follow** (the faces phase rebuilds them from this face):
 - **The Witness** (`witness`, the older Kai, 58) must now be built from this face: the same structure (his head shape

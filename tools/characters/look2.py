@@ -1984,8 +1984,8 @@ CUTS["photo_tied"] = dict(base="pony", hero="curly_tied", stiff=0.5, top=0.20, f
                           shellDark=0.62, shellStripe=0.35, edgeDark=0.7)
 CUTS["photo_loose"] = dict(base="bob", hero="curly_loose", stiff=0.3, top=0.12, front=0.07, side=0.09, nape=0.11, comb="tousle", lift=0.0, frontLift=0.0,
                            wave=0.4, W=0.0100, side_dens=1.0, wisp=0.06, scalp="full", nopart=True, sheen=0.25,
-                           ringW=0.08, ringR=(0.005, 0.009), ringPitch=(0.014, 0.024), ringPpt=14, crown=70, ringCap=0.95, sheetN=40, fillN=50,
-                           frizz=(150, 0.003, 0.006, 0.00042), frizzCap=1.6, target=15500, frontFloor=0.058, fillW=0.3, temple=50,
+                           ringW=0.08, ringR=(0.005, 0.009), ringPitch=(0.014, 0.024), ringPpt=14, crown=70, ringCap=0.95, sheetN=60, fillN=30,
+                           frizz=(150, 0.003, 0.006, 0.00042), frizzCap=1.6, target=15500, frontFloor=0.058, fillW=0.16, temple=50, fillCols=(4, 5, 6),
                            shellDark=0.6, shellStripe=0.3, edgeDark=0.7,
                            sheet=dict(drop=0.115, clear=0.004, flare=0.015, tip=0.045, a0=104, a1=256))
 
@@ -2411,7 +2411,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
             for j in range(2):
                 f = rng.uniform(0.25, 0.6)
                 pts = march(g + rng.normal(0, 0.004 * k, 3), f, ln, 0.01 * k, hem, ang=rng.normal(0, 0.3), wave=0.55, floor_y=0.03)
-                flat(pts, f, 1.25 * C.get("fillW", 1.0), 0.72 + 0.3 * f, 0.8, int(rng.choice([0, 1, 6, 6])), tipw=0.6)
+                flat(pts, f, 1.25 * C.get("fillW", 1.0), 0.72 + 0.3 * f, 0.8, int(rng.choice(C.get("fillCols", (0, 1, 6, 6)))), tipw=0.6)      # (fix round 2: thin wisps on B, no ribbons)
         n_fill = len(cards)
         sect["fill"] = tris()
         # fix round 2: the crown: dense, tight curl clumps lying on the volume (the top read as a striped cap with a
@@ -2615,15 +2615,16 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         jaw = BH.ss(40.0, 58.0, abs(x)) * BH.ss(sto - 6.0, sto - 22.0, y) * (1 - sbf)   # the jaw angle: the fuller band
         # fix round 2: the jaw sides from mouth level down to the jaw angle (the beard's outer silhouette: longer cards
         # standing 5-7 mm off the skin, pointing down and out, so the beard frames and widens the lower face)
-        jside = BH.ss(46.0, 60.0, abs(x)) * BH.ss(sto + 18.0, sto + 4.0, y) * BH.ss(pg - 18.0, pg - 4.0, y) * (1 - 0.6 * sbf)
+        sn_ = LK.lm.get("Sn", [0, sto + 23.0, 0])[1]
+        jside = BH.ss(46.0, 60.0, abs(x)) * BH.ss(sn_ + 6.0, sn_ - 8.0, y) * BH.ss(pg - 18.0, pg - 4.0, y) * (1 - 0.6 * sbf)
         # fix round 2: the chin's lower rim beside the centre (x = 12-32 mm) hangs lower: a broad U, not a V
-        rimU = BH.ss(pg - 2.0, pg - 12.0, y) * BH.ss(6.0, 14.0, abs(x)) * BH.ss(40.0, 28.0, abs(x))
+        rimU = BH.ss(pg - 2.0, pg - 12.0, y) * BH.ss(3.0, 10.0, abs(x)) * BH.ss(42.0, 30.0, abs(x))
         ulz = BH.ss(li + 1.0, li - 3.0, y) * BH.ss(pg + 2.0, pg + 8.0, y) * BH.ss(24.0, 18.0, abs(x))     # under the lower lip (thin, warm)
         # growth direction: the moustache down and a little out (never up toward the nostrils); chin down; the jaw
         # down and back; the under-jaw back toward the neck (along the skin); sideburns straight down
         sx = np.sign(x) if abs(x) > 0.5 else 0.0
         dmo = np.array([sx * (0.12 + 0.55 * BH.ss(4.0, 24.0, abs(x))), -1.0, 0.08])
-        dch = np.array([sx * (0.1 * BH.ss(10.0, 50.0, abs(x)) + 0.3 * jaw + 0.45 * jside), -1.0, 0.06 - 0.22 * jaw - 0.12 * under])
+        dch = np.array([sx * (0.1 * BH.ss(10.0, 50.0, abs(x)) + 0.3 * jaw + 0.7 * jside), -1.0, 0.06 - 0.22 * jaw - 0.12 * under])
         d = dmo * mo + dch * (1 - mo)
         d = _rot(_tan(d, n), n, rng.normal(0, 0.16 if mo > 0.5 else 0.22))
         if np.linalg.norm(d) < 1e-6:
@@ -2639,13 +2640,13 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         else:
             ln = 0.0072 * k * (1.0 + 0.4 * (float(lens[i]) - 1.0)) * rng.uniform(0.8, 1.15) * (0.75 if sbf > 0.5 else 1.0)
             ln *= 0.6 + 0.4 * BH.ss(0.15, 0.7, dens[i])
-            ln *= 1.0 + 0.3 * BH.ss(pg + 2.0, pg - 10.0, y) * BH.ss(40.0, 20.0, abs(x)) + 0.45 * rimU
-            ln = max(ln, (0.012 + 0.006 * rng.random()) * k * jside) if jside > 0.3 else ln      # 12-18 mm on the jaw sides
+            ln *= 1.0 + 0.3 * BH.ss(pg + 2.0, pg - 10.0, y) * BH.ss(40.0, 20.0, abs(x)) + 0.8 * rimU
+            ln = max(ln, (0.013 + 0.006 * rng.random()) * k * jside) if jside > 0.3 else ln      # 13-19 mm on the jaw sides
         f = rng.random() ** 1.1                                                   # layer: 0 on the skin .. 1 outside
         # flat to the skin: 1.2 mm on the moustache, 1.5-3 mm on the chin, up to 4 mm at the jaw angle
         thick = (0.0014 + 0.0016 * BH.ss(sto - 4, sto - 35, y) * (1 - 0.3 * BH.ss(30, 60, abs(x))) + 0.0008 * under + 0.0025 * jaw) * k
         thick *= 0.45 + 0.55 * BH.ss(0.2, 0.7, dens[i])
-        thick += (0.004 + 0.0015 * rng.random()) * k * jside * BH.ss(0.3, 0.7, dens[i]) + 0.0035 * k * rimU
+        thick += (0.0055 + 0.0017 * rng.random()) * k * jside * BH.ss(0.3, 0.7, dens[i]) + 0.0055 * k * rimU
         if mo > 0.5:
             thick = 0.0014 * k
         nseg = 2
@@ -2696,8 +2697,11 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         root, tip = bc_ * 0.85 * v_, bc_ * (1.05 + 0.15 * f) * v_
         if mo > 0.3:             # fix round 2: the moustache's tips 15-20 % lighter than its roots (soft, never pure black)
             root, tip = bc_ * 0.92 * v_, bc_ * (1.1 + 0.1 * f) * v_
-        if ulz > 0.05:           # under the lower lip: lighter, warmer hair
-            wk = ulz * BH.ss(0.8, 0.55, dens[i])
+        elif c.get("beardCardGain"):     # (the chin and the jaw band keep their dark, dense look: the gain is for the moustache)
+            dk = 0.82 * BH.ss(li - 4.0, li - 12.0, y) + 1.0 * (1 - BH.ss(li - 4.0, li - 12.0, y))
+            root, tip = root * dk, tip * dk
+        if ulz > 0.05:           # under the lower lip: lighter, warmer hair (fix round 2: not on the darker soul-patch strip down the middle)
+            wk = ulz * BH.ss(0.8, 0.55, dens[i]) * (BH.ss(2.5, 6.5, abs(x)) if c.get("beardCardGain") else 1.0)
             root, tip = root + (warm_ * 0.9 - root) * wk, tip + (warm_ * 1.1 - tip) * wk
             if c.get("beardCardGain") and wk > 0.3:      # fix round 2: fine, light, warm single hairs there (a soft haze, not ticks)
                 width = (0.00034 + 0.00012 * rng.random()) * k * np.array([1.0, 0.75, 0.35])
@@ -3305,7 +3309,8 @@ def hair_cards(c, B, cov, parts, ex):
                 ln *= rng.uniform(0.75, 1.1) * (1.0 - 0.25 * max(0.0, nn_ - 0.7) / 0.3)
                 pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.0003 * f)[0] for f in (0.0, 1.0)])
                 K.ribbon(pts, np.repeat(n[None], 2, 0), np.array([0.00030, 0.00012]) * float(c.get("browHairW", 1.0)) * (1.05 if male else 0.95) * (1.25 if tier < 2 else 1.0), 7, col * 0.8, col * 1.12,
-                         np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5, fine="@split", u0=HT_SINGLE[0], u1=HT_SINGLE[1], kind=2)
+                         np.eye(len(BH.BONE_NAMES))[BH.BI["head"]], 2.5, fine="@split", u0=HT_SINGLE[0], u1=HT_SINGLE[1],
+                         kind=2 if i % max(1, int(round(float(c.get("browCards", 1.0))))) == 0 else 8)      # (fix round 2: the extra brow hairs, kind 8, stay off the phone set)
                 continue
             pts = np.array([on_skin(p0 + d * ln * f, 0.0003 + 0.00025 * f)[0] for f in (0.0, 0.5, 1.0)])
             nr = np.repeat(n[None], 3, 0)
@@ -3388,7 +3393,7 @@ def hair_cards(c, B, cov, parts, ex):
     tan /= np.maximum(np.linalg.norm(tan, axis=1, keepdims=True), 1e-9)
     if os.environ.get("MATTE_FINE") != "0":      # proto:makehuman: lashes and brows matte (no strand sheen: grey stripes)
         kinds = np.concatenate([np.full(len(v_), kd_) for v_, kd_ in zip(K.v, K.kind)])
-        tan[(kinds == 1) | (kinds == 2) | (kinds == 4)] = 0.0       # and the likeness beard (kind 4: sheen on its flat cards read as chips)
+        tan[(kinds == 1) | (kinds == 2) | (kinds == 4) | (kinds == 8)] = 0.0       # and the likeness beard (kind 4: sheen on its flat cards read as chips)
     sh_ = float(CUTS.get(c.get("hairCut") or "", {}).get("sheen", 1.0))
     if sh_ < 1.0:        # likeness:final: a cut's strand sheen scaled down (rig2.js fades the sheen with the tangent's length)
         kinds = np.concatenate([np.full(len(v_), kd_) for v_, kd_ in zip(K.v, K.kind)])
