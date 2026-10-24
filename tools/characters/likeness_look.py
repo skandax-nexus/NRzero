@@ -552,13 +552,13 @@ def paint_moles(c, LK, pos, col, isface, BH):
     return col, out
 
 
-def beard_paint(c, B, LK, pos, hw, lipm, isface, seed, BH, lipgeo=None, nrm=None):
+def beard_paint(c, B, LK, pos, hw, lipm, isface, seed, BH, lipgeo=None, nrm=None, side=None):
     """The beard's painted under-layer: alpha and colour (sRGB) per texel. Under dense beard it is a dark, nearly solid
     layer with a fine down-running hair texture (no skin shows between the cards); toward the cheek line and in the
     sparse patches it turns to a thinner hair texture with skin between the strokes, so the edge reads as hair thinning
     out (groomed: the map is already smooth and symmetric)."""
     ss, vnoise, hash01 = BH.ss, BH.vnoise, BH.hash01
-    dens = LK.beard_density(pos, hw, ear_front_z(B), ear_low_y(B), sb_top=float(c.get("sideburnTop", 20.0)), nrm=nrm)
+    dens = LK.beard_density(pos, hw, ear_front_z(B), ear_low_y(B), sb_top=float(c.get("sideburnTop", 20.0)), nrm=nrm, side=side)
     dens = dens * (1 - ss(0.12, 0.45, lipm)) * isface
     bc = BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119")))
     hairs = np.clip((vnoise(pos * np.array([3.0, 0.5, 3.0]), 1900, seed + 2.9) - 0.3) * 2.0, 0, 1)

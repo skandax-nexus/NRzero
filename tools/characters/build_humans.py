@@ -1372,7 +1372,8 @@ def paint(c, B, cov, res, path_out):
         # photo likeness: the measured beard (density map): a dark painted under-layer below the beard cards, a stubble
         # shadow where it thins out (look2 grows the cards from the same map)
         ab, brgb, _bd = likeness_look.beard_paint(c, B, LK, pos, fld(B.hw), lipm, isface, seed, sys.modules[__name__], lipgeo=(d, hu, t, lipfront),
-                                                  nrm=np.stack([fld(B.N[:, i]) for i in range(3)], 1))
+                                                  nrm=np.stack([fld(B.N[:, i]) for i in range(3)], 1),
+                                                  side=LK.side_at(tv, bc) if getattr(LK, "v3", False) else None)      # (Kai v3: the side photos' beard)
         col = col * (1 - ab[:, None]) + brgb * ab[:, None]
         if c.get("moHang"):      # (the moustache hanging over the upper lip is hair: no lip gloss or lip tint under it)
             lipm = lipm * (1 - ss(0.5, 0.9, _bd) * (lipm > 0))
@@ -2591,6 +2592,29 @@ def build(c, tex_dir):
             taubin(Lh, 2, pin=Lh.cov <= 0.0005)
             Lh.mask[:, 2] = 1
             layers["hair"] = Lh
+    if c.get("beardShell"):
+        # Kai v3: the beard's volume. His beard is a dense spade standing 3-6 mm off the moustache and the jaw, 13 mm
+        # off the chin and hanging 20-30 mm under it (the three photos): a copy of the head skin where the beard is
+        # (likeness_look.Look.shell: the density over `beardShell`), lifted to the beard's measured outer surface,
+        # sharing the skin's atlas texels (the painted beard mat) and shaded as hair; the beard cards grow over it
+        LKs = likeness_look.load(c, B)
+        if LKs is not None and getattr(LKs, "v3", False):
+            shv = LKs.shell(B)
+            iso = float(c["beardShell"])
+            fcs = [fi for fi in B.faces if lay_parts[fi] not in ("mouth", "lidL", "lidR")]
+            Lbs = build_layer(B, "beardshell", shv["dens"] - iso, faces=fcs)
+            if Lbs is not None:
+                ramp = ss(0.0, 0.22, Lbs.cov)
+                Lbs.pos = Lbs.pos + (shv["S"] - B.P)[Lbs.base] * ramp[:, None] + B.N[Lbs.base] * 0.0003
+                taubin(Lbs, 3, pin=Lbs.cov <= 0.0005)
+                Lbs.mask[:, 2] = 0.988         # hair (0.988: the bare-clay review renders can tell the beard's volume from the scalp's)
+                Lbs.split_src = B.P[Lbs.base]          # (the face-bone split from the skin it grows on, look2.SPLIT_SRC)
+                layers["beardshell"] = Lbs
+                # the skin it hides (dense, standing well off): shaded as hair, not subdivided (subdivide_head)
+                hid = ss(0.7, 0.85, shv["dens"]) * ss(2.0, 3.5, shv["t"])
+                skin.mask[:, 2] = np.maximum(skin.mask[:, 2], hid[skin.base])
+                skin.mask[:, 0] = skin.mask[:, 0] * (1 - hid[skin.base])
+                print(f"  beard shell: {len(Lbs.faces)} faces, standoff {shv['t'][Lbs.base].max():.1f} mm max, skin hidden {int((hid[skin.base] > 0.5).sum())} vertices", flush=True)
     for key, off in (("scarf", 0.015), ("hood", 0.016)):
         if key in cov:
             faces = [fi for fi in B.faces if lay_parts[fi] not in ("mouth", "lidL", "lidR")]
@@ -2624,6 +2648,9 @@ def build(c, tex_dir):
                     Lx.mask[:, 1] = 0.0
                 layers[key] = Lx
     parts = [layer_object(Lr, B) for Lr in layers.values()]
+    for Lr in layers.values():
+        if getattr(Lr, "split_src", None) is not None:      # (Kai v3: the beard shell splits its face bones from the skin under it)
+            look2.SPLIT_SRC[Lr.name] = to_bl_np(Lr.split_src)
     parts += look2.eye_objects(B, c) if look2.ON else eye_objects(B, c)
     gk = None
     if costume_mode:
@@ -2662,6 +2689,9 @@ def build(c, tex_dir):
         ao_relief(parts[0], B, c)
     if look2.ON and budget(c) >= 16000 and os.environ.get("HEAD_SUBDIV", "1") != "0":
         subdivide_head(parts[0], B)       # proto:makehuman: smooth face silhouettes on the hero (pack lands the budget)
+        for o_ in parts[1:]:
+            if o_.name.split(".")[0] == "beardshell":
+                subdivide_head(o_, B, shell=True)     # (Kai v3: a round beard silhouette)
     if gh:
         gh.data.materials.clear()
         gh.data.materials.append(look2.hair_material(c, look2.strand_texture(os.path.join(tex_dir, "az_strands.png"))))
@@ -2735,14 +2765,26 @@ def ao_relief(o, B, c):
     print(f"  ao relief: {int((red > 0.05).sum())} vertices, max {red.max():.2f}", flush=True)
 
 
-def subdivide_head(o, B):
+def subdivide_head(o, B, shell=False):
     """proto:makehuman: one smoothed subdivision step of the visible head skin (face, ears, neck under the jaw; not the
     scalp under the hair, not the mouth bag), after the weights are written as vertex groups (bmesh interpolates them,
     the uvs and the shading mask). The base mesh is too coarse for a close-up silhouette (faceted jaw, cheek, ears);
     pack_cast2.mjs then lands the HD and phone head budgets on the denser surface."""
-    if o.name.split(".")[0] != "skin":
+    if o.name.split(".")[0] != ("beardshell" if shell else "skin"):
         return
     me = o.data
+    if shell:       # Kai v3: the beard shell, every face once (smooth)
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        n0 = len(bm.faces)
+        bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=1, use_grid_fill=True, smooth=1.0, use_smooth_even=True)
+        bm.to_mesh(me)
+        bm.free()
+        for p_ in me.polygons:
+            p_.use_smooth = True
+        me.update()
+        print(f"  beard shell subdivided: {n0} -> {len(me.polygons)} faces", flush=True)
+        return
     hc = B.L.eye + np.array([0.0, 0.0, -0.06])
     msk = np.zeros(len(me.vertices) * 3)
     a = me.attributes.get("_mask")

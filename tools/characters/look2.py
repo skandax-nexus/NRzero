@@ -113,6 +113,7 @@ class _Split:
 
 
 HEADSPLIT = ("skin", "lash", "brow", "beard", "tongue", "teeth_lo", "mouth")
+SPLIT_SRC = {}      # object name -> Blender points its face-bone split is looked up at (Kai v3: the beard shell, from its skin)
 NOSPLIT = ("gp_", "gx_", "gadget", "strap_", "pouch", "buckle", "panel", "knot", "helmet")
 
 
@@ -394,6 +395,9 @@ def expand_weights_split(o, W, B, keys, only=None, out=None):
     if not need.any():
         return out
     pts = BH.obj_world_verts(o)
+    src = SPLIT_SRC.get(o.name)
+    if src is not None and len(src) == len(pts):
+        pts = src
     for i in np.nonzero(need)[0]:
         hits = sp.kd.find_n(V(pts[i]), 3)
         w = np.array([1.0 / max(d, 2e-4) for _, _, d in hits])
@@ -1190,11 +1194,14 @@ class Cards:
     """Accumulates card ribbons: vertices (MH), normals, uvs, colours, strand tangents, weights, importance."""
     def __init__(self):
         self.v, self.n, self.uv, self.col, self.tan, self.w, self.f, self.imp, self.fine, self.kind = [], [], [], [], [], [], [], [], [], []
+        self.anchor = []        # per ribbon: None, or the MH point its weights are split at (Kai v3: a hanging beard hair at its root)
 
-    def ribbon(self, pts, norms, width, column, col_root, col_tip, W, imp, fine=None, u0=0.06, u1=0.94, kind=0, vt=None):
+    def ribbon(self, pts, norms, width, column, col_root, col_tip, W, imp, fine=None, u0=0.06, u1=0.94, kind=0, vt=None, anchor=None):
         """A strip along pts (k, 3) with per-point normals; width (k,) metres; uv column of the strand texture; vt (k,):
-        the strand texture's v (0 root .. 1 tip) per point (default: even along the strip)."""
+        the strand texture's v (0 root .. 1 tip) per point (default: even along the strip); anchor: an MH point the
+        strip's face-bone weights are split at (default: each vertex where it is)."""
         k = len(pts)
+        self.anchor.append(None if anchor is None else np.repeat(np.asarray(anchor, float)[None], 2 * k, 0))
         base = sum(len(x) for x in self.v)
         vs, ns, uvs, cs, ts = [], [], [], [], []
         cw = 1.0 / HT_COLS
@@ -2557,7 +2564,7 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
     # the photo's few silver-grey strands: two or three long ones looping across the front-top on his left
     ng = int(c.get("greyStrands", 0))
     for j in range(ng):
-        p = eye + np.array([0.012 + 0.014 * j, 0.066 + 0.006 * j, -0.004]) * k
+        p = eye + np.array([(0.012 + 0.014 * j) * float(c.get("greySide", 1.0)), 0.066 + 0.006 * j, -0.004]) * k      # (greySide -1: on his right, Kai v3)
         si, _ = shell.near(p)
         g = hP[si] - head_c
         if tied and FZ:      # fix round 1: the grey strands curl like the rest (no straight white wires), thin
@@ -2596,6 +2603,8 @@ def _curl_cards(c, B, hair_objs, coll, cover, rng, K, tier, hc, grey):
 # ---------------------------------------------------------------------------------------------------------------
 def _beard_cards(c, B, LK, K, tier, rng, coll):
     import likeness_look as LL
+    if getattr(LK, "v3", False) and c.get("beardShell"):
+        return _beard_cards_v3(c, B, LK, K, tier, rng, coll)
     L = B.L
     k = B.H / 1.75
     eye = L.eye
@@ -2793,6 +2802,190 @@ def _beard_cards(c, B, LK, K, tier, rng, coll):
         K.ribbon(P, nr, width, 7, root, tip, head1, 2.0 + 0.8 * f + 0.4 * rng.random() + 0.6 * mo + 0.5 * edge, fine="@split", u0=u0, u1=u1, kind=4)
         ntri += 2 * (len(P) - 1)
     print(f"  beard cards (likeness map): {len(pts)} cards, {ntri} tris", flush=True)
+    return len(pts)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Kai v3: the beard's hair over its volume (likeness_look.Look.shell; the build's `beardshell` layer carries the mass)
+# ---------------------------------------------------------------------------------------------------------------
+def _beard_cards_v3(c, B, LK, K, tier, rng, coll):
+    """Fine strands rooted on the skin where the beard grows (the front and side photos' density), rising through the
+    beard's volume and lying along its outer surface in the growth direction: the moustache down over the top of the
+    lip, the cheeks, jaw and chin down, the hang under the chin down and a little back. A felt of single hairs and thin
+    wisps; at the edges (the cheek line, the jaw's and the chin's silhouette) loose frizzy hairs stand a few mm off, so
+    the outline breaks up as his does. The near-black core colour, the moustache's tips lit warm brown (front_look)."""
+    import likeness_look as LL
+    L = B.L
+    k = B.H / 1.75
+    P_, N_ = B.P, B.N
+    sh = LK.shell(B)
+    dens_v, t_v, S_v = sh["dens"], sh["t"], sh["S"]
+    off_v = S_v - P_
+    ear_z, ear_lo = LL.ear_front_z(B), LL.ear_low_y(B)
+    tri = []
+    for fi in B.faces:
+        if B.part[fi] not in ("face", "scalp", "torso"):
+            continue
+        vs = list(B.F[fi][0])
+        if dens_v[vs].max() < 0.08:
+            continue
+        tri += [[vs[0], vs[1], vs[2]]] + ([[vs[0], vs[2], vs[3]]] if len(vs) == 4 else [])
+    if not tri:
+        return 0
+    T_ = np.array(tri)
+    nroot = {2: int(c.get("beardCards", 2700)), 1: 950, 0: 360}[tier]
+    A = 0.5 * np.linalg.norm(np.cross(P_[T_[:, 1]] - P_[T_[:, 0]], P_[T_[:, 2]] - P_[T_[:, 0]]), axis=1)
+    ns = nroot * 6
+    ti = rng.choice(len(T_), size=ns, p=A / A.sum())
+    r1, r2 = rng.random(ns), rng.random(ns)
+    s_ = np.sqrt(r1)
+    bc = np.stack([1 - s_, s_ * (1 - r2), s_ * r2], 1)
+    tv = T_[ti]
+    pts = (P_[tv] * bc[:, :, None]).sum(1)
+    nrm = (N_[tv] * bc[:, :, None]).sum(1)
+    nrm /= np.maximum(np.linalg.norm(nrm, axis=1, keepdims=True), 1e-12)
+    hw = (B.hw[tv] * bc).sum(1)
+    dens = LK.beard_density(pts, hw, ear_z, ear_lo, nrm=nrm, side=LK.side_at(tv, bc))
+    tt = (t_v[tv] * bc).sum(1)
+    # never on the lips (a 1 mm clear margin round the vermilion) or inside the mouth
+    xs, ys = L.lip_line
+    t_ = (pts[:, 0] - L.lip_cx) / max(L.lip_w, 0.018)
+    d_ = pts[:, 1] - np.interp(pts[:, 0], xs, ys)
+    sc = L.lip_w / 0.024
+    lipup, liplo = 0.0074 * sc * float((c.get("lipScale") or [1, 1])[0]), 0.0092 * sc * float((c.get("lipScale") or [1, 1])[1])
+    onlip = (np.abs(t_) < 1.08) & (d_ < lipup * (1 - np.clip(np.abs(t_), 0, 1) ** 2.3) ** 0.55 + 0.0012) & (d_ > -liplo * (1 - np.clip(np.abs(t_), 0, 1) ** 2) ** 0.7 - 0.001) & (pts[:, 2] > L.lip_z - 0.016)
+    dens = np.where(onlip, 0.0, dens)
+    keep = rng.random(len(pts)) < np.clip(dens, 0, 1) ** 1.2
+    pts, nrm, dens, tt, tv, bc = pts[keep], nrm[keep], dens[keep], tt[keep], tv[keep], bc[keep]
+    q_all = LK.mm(pts)
+    sto, li, pg, sn = (LK.lm[n_][1] for n_ in ("Sto", "Li", "Pg", "Sn"))
+    mo_all = BH.ss(sto - 1.0, sto + 3.0, q_all[:, 1]) * BH.ss(sn + 2.0, sn - 2.0, q_all[:, 1]) * BH.ss(34.0, 26.0, np.abs(q_all[:, 0]))
+    if len(pts) > nroot:
+        # the moustache picked 3x (dense, fine), the hang by its size (the shell's underside is far larger than the skin it
+        # grows from), the edges 1.5x (the frizzy outline)
+        e_ = 0.0025 / LK.scale
+        dn_ = [LK._grid(LK.beard, pts + np.array(o_)) for o_ in ((e_, 0, 0), (-e_, 0, 0), (0, e_, 0), (0, -e_, 0))]
+        grad0 = np.clip((np.max(dn_, 0) - np.min(dn_, 0)) / 0.35, 0, 1)
+        wsel = 1.0 + 2.0 * mo_all + np.clip(tt / 8.0, 0, 2.5) + 0.5 * grad0
+        sel = rng.choice(len(pts), nroot, replace=False, p=wsel / wsel.sum())
+        pts, nrm, dens, tt, tv, bc, q_all, mo_all = pts[sel], nrm[sel], dens[sel], tt[sel], tv[sel], bc[sel], q_all[sel], mo_all[sel]
+    skin = _Surf(B.P[B.bodyv], B.N[B.bodyv])
+    bodyv = B.bodyv
+
+    def lift_at(q):
+        """the skin point under q, its normal and the beard's offset vector there (inverse-distance of the 3 nearest)"""
+        hits = skin.kd.find_n(V(q), 3)
+        w = np.array([1.0 / max(d, 2e-4) for _, _, d in hits])
+        w /= w.sum()
+        ids = [j for _, j, _ in hits]
+        sp = (skin.P[ids] * w[:, None]).sum(0)
+        sn_ = (skin.N[ids] * w[:, None]).sum(0)
+        sn_ /= max(np.linalg.norm(sn_), 1e-9)
+        o = (off_v[bodyv[ids]] * w[:, None]).sum(0)
+        return sp, sn_, o
+    bc_ = BH.lin(hair_floor(BH.hexc(c.get("beardColor", c.get("hairColor", "2e2119"))), 0.16)) * float(c.get("beardCardGain", 1.0))
+    warm_ = BH.lin(BH.hexc(c["beardWarm"])) if c.get("beardWarm") else bc_
+    lens = LK.beard_length(pts)
+    head1 = np.eye(len(BH.BONE_NAMES))[BH.BI["head"]]
+    hang_ = float(c.get("moHang", 0.0))
+    hang_c = float(c.get("moHangCorner", hang_ * 0.45))
+    lt_all, rim_all = LK.beard_light(pts), LK.beard_rim(pts)
+    e_ = 0.0025 / LK.scale
+    dn_ = [LK._grid(LK.beard, pts + np.array(o_)) for o_ in ((e_, 0, 0), (-e_, 0, 0), (0, e_, 0), (0, -e_, 0))]
+    grad = np.clip((np.max(dn_, 0) - np.min(dn_, 0)) / 0.35, 0, 1)
+    fw0, fw1 = 0.03, HT_SINGLE[0] - 0.04
+    frz = float(c.get("beardFrizz", 1.0))
+    ntri = 0
+    for i in range(len(pts)):
+        p, n, q = pts[i], nrm[i], q_all[i]
+        x, y = q[0], q[1]
+        nh = LK.dir_mm(n[None])[0]
+        mo = float(mo_all[i])
+        under = BH.ss(-0.25, -0.7, nh[1])
+        hang = BH.ss(pg + 6.0, pg - 6.0, y) * BH.ss(-0.05, -0.5, nh[1])
+        sbf = BH.ss(-40.0, -20.0, y) * BH.ss(0.5, 0.8, abs(nh[0]))           # the side band / sideburn
+        sx = np.sign(x) if abs(x) > 0.5 else 0.0
+        # growth direction (head frame): the moustache down and a little out; the chin and the jaw down, the jaw a little
+        # back; the hang down and back toward the throat; the side band down
+        dmo = np.array([sx * (0.12 + 0.55 * BH.ss(4.0, 24.0, abs(x))), -1.0, 0.1])
+        dch = np.array([sx * (0.08 + 0.25 * BH.ss(30.0, 60.0, abs(x))), -1.0, 0.05 - 0.35 * BH.ss(40.0, 60.0, abs(x)) - 0.5 * under])
+        dh = LK.dir_mh((dmo * mo + dch * (1 - mo))[None])[0]
+        d = _rot(_tan(dh, n), n, rng.normal(0, 0.14 if mo > 0.5 else 0.2))
+        if np.linalg.norm(d) < 1e-6:
+            continue
+        d /= np.linalg.norm(d)
+        # length (metres, the 1.75 m body): the moustache 6-9 mm, the cheeks 7-10, the chin and jaw 9-14, the hang 12-20
+        if mo > 0.5:
+            ln = 0.0072 * k * rng.uniform(0.85, 1.25)
+        else:
+            ln = (0.0085 + 0.0045 * BH.ss(li - 8.0, pg - 4.0, y) + 0.006 * hang) * k * rng.uniform(0.8, 1.2) * (0.8 if sbf > 0.5 else 1.0)
+            ln *= 0.65 + 0.35 * BH.ss(0.15, 0.7, dens[i])
+        # where the card lies in the volume: on the outer surface (g ~ 1), a few on the way up, frizz standing off at
+        # the edges (the outline breaks up: loose curls 1-4 mm out)
+        edge = max(float(grad[i]), 0.9 * hang * BH.ss(0.6, 1.0, rng.random()), 0.6 * float(rim_all[i]), 0.5 * sbf)
+        g = rng.uniform(0.86, 1.06) if rng.random() > 0.15 else rng.uniform(0.45, 0.86)
+        fz = 0.0
+        if rng.random() < frz * (0.12 + 0.35 * edge):
+            fz = rng.uniform(0.6, 3.2) * 0.001          # metres off the volume
+        nseg = 3 if (ln > 0.011 * k or fz > 0) else 2
+        sp0, sn0, o0 = lift_at(p)
+        P = [sp0 + o0 * min(g, 1.0) * rng.uniform(0.2, 0.7) + sn0 * 0.0003]       # rooted inside the volume
+        dd = d.copy()
+        wav = rng.normal(0, 0.3)
+        nn = sn0
+        for s_i in range(1, nseg + 1):
+            tpar = s_i / nseg
+            qn = P[-1] + dd * (ln / nseg)
+            sp, sn, o = lift_at(qn)
+            # onto the beard's offset surface at g (the volume's local thickness), the frizz further out
+            gq = g * min(1.0, 0.55 + 0.6 * tpar)
+            tgt = sp + o * gq + sn * (0.0004 + fz * tpar)
+            qn = tgt + (qn - tgt) - sn * ((qn - tgt) @ sn)
+            if mo > 0.5 and abs(qn[0] - L.lip_cx) < L.lip_w * 1.1:      # the moustache hangs over the top of the upper lip, never past moHang
+                tx = min(abs((qn[0] - L.lip_cx) / max(L.lip_w, 0.018)), 1.0)
+                hux = lipup * (1 - tx ** 2.3) ** 0.55
+                yl = np.interp(qn[0], xs, ys) + max(0.0015, hux * (1 - (hang_ + (hang_c - hang_) * BH.ss(0.25, 0.85, tx)) * rng.uniform(0.75, 1.1)))
+                if qn[1] < yl:
+                    qn[1] = yl
+            ki, _ = coll.near(qn)
+            hh = (qn - coll.P[ki]) @ coll.N[ki]
+            if hh < 0.0006:
+                qn = qn + coll.N[ki] * (0.0006 - hh)
+            dn = qn - P[-1]
+            dd = _tan(dn / max(np.linalg.norm(dn), 1e-9), sn)
+            curl = (0.9 if fz > 0 else 0.25) * (1 if wav >= 0 else -1)
+            dd = _rot(dd / max(np.linalg.norm(dd), 1e-9), sn, wav * (1 if s_i == 1 else -1) + (curl if s_i > 1 else 0.0))
+            P.append(qn)
+            nn = sn
+        P = np.array(P)
+        nr = np.repeat(((n + nn) / np.linalg.norm(n + nn))[None], len(P), 0)
+        if mo > 0.3:                                 # the moustache: thin single hairs, tapering
+            width = (0.0003 + 0.0002 * rng.random()) * k * np.array([1.0, 0.75, 0.35])
+            u0, u1 = HT_SINGLE
+        elif (edge > 0.45 and rng.random() < 0.6) or rng.random() < 0.25:      # a thin wisp of a few strands
+            wid = (0.0009 + 0.0007 * rng.random()) * k
+            width = wid * np.array([1.0, 0.8, 0.45])
+            win = 0.12 + 0.08 * rng.random()
+            u0 = fw0 + (fw1 - fw0 - win) * rng.random()
+            u1 = u0 + win
+        else:                                        # one fine hair
+            width = (0.0005 + 0.00016 * rng.random()) * k * np.array([1.0, 0.85, 0.6])
+            u0, u1 = HT_SINGLE
+        if len(width) != len(P):
+            width = np.interp(np.linspace(0, 1, len(P)), np.linspace(0, 1, len(width)), width)
+        v_ = rng.normal(1.0, 0.09)
+        root, tip = bc_ * 0.8 * v_, bc_ * (1.0 + 0.2 * g) * v_
+        if mo > 0.3:            # the moustache's lit tips: warm brown (front_look: #433532 against the core #2d2928)
+            root, tip = bc_ * 0.9 * v_, warm_ * (0.85 + 0.25 * rng.random()) * v_
+        wk = float(lt_all[i])
+        if wk > 0.02:           # the finer, lighter hair right under the lower lip
+            root, tip = root + (warm_ * 0.9 - root) * wk * 0.7, tip + (warm_ * 1.15 - tip) * wk * 0.7
+        rk = float(rim_all[i]) * float(c.get("beardRimDark", 0.0))
+        root, tip = root * (1 - rk), tip * (1 - 0.7 * rk)
+        K.ribbon(P, nr, width, 7, root, tip, head1, 2.0 + 0.8 * g + 0.4 * rng.random() + 0.6 * mo + 0.5 * edge, fine="@split", u0=u0, u1=u1, kind=4,
+                 anchor=p)
+        ntri += 2 * (len(P) - 1)
+    print(f"  beard cards (v3, over the beard volume): {len(pts)} cards, {ntri} tris", flush=True)
     return len(pts)
 
 
@@ -3338,6 +3531,7 @@ def hair_cards(c, B, cov, parts, ex):
                 K.f.append((faces, 3.0))
                 K.fine.append([bone] * len(vs_))
                 K.kind.append(1)
+                K.anchor.append(None)
     # ---- brows: short cards lying on the brow skin, along the hair direction of each part of the brow
     bt = c.get("browThick", 0.5)
     male = c["macro"].get("gender", 0.5) >= 0.5
@@ -3495,6 +3689,8 @@ def hair_cards(c, B, cov, parts, ex):
     Wc = np.concatenate(K.w)
     BH.WSTORE[o.name] = Wc
     o["fine_list"] = json.dumps([f for lst in K.fine for f in lst])
+    if any(a_ is not None for a_ in K.anchor):      # (Kai v3: the beard's hanging hairs split their face bones at their roots)
+        SPLIT_SRC[o.name] = BH.to_bl_np(np.concatenate([v_ if a_ is None else a_ for v_, a_ in zip(K.v, K.anchor)]))
     # low tier: the first `lo_tris` triangles (silhouette and fringe cards, lashes, brows)
     ntri = 2 * len(faces)
     lo = 0

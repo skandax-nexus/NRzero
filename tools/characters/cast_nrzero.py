@@ -558,7 +558,12 @@ FACE_LOOK_KEYS = ("skin", "lip", "eyes", "irisR", "pupilR", "browColor", "browLi
                   # fix round 4 (docs/CHARACTER_LOOK.md "Kai's face", "Fix round 4: the complete face shape"): the dense
                   # per-vertex shape layer (likeness/dense_fit.py; a MakeHuman-target-like .npz relative to the face file,
                   # applied by mh.sculpt after the modifiers), its weight and per-region weights (inheritance)
-                  "shape", "shapeWeight", "shapeRegions")
+                  "shape", "shapeWeight", "shapeRegions",
+                  # Kai v3 (docs/CHARACTER_LOOK.md "Kai v3: the three photos", the look): the beard's volume (the density
+                  # over which the build lifts a shell of the skin to the beard's measured outer surface), the beard
+                  # card count and frizz, the grey strands' side (-1: his right), the measured under-eye crescent's
+                  # strength and depth, the de-lit skin zones' strength
+                  "beardShell", "beardCards", "beardFrizz", "greySide", "underEyeV3", "underEyeDepth", "zoneStrength")
 FACE_MACRO_KEYS = ("proportions", "muscle", "weight", "caucasian", "african", "asian")
 FACES_APPLIED = {}
 
